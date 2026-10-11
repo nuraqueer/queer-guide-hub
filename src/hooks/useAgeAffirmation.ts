@@ -100,6 +100,7 @@ export function useAgeAffirmation() {
   const affirmed = status === 'affirmed';
 
   const affirm = useCallback(async () => {
+    resolutionId.current += 1;
     const now = Date.now();
     persistBrowserAffirmation(now);
     setStatus('affirmed');
@@ -116,6 +117,7 @@ export function useAgeAffirmation() {
   }, []);
 
   const revoke = useCallback(() => {
+    resolutionId.current += 1;
     try {
       // Legacy first: cross-tab storage events then cannot recreate canonical
       // state from a legacy key that still exists.
@@ -131,7 +133,10 @@ export function useAgeAffirmation() {
 
   // Keep state in sync with storage events from other tabs + same-tab siblings.
   useEffect(() => {
-    const resync = () => setStatus(readStored() ? 'affirmed' : 'unaffirmed');
+    const resync = () => {
+      resolutionId.current += 1;
+      setStatus(readStored() ? 'affirmed' : 'unaffirmed');
+    };
     const onStorage = (e: StorageEvent) => {
       if (e.key !== STORAGE_KEY && e.key !== LEGACY_MARKETPLACE_KEY) return;
       resync();
@@ -151,6 +156,7 @@ export function useAgeAffirmation() {
     let disposed = false;
 
     const resolveAccount = async (user: AccountUser | null) => {
+      if (disposed) return;
       const currentResolution = ++resolutionId.current;
       const cached = readStored();
 
