@@ -87,11 +87,19 @@ const PARENT_OVERRIDES = {
   'FR-70': 'FR-BFC', 'FR-75C': 'FR-IDF',
   // Nouaceur is Casablanca-Settat, Chtouka-Aït Baha is Souss-Massa.
   'MA-NOU': 'MA-06', 'MA-CHT': 'MA-09',
+  // ISO 3166-2:RS puts the seven Vojvodina districts under the province.
+  'RS-01': 'RS-VO', 'RS-02': 'RS-VO', 'RS-03': 'RS-VO', 'RS-04': 'RS-VO',
+  'RS-05': 'RS-VO', 'RS-06': 'RS-VO', 'RS-07': 'RS-VO',
 }
 // dr5hn swaps the GeoNames admin1 numbers of Buenos Aires province (AR.01)
 // and the autonomous city (AR.07); every "01"/"07" region_name resolved to the
 // wrong one until 99991791713213.
-const FIPS_OVERRIDES = { 'AR-B': '01', 'AR-C': '07' }
+// BD's fips are the ISO letters, which the ISO-suffix arm already matches;
+// the GeoNames division numbers in region_name ("81" = Dhaka) matched nothing.
+const FIPS_OVERRIDES = {
+  'AR-B': '01', 'AR-C': '07',
+  'BD-C': '81', 'BD-D': '82', 'BD-E': '83', 'BD-B': '84', 'BD-A': '85', 'BD-G': '86', 'BD-F': '87',
+}
 
 const q = (s) => (s == null || s === '' ? 'null' : `'${String(s).trim().replace(/'/g, "''")}'`)
 const num = (s) => (s == null || s === '' || Number.isNaN(Number(s)) ? 'null' : String(Number(s)))

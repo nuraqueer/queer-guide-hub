@@ -42,6 +42,10 @@ const crosswalk = statements.slice(
 );
 const arRepair = statements.slice(
   statements.indexOf('create temp table _ar_swap'),
+  statements.indexOf('create temp table _bd_num'),
+);
+const bdRepair = statements.slice(
+  statements.indexOf('create temp table _bd_num'),
   statements.indexOf('create or replace function public.geo_boundary_region'),
 );
 const lookup = statements.slice(
@@ -65,7 +69,7 @@ const verify = statements.slice(statements.indexOf('do $verify$'));
 
 describe('the spans this file depends on', () => {
   it('found all of them', () => {
-    for (const s of [helper, crosswalk, arRepair, lookup, runner, candidates, update, sentinel, verify]) {
+    for (const s of [helper, crosswalk, arRepair, bdRepair, lookup, runner, candidates, update, sentinel, verify]) {
       expect(s.length).toBeGreaterThan(40);
     }
   });
@@ -156,11 +160,41 @@ describe('crosswalk', () => {
   });
 });
 
+describe('RS, BD, CO', () => {
+  it('sends the mislabelled Bogotá polygon to CO-DC and refuses the pre-2015 Dhaka division', () => {
+    expect(crosswalk).toMatch(/\('CO-CUN', 'Bogota', 'CO-DC', 'ne_mislabelled'\)/);
+    expect(crosswalk).toMatch(/\('BD-C', 'Dhaka', null, 'pre_2015_division_split'\)/);
+  });
+  it('puts exactly the seven Vojvodina districts under RS-VO, in migration and generator', () => {
+    expect(statements).toMatch(/set parent_code = 'RS-VO'\s+where code in \('RS-01', 'RS-02', 'RS-03', 'RS-04', 'RS-05', 'RS-06', 'RS-07'\)/);
+    for (let i = 1; i <= 7; i++) expect(generator).toMatch(new RegExp(`'RS-0${i}': 'RS-VO'`));
+    // Kosovo districts are not touched
+    expect(statements).not.toMatch(/'RS-2[5-9]'[^\n]*'RS-KM'/);
+    expect(generator).not.toMatch(/'RS-2[5-9]': 'RS-KM'/);
+  });
+  it('gives BD the GeoNames division numbers in migration and generator', () => {
+    const pairs = [['BD-C', '81'], ['BD-D', '82'], ['BD-E', '83'], ['BD-B', '84'], ['BD-A', '85'], ['BD-G', '86'], ['BD-F', '87']];
+    for (const [code, fips] of pairs) {
+      expect(statements).toContain(`('${code}', '${fips}')`);
+      expect(generator).toContain(`'${code}': '${fips}'`);
+    }
+  });
+  it('resolves only numeric BD names with no code, and writes the readable name', () => {
+    expect(bdRepair).toMatch(/c\.region_code is null\s+and c\.region_name ~ '\^\\s\*\[0-9\]\+\\s\*\$'/);
+    expect(bdRepair).toMatch(/set region_code = b\.code,\s+region_name = b\.name/);
+    for (const t of ['venues', 'events', 'hotels', 'organizations']) {
+      // keyed on the city's own code, not on the 38-row temp table
+      expect(bdRepair).toMatch(new RegExp(`update public\\.${t} \\w set state = s\\.name[\\s\\S]*?public\\.resolve_region_code\\('BD', btrim\\(\\w\\.state\\)\\) = c\\.region_code;`));
+    }
+    expect(verify).toMatch(/entity_numeric_state_resolvable'\)::int, -1\) <> 0/);
+  });
+});
+
 describe('AR fips swap', () => {
   it('swaps the vocabulary back to GeoNames, in migration and generator', () => {
     expect(statements).toMatch(/set fips_code = '01'\s+where code = 'AR-B'/);
     expect(statements).toMatch(/set fips_code = '07'\s+where code = 'AR-C'/);
-    expect(generator).toMatch(/FIPS_OVERRIDES = \{ 'AR-B': '01', 'AR-C': '07' \}/);
+    expect(generator).toMatch(/FIPS_OVERRIDES = \{\s*'AR-B': '01', 'AR-C': '07',/);
     expect(generator).toMatch(/q\(FIPS_OVERRIDES\[s\.iso3166_2\] \?\? s\.fips_code\)/);
   });
   it('repairs only rows whose recorded GeoNames number proves the swap', () => {

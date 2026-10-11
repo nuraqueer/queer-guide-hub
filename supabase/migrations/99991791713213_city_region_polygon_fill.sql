@@ -64,6 +64,21 @@
 --   7 were split by the reform and map to NOTHING (a point there is stamped
 --   no_code rather than guessed); MA-15/MA-16 are Western Sahara and are
 --   deliberately not given a Moroccan region.
+-- * CO: codes agree, but Natural Earth labels its Bogotá polygon CO-CUN
+--   (Cundinamarca). One row sends it to CO-DC. With that, CO agrees 76 of 79
+--   (the rest are border towns) and is trusted.
+-- * BD: Natural Earth has the 7 divisions from before 2015; Mymensingh (BD-H)
+--   was cut out of Dhaka then, so the Dhaka polygon maps to nothing. And 38
+--   cities carry a GeoNames division number as region_name (81 Dhaka, 83
+--   Rajshahi, 84 Chittagong, 86 Sylhet, 87 Rangpur) that never resolved,
+--   because dr5hn's BD fips are the ISO letters. fips_code now holds the
+--   GeoNames number (the letters still match through the ISO-suffix arm), and
+--   the 38 are resolved and given the readable name. Each was checked against
+--   the nearest district centroid: none lies in Mymensingh.
+-- * RS: codes agree; OUR hierarchy was flat. ISO 3166-2:RS puts the seven
+--   Vojvodina districts (RS-01..07) under the province RS-VO, which is what
+--   every coded Serbian city on record already carries. dr5hn gave them no
+--   parent. The Kosovo districts are deliberately left alone.
 -- * Two dr5hn parents found on the way: MA-NOU Nouaceur hangs under
 --   Rabat-Salé-Kénitra, it is Casablanca-Settat; MA-CHT Chtouka-Aït Baha hangs
 --   under Casablanca-Settat, it is Souss-Massa. Carried by the generator too.
@@ -104,6 +119,13 @@ update public.geo_subdivisions set fips_code = '01'
  where code = 'AR-B' and fips_code is distinct from '01';
 update public.geo_subdivisions set fips_code = '07'
  where code = 'AR-C' and fips_code is distinct from '07';
+update public.geo_subdivisions set parent_code = 'RS-VO'
+ where code in ('RS-01', 'RS-02', 'RS-03', 'RS-04', 'RS-05', 'RS-06', 'RS-07')
+   and parent_code is distinct from 'RS-VO';
+update public.geo_subdivisions g set fips_code = v.fips
+  from (values ('BD-C', '81'), ('BD-D', '82'), ('BD-E', '83'), ('BD-B', '84'),
+               ('BD-A', '85'), ('BD-G', '86'), ('BD-F', '87')) as v(code, fips)
+ where g.code = v.code and g.fips_code is distinct from v.fips;
 
 -- 1b. Crosswalk for polygons whose code is not ours. region_code NULL means
 --     "this polygon has no single answer" and the runner stamps no_code.
@@ -165,7 +187,9 @@ insert into public.geo_boundary_region_map (polygon_code, polygon_name, region_c
   ('MA-13', 'Souss - Massa - Draâ', null, 'pre_2015_region_split'),
   ('MA-14', 'Guelmim - Es-Semara', null, 'pre_2015_region_split'),
   ('MA-15', 'Laâyoune - Boujdour - Sakia El Hamra', null, 'disputed_western_sahara'),
-  ('MA-16', 'Oued el Dahab', null, 'disputed_western_sahara')
+  ('MA-16', 'Oued el Dahab', null, 'disputed_western_sahara'),
+  ('CO-CUN', 'Bogota', 'CO-DC', 'ne_mislabelled'),
+  ('BD-C', 'Dhaka', null, 'pre_2015_division_split')
 on conflict (polygon_code, polygon_name) do update
   set region_code = excluded.region_code, reason = excluded.reason;
 
@@ -213,6 +237,47 @@ update public.hotels h set state = 'Buenos Aires'
   from _ar_swap s where h.city_id = s.id and s.code = 'AR-B' and h.state = 'Autonomous City of Buenos Aires';
 update public.organizations o set state = 'Buenos Aires'
   from _ar_swap s where o.city_id = s.id and s.code = 'AR-B' and o.state = 'Autonomous City of Buenos Aires';
+
+-- 1d. BD: resolve the GeoNames division numbers now that fips carries them,
+--     and write the readable name back (the numeric_region_name_resolvable
+--     invariant in city_region_signals() would otherwise fail on them).
+create temp table _bd_num on commit drop as
+select c.id, r.code, s.name
+  from public.cities c
+  join public.countries co on co.id = c.country_id and co.code = 'BD'
+  cross join lateral (select public.resolve_region_code('BD', btrim(c.region_name)) as code) r
+  join public.geo_subdivisions s on s.code = r.code
+ where c.duplicate_of_id is null
+   and c.region_code is null
+   and c.region_name ~ '^\s*[0-9]+\s*$';
+
+update public.cities c
+   set region_code = b.code,
+       region_name = b.name
+  from _bd_num b
+ where c.id = b.id;
+
+-- Entity state: any BD venue/event/hotel/org whose numeric state now resolves
+-- to its own city's code gets the readable name — exactly the shape
+-- city_region_signals().entity_numeric_state_resolvable counts. Not only the
+-- 38 cities above: the dry run found three venues in cities that already had
+-- a code ("87" in Lalmonirhat, BD-F) which the new fips made resolvable.
+update public.venues v set state = s.name
+  from public.cities c join public.geo_subdivisions s on s.code = c.region_code
+ where v.city_id = c.id and s.country_code = 'BD' and v.state ~ '^\s*[0-9]+\s*$'
+   and public.resolve_region_code('BD', btrim(v.state)) = c.region_code;
+update public.events e set state = s.name
+  from public.cities c join public.geo_subdivisions s on s.code = c.region_code
+ where e.city_id = c.id and s.country_code = 'BD' and e.state ~ '^\s*[0-9]+\s*$'
+   and public.resolve_region_code('BD', btrim(e.state)) = c.region_code;
+update public.hotels h set state = s.name
+  from public.cities c join public.geo_subdivisions s on s.code = c.region_code
+ where h.city_id = c.id and s.country_code = 'BD' and h.state ~ '^\s*[0-9]+\s*$'
+   and public.resolve_region_code('BD', btrim(h.state)) = c.region_code;
+update public.organizations o set state = s.name
+  from public.cities c join public.geo_subdivisions s on s.code = c.region_code
+ where o.city_id = c.id and s.country_code = 'BD' and o.state ~ '^\s*[0-9]+\s*$'
+   and public.resolve_region_code('BD', btrim(o.state)) = c.region_code;
 
 -- 2. Which first-level unit a polygon stands for, in a given country: the
 --    crosswalk wins when it has a row (even a NULL one), else our own code or
@@ -565,6 +630,31 @@ begin
        and c.region_code is distinct from c.enrichment_status -> 'region_fips_swap_repair' ->> 'to'
   ) then
     raise exception 'P2g failed: an AR repair did not stick';
+  end if;
+  if exists (select 1 from public.geo_subdivisions
+              where code in ('RS-01', 'RS-02', 'RS-03', 'RS-04', 'RS-05', 'RS-06', 'RS-07')
+                and public.geo_subdivision_root(code) is distinct from 'RS-VO') then
+    raise exception 'P2h failed: a Vojvodina district does not roll up to RS-VO';
+  end if;
+  if public.resolve_region_code('BD', '81') is distinct from 'BD-C'
+     or public.resolve_region_code('BD', '84') is distinct from 'BD-B'
+     or public.resolve_region_code('BD', 'C') is distinct from 'BD-C' then
+    raise exception 'P2i failed: BD GeoNames numbers or ISO letters do not resolve';
+  end if;
+  if exists (select 1 from public.cities c join public.countries co on co.id = c.country_id
+              where co.code = 'BD' and c.duplicate_of_id is null
+                and c.region_name ~ '^\s*[0-9]+\s*$'
+                and public.resolve_region_code('BD', btrim(c.region_name)) is not null) then
+    raise exception 'P2j failed: a BD city still shows a resolvable GeoNames number';
+  end if;
+  -- The existing zero-invariants must still hold after the fips changes.
+  if coalesce((public.city_region_signals() ->> 'entity_numeric_state_resolvable')::int, -1) <> 0
+     or coalesce((public.city_region_signals() ->> 'numeric_region_name_resolvable')::int, -1) <> 0 then
+    raise exception 'P2l failed: a numeric region name or entity state is resolvable but not written back';
+  end if;
+  if (select region_code from public.geo_boundary_region_map where polygon_code = 'CO-CUN' and polygon_name = 'Bogota')
+     is distinct from 'CO-DC' then
+    raise exception 'P2k failed: Bogotá polygon not sent to CO-DC';
   end if;
   if exists (select 1 from public.geo_subdivisions where public.geo_subdivision_root(code) is null) then
     raise exception 'P3 failed: a subdivision climbs to no root after the parent fixes';
