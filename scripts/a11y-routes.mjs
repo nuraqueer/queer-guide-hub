@@ -38,7 +38,11 @@ export const PUBLIC_ROUTES = [
   { path: '/villages/adams-point', name: 'village-detail' },
   { path: '/news', name: 'news' },
   { path: '/news/all', name: 'news-archive' },
-  { path: '/places', name: 'places' },
+  // No '/places': it is a LocalizedRedirect to /travel, so the browser audited
+  // whatever /travel renders under the name "places" — a duplicate of the
+  // '/travel' row below, and misleading about what was measured. Dropping it
+  // cannot strand a required check: of the a11y jobs only "Playwright + axe
+  // a11y suite" is a required context, not the per-route Lighthouse matrix.
   { path: '/map', name: 'map' },
   { path: '/cities', name: 'cities' },
   { path: '/city/s-o-paulo', name: 'city-detail' },

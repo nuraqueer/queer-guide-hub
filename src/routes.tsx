@@ -594,7 +594,7 @@ export const AppRoutes = () => {
                   />
 
                   {/* Legacy routes -- redirect to new paths */}
-                  <Route path="venues" element={<Navigate to="/admin/content/venues" replace />} />
+                  <Route path="venues" element={<Navigate to="/admin/content/organizations" replace />} />
                   <Route path="duplicates" element={<GovernanceRedirect mode="merge" />} />
                   <Route path="events" element={<Navigate to="/admin/content/events" replace />} />
                   <Route

@@ -33,7 +33,14 @@ const ROUTES = [
   // assertions below would fail on it by construction.
   '/going-out',
   '/rights',
-  '/support',
+  // '/help', not '/support': the support intent moved to /help (INTENT_NAV
+  // names /help and has not named /support for a while), and /support is a
+  // LocalizedRedirect onto it. Sampling /support broke BOTH rules stated
+  // above — a redirect source, and now a noindex route — and only ever passed
+  // because that redirect is CLIENT-SIDE: fetch saw a 200 carrying /support's
+  // own body and canonical, so the assertions could not tell. Same staleness
+  // as the '/shop' note below, one intent over.
+  '/help',
   // No '/shop': it 301s to /marketplace (already sampled above). A redirect
   // source cannot be sampled here at all — fetch follows redirects, so the
   // response would carry the /marketplace canonical against a /shop request

@@ -46,6 +46,22 @@ export function buildRecord(
       if (meta.published_at) record.published_at = meta.published_at
       break
 
+    case 'organizations': {
+      record.name = normalized.name
+      record.description = normalized.description || enriched.description
+      // Explicit identity allowlist: a submission cannot set claims, trust or visibility.
+      const allowedRoles = new Set(['venue', 'organizer', 'community', 'support', 'advocacy', 'publisher', 'seller', 'hotel', 'brand', 'affiliate_partner'])
+      const roles = Array.isArray(meta.roles) ? meta.roles.filter((role): role is string => typeof role === 'string' && allowedRoles.has(role)) : []
+      record.roles = roles.length ? [...new Set(roles)] : ['community']
+      for (const field of ['website', 'email', 'phone']) {
+        if (typeof meta[field] === 'string' && meta[field]) record[field] = meta[field]
+      }
+      const base = String(normalized.name ?? 'organisation').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'organisation'
+      record.slug = `${base}-${crypto.randomUUID().slice(0, 8)}`
+      record.status = 'active' // Only reached after the pipeline's approval gates.
+      break
+    }
+
     case 'countries':
       record.name = normalized.name
       record.code = meta.code || meta.cca2

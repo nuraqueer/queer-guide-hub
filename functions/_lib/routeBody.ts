@@ -166,7 +166,11 @@ export const STATIC_ROUTE_BODY: Record<string, RouteBody> = {
     links: [
       { href: '/events', label: 'Events at queer venues' },
       { href: '/travel', label: 'Country safety guide' },
-      { href: '/places', label: 'Browse by city or country' },
+      // Was '/places', which LocalizedRedirects to /travel. Pointed at the
+      // destination matching the LABEL (a city index) rather than at the
+      // redirect target — /travel is a trip planner and is already linked on
+      // the line above. See the /places note in routeMeta.ts.
+      { href: '/cities', label: 'Browse by city or country' },
       { href: '/submit', label: 'Submit a venue' },
     ],
   },
@@ -179,7 +183,7 @@ export const STATIC_ROUTE_BODY: Record<string, RouteBody> = {
     ],
     links: [
       { href: '/venues', label: 'Venues hosting events' },
-      { href: '/places', label: 'Events by city' },
+      { href: '/cities', label: 'Events by city' },
       { href: '/travel', label: 'Travel for Pride' },
       { href: '/submit', label: 'Submit an event' },
     ],
@@ -291,7 +295,7 @@ export const STATIC_ROUTE_BODY: Record<string, RouteBody> = {
     ],
     links: [
       { href: '/travel', label: 'Country safety ratings' },
-      { href: '/places', label: 'Browse by city' },
+      { href: '/cities', label: 'Browse by city' },
       { href: '/venues', label: 'What is nearby' },
     ],
   },
@@ -322,7 +326,11 @@ export const STATIC_ROUTE_BODY: Record<string, RouteBody> = {
     ],
     links: [
       { href: '/travel', label: 'Plan safer queer travel' },
-      { href: '/support', label: 'Find support organizations' },
+      // Was '/support', which LocalizedRedirects to /help — and /help is
+      // already the next link in this very list, so following the redirect
+      // target would have made one of the two a duplicate. '/organizations' is
+      // what the label names, and is where /support's own body pointed.
+      { href: '/organizations', label: 'Find support organizations' },
       { href: '/help', label: 'Crisis hotlines' },
       { href: '/news', label: 'Rights news' },
     ],
@@ -381,18 +389,14 @@ export const STATIC_ROUTE_BODY: Record<string, RouteBody> = {
     ],
   },
 
-  '/support': {
-    h1: 'Find LGBTQ+ support near you',
-    paragraphs: [
-      'Support organizations, advocacy groups and community services for LGBTQ+ people, listed by country with direct links to the people who actually run them.',
-      'We list around 2,510 organizations across 76 countries. That is nowhere near everywhere — if a group you trust is missing, tell us and we will add it. An empty result means we have no record, not that no help exists.',
-    ],
-    links: [
-      { href: '/help', label: 'Crisis hotlines by country' },
-      { href: '/organizations', label: 'Every organization' },
-      { href: '/rights', label: 'Know the law where you are' },
-    ],
-  },
+  // No '/support' entry: the route is a LocalizedRedirect to /help, so React
+  // never renders a page there and _middleware.ts gates the bot body on
+  // `indexable` — which /support no longer is. It carried a full body and its
+  // own STATIC_ROUTE_META for as long as both existed, so crawlers indexed
+  // real copy at a URL that bounces every human to /help. Same shape as the
+  // '/shop' note in routeMeta.ts. The organization count and the "an empty
+  // result means we have no record" caveat belong on /organizations, which has
+  // meta but still no body here.
 
   // No '/shop' body: it 301s to /marketplace, so no crawler can reach it — the
   // same dead-copy bug as '/resources' below. Its verified-brands sentences were
@@ -444,18 +448,11 @@ export const STATIC_ROUTE_BODY: Record<string, RouteBody> = {
     ],
   },
 
-  '/places': {
-    h1: 'Queer places — cities, neighborhoods, queer villages',
-    paragraphs: [
-      'A geographic index of queer life: cities with thriving scenes, neighborhoods historically shaped by LGBTQ+ communities, and "queer villages" around the world that exist because queer people built them.',
-      'Each place page collects the venues, events, hotels, and history of that location, with pointers to safety information and travel tips.',
-    ],
-    links: [
-      { href: '/venues', label: 'Venues' },
-      { href: '/events', label: 'Events' },
-      { href: '/travel', label: 'Travel safety' },
-    ],
-  },
+  // No '/places' entry: the route is a LocalizedRedirect to /travel, so this
+  // body was copy describing a page no reader ever reaches. Same reasoning as
+  // the '/support' note above. The queer-villages material it carried has no
+  // home on /travel (a trip planner) or /cities (a city index) — recorded here
+  // rather than silently dropped, since re-siting it is a content decision.
 
   '/about': {
     h1: 'About Queer Guide',
@@ -506,6 +503,12 @@ export const STATIC_ROUTE_BODY: Record<string, RouteBody> = {
     ],
     links: [
       { href: '/tags', label: 'Other support resources' },
+      // /help is the intent that replaced /support, and this is where the
+      // deleted /support body pointed for the organizations directory. Added
+      // when both intent lists were derived from INTENT_NAV, which revealed
+      // /help had only 2 outbound links against the hub minimum of 3 — unseen
+      // while those lists hand-named '/support' instead.
+      { href: '/organizations', label: 'Support organizations by country' },
       { href: '/feedback', label: 'Report an outdated number' },
     ],
   },

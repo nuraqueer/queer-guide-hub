@@ -61,6 +61,12 @@ export function isAdultCategorySlug(slug: string | null | undefined): boolean {
  * same canonical confirmation.
  */
 export function useAdultAcknowledgement() {
-  const { affirmed, affirm, revoke } = useAgeAffirmation();
-  return { acknowledged: affirmed, acknowledge: affirm, reset: revoke };
+  const { affirmed, checking, accountSyncError, affirm, revoke } = useAgeAffirmation();
+  return {
+    acknowledged: affirmed,
+    checking,
+    accountSyncError,
+    acknowledge: affirm,
+    reset: revoke,
+  };
 }
