@@ -10,7 +10,7 @@ import { join } from 'node:path';
  * rule in prose.
  */
 
-const MIGRATION = '99991791721662_city_dup_clusters_split_by_distance.sql';
+const MIGRATION = '99991791728197_city_dup_clusters_split_by_distance.sql';
 
 const sql = readFileSync(join(process.cwd(), 'supabase', 'migrations', MIGRATION), 'utf8')
   .split('\n')

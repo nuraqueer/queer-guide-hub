@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
-const MIGRATION = '99991791723916_synonyms_follow_disambiguated_tag.sql';
+const MIGRATION = '99991791728213_synonyms_follow_disambiguated_tag.sql';
 const raw = readFileSync(join(process.cwd(), 'supabase/migrations', MIGRATION), 'utf8');
 
 // The header quotes the defect, the six terms and the rejected alternative ("drop"), so an
