@@ -7,6 +7,7 @@
 import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { Navigate, useParams, useSearchParams } from 'react-router';
 import { Plus, Search, RefreshCw, X } from 'lucide-react';
+import { contentTypeRouteAliases } from '@/config/contentTypes';
 import { ContentEntityTabs } from '@/components/admin/ContentEntityTabs';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -103,7 +104,12 @@ export function ContentListPanel(props: ContentListPanelProps) {
     if (next.has('edit')) next.set('location', next.get('edit')!);
     next.delete('edit');
     next.delete('view');
-    return <Navigate replace to={`/admin/content/organizations${next.size ? `?${next}` : ''}`} />;
+    return (
+      <Navigate
+        replace
+        to={`/admin/content/${contentTypeRouteAliases.venues}${next.size ? `?${next}` : ''}`}
+      />
+    );
   }
   if (typeId === 'venues')
     return (

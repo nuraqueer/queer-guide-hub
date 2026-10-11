@@ -1,11 +1,11 @@
 # Venue and organisation content-type unification
 
-Date: 2026-10-11. Status: isolated release prepared; migration and ingestion services applied; backfill in progress.
+Date: 2026-10-11. Status: production migration and backfill complete; frontend release awaiting CI.
 
 ## Scope and evidence
 
 This combines source-code analysis with read-only production schema and coverage
-queries. The approved migration is now applied; the bounded production backfill is running. The checkout contains
+queries. The approved migration is now applied; the bounded production backfill is complete. The checkout contains
 substantial unrelated uncommitted changes, which were preserved.
 
 Measured coverage: 97,810 canonical venues, 94,233 unlinked venues, 6,415 canonical
@@ -170,9 +170,22 @@ location search documents. Existing venue IDs, URLs and references remain intact
   drafts; public editor resolution retains its elevated-role check.
 - Deployed `source-community-submissions` and `pipeline-commit`, plus submit worker
   version `5a1f275a-2b0f-4eee-90c9-0e5160be49ce`.
-- Backfill is running. REST batch timeouts roll back their batch; the script now
+- Backfill is complete: all 96,902 canonical venues are linked, with zero unlinked
+  records. 246 organisations own multiple locations. REST timeouts roll back their
+  batch; the script now
   reduces the batch size automatically and resumes from still-unlinked locations.
-- Frontend deployment waits for complete coverage. Existing venue IDs and public
+- Removed 93,318 generated venue-only identity queue entries that the indexer
+  deliberately ignores. Confirmed zero duplicate generated identity search documents,
+  no venue quality-score drift in the index, and no organisation-reference dependency
+  in the venue indexer. The existing search drain continues with zero recent failures.
+- The live critical data-quality gates pass. Frontend deployment awaits the remaining
+  CI checks in PR #4311. Existing venue IDs and public
   location URLs remain intact.
 
 A physical table collapse is outside the approved design.
+
+Full-suite integration follow-up: legacy route aliases remain explicitly supported;
+internal venue details remain revisioned and retain the Locations deduplication lane.
+The editor fixture now provides the query context used by real application routes.
+All 29 tests covering the seven full-suite failures now pass. The production
+migration recovery on main was reconciled without changing applied SQL.
