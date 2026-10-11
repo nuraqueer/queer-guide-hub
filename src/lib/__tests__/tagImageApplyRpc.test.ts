@@ -78,9 +78,20 @@ describe('tag_image_apply_rpc migration', () => {
     expect(statements).toMatch(/raise exception[\s\S]{0,200}expected exactly 1/);
   });
 
-  it('no-ops when the exemption is already present', () => {
+  it('no-ops when the exemption is already present, testing STRIPPED source', () => {
     // Re-run, or another session got there first.
-    expect(statements).toMatch(/position\('''enrichment_status'''\s+in v_src\)\s*>\s*0/);
+    //
+    // The idempotency check must read a comment-stripped copy, while `v_src`
+    // itself stays raw because the patch re-executes the real definition
+    // including its comments. Unstripped, a comment that merely NAMES the
+    // column -- which part 2 of this file adds to the function -- reads as
+    // "already patched", the patch skips, and P2 (which strips) then aborts
+    // `db push` for every migration queued behind it.
+    expect(statements).toMatch(
+      /position\('''enrichment_status'''\s+in\s+regexp_replace\(v_src,[\s\S]{0,80}?\)\)\s*>\s*0/,
+    );
+    // ...and the raw definition is still what gets re-executed.
+    expect(statements).toMatch(/execute replace\(v_src, v_from, v_to\)/);
   });
 
   for (const proc of ['tag_image_apply', 'tag_image_bump_miss']) {
@@ -179,6 +190,40 @@ describe('tag_image_apply_rpc migration', () => {
 });
 
 describe('tag_image_apply_rpc postconditions', () => {
+  it('P2 strips comments before searching the definition', () => {
+    // Found by mutation: reverting P2 to a bare `pg_get_functiondef(p.oid)`
+    // SURVIVED, because nothing here asserted the strip. `pg_get_functiondef()`
+    // returns the body INCLUDING comments, and part 2 of this migration adds a
+    // comment to `log_unified_tag_change` that NAMES `enrichment_status` -- so
+    // the unstripped form is satisfied by the prose and passes with the array
+    // entry missing. Falsely GREEN, which is the worse direction.
+    //
+    // `scripts/check-functiondef-asserts.mjs` is the CI gate for this class and
+    // it caught the original on PR #4303; this is the repo-local half, so the
+    // property is guarded where it is cheap to see rather than only at apply.
+    const p2 = verify.slice(verify.indexOf('into v_src'), verify.indexOf('P2 failed'));
+    expect(p2.length).toBeGreaterThan(0);
+    expect(verify).toMatch(
+      /regexp_replace\(pg_get_functiondef\(p\.oid\),\s*'--\[\^'\s*\|\|\s*chr\(10\)\s*\|\|\s*'\]\*'/,
+    );
+    // chr(10), never a '\n' literal: in a plain single-quoted PostgreSQL string
+    // a backslash-n is two characters, so the pattern would match neither.
+    expect(verify).not.toMatch(/regexp_replace\(pg_get_functiondef\([^)]*\),\s*'--\[\^\\n\]/);
+  });
+
+  it('counts the postcondition CONDITIONS, not just the messages they print', () => {
+    // Found by mutation: neutering P10's `if v_bad <> 0` to `if v_bad < 0`
+    // SURVIVED. Every string-anchored assertion stayed green -- the slug list,
+    // the regex and the `P10 failed` text are all untouched -- while the check
+    // had stopped checking. Anchoring on the condition is the documented fix
+    // (60000101160000), and a count is what makes it hold for all of them.
+    const conds = verify.match(/if\s+v_bad\s*<>\s*0\s+then/g) ?? [];
+    expect(conds.length).toBeGreaterThanOrEqual(2);
+    // No loosened comparison anywhere in the block.
+    expect(verify).not.toMatch(/if\s+v_bad\s*[<>]\s*0\s+then/);
+    expect(verify).not.toMatch(/v_bad\s*(<=|>=)\s*0/);
+  });
+
   it('asserts the column, the exemption and BOTH pre-existing exemptions', () => {
     // A patch that REPLACED the array rather than extending it satisfies the
     // enrichment_status check alone.
@@ -247,11 +292,88 @@ describe('tag_image_apply_rpc postconditions', () => {
   it('counts every postcondition, so a loosened comparison cannot hide', () => {
     // Neutering `if v_bad <> 0` to `if v_bad < 0` leaves every string-anchored
     // assertion green while the check has stopped checking (60000101160000).
-    for (let n = 1; n <= 9; n++) {
+    //
+    // `P1 failed` is NOT a prefix of `P10 failed` -- after `P1` comes `0`, not a
+    // space -- so a plain substring check per n cannot be satisfied by the
+    // wrong postcondition. Checked rather than assumed, because the shared-
+    // prefix trap (`to service_role` inside `to service_role, authenticated`)
+    // is one this repo has been bitten by.
+    for (let n = 1; n <= 10; n++) {
       expect(verify).toContain(`P${n} failed`);
     }
     expect(verify).not.toMatch(/\bwhere false\b/);
     expect(verify).not.toMatch(/if\s+false\s+then/);
+  });
+});
+
+describe('the superseded provenance automation', () => {
+  /**
+   * Scoped to the ONE statement, because `description` and the slug both appear
+   * in P10's query too -- an assertion over the whole statements region would
+   * match there and pass with this UPDATE deleted.
+   *
+   * Computed LAZILY, and the end is the statement's own terminating semicolon
+   * rather than an offset from the idempotency guard's literal. A first draft
+   * did both the other way and mutation testing reported HARNESS-BROKEN rather
+   * than a catch: removing the guard made the inner `indexOf` return -1, the
+   * slice collapsed, and an `expect()` evaluated at describe time threw during
+   * COLLECTION, so vitest ran no tests at all. "No tests" is not a failure a
+   * careless harness distinguishes from a pass -- so the anchor must not depend
+   * on the thing being mutated, and nothing may assert at module scope.
+   * None of the SET clause's string literals contains a semicolon, checked.
+   */
+  const stmt = () => {
+    const start = statements.indexOf('update public.admin_automations');
+    const end = statements.indexOf(';', start);
+    return start < 0 || end < 0 ? '' : statements.slice(start, end);
+  };
+
+  it('PREPENDS, preserving the previous description verbatim', () => {
+    // A first draft retyped the whole description from what the row said when
+    // the file was authored. By merge time a concurrent session had added
+    // `[COMPLETED 2026-09-26: verified no eligible work remains]`, so retyping
+    // would have discarded another session's measurement -- and the retyped
+    // "original note" had merged two of the retirement note's sentences into
+    // one while presenting itself as a quote. `|| description` cannot do either.
+    expect(stmt()).toMatch(/\|\|\s*description\s*$/m);
+    expect(stmt()).toContain('[SUPERSEDED 2026-10-11');
+  });
+
+  it('does not write `enabled`, so the reconciler still cannot re-arm it', () => {
+    // Re-enabling a retired automation as a side effect of a feature is the
+    // Wolfram-cron / detect_stale_venues shape. `sync_automations_to_cron()`
+    // branch (b) is a kill switch only while `enabled` stays false.
+    //
+    // Scoped to the SET clause. A first draft used `/set[\s\S]*\benabled\b=/`
+    // over the whole statement and FAILED on correct code, because the greedy
+    // span reached the WHERE clause's own `enabled = false` -- an anchor wider
+    // than the claim. That direction is the cheap one; the same width in a
+    // negative assertion passes while the thing it guards is gone.
+    const s = stmt();
+    const setClause = s.slice(0, s.indexOf(' where '));
+    expect(setClause.length).toBeGreaterThan(0);
+    expect(setClause).not.toMatch(/\benabled\b/);
+    expect(s.slice(s.indexOf(' where '))).toMatch(/enabled\s*=\s*false/);
+  });
+
+  it('is idempotent, so a replay cannot stack the note onto itself', () => {
+    expect(stmt()).toMatch(/description not like '\[SUPERSEDED%'/);
+  });
+
+  it('P10 asserts BOTH halves, and asserts the REACHED state', () => {
+    // `enabled = false` alone passes while the row still tells the next reader
+    // that image_url is null corpus-wide; the text alone passes if this
+    // migration re-armed a retired automation. The text half is POSITIVE
+    // (`not like '[SUPERSEDED%'`) rather than an absence check on the old
+    // phrase, because the replacement QUOTES the false claim in order to
+    // explain it -- an absence pattern would have to miss its own quotation.
+    const p10 = verify.slice(
+      verify.indexOf("slug = 'tag_image_provenance_sync'"),
+      verify.indexOf('P10 failed'),
+    );
+    expect(p10.length).toBeGreaterThan(0);
+    expect(p10).toMatch(/enabled/);
+    expect(p10).toMatch(/description not like '\[SUPERSEDED%'/);
   });
 });
 

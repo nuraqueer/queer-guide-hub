@@ -100,7 +100,19 @@ begin
   end if;
 
   -- Already done (a re-run, or another session got there first).
-  if position('''enrichment_status''' in v_src) > 0 then
+  --
+  -- Tested against a COMMENT-STRIPPED copy while `v_src` itself stays raw,
+  -- because line 114 must re-execute the real definition including its
+  -- comments. The two needs are different and the distinction is load-bearing:
+  -- a comment that merely NAMES the column -- which part 2 of this very file
+  -- adds -- would otherwise read as "already patched", the patch would skip,
+  -- and P2 below (which strips) would then abort `db push` for every migration
+  -- queued behind it. Measured on prod before shipping: the live definition
+  -- mentions the column 0 times in code and 0 times in prose, and the anchor
+  -- appears exactly once either way, so this is prevention rather than a
+  -- live repair.
+  if position('''enrichment_status''' in
+              regexp_replace(v_src, '--[^' || chr(10) || ']*', '', 'g')) > 0 then
     raise notice 'v_derived already carries enrichment_status -- no patch needed';
     return;
   end if;
@@ -239,18 +251,27 @@ grant execute on function public.tag_image_bump_miss(uuid, text) to service_role
 --
 -- `admin_automations.tag_image_provenance_sync` (disabled, rpc-type, weekly
 -- `run_tag_image_provenance_sync`) recovered license/attribution/source/alt
--- for tag images hosted on Wikimedia Commons. Its description reads:
+-- for tag images hosted on Wikimedia Commons. Its retirement note says
+-- `unified_tags.image_url is null on every row, so the Commons provenance
+-- match can never fire again`.
 --
---     "[RETIRED 2026-08-28: glossary photography removed wholesale (TagPlate
---      change); unified_tags.image_url is null on every row, so the Commons
---      provenance match can never fire again. Kept disabled rather than
---      deleted so sync_automations_to_cron cannot re-arm it.]"
+-- Every clause was true when written. Re-introducing photography makes that
+-- one false: `image_url` stops being null corpus-wide, so the match CAN fire
+-- again. Found by querying `admin_automations` for the namespace this feature
+-- writes into, before merging -- not by any test, and not by reading the
+-- migration tree.
 --
--- Every clause was true when written. Re-introducing photography makes the
--- middle one false: `image_url` stops being null corpus-wide, so the match
--- CAN fire again. Found by querying `admin_automations` for the namespace this
--- feature writes into, before merging -- not by any test, and not by reading
--- the migration tree.
+-- THE NOTE IS PREPENDED AND THE EXISTING TEXT IS PRESERVED BYTE-FOR-BYTE,
+-- which is not tidiness. A first draft RETYPED the whole description from what
+-- the row said when this file was authored, and by the time it was about to
+-- merge the row had moved: a concurrent session had added
+-- `[COMPLETED 2026-09-26: verified no eligible work remains]`, a measurement
+-- this file has no business discarding, and the retyped "original note" had
+-- also silently merged two of the retirement note's sentences into one while
+-- presenting itself as a quote. Prepending cannot do either. It is also why
+-- there is no equality precondition on the old text -- soft on preconditions,
+-- because a concurrent edit to a control surface is legitimate and must not
+-- abort `db push` for the whole repo.
 --
 -- IT STAYS DISABLED, and the reason is the contract rather than inertia.
 -- `enforce_tag_image_contract` refuses a non-null `image_url` that lacks
@@ -268,21 +289,23 @@ grant execute on function public.tag_image_bump_miss(uuid, text) to service_role
 
 update public.admin_automations
    set description =
-         '[SUPERSEDED 2026-10-11 by the tag-imagery re-introduction] Weekly: recovered '
-      || 'license/attribution/source/alt for tag images hosted on Wikimedia Commons via '
-      || 'the imageinfo API. STAYS DISABLED, and the 2026-08-28 retirement note below is '
-      || 'now wrong on one point: it said unified_tags.image_url is null on every row so '
-      || 'the Commons match can never fire again, and glossary photography has since been '
-      || 're-introduced, so it can. What replaces this job is enforce_tag_image_contract, '
-      || 'which REFUSES a non-null image_url lacking license/attribution/source/alt -- so '
-      || 'a published row cannot be missing the provenance this job recovered, and there '
-      || 'is nothing left for it to do. Obsolete by construction rather than idle. Kept '
+         '[SUPERSEDED 2026-10-11 by the tag-imagery re-introduction] STAYS DISABLED. The '
+      || '2026-08-28 retirement note below is now wrong on one point: it said '
+      || 'unified_tags.image_url is null on every row so the Commons provenance match can '
+      || 'never fire again, and glossary photography has since been re-introduced, so it '
+      || 'can. What replaces this job is enforce_tag_image_contract, which REFUSES a '
+      || 'non-null image_url lacking license/attribution/source/alt -- so a published row '
+      || 'cannot be missing the provenance this job recovered, and there is nothing left '
+      || 'for it to do. Obsolete by construction rather than idle, which is a stronger '
+      || 'claim than the one it carried and the opposite of a reason to re-arm it. Kept '
       || 'disabled rather than deleted so sync_automations_to_cron cannot re-arm it. '
-      || 'Original note: [RETIRED 2026-08-28: glossary photography removed wholesale '
-      || '(TagPlate change). Self-hosted images were out of scope -- their provenance was '
-      || 'never captured and cannot be recovered (see 20260921100000).]'
+      || 'Everything from here on is the previous description, verbatim: '
+      || description
  where slug = 'tag_image_provenance_sync'
-   and enabled = false;
+   and enabled = false
+   -- Idempotent, and it is the reason this can be re-run or replayed on a
+   -- rebuild without stacking a second copy of the note onto itself.
+   and description not like '[SUPERSEDED%';
 
 -- ---------------------------------------------------------------------------
 -- Postconditions. Assert the REACHED state, and assert the behaviour rather
@@ -309,7 +332,18 @@ begin
   end if;
 
   -- P2: the audit trigger exempts it.
-  select pg_get_functiondef(p.oid) into v_src
+  --
+  -- COMMENTS ARE STRIPPED FIRST, and this file is why the rule exists for
+  -- presence checks and not only for counts. `pg_get_functiondef()` returns the
+  -- body INCLUDING its comments, and part 2 above adds a comment to
+  -- `log_unified_tag_change` that NAMES `enrichment_status` while explaining the
+  -- exemption -- so an unstripped `position(...)` here is satisfied by the prose
+  -- and would pass with the array entry itself missing. Falsely GREEN on a
+  -- security-shaped property, which is the worse of the two directions.
+  -- `chr(10)` rather than '\n': in a plain single-quoted literal a backslash-n
+  -- is a literal backslash and an n, so the pattern would match neither.
+  select regexp_replace(pg_get_functiondef(p.oid), '--[^' || chr(10) || ']*', '', 'g')
+    into v_src
     from pg_proc p join pg_namespace n on n.oid = p.pronamespace
    where n.nspname = 'public' and p.proname = 'log_unified_tag_change';
   if position('''enrichment_status''' in v_src) = 0 then
