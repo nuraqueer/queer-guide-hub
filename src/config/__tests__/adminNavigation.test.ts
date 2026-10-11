@@ -74,9 +74,9 @@ describe('adminNavSections shape', () => {
 
 describe('getNavItemByRoute', () => {
   it('finds an item by its exact route', () => {
-    const item = getNavItemByRoute('/admin/content/venues');
-    expect(item?.id).toBe('venues');
-    expect(item?.countTable).toBe('venues');
+    const item = getNavItemByRoute('/admin/content/organizations');
+    expect(item?.id).toBe('organizations');
+    expect(item?.countTable).toBe('organizations');
   });
 
   it('returns undefined for unknown route', () => {
@@ -91,8 +91,8 @@ describe('getBreadcrumbsForRoute', () => {
   });
 
   it('builds [Admin Console, Section, Item] for a deep route', () => {
-    const crumbs = getBreadcrumbsForRoute('/admin/content/venues');
-    expect(crumbs.map((c) => c.label)).toEqual(['Admin Console', 'Content', 'Venues']);
+    const crumbs = getBreadcrumbsForRoute('/admin/content/organizations');
+    expect(crumbs.map((c) => c.label)).toEqual(['Admin Console', 'Content', 'Organisations']);
   });
 
   it("omits section crumb for cockpit's /admin overview", () => {
@@ -152,10 +152,10 @@ describe('getAllCountTables', () => {
     }
   });
 
-  it('returns at least venues and events', () => {
+  it('returns at least organisations and events', () => {
     const tables = getAllCountTables();
     const tableNames = tables.map((t) => t.table);
-    expect(tableNames).toContain('venues');
+    expect(tableNames).toContain('organizations');
     expect(tableNames).toContain('events');
   });
 });
@@ -244,7 +244,6 @@ describe('getRouteMinRole', () => {
       'personalities',
       'queer_villages',
       'unified_tags',
-      'venues',
     ]);
   });
 });
