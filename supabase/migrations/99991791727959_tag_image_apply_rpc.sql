@@ -155,7 +155,7 @@ begin
   perform set_config('app.actor', 'machine:tag-imagery', true);
 
   select coalesce(enrichment_status, '{}'::jsonb) into v_status
-    from public.unified_tags where id = p_tag_id;
+    from public.unified_tags where id = p_tag_id for update;
 
   if not found then
     raise exception 'tag % not found', p_tag_id using errcode = '22023';
@@ -202,7 +202,7 @@ begin
   perform set_config('app.actor', 'machine:tag-imagery', true);
 
   select coalesce(enrichment_status, '{}'::jsonb) into v_status
-    from public.unified_tags where id = p_tag_id;
+    from public.unified_tags where id = p_tag_id for update;
 
   if not found then
     raise exception 'tag % not found', p_tag_id using errcode = '22023';
