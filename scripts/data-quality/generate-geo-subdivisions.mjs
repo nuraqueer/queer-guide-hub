@@ -76,7 +76,7 @@ const EXTRA_ALIASES = {
 // Extremadura (as Cáceres already is). ES-O / ES-S / ES-LO are listed twice
 // under one code (province and community), which made each its own parent;
 // the community is the first-level unit.
-// 99991791713213: Haute-Saône hangs under Grand Est; it is
+// 99991791721754: Haute-Saône hangs under Grand Est; it is
 // Bourgogne-Franche-Comté like every sibling department. Paris (the
 // collectivity FR-75C) has no parent, so a point in Paris climbed to FR-75C
 // while every Paris city carries FR-IDF.
@@ -93,7 +93,7 @@ const PARENT_OVERRIDES = {
 }
 // dr5hn swaps the GeoNames admin1 numbers of Buenos Aires province (AR.01)
 // and the autonomous city (AR.07); every "01"/"07" region_name resolved to the
-// wrong one until 99991791713213.
+// wrong one until 99991791721754.
 // BD's fips are the ISO letters, which the ISO-suffix arm already matches;
 // the GeoNames division numbers in region_name ("81" = Dhaka) matched nothing.
 const FIPS_OVERRIDES = {

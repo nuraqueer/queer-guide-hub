@@ -4706,7 +4706,7 @@ const DISOWNED_PROSE_CEILING = 380
     }
   }
 
-  // 99991791713213: region_code filled from Natural Earth admin-1 polygons.
+  // 99991791721754: region_code filled from Natural Earth admin-1 polygons.
   // The backlog only warns (it drains every 15 min); a filled code from
   // another country is a zero-invariant, and a probe that saw no polygons
   // measured nothing.
@@ -4716,7 +4716,7 @@ const DISOWNED_PROSE_CEILING = 380
     body: '{}',
   })
   if (polyRes.status === 404) {
-    console.warn('⚠ city_region_polygon_signals → HTTP 404 (not applied? migration 99991791713213)')
+    console.warn('⚠ city_region_polygon_signals → HTTP 404 (not applied? migration 99991791721754)')
     console.warn('  This check measured NOTHING — it did not pass.')
   } else if (!polyRes.ok) {
     console.error(`✗ city_region_polygon_signals → HTTP ${polyRes.status}`)

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-// Guards 99991791713213_city_region_polygon_fill.sql, the generator it mirrors
+// Guards 99991791721754_city_region_polygon_fill.sql, the generator it mirrors
 // and its health-script block.
 //
 // What must not drift:
@@ -18,7 +18,7 @@ import { join } from 'node:path';
 //   6. runner + sentinel are service_role only, and the FR parent fixes live in
 //      both the migration and the generator.
 
-const MIGRATION = '99991791713213_city_region_polygon_fill.sql';
+const MIGRATION = '99991791721754_city_region_polygon_fill.sql';
 const raw = readFileSync(join(process.cwd(), 'supabase/migrations', MIGRATION), 'utf8');
 const generator = readFileSync(
   join(process.cwd(), 'scripts/data-quality/generate-geo-subdivisions.mjs'),

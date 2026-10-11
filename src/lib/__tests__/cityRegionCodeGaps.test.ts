@@ -75,7 +75,7 @@ describe('hierarchy repairs', () => {
     }
   });
 
-  // Later migrations add their own parent repairs (99991791713213: FR-70,
+  // Later migrations add their own parent repairs (99991791721754: FR-70,
   // FR-75C, MA-NOU, MA-CHT, RS-01..07); the generator must carry the union, exactly.
   const LATER_PAIRS: Record<string, string> = {
     'FR-70': 'FR-BFC',
