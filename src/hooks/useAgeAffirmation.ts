@@ -72,16 +72,16 @@ async function persistAccountAffirmation(
     .select('age_confirmed_at')
     .maybeSingle();
 
-  // Keep auth metadata in sync for signup/backwards compatibility, but never
-  // use user-editable metadata as an authorization decision.
-  const metadataResult = await supabase.auth.updateUser({
-    data: { age_confirmed_at: affirmedAt },
-  });
-
   if (profileResult.error) return profileResult.error;
   if (!profileResult.data?.age_confirmed_at) {
     return new Error('Profile confirmation was not saved');
   }
+
+  // A metadata write emits USER_UPDATED. Only emit it after the canonical
+  // profile write succeeds, or a missing profile repeatedly retries itself.
+  const metadataResult = await supabase.auth.updateUser({
+    data: { age_confirmed_at: affirmedAt },
+  });
   return metadataResult.error ?? null;
 }
 

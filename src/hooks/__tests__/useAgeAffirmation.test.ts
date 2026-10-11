@@ -150,6 +150,19 @@ describe('useAgeAffirmation', () => {
     await waitFor(() => expect(result.current.affirmed).toBe(true));
   });
 
+  it('does not emit another auth update when a legacy profile repair fails', async () => {
+    accountMocks.updateProfile.mockResolvedValueOnce({ data: null, error: null });
+    const { result } = renderHook(() => useAgeAffirmation());
+    act(() => {
+      authCallback?.('SIGNED_IN', {
+        user: { id: 'user-1', user_metadata: { age_confirmed_at: '2025-06-01T00:00:00Z' } },
+      });
+    });
+    await waitFor(() => expect(result.current.accountSyncError).toBeTruthy());
+    expect(result.current.affirmed).toBe(true);
+    expect(accountMocks.updateUser).not.toHaveBeenCalled();
+  });
+
   it('does not declare the reader unaffirmed while a profile lookup is pending', async () => {
     let resolveLookup: ((value: unknown) => void) | undefined;
     accountMocks.profileLookup.mockReturnValueOnce(
