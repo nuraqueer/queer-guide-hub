@@ -234,6 +234,57 @@ revoke all on function public.tag_image_bump_miss(uuid, text) from authenticated
 grant execute on function public.tag_image_bump_miss(uuid, text) to service_role;
 
 -- ---------------------------------------------------------------------------
+-- 6. One retired automation's stated premise becomes FALSE when this ships,
+--    and THIS CHANGE IS WHAT FALSIFIES IT.
+--
+-- `admin_automations.tag_image_provenance_sync` (disabled, rpc-type, weekly
+-- `run_tag_image_provenance_sync`) recovered license/attribution/source/alt
+-- for tag images hosted on Wikimedia Commons. Its description reads:
+--
+--     "[RETIRED 2026-08-28: glossary photography removed wholesale (TagPlate
+--      change); unified_tags.image_url is null on every row, so the Commons
+--      provenance match can never fire again. Kept disabled rather than
+--      deleted so sync_automations_to_cron cannot re-arm it.]"
+--
+-- Every clause was true when written. Re-introducing photography makes the
+-- middle one false: `image_url` stops being null corpus-wide, so the match
+-- CAN fire again. Found by querying `admin_automations` for the namespace this
+-- feature writes into, before merging -- not by any test, and not by reading
+-- the migration tree.
+--
+-- IT STAYS DISABLED, and the reason is the contract rather than inertia.
+-- `enforce_tag_image_contract` refuses a non-null `image_url` that lacks
+-- license/attribution/source/alt, so a row this feature publishes CANNOT be
+-- missing the provenance that job existed to recover. It is now obsolete by
+-- construction, not merely idle -- which is a stronger statement than the one
+-- it carries, and the opposite of a reason to re-arm it. Re-enabling a retired
+-- automation as a side effect of a feature is also exactly the shape this repo
+-- has been burned by (the Wolfram cron, `detect_stale_venues`).
+--
+-- Only the description changes. `enabled` is untouched, so
+-- `sync_automations_to_cron()` branch (b) still cannot re-arm it, and the
+-- postcondition below asserts that rather than trusting this comment.
+-- ---------------------------------------------------------------------------
+
+update public.admin_automations
+   set description =
+         '[SUPERSEDED 2026-10-11 by the tag-imagery re-introduction] Weekly: recovered '
+      || 'license/attribution/source/alt for tag images hosted on Wikimedia Commons via '
+      || 'the imageinfo API. STAYS DISABLED, and the 2026-08-28 retirement note below is '
+      || 'now wrong on one point: it said unified_tags.image_url is null on every row so '
+      || 'the Commons match can never fire again, and glossary photography has since been '
+      || 're-introduced, so it can. What replaces this job is enforce_tag_image_contract, '
+      || 'which REFUSES a non-null image_url lacking license/attribution/source/alt -- so '
+      || 'a published row cannot be missing the provenance this job recovered, and there '
+      || 'is nothing left for it to do. Obsolete by construction rather than idle. Kept '
+      || 'disabled rather than deleted so sync_automations_to_cron cannot re-arm it. '
+      || 'Original note: [RETIRED 2026-08-28: glossary photography removed wholesale '
+      || '(TagPlate change). Self-hosted images were out of scope -- their provenance was '
+      || 'never captured and cannot be recovered (see 20260921100000).]'
+ where slug = 'tag_image_provenance_sync'
+   and enabled = false;
+
+-- ---------------------------------------------------------------------------
 -- Postconditions. Assert the REACHED state, and assert the behaviour rather
 -- than the source text -- a text check cannot tell a live guard from a dead
 -- one.
@@ -382,6 +433,31 @@ begin
     raise exception 'P9 failed: % probe rows left behind', v_leaked;
   end if;
 
-  raise notice 'tag_image_apply_rpc: P1-P9 passed';
+  -- P10: the superseded provenance automation is still DISABLED and its
+  -- description no longer asserts the premise this feature falsifies.
+  --
+  -- Both halves are needed and neither alone is the claim. Asserting only
+  -- `enabled = false` passes while the row still tells the next reader that
+  -- image_url is null corpus-wide; asserting only the text passes if this
+  -- migration re-armed a retired automation as a side effect, which is the
+  -- Wolfram-cron failure. The row is also allowed not to exist -- a sibling
+  -- session may legitimately delete it -- so this is soft on the row and hard
+  -- on its state, per the soft-preconditions rule.
+  --
+  -- The text half is a POSITIVE assertion on the reached state, deliberately.
+  -- The obvious form -- "the old premise phrase is absent" -- is unsafe here
+  -- for the reason this repo has recorded twice: the replacement QUOTES the
+  -- false claim in order to explain it, so an absence pattern would have to
+  -- miss its own quotation by a comma and one word, and the next person to fix
+  -- that sentence's grammar fails the check on correct code.
+  select count(*) into v_bad
+    from public.admin_automations
+   where slug = 'tag_image_provenance_sync'
+     and (enabled or description not like '[SUPERSEDED%');
+  if v_bad <> 0 then
+    raise exception 'P10 failed: tag_image_provenance_sync is enabled, or its description was not superseded';
+  end if;
+
+  raise notice 'tag_image_apply_rpc: P1-P10 passed';
 end
 $verify$;

@@ -1,5 +1,5 @@
 /**
- * Guards 99991791634937_tag_image_apply_rpc.sql and the two call sites it exists
+ * Guards 99991791713983_tag_image_apply_rpc.sql and the two call sites it exists
  * for.
  *
  * Running tag-imagery ONCE found three defects no test, typecheck or green
@@ -22,7 +22,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 const ROOT = join(__dirname, '../../..');
-const MIGRATION = '99991791634937_tag_image_apply_rpc.sql';
+const MIGRATION = '99991791713983_tag_image_apply_rpc.sql';
 
 const rawSql = readFileSync(join(ROOT, 'supabase/migrations', MIGRATION), 'utf8');
 const rawFn = readFileSync(join(ROOT, 'supabase/functions/tag-imagery/index.ts'), 'utf8');
@@ -320,8 +320,18 @@ describe('tag-imagery is reachable by its only caller', () => {
     // before requireInternalOrAdmin ever runs. Measured, not inferred.
     const idx = config.indexOf('[functions.tag-imagery]');
     expect(idx).toBeGreaterThan(0);
-    const section = config.slice(idx, config.indexOf('[functions.', idx + 10));
-    expect(section).toMatch(/^verify_jwt = false$/m);
+    // The next section may not exist (this entry can be last), and indexOf's -1
+    // would silently chop the final character off the slice.
+    const nextIdx = config.indexOf('[functions.', idx + 10);
+    const section = config.slice(idx, nextIdx === -1 ? undefined : nextIdx);
+
+    // Assert the key is declared EXACTLY ONCE and that the one declaration is
+    // false. A bare /^verify_jwt = false$/m is satisfied by a section that
+    // declares BOTH values -- mutation-tested: inserting `verify_jwt = true`
+    // above the real line left that assertion green while the section now
+    // declares the gateway check ON.
+    const declarations = section.match(/^verify_jwt = \w+$/gm) ?? [];
+    expect(declarations).toEqual(['verify_jwt = false']);
   });
 
   it('self-gates in the function, so verify_jwt = false is not the only check', () => {
