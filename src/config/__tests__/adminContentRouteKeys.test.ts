@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
-import { contentTypeRegistry } from '@/config/contentTypes';
+import { contentTypeRegistry, contentTypeRouteAliases } from '@/config/contentTypes';
 
 /**
  * `/admin/content/:type` never 404s on a bad key.
@@ -85,7 +85,10 @@ describe('admin /admin/content/:type route keys', () => {
   });
 
   it('every referenced content type exists in the registry', () => {
-    const known = new Set(Object.keys(contentTypeRegistry));
+    const known = new Set([
+      ...Object.keys(contentTypeRegistry),
+      ...Object.keys(contentTypeRouteAliases),
+    ]);
     const bad: string[] = [];
 
     for (const file of files) {
@@ -104,6 +107,11 @@ describe('admin /admin/content/:type route keys', () => {
         `The route will NOT 404 — it silently renders the "All Content" list, so a test ` +
         `referencing it passes while never visiting the intended page.\n${bad.join('\n')}`,
     ).toEqual([]);
+  });
+
+  it('legacy aliases point to a registered canonical type', () => {
+    for (const target of Object.values(contentTypeRouteAliases))
+      expect(contentTypeRegistry[target]).toBeDefined();
   });
 
   it('ignores a route named in a comment but still catches a live one', () => {

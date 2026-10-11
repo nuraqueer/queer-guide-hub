@@ -13,6 +13,7 @@ describe('submissionRegistry', () => {
       'event',
       'hotel',
       'news',
+      'organization',
       'personality',
       'place',
       'product',
@@ -62,7 +63,7 @@ describe('submissionTypes ordered list', () => {
     for (const t of submissionTypes) {
       expect(t.group === 'primary' || t.group === 'more').toBe(true);
     }
-    expect(primarySubmissionTypes.map((t) => t.id)).toEqual(['event', 'venue', 'product']);
+    expect(primarySubmissionTypes.map((t) => t.id)).toEqual(['event', 'venue', 'organization', 'product']);
     expect(moreSubmissionTypes.every((t) => t.group === 'more')).toBe(true);
     expect(primarySubmissionTypes.length + moreSubmissionTypes.length).toBe(submissionTypes.length);
   });
