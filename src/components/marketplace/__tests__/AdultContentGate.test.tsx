@@ -2,7 +2,7 @@
  * @vitest-environment jsdom
  */
 import { describe, it, expect, beforeEach } from 'vitest';
-import { fireEvent, render } from '@testing-library/react';
+import { fireEvent, render, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
 
 import { AdultContentGate } from '../AdultContentGate';
@@ -24,22 +24,23 @@ describe('AdultContentGate', () => {
     expect(queryByRole('alertdialog')).toBeNull();
   });
 
-  it('opens when active and unacknowledged', () => {
+  it('opens when active and unacknowledged', async () => {
     const { getByRole } = render(
       <MemoryRouter>
         <AdultContentGate active />
       </MemoryRouter>,
     );
-    expect(getByRole('alertdialog')).toBeTruthy();
+    await waitFor(() => expect(getByRole('alertdialog')).toBeTruthy());
     expect(getByRole('button', { name: /I am 18 or older/i })).toBeTruthy();
   });
 
-  it('persists acknowledgement in localStorage', () => {
+  it('persists acknowledgement in localStorage', async () => {
     const { getByText, queryByRole } = render(
       <MemoryRouter>
         <AdultContentGate active />
       </MemoryRouter>,
     );
+    await waitFor(() => expect(getByText(/I am 18 or older/i)).toBeTruthy());
     fireEvent.click(getByText(/I am 18 or older/i));
     expect(localStorage.getItem(KEY)).toBeTruthy();
     expect(queryByRole('alertdialog')).toBeNull();
