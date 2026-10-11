@@ -91,7 +91,7 @@ export default function TagsIndex() {
   const { allTags, categoriesTree, loading, error } = useCentralizedTags();
   const { data: usageCounts = {} } = useTagUsageCounts();
   const safeMode = useSafeMode();
-  const { affirm } = useAgeAffirmation();
+  const { affirmed, checking: checkingAgeAffirmation, affirm } = useAgeAffirmation();
 
   // ── URL state ───────────────────────────────────────────────────────────
   const resolveCategorySlug = useCallback(
@@ -226,7 +226,7 @@ export default function TagsIndex() {
   /** Safe mode + the explicit `?adult=1` opt-in. The index did NO safe-mode
    *  filtering at all before this, so 18+ terms sat in the grid for signed-out
    *  visitors while the detail page dutifully gated them. */
-  const hideAdult = safeMode.enabled && !state.adult;
+  const hideAdult = safeMode.enabled && !state.adult && !affirmed;
 
   const inScope = useCallback(
     (e: TagIndexEntry) => {
@@ -521,7 +521,7 @@ export default function TagsIndex() {
                   ? t('tags.searching', 'Searching…')
                   : t('tags.count', '{{count}} terms', { count: primaryResults.length })}
               </p>
-              {hideAdult && (
+              {hideAdult && !checkingAgeAffirmation && (
                 <button
                   type="button"
                   onClick={() => {

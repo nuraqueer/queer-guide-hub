@@ -28,9 +28,9 @@ interface Props {
  */
 export function AgeAffirmationModal({ active, onDecline }: Props) {
   const { t } = useTranslation();
-  const { affirmed, affirm } = useAgeAffirmation();
+  const { affirmed, checking, affirm } = useAgeAffirmation();
 
-  const open = active && !affirmed;
+  const open = active && !checking && !affirmed;
 
   return (
     <Dialog

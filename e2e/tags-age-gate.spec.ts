@@ -67,6 +67,16 @@ test.describe('@p0-3 /tags age gate', () => {
     await page.reload();
     await expect(page.getByTestId('age-gate-placeholder')).toHaveCount(0);
     await expect(page.getByTestId('age-affirmation-modal')).toHaveCount(0);
+
+    // The confirmation is global account/browser state, not a transient Tags
+    // query flag. Returning to the index must keep 18+ terms included without
+    // asking for a second opt-in or adding `adult=1` to the URL.
+    await page.goto('/tags?q=age+play');
+    await expect(page.locator('a[href*="/tags/age-play"]').first()).toBeVisible({
+      timeout: 15_000,
+    });
+    await expect(page.getByRole('button', { name: /include 18\+/i })).toHaveCount(0);
+    await expect(page).not.toHaveURL(/adult=1/);
   });
 
   // Replaces the `test.skip` placeholder that stood here since the toggle UI
