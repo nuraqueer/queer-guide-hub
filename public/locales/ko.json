@@ -148,7 +148,7 @@
     "addToMap": "지도에 추가하기",
     "seeOnMap": "지도에서 {{count}}개 결과 보기",
     "keyHints": "↑↓ 이동 · ↵ 열기",
-    "open": "검색 열기"
+    "open": "검색"
   },
   "common": {
     "contentInLanguage": "{{lang}}(으)로",

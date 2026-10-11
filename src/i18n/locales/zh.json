@@ -148,7 +148,7 @@
     "addToMap": "把它加到地图上",
     "seeOnMap": "在地图上查看 {{count}} 条结果",
     "keyHints": "↑↓ 导航 · ↵ 打开",
-    "open": "打开搜索"
+    "open": "搜索"
   },
   "common": {
     "contentInLanguage": "语言：{{lang}}",

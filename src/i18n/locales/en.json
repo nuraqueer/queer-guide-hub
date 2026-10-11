@@ -334,7 +334,7 @@
     "addToMap": "Add it to the map",
     "seeOnMap": "See {{count}} results on the map",
     "keyHints": "↑↓ navigate · ↵ open",
-    "open": "Open search"
+    "open": "Search"
   },
   "common": {
     "back": "Back",
@@ -2287,7 +2287,7 @@
       "contact": "Contact",
       "privacy": "Privacy",
       "terms": "Terms",
-      "donate": "Support us"
+      "donate": "Support Us"
     },
     "mobileNav": {
       "home": "Home",

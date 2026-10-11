@@ -148,7 +148,7 @@
     "addToMap": "地図に追加する",
     "seeOnMap": "{{count}}件を地図で見る",
     "keyHints": "↑↓ 移動 · ↵ 開く",
-    "open": "検索を開く"
+    "open": "検索"
   },
   "common": {
     "contentInLanguage": "言語：{{lang}}",
@@ -2108,7 +2108,7 @@
       "contact": "お問い合わせ",
       "privacy": "プライバシー",
       "terms": "利用規約",
-      "donate": "応援する"
+      "donate": "サポートする"
     },
     "signUp": "Sign up",
     "navigation": "Navigation",

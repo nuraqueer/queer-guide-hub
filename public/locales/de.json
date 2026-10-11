@@ -148,7 +148,7 @@
     "addToMap": "Zur Karte hinzufügen",
     "seeOnMap": "{{count}} Ergebnisse auf der Karte",
     "keyHints": "↑↓ navigieren · ↵ öffnen",
-    "open": "Suche öffnen"
+    "open": "Suchen"
   },
   "common": {
     "contentInLanguage": "Auf {{lang}}",
