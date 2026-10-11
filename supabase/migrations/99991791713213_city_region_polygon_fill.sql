@@ -32,7 +32,9 @@
 --   coordinates are each a few hundred metres off. A point with another
 --   admin-1 polygon of a DIFFERENT first-level unit within ~3 km is stamped
 --   ambiguous_border and left alone.
--- * Fill estimate after both gates: see the dry run quoted in the PR.
+-- * Dry run of this file on prod (rolled back): 5,037 filled, 0 wrong
+--   country; AR 54 re-filed (47 -> AR-B, 7 -> AR-C) and then trusted (83
+--   filled); IR trusted after the crosswalk.
 --
 -- VOCABULARY FIXES (found by the calibration, carried by the generator too)
 -- * FR-70 Haute-Saône hangs under FR-GES (Grand Est). It is
@@ -42,9 +44,35 @@
 --   up to FR-75C while every Paris city on record carries FR-IDF. 0 live
 --   cities carry FR-75C (measured), so giving it parent FR-IDF moves nothing.
 --
+-- CROSSWALK — the three countries whose polygons speak another code scheme
+-- (measured per polygon and per province centroid, 2026-10-11):
+-- * AR: polygon and vocabulary codes are IDENTICAL; what was wrong is OURS.
+--   dr5hn gives AR-B (the province) fips "07" and AR-C (the autonomous city)
+--   fips "01"; GeoNames admin1 is the other way round (AR.01 = Buenos Aires
+--   province, AR.07 = Ciudad de Buenos Aires). So every city whose region_name
+--   arrived as the GeoNames number was filed in the wrong one: 47 province
+--   towns (Bahía Blanca, Azul, Junín, Mar del Plata ...) under the capital and
+--   the capital itself plus Palermo, Belgrano, Balvanera ... under the
+--   province. content_revisions still holds the original "01"/"07" for each,
+--   so the repair keys on that evidence, not on the polygon.
+-- * IR: Natural Earth numbers the provinces differently (its IR-07 is two
+--   polygons, Tehran AND Alborz; ours is Fars). 31 rows map polygon NAME to
+--   our code, 1:1, all 31 provinces covered.
+-- * MA: Natural Earth has the 16 regions from BEFORE the 2015 reform, we have
+--   the 12 after it. Placing each of our provinces' centroids in the old
+--   polygons: 7 old regions lie wholly inside one new region and are mapped;
+--   7 were split by the reform and map to NOTHING (a point there is stamped
+--   no_code rather than guessed); MA-15/MA-16 are Western Sahara and are
+--   deliberately not given a Moroccan region.
+-- * Two dr5hn parents found on the way: MA-NOU Nouaceur hangs under
+--   Rabat-Salé-Kénitra, it is Casablanca-Settat; MA-CHT Chtouka-Aït Baha hangs
+--   under Casablanca-Settat, it is Souss-Massa. Carried by the generator too.
+--
 -- RULES
 -- * Fill-if-empty only: region_code IS NULL and region_name empty. An existing
---   code is never overwritten — a generalised polygon is the weaker signal.
+--   code is never overwritten BY A POLYGON — a generalised polygon is the
+--   weaker signal. The one overwrite in this file is the AR repair, and it
+--   rests on the recorded GeoNames number, not on the polygon.
 --   The 256 cities with an unresolvable region_name text are left out too.
 -- * region_name is written only when the subdivision's own name resolves back
 --   to the same code (40 first-level names are ambiguous and do not); else
@@ -68,8 +96,148 @@ update public.geo_subdivisions set parent_code = 'FR-BFC'
  where code = 'FR-70' and parent_code is distinct from 'FR-BFC';
 update public.geo_subdivisions set parent_code = 'FR-IDF'
  where code = 'FR-75C' and parent_code is distinct from 'FR-IDF';
+update public.geo_subdivisions set parent_code = 'MA-06'
+ where code = 'MA-NOU' and parent_code is distinct from 'MA-06';
+update public.geo_subdivisions set parent_code = 'MA-09'
+ where code = 'MA-CHT' and parent_code is distinct from 'MA-09';
+update public.geo_subdivisions set fips_code = '01'
+ where code = 'AR-B' and fips_code is distinct from '01';
+update public.geo_subdivisions set fips_code = '07'
+ where code = 'AR-C' and fips_code is distinct from '07';
 
--- 2. Lookup: which first-level unit does a point fall in, per the polygons
+-- 1b. Crosswalk for polygons whose code is not ours. region_code NULL means
+--     "this polygon has no single answer" and the runner stamps no_code.
+create table if not exists public.geo_boundary_region_map (
+  polygon_code text not null,
+  polygon_name text not null,
+  region_code  text references public.geo_subdivisions (code),
+  reason       text not null,
+  primary key (polygon_code, polygon_name)
+);
+alter table public.geo_boundary_region_map enable row level security;
+revoke all on public.geo_boundary_region_map from public, anon, authenticated;
+grant select on public.geo_boundary_region_map to service_role;
+
+insert into public.geo_boundary_region_map (polygon_code, polygon_name, region_code, reason) values
+  ('IR-01', 'East Azarbaijan', 'IR-03', 'ne_renumbered'),
+  ('IR-02', 'West Azarbaijan', 'IR-04', 'ne_renumbered'),
+  ('IR-03', 'Ardebil', 'IR-24', 'ne_renumbered'),
+  ('IR-04', 'Esfahan', 'IR-10', 'ne_renumbered'),
+  ('IR-05', 'Ilam', 'IR-16', 'ne_renumbered'),
+  ('IR-06', 'Bushehr', 'IR-18', 'ne_renumbered'),
+  ('IR-07', 'Alborz', 'IR-30', 'ne_renumbered'),
+  ('IR-07', 'Tehran', 'IR-23', 'ne_renumbered'),
+  ('IR-08', 'Chahar Mahall and Bakhtiari', 'IR-14', 'ne_renumbered'),
+  ('IR-10', 'Khuzestan', 'IR-06', 'ne_renumbered'),
+  ('IR-11', 'Zanjan', 'IR-19', 'ne_renumbered'),
+  ('IR-12', 'Semnan', 'IR-20', 'ne_renumbered'),
+  ('IR-13', 'Sistan and Baluchestan', 'IR-11', 'ne_renumbered'),
+  ('IR-14', 'Fars', 'IR-07', 'ne_renumbered'),
+  ('IR-15', 'Kerman', 'IR-08', 'ne_renumbered'),
+  ('IR-16', 'Kordestan', 'IR-12', 'ne_renumbered'),
+  ('IR-17', 'Kermanshah', 'IR-05', 'ne_renumbered'),
+  ('IR-18', 'Kohgiluyeh and Buyer Ahmad', 'IR-17', 'ne_renumbered'),
+  ('IR-19', 'Gilan', 'IR-01', 'ne_renumbered'),
+  ('IR-20', 'Lorestan', 'IR-15', 'ne_renumbered'),
+  ('IR-21', 'Mazandaran', 'IR-02', 'ne_renumbered'),
+  ('IR-22', 'Markazi', 'IR-00', 'ne_renumbered'),
+  ('IR-23', 'Hormozgan', 'IR-22', 'ne_renumbered'),
+  ('IR-24', 'Hamadan', 'IR-13', 'ne_renumbered'),
+  ('IR-25', 'Yazd', 'IR-21', 'ne_renumbered'),
+  ('IR-26', 'Qom', 'IR-25', 'ne_renumbered'),
+  ('IR-27', 'Golestan', 'IR-27', 'ne_renumbered'),
+  ('IR-28', 'Qazvin', 'IR-26', 'ne_renumbered'),
+  ('IR-29', 'South Khorasan', 'IR-29', 'ne_renumbered'),
+  ('IR-30', 'Razavi Khorasan', 'IR-09', 'ne_renumbered'),
+  ('IR-31', 'North Khorasan', 'IR-28', 'ne_renumbered'),
+  ('MA-01', 'Tanger - Tétouan', 'MA-01', 'pre_2015_region_within'),
+  ('MA-04', 'Oriental', 'MA-02', 'pre_2015_region_within'),
+  ('MA-05', 'Fès - Boulemane', 'MA-03', 'pre_2015_region_within'),
+  ('MA-07', 'Rabat - Salé - Zemmour - Zaer', 'MA-04', 'pre_2015_region_within'),
+  ('MA-08', 'Grand Casablanca', 'MA-06', 'pre_2015_region_within'),
+  ('MA-11', 'Marrakech - Tensift - Al Haouz', 'MA-07', 'pre_2015_region_within'),
+  ('MA-12', 'Tadla - Azilal', 'MA-05', 'pre_2015_region_within'),
+  ('MA-02', 'Gharb - Chrarda - Béni Hssen', null, 'pre_2015_region_split'),
+  ('MA-03', 'Taza - Al Hoceima - Taounate', null, 'pre_2015_region_split'),
+  ('MA-06', 'Meknès - Tafilalet', null, 'pre_2015_region_split'),
+  ('MA-09', 'Chaouia - Ouardigha', null, 'pre_2015_region_split'),
+  ('MA-10', 'Doukkala - Abda', null, 'pre_2015_region_split'),
+  ('MA-13', 'Souss - Massa - Draâ', null, 'pre_2015_region_split'),
+  ('MA-14', 'Guelmim - Es-Semara', null, 'pre_2015_region_split'),
+  ('MA-15', 'Laâyoune - Boujdour - Sakia El Hamra', null, 'disputed_western_sahara'),
+  ('MA-16', 'Oued el Dahab', null, 'disputed_western_sahara')
+on conflict (polygon_code, polygon_name) do update
+  set region_code = excluded.region_code, reason = excluded.reason;
+
+-- 1c. AR: re-file the cities the swapped fips put in the wrong unit. Keyed on
+--     the GeoNames number content_revisions recorded as their region_name,
+--     and only while region_name still reads what the writeback put there.
+create temp table _ar_swap on commit drop as
+select c.id,
+       c.region_code as was,
+       ev.num,
+       case ev.num when '01' then 'AR-B' else 'AR-C' end as code,
+       case ev.num when '01' then 'Buenos Aires' else 'Autonomous City of Buenos Aires' end as name
+  from public.cities c
+  join public.countries co on co.id = c.country_id and co.code = 'AR'
+  cross join lateral (
+    select r.before ->> 'region_name' as num
+      from public.content_revisions r
+     where r.source_table = 'cities' and r.source_id = c.id
+       and r.before ->> 'region_name' in ('01', '07')
+     order by r.seq desc
+     limit 1
+  ) ev
+ where (ev.num = '01' and c.region_code = 'AR-C' and c.region_name = 'Autonomous City of Buenos Aires')
+    or (ev.num = '07' and c.region_code = 'AR-B' and c.region_name = 'Buenos Aires');
+
+update public.cities c
+   set region_code = s.code,
+       region_name = s.name,
+       enrichment_status = coalesce(c.enrichment_status, '{}'::jsonb)
+         || jsonb_build_object('region_fips_swap_repair', jsonb_build_object(
+              'from', s.was, 'to', s.code, 'geonames_admin1', s.num, 'at', now()))
+  from _ar_swap s
+ where c.id = s.id
+   and not exists (
+     select 1 from public.cities o
+      where o.country_id = c.country_id and o.id <> c.id and o.region_code = s.code
+        and (lower(o.name) = lower(c.name) or o.canonical_key = c.canonical_key));
+
+-- The province towns' venues/events copied the wrong name into `state`.
+update public.venues v set state = 'Buenos Aires'
+  from _ar_swap s where v.city_id = s.id and s.code = 'AR-B' and v.state = 'Autonomous City of Buenos Aires';
+update public.events e set state = 'Buenos Aires'
+  from _ar_swap s where e.city_id = s.id and s.code = 'AR-B' and e.state = 'Autonomous City of Buenos Aires';
+update public.hotels h set state = 'Buenos Aires'
+  from _ar_swap s where h.city_id = s.id and s.code = 'AR-B' and h.state = 'Autonomous City of Buenos Aires';
+update public.organizations o set state = 'Buenos Aires'
+  from _ar_swap s where o.city_id = s.id and s.code = 'AR-B' and o.state = 'Autonomous City of Buenos Aires';
+
+-- 2. Which first-level unit a polygon stands for, in a given country: the
+--    crosswalk wins when it has a row (even a NULL one), else our own code or
+--    its name. Used for the point's own polygon AND for its neighbours.
+create or replace function public.geo_boundary_region(p_boundary_id bigint, p_cc text)
+returns text
+language sql
+stable
+set search_path to 'public'
+as $$
+  select case when split_part(g.iso_3166_2, '-', 1) = p_cc then
+           case when m.polygon_code is not null then m.region_code
+                else coalesce(public.geo_subdivision_root(g.iso_3166_2),
+                              public.resolve_region_code(p_cc, g.name))
+           end
+         end
+    from public.geo_boundaries g
+    left join public.geo_boundary_region_map m
+      on m.polygon_code = g.iso_3166_2 and m.polygon_name = g.name
+   where g.id = p_boundary_id;
+$$;
+
+revoke all on function public.geo_boundary_region(bigint, text) from public, anon, authenticated;
+grant execute on function public.geo_boundary_region(bigint, text) to service_role;
+
 create or replace function public.city_region_polygon_lookup(
   p_cc text,
   p_pt geometry,
@@ -85,10 +253,7 @@ as $$
   select g.id,
          g.iso_3166_2,
          split_part(g.iso_3166_2, '-', 1),
-         case when split_part(g.iso_3166_2, '-', 1) = p_cc then
-           coalesce(public.geo_subdivision_root(g.iso_3166_2),
-                    public.resolve_region_code(p_cc, g.name))
-         end
+         public.geo_boundary_region(g.id, p_cc)
     from public.geo_boundaries g
    where g.boundary_kind = 'admin1'
      and st_intersects(g.geom, p_pt)
@@ -193,12 +358,8 @@ begin
               where o.boundary_kind = 'admin1'
                 and o.id <> l.boundary_id
                 and st_dwithin(o.geom, k.pt, 0.03)
-                and coalesce(
-                      public.geo_subdivision_root(o.iso_3166_2),
-                      case when split_part(o.iso_3166_2, '-', 1) = k.cc
-                           then public.resolve_region_code(k.cc, o.name) end,
-                      o.iso_3166_2
-                    ) is distinct from l.region_code
+                and coalesce(public.geo_boundary_region(o.id, k.cc), o.iso_3166_2)
+                    is distinct from l.region_code
            ) then 'ambiguous_border'
            when tw.id is not null then 'twin_exists'
            else 'filled'
@@ -363,6 +524,48 @@ begin
   if public.geo_subdivision_root('FR-75C') is distinct from 'FR-IDF' then
     raise exception 'P2 failed: FR-75C does not roll up to FR-IDF';
   end if;
+  if (select fips_code from public.geo_subdivisions where code = 'AR-B') is distinct from '01'
+     or (select fips_code from public.geo_subdivisions where code = 'AR-C') is distinct from '07' then
+    raise exception 'P2b failed: AR fips not swapped back to GeoNames';
+  end if;
+  if public.geo_subdivision_root('MA-NOU') is distinct from 'MA-06'
+     or public.geo_subdivision_root('MA-CHT') is distinct from 'MA-09' then
+    raise exception 'P2c failed: MA province parents not repaired';
+  end if;
+  -- Every IR province is reached by exactly one crosswalk row, and every
+  -- mapped polygon lies within 50 km of its province's own centroid. Not
+  -- "contains": NE's Razavi/South Khorasan line predates the county moves
+  -- since 2013, so South Khorasan's centroid sits 22 km outside its polygon.
+  -- A wrong mapping is hundreds of km off.
+  if (select count(distinct region_code) from public.geo_boundary_region_map where polygon_code like 'IR-%')
+     <> (select count(*) from public.geo_subdivisions where country_code = 'IR' and parent_code is null) then
+    raise exception 'P2d failed: IR crosswalk does not cover every province exactly once';
+  end if;
+  if exists (
+    select 1
+      from public.geo_boundary_region_map m
+      join public.geo_boundaries g on g.boundary_kind = 'admin1' and g.iso_3166_2 = m.polygon_code and g.name = m.polygon_name
+      join public.geo_subdivisions s on s.code = m.region_code
+     where m.polygon_code like 'IR-%' and s.latitude is not null
+       and not extensions.st_dwithin(g.geom::extensions.geography,
+             extensions.st_setsrid(extensions.st_makepoint(s.longitude::float8, s.latitude::float8), 4326)::extensions.geography, 50000)
+  ) then
+    raise exception 'P2e failed: an IR crosswalk row points at a province whose centroid is over 50 km from that polygon';
+  end if;
+  if exists (
+    select 1 from public.geo_boundary_region_map m
+     where not exists (select 1 from public.geo_boundaries g
+                        where g.boundary_kind = 'admin1' and g.iso_3166_2 = m.polygon_code and g.name = m.polygon_name)
+  ) then
+    raise exception 'P2f failed: a crosswalk row names a polygon that does not exist';
+  end if;
+  if exists (
+    select 1 from public.cities c
+     where c.enrichment_status ? 'region_fips_swap_repair'
+       and c.region_code is distinct from c.enrichment_status -> 'region_fips_swap_repair' ->> 'to'
+  ) then
+    raise exception 'P2g failed: an AR repair did not stick';
+  end if;
   if exists (select 1 from public.geo_subdivisions where public.geo_subdivision_root(code) is null) then
     raise exception 'P3 failed: a subdivision climbs to no root after the parent fixes';
   end if;
@@ -373,7 +576,8 @@ begin
   end if;
   if has_function_privilege('anon', 'public.run_city_region_polygon_fill(integer, boolean)', 'EXECUTE')
      or has_function_privilege('authenticated', 'public.run_city_region_polygon_fill(integer, boolean)', 'EXECUTE')
-     or has_function_privilege('anon', 'public.city_region_polygon_signals()', 'EXECUTE') then
+     or has_function_privilege('anon', 'public.city_region_polygon_signals()', 'EXECUTE')
+     or has_table_privilege('anon', 'public.geo_boundary_region_map', 'SELECT') then
     raise exception 'P5 failed: runner or sentinel reachable by anon/authenticated';
   end if;
   if not exists (select 1 from cron.job where jobname = 'city_region_polygon_fill') then

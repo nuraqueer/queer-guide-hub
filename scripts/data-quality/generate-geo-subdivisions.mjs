@@ -85,7 +85,13 @@ const PARENT_OVERRIDES = {
   'IT-GR': 'IT-52', 'IT-LI': 'IT-52', 'IT-LU': 'IT-52', 'IT-MS': 'IT-52',
   'IT-PI': 'IT-52', 'IT-PO': 'IT-52', 'IT-PT': 'IT-52', 'IT-SI': 'IT-52',
   'FR-70': 'FR-BFC', 'FR-75C': 'FR-IDF',
+  // Nouaceur is Casablanca-Settat, Chtouka-Aït Baha is Souss-Massa.
+  'MA-NOU': 'MA-06', 'MA-CHT': 'MA-09',
 }
+// dr5hn swaps the GeoNames admin1 numbers of Buenos Aires province (AR.01)
+// and the autonomous city (AR.07); every "01"/"07" region_name resolved to the
+// wrong one until 99991791713213.
+const FIPS_OVERRIDES = { 'AR-B': '01', 'AR-C': '07' }
 
 const q = (s) => (s == null || s === '' ? 'null' : `'${String(s).trim().replace(/'/g, "''")}'`)
 const num = (s) => (s == null || s === '' || Number.isNaN(Number(s)) ? 'null' : String(Number(s)))
@@ -126,7 +132,7 @@ const rows = [...byCode.values()]
       q(name),
       q(s.type),
       q(parent),
-      q(s.fips_code),
+      q(FIPS_OVERRIDES[s.iso3166_2] ?? s.fips_code),
       q(s.wikiDataId),
       num(s.latitude),
       num(s.longitude),

@@ -32,6 +32,18 @@ const statements = raw
   .filter((l) => !l.trimStart().startsWith('--'))
   .join('\n');
 
+const helper = statements.slice(
+  statements.indexOf('create or replace function public.geo_boundary_region'),
+  statements.indexOf('create or replace function public.city_region_polygon_lookup'),
+);
+const crosswalk = statements.slice(
+  statements.indexOf('insert into public.geo_boundary_region_map'),
+  statements.indexOf('create temp table _ar_swap'),
+);
+const arRepair = statements.slice(
+  statements.indexOf('create temp table _ar_swap'),
+  statements.indexOf('create or replace function public.geo_boundary_region'),
+);
 const lookup = statements.slice(
   statements.indexOf('create or replace function public.city_region_polygon_lookup'),
   statements.indexOf('create or replace function public.run_city_region_polygon_fill'),
@@ -53,7 +65,7 @@ const verify = statements.slice(statements.indexOf('do $verify$'));
 
 describe('the spans this file depends on', () => {
   it('found all of them', () => {
-    for (const s of [lookup, runner, candidates, update, sentinel, verify]) {
+    for (const s of [helper, crosswalk, arRepair, lookup, runner, candidates, update, sentinel, verify]) {
       expect(s.length).toBeGreaterThan(40);
     }
   });
@@ -83,9 +95,10 @@ describe('fill-if-empty', () => {
 });
 
 describe('gates', () => {
-  it('climbs the polygon code to the first level, same country only', () => {
-    expect(lookup).toMatch(/when split_part\(g\.iso_3166_2, '-', 1\) = p_cc then/);
-    expect(lookup).toMatch(/public\.geo_subdivision_root\(g\.iso_3166_2\)/);
+  it('climbs the polygon code to the first level, same country only, crosswalk first', () => {
+    expect(helper).toMatch(/case when split_part\(g\.iso_3166_2, '-', 1\) = p_cc then/);
+    expect(helper).toMatch(/case when m\.polygon_code is not null then m\.region_code\s+else coalesce\(public\.geo_subdivision_root\(g\.iso_3166_2\)/);
+    expect(lookup).toMatch(/public\.geo_boundary_region\(g\.id, p_cc\)/);
     expect(runner).toMatch(/s\.parent_code is null/);
   });
   it('refuses a polygon from another country', () => {
@@ -96,6 +109,9 @@ describe('gates', () => {
   });
   it('skips points near another first-level unit', () => {
     expect(runner).toMatch(/st_dwithin\(o\.geom, k\.pt, 0\.03\)/);
+    // neighbours are resolved through the same crosswalk, or IR/MA neighbours
+    // would read as another unit and block every point
+    expect(runner).toMatch(/coalesce\(public\.geo_boundary_region\(o\.id, k\.cc\), o\.iso_3166_2\)/);
     expect(runner).toMatch(/is distinct from l\.region_code\s*\) then 'ambiguous_border'/);
   });
   it('orders the gates so filled is only the fall-through', () => {
@@ -113,6 +129,52 @@ describe('vocabulary fixes', () => {
   it('lives in the generator too', () => {
     expect(generator).toMatch(/'FR-70': 'FR-BFC'/);
     expect(generator).toMatch(/'FR-75C': 'FR-IDF'/);
+    expect(generator).toMatch(/'MA-NOU': 'MA-06', 'MA-CHT': 'MA-09'/);
+  });
+});
+
+describe('crosswalk', () => {
+  const rows = [...crosswalk.matchAll(/\('([A-Z]{2}-\d{2})', '([^']+)', (null|'[A-Z]{2}-\d{2}'), '([a-z_0-9]+)'\)/g)];
+  it('maps all 31 IR provinces exactly once', () => {
+    const ir = rows.filter((r) => r[1].startsWith('IR-'));
+    expect(ir).toHaveLength(31);
+    expect(new Set(ir.map((r) => r[3])).size).toBe(31);
+    expect(ir.every((r) => r[3] !== 'null')).toBe(true);
+  });
+  it('gives the two Natural Earth IR-07 polygons different provinces', () => {
+    expect(crosswalk).toMatch(/\('IR-07', 'Alborz', 'IR-30'/);
+    expect(crosswalk).toMatch(/\('IR-07', 'Tehran', 'IR-23'/);
+  });
+  it('maps 7 whole MA regions, refuses the 7 split ones and Western Sahara', () => {
+    const ma = rows.filter((r) => r[1].startsWith('MA-'));
+    expect(ma).toHaveLength(16);
+    expect(ma.filter((r) => r[4] === 'pre_2015_region_within' && r[3] !== 'null')).toHaveLength(7);
+    expect(ma.filter((r) => r[4] === 'pre_2015_region_split' && r[3] === 'null')).toHaveLength(7);
+    const ws = ma.filter((r) => r[4] === 'disputed_western_sahara');
+    expect(ws.map((r) => r[1]).sort()).toEqual(['MA-15', 'MA-16']);
+    expect(ws.every((r) => r[3] === 'null')).toBe(true);
+  });
+});
+
+describe('AR fips swap', () => {
+  it('swaps the vocabulary back to GeoNames, in migration and generator', () => {
+    expect(statements).toMatch(/set fips_code = '01'\s+where code = 'AR-B'/);
+    expect(statements).toMatch(/set fips_code = '07'\s+where code = 'AR-C'/);
+    expect(generator).toMatch(/FIPS_OVERRIDES = \{ 'AR-B': '01', 'AR-C': '07' \}/);
+    expect(generator).toMatch(/q\(FIPS_OVERRIDES\[s\.iso3166_2\] \?\? s\.fips_code\)/);
+  });
+  it('repairs only rows whose recorded GeoNames number proves the swap', () => {
+    expect(arRepair).toMatch(/r\.before ->> 'region_name' in \('01', '07'\)/);
+    expect(arRepair).toMatch(/ev\.num = '01' and c\.region_code = 'AR-C' and c\.region_name = 'Autonomous City of Buenos Aires'/);
+    expect(arRepair).toMatch(/ev\.num = '07' and c\.region_code = 'AR-B' and c\.region_name = 'Buenos Aires'/);
+  });
+  it('refuses a repair that would collide with a same-name twin', () => {
+    expect(arRepair).toMatch(/and not exists \(\s*select 1 from public\.cities o/);
+  });
+  it('fixes entity state only on the province towns, only the wrong value', () => {
+    for (const t of ['venues', 'events', 'hotels', 'organizations']) {
+      expect(arRepair).toMatch(new RegExp(`update public\\.${t} \\w set state = 'Buenos Aires'[\\s\\S]*?s\\.code = 'AR-B' and \\w\\.state = 'Autonomous City of Buenos Aires';`));
+    }
   });
 });
 
@@ -120,6 +182,7 @@ describe('privileges and wiring', () => {
   it('revokes runner, lookup and sentinel from anon/authenticated', () => {
     for (const sig of [
       'city_region_polygon_lookup\\(text, geometry\\)',
+      'geo_boundary_region\\(bigint, text\\)',
       'run_city_region_polygon_fill\\(integer, boolean\\)',
       'city_region_polygon_signals\\(\\)',
     ]) {
