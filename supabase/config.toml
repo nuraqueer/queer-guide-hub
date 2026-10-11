@@ -135,6 +135,17 @@ verify_jwt = false
 [functions.tag-enrichment-sweep]
 verify_jwt = false
 
+[functions.tag-imagery]
+# Same posture, same measured reason as categorize-tags above. The driver
+# (scripts/data-quality/backfill-tag-images.mjs) posts through pg_net with
+# ONLY x-internal-secret and no Authorization header, so the secret never
+# leaves the database — with verify_jwt on, the gateway answers
+# UNAUTHORIZED_NO_AUTH_HEADER and hasInternalSecret() is never reached, i.e.
+# the function is unreachable by its only caller. The function self-gates
+# with requireInternalOrAdmin, which accepts the secret, a service-role
+# bearer or an admin JWT.
+verify_jwt = false
+
 [functions.calendar-feed]
 verify_jwt = false
 
