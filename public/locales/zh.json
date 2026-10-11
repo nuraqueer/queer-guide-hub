@@ -2705,7 +2705,21 @@
       "subtitle": "管理你的联系人",
       "gate": "请登录以查看你的好友。",
       "requests": "请求",
-      "sentRequest": "向你发送了好友请求"
+      "sentRequest": "向你发送了好友请求",
+      "loadError": "无法加载你的好友。",
+      "empty": {
+        "title": "还没有好友。",
+        "description": "寻找可以联系的人。",
+        "cta": "寻找用户",
+        "pendingSent_one": "你有 {{count}} 个已发送的请求正在等待回复。请查看“请求”标签页。",
+        "pendingSent_other": "你有 {{count}} 个已发送的请求正在等待回复。请查看“请求”标签页。"
+      },
+      "requestsEmpty": "没有待处理的好友请求。",
+      "received": "已收到",
+      "sent": "已发送",
+      "waitingForAnswer": "等待回复",
+      "pendingBadge": "待处理",
+      "cancelRequest": "撤回"
     },
     "entityDetail": {
       "milestoneNotFoundTitle": "未找到里程碑",
@@ -3194,7 +3208,8 @@
       "news": "新闻",
       "map": "地图",
       "history": "[ZH] Legal record",
-      "historyNote": "[ZH] What changed and when. Safety information without a date is not safety information."
+      "historyNote": "[ZH] What changed and when. Safety information without a date is not safety information.",
+      "about": "关于{{country}}"
     },
     "practical": {
       "languages": "语言",
@@ -3298,6 +3313,18 @@
       "title": "[ZH] Compare the law elsewhere",
       "body": "[ZH] Every country page carries the same legal breakdown, from the same sources, with the date it was checked.",
       "rights": "[ZH] Rights across the world"
+    },
+    "overview": "概览",
+    "gallery": {
+      "allTypes": "所有类型",
+      "verifiedOnly": "仅已验证场所",
+      "freeOnly": "仅免费活动",
+      "invalidDates": "请选择晚于开始日期的结束日期。",
+      "error": "无法加载此合集。",
+      "results_one": "{{count}} 个结果",
+      "results_other": "{{count}} 个结果",
+      "empty": "没有匹配结果。请尝试其他城市或重置筛选条件。",
+      "pagination": "图库分页"
     }
   },
   "inbox": {
@@ -3724,6 +3751,9 @@
       "blurb": "[ZH] Pick a few. They shape what we suggest, and they are how other members find people with something in common.",
       "blurbSignedOut": "[ZH] Sign in to pick a few. They shape what we suggest, and they are how other members find people with something in common.",
       "count": "[ZH] {{count}} selected"
+    },
+    "friends": {
+      "discover": "寻找用户"
     }
   },
   "hub": {
