@@ -2707,7 +2707,21 @@
       "subtitle": "Faça a gestão das suas conexões",
       "gate": "Inicie sessão para ver os seus amigos.",
       "requests": "Solicitações",
-      "sentRequest": "Enviou um pedido de amizade"
+      "sentRequest": "Enviou um pedido de amizade",
+      "loadError": "Não foi possível carregar suas amizades.",
+      "empty": {
+        "title": "Ainda sem amizades.",
+        "description": "Encontre pessoas para se conectar.",
+        "cta": "Encontrar pessoas",
+        "pendingSent_one": "Você tem {{count}} pedido enviado aguardando resposta. Veja a aba Pedidos.",
+        "pendingSent_other": "Você tem {{count}} pedidos enviados aguardando resposta. Veja a aba Pedidos."
+      },
+      "requestsEmpty": "Nenhum pedido de amizade em aberto.",
+      "received": "Recebidos",
+      "sent": "Enviados",
+      "waitingForAnswer": "Aguardando resposta",
+      "pendingBadge": "Pendente",
+      "cancelRequest": "Retirar"
     },
     "entityDetail": {
       "milestoneNotFoundTitle": "Marco não encontrado",
@@ -3196,7 +3210,8 @@
       "news": "Notícias",
       "map": "Mapa",
       "history": "[PT] Legal record",
-      "historyNote": "[PT] What changed and when. Safety information without a date is not safety information."
+      "historyNote": "[PT] What changed and when. Safety information without a date is not safety information.",
+      "about": "Sobre {{country}}"
     },
     "practical": {
       "languages": "Idiomas",
@@ -3300,6 +3315,18 @@
       "title": "[PT] Compare the law elsewhere",
       "body": "[PT] Every country page carries the same legal breakdown, from the same sources, with the date it was checked.",
       "rights": "[PT] Rights across the world"
+    },
+    "overview": "Visão geral",
+    "gallery": {
+      "allTypes": "Todos os tipos",
+      "verifiedOnly": "Apenas locais verificados",
+      "freeOnly": "Apenas eventos gratuitos",
+      "invalidDates": "Escolhe uma data de fim posterior à data de início.",
+      "error": "Não foi possível carregar esta coleção.",
+      "results_one": "{{count}} resultado",
+      "results_other": "{{count}} resultados",
+      "empty": "Sem resultados. Experimenta outra cidade ou repõe os filtros.",
+      "pagination": "Páginas da galeria"
     }
   },
   "inbox": {
@@ -3726,6 +3753,9 @@
       "blurb": "[PT] Pick a few. They shape what we suggest, and they are how other members find people with something in common.",
       "blurbSignedOut": "[PT] Sign in to pick a few. They shape what we suggest, and they are how other members find people with something in common.",
       "count": "[PT] {{count}} selected"
+    },
+    "friends": {
+      "discover": "Encontrar pessoas"
     }
   },
   "hub": {
