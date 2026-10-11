@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { untypedFrom, untypedRpc } from '@/integrations/supabase/untyped';
 import { contentTypeRegistry, getContentType } from '@/config/contentTypes';
+import { venueContentType } from '@/config/contentTypes/venue';
 import type { DedupCapability } from '@/types/cms';
 
 /**
@@ -58,11 +59,11 @@ export interface DedupType {
   cfg: DedupCapability;
 }
 
-/** Every content type whose registry `admin.dedup` block is set, in registry order. */
+/** Locations retain dedup tools even though their editor lives under Organisations. */
 export function useDedupTypes(): DedupType[] {
   return useMemo(
     () =>
-      Object.entries(contentTypeRegistry)
+      Object.entries({ venues: venueContentType, ...contentTypeRegistry })
         .filter(([, c]) => c.admin?.dedup)
         .map(([key, c]) => ({ key, label: c.label.plural, cfg: c.admin!.dedup! })),
     [],
