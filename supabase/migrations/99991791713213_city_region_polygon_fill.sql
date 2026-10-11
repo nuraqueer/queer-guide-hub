@@ -79,6 +79,36 @@
 --   Vojvodina districts (RS-01..07) under the province RS-VO, which is what
 --   every coded Serbian city on record already carries. dr5hn gave them no
 --   parent. The Kosovo districts are deliberately left alone.
+-- * PA: Panamá Oeste (PA-10) was cut out of Panamá (PA-8) in 2014; Natural
+--   Earth still has one Panamá polygon, so it maps to nothing.
+-- * GT: Natural Earth spells its polygon "Quezaltenango"; ours is GT-09
+--   Quetzaltenango, which the resolver could not reach. Four PA polygons are
+--   our units under other names (Kuna Yala = Guna Yala since 2011, Emberá,
+--   Ngöbe Buglé, Chiriquí) and are mapped explicitly, which is what lets PA
+--   pass the structure rule once the Panamá polygon is out of calibration.
+-- * KNOWN RESIDUAL ERROR, measured rather than hidden: Natural Earth draws a
+--   few small capital units too large, so a suburb can sit kilometres inside
+--   the wrong polygon where no border gate can see it — Lambaré (Central)
+--   inside Asunción, Klosterneuburg (Lower Austria) 8 km inside Vienna. An
+--   area cut-off was measured and rejected: it would also refuse hundreds of
+--   correct fills into Swiss cantons and Italian provinces. A city whose OWN
+--   coordinates are wrong gets the region of where the coordinates point
+--   (Fray Bartolomé de las Casas, Alta Verapaz, sits in Santa Rosa in our
+--   table) — the region follows the coordinates, never the name.
+-- * SI, GT, UA each failed calibration on ONE border city out of 5-9
+--   (Podčetrtek 46 m from its municipal line, Mixco 1.4 km from Sacatepéquez,
+--   and "Chorzòw Batory slaskie" — a POLISH town filed under Kyiv, 1.1 km
+--   from the oblast line). Two changes, both general:
+--   (a) calibration ignores cities within ~3 km of another first-level unit,
+--       the same gate the fill applies — trust is measured on the population
+--       that would actually be filled;
+--   (b) a country with ZERO calibration disagreements is also trusted when
+--       >= 95% of its polygons map unambiguously to our units (code in the
+--       vocabulary AND name or alias equal, or a crosswalk row). SI passes on
+--       that: 192 of 193 polygons carry our ISO municipality code, 187 with an
+--       identical name and the other 5 spelling variants (Kanal / Kanal ob
+--       Soči). A country whose stored codes contradict the polygons — AR before
+--       its repair — still fails, because (b) requires zero disagreements.
 -- * Two dr5hn parents found on the way: MA-NOU Nouaceur hangs under
 --   Rabat-Salé-Kénitra, it is Casablanca-Settat; MA-CHT Chtouka-Aït Baha hangs
 --   under Casablanca-Settat, it is Souss-Massa. Carried by the generator too.
@@ -189,7 +219,13 @@ insert into public.geo_boundary_region_map (polygon_code, polygon_name, region_c
   ('MA-15', 'Laâyoune - Boujdour - Sakia El Hamra', null, 'disputed_western_sahara'),
   ('MA-16', 'Oued el Dahab', null, 'disputed_western_sahara'),
   ('CO-CUN', 'Bogota', 'CO-DC', 'ne_mislabelled'),
-  ('BD-C', 'Dhaka', null, 'pre_2015_division_split')
+  ('BD-C', 'Dhaka', null, 'pre_2015_division_split'),
+  ('PA-8', 'Panama', null, 'pre_2014_province_split'),
+  ('GT-QZ', 'Quezaltenango', 'GT-09', 'ne_spelling'),
+  ('PA-4', 'Chiriquí', 'PA-4', 'ne_spelling'),
+  ('PA-EM', 'Emberá', 'PA-EM', 'ne_spelling'),
+  ('PA-KY', 'Kuna Yala', 'PA-KY', 'ne_spelling'),
+  ('PA-NB', 'Ngöbe Buglé', 'PA-NB', 'ne_spelling')
 on conflict (polygon_code, polygon_name) do update
   set region_code = excluded.region_code, reason = excluded.reason;
 
@@ -393,12 +429,44 @@ begin
     select cal.cc, cal.region_code, l.region_code as top
       from cal
       left join lateral public.city_region_polygon_lookup(cal.cc, cal.pt) l on true
+     where not exists (
+       select 1
+         from public.geo_boundaries o
+        where o.boundary_kind = 'admin1'
+          and o.id <> l.boundary_id
+          and st_dwithin(o.geom, cal.pt, 0.03)
+          and coalesce(public.geo_boundary_region(o.id, cal.cc), o.iso_3166_2) is distinct from l.region_code
+     )
+  ), structure as (
+    -- share of the country's polygons that map to one of our units without
+    -- interpretation: our code AND our name/alias, or a crosswalk row
+    select g.iso_a2 as cc,
+           count(*) as polys,
+           count(*) filter (where m.polygon_code is not null
+                               or (s.code is not null
+                                   and (public.city_name_key(s.name) = public.city_name_key(g.name)
+                                        or exists (select 1 from unnest(s.aliases) a
+                                                    where public.city_name_key(a) = public.city_name_key(g.name))))) as mapped
+      from public.geo_boundaries g
+      left join public.geo_subdivisions s on s.code = g.iso_3166_2
+      left join public.geo_boundary_region_map m on m.polygon_code = g.iso_3166_2 and m.polygon_name = g.name
+     where g.boundary_kind = 'admin1'
+       and g.iso_a2 in (select distinct cc from _rpf_cand)
+     group by g.iso_a2
   )
-  select cc,
-         count(*) filter (where top is not null) as n,
-         count(*) filter (where top = region_code) as agree
-    from hit
-   group by cc;
+  select k.cc,
+         coalesce(h.n, 0) as n,
+         coalesce(h.agree, 0) as agree,
+         coalesce(st.mapped::numeric / nullif(st.polys, 0), 0) as structure,
+         (   (coalesce(h.n, 0) >= 5 and h.agree::numeric / h.n >= 0.95)
+          or (coalesce(h.n, 0) = coalesce(h.agree, 0)
+              and coalesce(st.mapped::numeric / nullif(st.polys, 0), 0) >= 0.95)) as trusted
+    from (select distinct cc from _rpf_cand) k
+    left join (select cc,
+                      count(*) filter (where top is not null) as n,
+                      count(*) filter (where top = region_code) as agree
+                 from hit group by cc) h on h.cc = k.cc
+    left join structure st on st.cc = k.cc;
 
   drop table if exists _rpf_res;
   create temp table _rpf_res on commit drop as
@@ -415,7 +483,7 @@ begin
            when l.boundary_id is null then 'no_polygon'
            when l.polygon_country <> k.cc then 'other_country'
            when s.code is null then 'no_code'
-           when coalesce(t.n, 0) < 5 or t.agree::numeric / t.n < 0.95 then 'country_untrusted'
+           when not coalesce(t.trusted, false) then 'country_untrusted'
            -- ~3 km (0.03 degrees; narrower east-west at high latitude).
            when exists (
              select 1
@@ -497,9 +565,9 @@ begin
                                    from (select state, count(*) n from _rpf_res group by state) s), '{}'::jsonb),
            'filled_by_country', coalesce((select jsonb_object_agg(cc, n)
                                             from (select cc, count(*) n from _rpf_res where state = 'filled' group by cc) s), '{}'::jsonb),
-           'untrusted_countries', coalesce((select jsonb_object_agg(t.cc, jsonb_build_object('n', t.n, 'agree', t.agree))
+           'untrusted_countries', coalesce((select jsonb_object_agg(t.cc, jsonb_build_object('n', t.n, 'agree', t.agree, 'structure', round(t.structure, 3)))
                                               from _rpf_trust t
-                                             where coalesce(t.n, 0) < 5 or t.agree::numeric / t.n < 0.95), '{}'::jsonb)
+                                             where not t.trusted), '{}'::jsonb)
          )
     into v_summary;
   return v_summary;
@@ -554,7 +622,7 @@ insert into public.admin_automations (slug, name, description, managed_by, enabl
 values (
   'city_region_polygon_fill',
   'city_region_polygon_fill',
-  'Fills cities.region_code (and region_name when unambiguous) from Natural Earth admin-1 polygons, rolled up to the ISO first-level unit. Only countries whose existing codes agree >= 95% with the polygons are filled; border points within ~3 km of another unit are skipped. Fill-if-empty, visit-once (enrichment_status.region_polygon).',
+  'Fills cities.region_code (and region_name when unambiguous) from Natural Earth admin-1 polygons, rolled up to the ISO first-level unit. Only countries whose existing codes agree >= 95% with the polygons (or, with zero disagreements, whose polygons map >= 95% one-to-one onto our units) are filled; border points within ~3 km of another unit are skipped. Fill-if-empty, visit-once (enrichment_status.region_polygon).',
   'system',
   true,
   jsonb_build_object('type', 'schedule'),

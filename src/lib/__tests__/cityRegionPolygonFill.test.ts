@@ -108,8 +108,19 @@ describe('gates', () => {
   it('refuses a polygon from another country', () => {
     expect(runner).toMatch(/when l\.polygon_country <> k\.cc then 'other_country'/);
   });
-  it('requires per-country calibration of >= 5 rows at >= 95%', () => {
-    expect(runner).toMatch(/when coalesce\(t\.n, 0\) < 5 or t\.agree::numeric \/ t\.n < 0\.95 then 'country_untrusted'/);
+  it('trusts a country on calibration (>= 5 rows, >= 95%) or, with zero disagreements, on structure (>= 95%)', () => {
+    expect(runner).toMatch(/\(coalesce\(h\.n, 0\) >= 5 and h\.agree::numeric \/ h\.n >= 0\.95\)/);
+    expect(runner).toMatch(/or \(coalesce\(h\.n, 0\) = coalesce\(h\.agree, 0\)\s+and coalesce\(st\.mapped::numeric \/ nullif\(st\.polys, 0\), 0\) >= 0\.95\)\) as trusted/);
+    expect(runner).toMatch(/when not coalesce\(t\.trusted, false\) then 'country_untrusted'/);
+  });
+  it('calibrates only on cities the fill itself would not skip as border cases', () => {
+    const cal = runner.slice(runner.indexOf('), hit as ('), runner.indexOf('), structure as ('));
+    expect(cal).toMatch(/where not exists \(/);
+    expect(cal).toMatch(/st_dwithin\(o\.geom, cal\.pt, 0\.03\)/);
+  });
+  it('counts a polygon as structurally mapped only by code AND name, or by crosswalk', () => {
+    const st = runner.slice(runner.indexOf('), structure as ('), runner.indexOf('select k.cc'));
+    expect(st).toMatch(/m\.polygon_code is not null\s+or \(s\.code is not null\s+and \(public\.city_name_key\(s\.name\) = public\.city_name_key\(g\.name\)/);
   });
   it('skips points near another first-level unit', () => {
     expect(runner).toMatch(/st_dwithin\(o\.geom, k\.pt, 0\.03\)/);
@@ -161,6 +172,14 @@ describe('crosswalk', () => {
 });
 
 describe('RS, BD, CO', () => {
+  it('refuses the pre-2014 Panamá polygon and maps the Quezaltenango spelling', () => {
+    expect(crosswalk).toMatch(/\('PA-8', 'Panama', null, 'pre_2014_province_split'\)/);
+    expect(crosswalk).toMatch(/\('GT-QZ', 'Quezaltenango', 'GT-09', 'ne_spelling'\)/);
+    for (const [code, name] of [['PA-4', 'Chiriquí'], ['PA-EM', 'Emberá'], ['PA-KY', 'Kuna Yala'], ['PA-NB', 'Ngöbe Buglé']]) {
+      // a spelling row must point at the polygon's own code — it renames, it never re-files
+      expect(crosswalk).toContain(`('${code}', '${name}', '${code}', 'ne_spelling')`);
+    }
+  });
   it('sends the mislabelled Bogotá polygon to CO-DC and refuses the pre-2015 Dhaka division', () => {
     expect(crosswalk).toMatch(/\('CO-CUN', 'Bogota', 'CO-DC', 'ne_mislabelled'\)/);
     expect(crosswalk).toMatch(/\('BD-C', 'Dhaka', null, 'pre_2015_division_split'\)/);
