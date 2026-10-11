@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 
 const STORAGE_KEY = 'qg_age_affirmation';
@@ -9,6 +9,9 @@ const LEGACY_MARKETPLACE_KEY = 'qg.marketplace.ageAck';
 const SYNC_EVENT = 'qg-age-affirmation-sync';
 
 type Stored = { affirmedAt: number };
+type AccountUser = { id: string; user_metadata?: Record<string, unknown> };
+
+export type AgeAffirmationStatus = 'checking' | 'affirmed' | 'unaffirmed';
 
 function readStored(): Stored | null {
   if (typeof localStorage === 'undefined') return null;
@@ -36,8 +39,9 @@ function readStored(): Stored | null {
   }
 }
 
-function hasAccountAffirmation(user: { user_metadata?: Record<string, unknown> } | null): boolean {
-  return typeof user?.user_metadata?.age_confirmed_at === 'string';
+function metadataAffirmedAt(user: AccountUser | null): string | null {
+  const value = user?.user_metadata?.age_confirmed_at;
+  return typeof value === 'string' && Number.isFinite(Date.parse(value)) ? value : null;
 }
 
 function persistBrowserAffirmation(affirmedAt = Date.now()) {
@@ -51,13 +55,34 @@ function persistBrowserAffirmation(affirmedAt = Date.now()) {
   }
 }
 
-async function persistAccountAffirmation(affirmedAt: string): Promise<void> {
-  const { data } = await supabase.auth.getUser();
-  if (!data.user) return;
-  await Promise.allSettled([
-    supabase.auth.updateUser({ data: { age_confirmed_at: affirmedAt } }),
-    supabase.from('profiles').update({ age_confirmed_at: affirmedAt }).eq('user_id', data.user.id),
-  ]);
+async function persistAccountAffirmation(
+  affirmedAt: string,
+  knownUser?: AccountUser | null,
+): Promise<unknown | null> {
+  const user = knownUser ?? (await supabase.auth.getUser()).data.user;
+  if (!user) return null;
+
+  // The profile is the durable, auditable source of truth. Selecting the
+  // updated row is deliberate: an RLS-blocked UPDATE can otherwise look like a
+  // successful request that changed zero rows.
+  const profileResult = await supabase
+    .from('profiles')
+    .update({ age_confirmed_at: affirmedAt })
+    .eq('user_id', user.id)
+    .select('age_confirmed_at')
+    .maybeSingle();
+
+  // Keep auth metadata in sync for signup/backwards compatibility, but never
+  // use user-editable metadata as an authorization decision.
+  const metadataResult = await supabase.auth.updateUser({
+    data: { age_confirmed_at: affirmedAt },
+  });
+
+  if (profileResult.error) return profileResult.error;
+  if (!profileResult.data?.age_confirmed_at) {
+    return new Error('Profile confirmation was not saved');
+  }
+  return metadataResult.error ?? null;
 }
 
 /**
@@ -67,16 +92,27 @@ async function persistAccountAffirmation(affirmedAt: string): Promise<void> {
  * account consent restores it on other devices.
  */
 export function useAgeAffirmation() {
-  const [affirmed, setAffirmed] = useState<boolean>(() => !!readStored());
+  const [status, setStatus] = useState<AgeAffirmationStatus>(() =>
+    readStored() ? 'affirmed' : 'checking',
+  );
+  const [accountSyncError, setAccountSyncError] = useState<unknown | null>(null);
+  const resolutionId = useRef(0);
+  const affirmed = status === 'affirmed';
 
   const affirm = useCallback(async () => {
     const now = Date.now();
     persistBrowserAffirmation(now);
-    setAffirmed(true);
+    setStatus('affirmed');
+    setAccountSyncError(null);
     // Notify sibling instances in THIS tab (e.g. the gate) so gated content
     // reveals in place instead of only after a reload.
     window.dispatchEvent(new Event(SYNC_EVENT));
-    await persistAccountAffirmation(new Date(now).toISOString()).catch(() => undefined);
+    try {
+      const error = await persistAccountAffirmation(new Date(now).toISOString());
+      setAccountSyncError(error);
+    } catch (error) {
+      setAccountSyncError(error);
+    }
   }, []);
 
   const revoke = useCallback(() => {
@@ -88,13 +124,14 @@ export function useAgeAffirmation() {
     } catch {
       // Same as above — best-effort.
     }
-    setAffirmed(false);
+    setStatus('unaffirmed');
+    setAccountSyncError(null);
     window.dispatchEvent(new Event(SYNC_EVENT));
   }, []);
 
   // Keep state in sync with storage events from other tabs + same-tab siblings.
   useEffect(() => {
-    const resync = () => setAffirmed(!!readStored());
+    const resync = () => setStatus(readStored() ? 'affirmed' : 'unaffirmed');
     const onStorage = (e: StorageEvent) => {
       if (e.key !== STORAGE_KEY && e.key !== LEGACY_MARKETPLACE_KEY) return;
       resync();
@@ -107,35 +144,94 @@ export function useAgeAffirmation() {
     };
   }, []);
 
-  // Signup already requires the same 18+ affirmation. Adopt that durable
-  // account proof; older accounts fall back to the profiles column.
+  // Resolve the durable account record before declaring a signed-in reader
+  // unaffirmed. Without the explicit checking state, the modal flashes (and is
+  // actionable) while this query is still in flight.
   useEffect(() => {
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
-      const user = session?.user ?? null;
-      if (!user) return;
-      if (hasAccountAffirmation(user)) {
-        persistBrowserAffirmation(
-          Date.parse(String(user.user_metadata.age_confirmed_at)) || Date.now(),
-        );
-        setAffirmed(true);
-        window.dispatchEvent(new Event(SYNC_EVENT));
+    let disposed = false;
+
+    const resolveAccount = async (user: AccountUser | null) => {
+      const currentResolution = ++resolutionId.current;
+      const cached = readStored();
+
+      if (!user) {
+        if (!disposed && currentResolution === resolutionId.current) {
+          setStatus(cached ? 'affirmed' : 'unaffirmed');
+          setAccountSyncError(null);
+        }
         return;
       }
 
-      void supabase
+      if (!cached) setStatus('checking');
+
+      const profileResult = await supabase
         .from('profiles')
         .select('age_confirmed_at')
         .eq('user_id', user.id)
-        .maybeSingle()
-        .then(({ data }) => {
-          if (!data?.age_confirmed_at) return;
-          persistBrowserAffirmation(Date.parse(data.age_confirmed_at) || Date.now());
-          setAffirmed(true);
-          window.dispatchEvent(new Event(SYNC_EVENT));
-        });
+        .maybeSingle();
+
+      if (disposed || currentResolution !== resolutionId.current) return;
+
+      const profileTimestamp = profileResult.data?.age_confirmed_at ?? null;
+      const metadataTimestamp = metadataAffirmedAt(user);
+      const durableTimestamp = profileTimestamp ?? metadataTimestamp;
+
+      if (durableTimestamp) {
+        persistBrowserAffirmation(Date.parse(durableTimestamp) || Date.now());
+        setStatus('affirmed');
+        setAccountSyncError(profileResult.error);
+        window.dispatchEvent(new Event(SYNC_EVENT));
+
+        // Older accounts may only carry the signup metadata. Repair the
+        // canonical profile record while the proof is available.
+        if (!profileTimestamp && metadataTimestamp) {
+          void persistAccountAffirmation(metadataTimestamp, user)
+            .then(setAccountSyncError)
+            .catch(setAccountSyncError);
+        }
+        return;
+      }
+
+      if (profileResult.error) {
+        // Do not turn a failed account lookup into another consent prompt.
+        // A cached affirmation remains usable; otherwise the gate stays in its
+        // neutral placeholder state until auth emits another resolvable event.
+        setStatus(cached ? 'affirmed' : 'checking');
+        setAccountSyncError(profileResult.error);
+        return;
+      }
+
+      if (cached) {
+        setStatus('affirmed');
+        void persistAccountAffirmation(new Date(cached.affirmedAt).toISOString(), user)
+          .then(setAccountSyncError)
+          .catch(setAccountSyncError);
+        return;
+      }
+
+      setStatus('unaffirmed');
+      setAccountSyncError(null);
+    };
+
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
+      // Supabase recommends keeping this callback synchronous; defer the data
+      // request so auth's internal lock is released first.
+      window.setTimeout(() => void resolveAccount(session?.user ?? null), 0);
     });
-    return () => sub.subscription.unsubscribe();
+
+    return () => {
+      disposed = true;
+      resolutionId.current += 1;
+      sub.subscription.unsubscribe();
+    };
   }, []);
 
-  return { affirmed, affirm, revoke } as const;
+  return {
+    status,
+    checking: status === 'checking',
+    affirmed,
+    accountSyncError,
+    affirm,
+    revoke,
+  } as const;
 }

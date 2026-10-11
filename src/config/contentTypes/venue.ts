@@ -26,7 +26,8 @@ export const venueFields: FieldConfig[] = [
     filterable: true,
     // Was a hand-maintained list offering beach / cruise_club / bookstore, none of which
     // venues_category_check allows — picking one failed the save outright — while
-    // omitting organization and event-venue, which are legal and in use.
+    // omitting event-venue, which is legal and in use. Organisation is a role
+    // on the parent identity, rather than a physical-location category.
     options: VENUE_CATEGORY_OPTIONS,
   },
   {
@@ -41,7 +42,8 @@ export const venueFields: FieldConfig[] = [
       { value: 'apartment', label: 'Apartment' },
       { value: 'resort', label: 'Resort' },
       { value: 'guesthouse', label: 'Guesthouse' },
-      { value: 'other', label: 'Other' },
+      { value: 'villa', label: 'Villa' },
+      { value: 'campground', label: 'Campground' },
     ],
   },
   // Location

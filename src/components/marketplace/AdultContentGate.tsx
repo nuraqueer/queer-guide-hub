@@ -24,10 +24,10 @@ interface AdultContentGateProps {
  * navigation. Declining navigates away from the gated route.
  */
 export function AdultContentGate({ active, fallbackPath = '/' }: AdultContentGateProps) {
-  const { acknowledged, acknowledge } = useAdultAcknowledgement();
+  const { acknowledged, checking, acknowledge } = useAdultAcknowledgement();
   const navigate = useNavigate();
 
-  const open = active && !acknowledged;
+  const open = active && !checking && !acknowledged;
 
   return (
     <AlertDialog open={open}>

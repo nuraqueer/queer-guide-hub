@@ -1,4 +1,5 @@
 import React from 'react';
+import { OrganisationLocationsField } from './OrganisationLocationsField';
 import type { FieldConfig } from '@/types/cms';
 import { TextField } from './TextField';
 import { TextAreaField } from './TextAreaField';
@@ -35,6 +36,7 @@ export interface FieldProps {
 }
 
 const FIELD_COMPONENTS: Record<string, React.ComponentType<FieldProps>> = {
+  organisation_locations: OrganisationLocationsField,
   text: TextField,
   url: TextField,
   email: TextField,
