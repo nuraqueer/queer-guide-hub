@@ -330,14 +330,14 @@ describe('TagsIndex', () => {
     expect(screen.getByText(/no terms match/i)).toBeInTheDocument();
   });
 
-  it('hides 18+ terms by default, and offers an explicit way in', () => {
+  it('hides 18+ terms by default, and offers an explicit way in after account resolution', async () => {
     // Behaviour change: the index did NO safe-mode filtering at all, so 18+
     // terms sat in the grid for signed-out visitors while the detail page
     // dutifully gated them.
     corpus = [...PLAIN, ADULT];
     renderAt('/tags');
     expect(screen.queryByRole('link', { name: /Puppy play/ })).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /include 18\+/i })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: /include 18\+/i })).toBeInTheDocument();
   });
 
   it('shows 18+ terms when the reader opts in with ?adult=1', () => {
@@ -346,10 +346,18 @@ describe('TagsIndex', () => {
     expect(screen.getByRole('link', { name: /Puppy play/ })).toBeInTheDocument();
   });
 
-  it('records shared 18+ confirmation when adult terms are included', () => {
+  it('keeps 18+ terms included for a previously affirmed reader without a URL flag', () => {
+    localStorage.setItem('qg_age_affirmation', JSON.stringify({ affirmedAt: Date.now() }));
+    corpus = [...PLAIN, ADULT];
+    renderAt('/tags?q=puppy');
+    expect(screen.getByRole('link', { name: /Puppy play/ })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /include 18\+/i })).not.toBeInTheDocument();
+  });
+
+  it('records shared 18+ confirmation when adult terms are included', async () => {
     corpus = [...PLAIN, ADULT];
     renderAt('/tags');
-    fireEvent.click(screen.getByRole('button', { name: /include 18\+/i }));
+    fireEvent.click(await screen.findByRole('button', { name: /include 18\+/i }));
     expect(localStorage.getItem('qg_age_affirmation')).toBeTruthy();
   });
 });
