@@ -87,7 +87,8 @@ as $function$
            jsonb_agg(jsonb_build_object('id', entity_id, 'title', title, 'city', city,
                                         'country', country, 'slug', slug,
                                         'region', region_name,
-                                        'has_coords', lat is not null and lng is not null)
+                                        'has_coords', case when p_content_type = 'city'
+                                          then lat is not null and lng is not null else null end)
                      order by slug nulls last) as members
     from anchored
     group by nt, nc, nco, anchor

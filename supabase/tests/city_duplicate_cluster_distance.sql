@@ -60,6 +60,12 @@ begin
   if jsonb_array_length(result) <> 1 or (result->0->>'count')::int <> 3 then
     raise exception 'non-city grouping changed: %', result;
   end if;
+  if exists (
+    select 1 from jsonb_array_elements(result->0->'members') member
+    where member->'has_coords' is distinct from 'null'::jsonb
+  ) then
+    raise exception 'non-city rows were labelled as missing city coordinates: %', result;
+  end if;
 end
 $fixture$;
 rollback;

@@ -33,7 +33,7 @@ export interface ClusterMember {
   /** Cities only: the row's region/state, so same-name places can be told apart. */
   region?: string | null;
   /** Cities only: false when the finder could not check distance for this row. */
-  has_coords?: boolean;
+  has_coords?: boolean | null;
 }
 export interface Cluster {
   city: string | null;
