@@ -122,7 +122,7 @@
     "lucide-react": "^1.49.0",
     "mammoth": "^1.13.0",
     "maplibre-gl": "^6.11.2",
-    "motion": "^13.5.0",
+    "motion": "^14.0.0",
     "pdfjs-dist": "^6.3.289",
     "react": "^19.3.0",
     "react-day-picker": "^10.0.2",
