@@ -1,5 +1,5 @@
 /**
- * Guards 99991791713983_tag_image_apply_rpc.sql and the two call sites it exists
+ * Guards 99991791728981_tag_image_apply_rpc.sql and the two call sites it exists
  * for.
  *
  * Running tag-imagery ONCE found three defects no test, typecheck or green
@@ -22,7 +22,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 const ROOT = join(__dirname, '../../..');
-const MIGRATION = '99991791713983_tag_image_apply_rpc.sql';
+const MIGRATION = '99991791728981_tag_image_apply_rpc.sql';
 
 const rawSql = readFileSync(join(ROOT, 'supabase/migrations', MIGRATION), 'utf8');
 const rawFn = readFileSync(join(ROOT, 'supabase/functions/tag-imagery/index.ts'), 'utf8');
