@@ -29,6 +29,10 @@ export interface ClusterMember {
   slug: string | null;
   city: string | null;
   country: string | null;
+  /** Cities only: the row's region/state, so same-name places can be told apart. */
+  region?: string | null;
+  /** Cities only: false when the finder could not check distance for this row. */
+  has_coords?: boolean;
 }
 export interface Cluster {
   city: string | null;
