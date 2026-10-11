@@ -43,8 +43,22 @@ vi.mock('@/integrations/supabase/client', () => ({
         in: () =>
           Promise.resolve({
             data: [
-              { id: 'v1', quality_score: 80, trust_score: 70, images: ['x.jpg'], created_at: '2024-01-01', is_featured: false },
-              { id: 'v2', quality_score: 50, trust_score: 40, images: [], created_at: '2025-01-01', is_featured: false },
+              {
+                id: 'v1',
+                quality_score: 80,
+                trust_score: 70,
+                images: ['x.jpg'],
+                created_at: '2024-01-01',
+                is_featured: false,
+              },
+              {
+                id: 'v2',
+                quality_score: 50,
+                trust_score: 40,
+                images: [],
+                created_at: '2025-01-01',
+                is_featured: false,
+              },
             ],
             error: null,
           }),
@@ -59,7 +73,7 @@ describe('AdminDuplicates', () => {
   it('builds the type selector from the registry (beyond the old hardcoded four)', async () => {
     renderWithProviders(<AdminDuplicates />);
     await waitFor(() => expect(screen.getByText('Duplicates & merge')).toBeInTheDocument());
-    expect(screen.getByRole('button', { name: 'Venues' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Locations' })).toBeInTheDocument();
     // Cities is registry-driven — it was NOT in the old hardcoded list.
     expect(screen.getByRole('button', { name: 'Cities' })).toBeInTheDocument();
   });

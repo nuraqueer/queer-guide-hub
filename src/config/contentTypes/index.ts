@@ -130,6 +130,13 @@ export const contentTypeRegistry: Record<string, ContentTypeConfig> = {
   }),
 };
 
+/** Internal location contracts remain versioned and deduplicated, without CMS list entries. */
+export const internalContentTypeRegistry: Record<string, ContentTypeConfig> = {
+  venues: venueContentType,
+};
+/** Supported legacy routes resolve to a canonical CMS content type. */
+export const contentTypeRouteAliases: Record<string, string> = { venues: 'organizations' };
+
 /** Get all content type IDs */
 export function getContentTypeIds(): string[] {
   return Object.keys(contentTypeRegistry);
@@ -138,7 +145,7 @@ export function getContentTypeIds(): string[] {
 /** Get a content type config by ID */
 export function getContentType(id: string): ContentTypeConfig | undefined {
   // Internal location config retained for validation and legacy integrations.
-  return id === 'venues' ? venueContentType : contentTypeRegistry[id];
+  return contentTypeRegistry[id] ?? internalContentTypeRegistry[id];
 }
 
 /** Get field configs for a content type, optionally filtered by group */

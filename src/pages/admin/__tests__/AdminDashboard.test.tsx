@@ -110,7 +110,7 @@ describe('AdminDashboard — Needs you', () => {
   });
 
   it('says "All clear." and lists nothing when every queue is empty', () => {
-    mockCounts.mockReturnValue(counts({ venues: 32000 }));
+    mockCounts.mockReturnValue(counts({ organizations: 32000 }));
     render();
     expect(screen.getByText('All clear.')).toBeTruthy();
     const list = screen.getByRole('region', { name: /needs you/i });
@@ -175,11 +175,13 @@ describe('AdminDashboard — Jump to', () => {
   it('shows a destination with no RPC count as label-only, never as 0', () => {
     // `milestones` is declared as a countTable in adminNavigation but is not in
     // get_admin_counts' reltuples list.
-    mockCounts.mockReturnValue(counts({ venues: 32000 }));
+    mockCounts.mockReturnValue(counts({ organizations: 32000 }));
     render();
     const jump = screen.getByRole('region', { name: /jump to/i });
     const milestones = within(jump).getByRole('link', { name: /Milestones/ });
     expect(milestones.textContent).toBe('Milestones');
-    expect(within(jump).getByRole('link', { name: /Venues/ }).textContent).toContain('32.0k');
+    expect(within(jump).getByRole('link', { name: /Organisations/ }).textContent).toContain(
+      '32.0k',
+    );
   });
 });
