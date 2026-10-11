@@ -1,17 +1,3 @@
--- RECOVERED FROM PROD BY scripts/recover-migration-drift.mjs.
---
--- Applied to prod as version 99991791725037 with no repo file — the signature of
--- MCP `apply_migration`, which stamps a version and commits nothing. An applied
--- version with no file fails migration-versions on every PR in the repo and
--- makes `db push` refuse to run.
---
--- Reconstructed from `schema_migrations.statements`, which holds the PARSED
--- statements: trailing semicolons are stripped (re-added here) and any original
--- comment header is NOT recorded, so the reasoning that accompanied this
--- migration is lost. Verified by md5 against a server-computed digest.
---
--- Never re-run: `db push` matches on version and skips an applied one. The file
--- exists so history is complete and a rebuild from zero works.
 -- Approved design: docs/plans/2026-10-11-unified-organisation-content-type-design.md
 -- Organizations are identities; venues remain internal, independently addressable locations.
 -- Apply, drain cms_backfill_venue_organisations in bounded batches, then release the CMS.
@@ -73,7 +59,6 @@ begin
   return org_id;
 end;
 $$;
-
 revoke all on function public.cms_venue_organisation_core(uuid) from public, anon, authenticated, service_role;
 
 -- Explicit legacy-editor resolution remains elevated; the private core is only
@@ -85,9 +70,7 @@ begin
   return public.cms_venue_organisation_core(p_venue_id);
 end;
 $$;
-
 revoke all on function public.cms_venue_organisation(uuid) from public, anon;
-
 grant execute on function public.cms_venue_organisation(uuid) to authenticated, service_role;
 
 create or replace function public.cms_organisation_read(p_id uuid)
@@ -103,9 +86,7 @@ begin
   return result;
 end;
 $$;
-
 revoke all on function public.cms_organisation_read(uuid) from public, anon;
-
 grant execute on function public.cms_organisation_read(uuid) to authenticated, service_role;
 
 -- Closed allowlists preserve claims, safety, provenance, quality and external IDs.
@@ -153,7 +134,6 @@ begin
   end if;
 end;
 $$;
-
 revoke all on function public.cms_organisation_patch(text,uuid,jsonb) from public, anon, authenticated, service_role;
 
 create or replace function public.cms_organisation_save(
@@ -248,9 +228,7 @@ begin
   return public.cms_organisation_read(org_id);
 end;
 $$;
-
 revoke all on function public.cms_organisation_save(uuid,jsonb,jsonb,timestamptz) from public, anon;
-
 grant execute on function public.cms_organisation_save(uuid,jsonb,jsonb,timestamptz) to authenticated, service_role;
 
 create or replace function public.cms_backfill_venue_organisations(p_limit int default 100)
@@ -268,9 +246,7 @@ begin
   return processed;
 end;
 $$;
-
 revoke all on function public.cms_backfill_venue_organisations(int) from public, anon, authenticated;
-
 grant execute on function public.cms_backfill_venue_organisations(int) to service_role;
 
 -- New locations written by the existing import/submission pipeline acquire an identity.
@@ -284,11 +260,8 @@ begin
   return new;
 end;
 $$;
-
 revoke all on function public.cms_location_identity_insert() from public, anon, authenticated, service_role;
-
 drop trigger if exists cms_location_identity_insert on public.venues;
-
 create trigger cms_location_identity_insert after insert on public.venues
   for each row execute function public.cms_location_identity_insert();
 
@@ -410,11 +383,8 @@ begin
   return new;
 end;
 $$;
-
 revoke all on function public.cms_organisation_workflow_sync() from public, anon, authenticated, service_role;
-
 drop trigger if exists cms_organisation_workflow_sync on public.cms_content_metadata;
-
 create trigger cms_organisation_workflow_sync after insert or update of workflow_state, visibility_level on public.cms_content_metadata
   for each row execute function public.cms_organisation_workflow_sync();
 
@@ -433,11 +403,8 @@ begin
   return new;
 end;
 $$;
-
 revoke all on function public.cms_organisation_status_sync() from public, anon, authenticated, service_role;
-
 drop trigger if exists cms_organisation_status_sync on public.organizations;
-
 create trigger cms_organisation_status_sync after insert or update of status on public.organizations
   for each row execute function public.cms_organisation_status_sync();
 

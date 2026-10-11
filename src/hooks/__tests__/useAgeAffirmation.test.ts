@@ -66,6 +66,43 @@ describe('useAgeAffirmation', () => {
     expect(accountMocks.updateProfile).toHaveBeenCalled();
   });
 
+  it('does not let an older profile lookup undo a new confirmation', async () => {
+    let finishLookup!: (value: { data: null; error: null }) => void;
+    accountMocks.profileLookup.mockReturnValueOnce(
+      new Promise((resolve) => {
+        finishLookup = resolve;
+      }),
+    );
+    const { result } = renderHook(() => useAgeAffirmation());
+    act(() => authCallback?.('SIGNED_IN', { user: { id: 'user-1' } }));
+    await waitFor(() => expect(accountMocks.profileLookup).toHaveBeenCalled());
+    await act(async () => {
+      await result.current.affirm();
+    });
+    await act(async () => {
+      finishLookup({ data: null, error: null });
+    });
+    expect(result.current.status).toBe('affirmed');
+  });
+
+  it('does not let an older profile lookup undo a local revocation', async () => {
+    let finishLookup!: (value: { data: { age_confirmed_at: string }; error: null }) => void;
+    accountMocks.profileLookup.mockReturnValueOnce(
+      new Promise((resolve) => {
+        finishLookup = resolve;
+      }),
+    );
+    const { result } = renderHook(() => useAgeAffirmation());
+    act(() => authCallback?.('SIGNED_IN', { user: { id: 'user-1' } }));
+    await waitFor(() => expect(accountMocks.profileLookup).toHaveBeenCalled());
+    act(() => result.current.revoke());
+    await act(async () => {
+      finishLookup({ data: { age_confirmed_at: '2026-10-11T00:00:00Z' }, error: null });
+    });
+    expect(result.current.status).toBe('unaffirmed');
+    expect(localStorage.getItem(KEY)).toBeNull();
+  });
+
   it('keeps an existing confirmation instead of expiring it after 30 days', () => {
     const longAgo = Date.now() - 31 * 24 * 60 * 60 * 1000;
     localStorage.setItem(KEY, JSON.stringify({ affirmedAt: longAgo }));
@@ -111,6 +148,19 @@ describe('useAgeAffirmation', () => {
       authCallback?.('SIGNED_IN', { user: { id: 'user-1', user_metadata: {} } });
     });
     await waitFor(() => expect(result.current.affirmed).toBe(true));
+  });
+
+  it('does not emit another auth update when a legacy profile repair fails', async () => {
+    accountMocks.updateProfile.mockResolvedValueOnce({ data: null, error: null });
+    const { result } = renderHook(() => useAgeAffirmation());
+    act(() => {
+      authCallback?.('SIGNED_IN', {
+        user: { id: 'user-1', user_metadata: { age_confirmed_at: '2025-06-01T00:00:00Z' } },
+      });
+    });
+    await waitFor(() => expect(result.current.accountSyncError).toBeTruthy());
+    expect(result.current.affirmed).toBe(true);
+    expect(accountMocks.updateUser).not.toHaveBeenCalled();
   });
 
   it('does not declare the reader unaffirmed while a profile lookup is pending', async () => {

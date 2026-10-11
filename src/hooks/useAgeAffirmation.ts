@@ -72,16 +72,16 @@ async function persistAccountAffirmation(
     .select('age_confirmed_at')
     .maybeSingle();
 
-  // Keep auth metadata in sync for signup/backwards compatibility, but never
-  // use user-editable metadata as an authorization decision.
-  const metadataResult = await supabase.auth.updateUser({
-    data: { age_confirmed_at: affirmedAt },
-  });
-
   if (profileResult.error) return profileResult.error;
   if (!profileResult.data?.age_confirmed_at) {
     return new Error('Profile confirmation was not saved');
   }
+
+  // A metadata write emits USER_UPDATED. Only emit it after the canonical
+  // profile write succeeds, or a missing profile repeatedly retries itself.
+  const metadataResult = await supabase.auth.updateUser({
+    data: { age_confirmed_at: affirmedAt },
+  });
   return metadataResult.error ?? null;
 }
 
@@ -100,6 +100,7 @@ export function useAgeAffirmation() {
   const affirmed = status === 'affirmed';
 
   const affirm = useCallback(async () => {
+    resolutionId.current += 1;
     const now = Date.now();
     persistBrowserAffirmation(now);
     setStatus('affirmed');
@@ -116,6 +117,7 @@ export function useAgeAffirmation() {
   }, []);
 
   const revoke = useCallback(() => {
+    resolutionId.current += 1;
     try {
       // Legacy first: cross-tab storage events then cannot recreate canonical
       // state from a legacy key that still exists.
@@ -131,7 +133,10 @@ export function useAgeAffirmation() {
 
   // Keep state in sync with storage events from other tabs + same-tab siblings.
   useEffect(() => {
-    const resync = () => setStatus(readStored() ? 'affirmed' : 'unaffirmed');
+    const resync = () => {
+      resolutionId.current += 1;
+      setStatus(readStored() ? 'affirmed' : 'unaffirmed');
+    };
     const onStorage = (e: StorageEvent) => {
       if (e.key !== STORAGE_KEY && e.key !== LEGACY_MARKETPLACE_KEY) return;
       resync();
@@ -151,6 +156,7 @@ export function useAgeAffirmation() {
     let disposed = false;
 
     const resolveAccount = async (user: AccountUser | null) => {
+      if (disposed) return;
       const currentResolution = ++resolutionId.current;
       const cached = readStored();
 
