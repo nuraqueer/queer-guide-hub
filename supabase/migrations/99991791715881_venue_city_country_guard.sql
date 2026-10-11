@@ -1,5 +1,5 @@
--- Write-time guard: a venue may not be linked to a city in another country
--- than the one its own coordinates are in (2026-10-11).
+-- Write-time guard: a venue, hotel or organization may not be linked to a
+-- city in another country than the one its own coordinates are in (2026-10-11).
 --
 -- WHY. 627 venues were repaired in 99991791714603. Every one had been linked
 -- to a same-name city ABROAD ("Valencia" ES for a pin in Valencia VE,
@@ -45,8 +45,24 @@
 -- The refusal is recorded on the row (enrichment_status.city_guard) with the
 -- refused city, both countries and the distance, so nothing disappears
 -- silently.
+--
+-- HOTELS AND ORGANIZATIONS get the same function. They are clean today
+-- (geo_containment_findings: 0 hotels, 1 organization), so this is
+-- prevention, but they are more exposed than venues: besides
+-- derive_entity_geo_address they carry tg_city_country_derivation
+-- (hotel_city_country_derivation / organization_city_country_derivation),
+-- which copies the city's country UNCONDITIONALLY, overwriting even an
+-- explicitly written country_id. Their guard triggers are therefore named
+-- hotel_aa_... / organization_aa_... so they fire before that trigger as well
+-- as before trg_*_geo_derive (same-timing BEFORE triggers fire in name order).
+-- The function only reads columns all three tables have: city_id, country_id,
+-- latitude, longitude, enrichment_status. The coordinate TYPES differ --
+-- venues/organizations are numeric, hotels double precision -- and
+-- haversine_m / geo_country_at take numeric only, so every call casts
+-- explicitly. Without the casts every hotel write would raise 42883; the
+-- hotel probe below is what found it.
 
-create or replace function public.venue_city_country_guard()
+create or replace function public.entity_city_country_guard()
 returns trigger
 language plpgsql
 set search_path to 'public', 'extensions'
@@ -72,9 +88,9 @@ begin
      where c.id = new.city_id;
 
     if v_city_lat is not null and v_city_lng is not null and v_city_cc is not null then
-      v_km := public.haversine_m(new.latitude, new.longitude, v_city_lat, v_city_lng) / 1000.0;
+      v_km := public.haversine_m(new.latitude::numeric, new.longitude::numeric, v_city_lat, v_city_lng) / 1000.0;
       if v_km > 100 then
-        select g.iso_a2 into v_pt_iso from public.geo_country_at(new.latitude, new.longitude) g limit 1;
+        select g.iso_a2 into v_pt_iso from public.geo_country_at(new.latitude::numeric, new.longitude::numeric) g limit 1;
         if v_pt_iso is not null and not public.geo_countries_equivalent(v_city_cc, v_pt_iso) then
           select min(ST_Distance(b.geom::geography,
                                  ST_SetSRID(ST_MakePoint(new.longitude::float8, new.latitude::float8), 4326)::geography))
@@ -104,7 +120,7 @@ begin
           or new.latitude is distinct from old.latitude or new.longitude is distinct from old.longitude) then
     select code into v_vc from public.countries where id = new.country_id;
     if v_pt_iso is null then
-      select g.iso_a2 into v_pt_iso from public.geo_country_at(new.latitude, new.longitude) g limit 1;
+      select g.iso_a2 into v_pt_iso from public.geo_country_at(new.latitude::numeric, new.longitude::numeric) g limit 1;
     end if;
     if v_vc is not null and v_pt_iso is not null and not public.geo_countries_equivalent(v_vc, v_pt_iso) then
       select min(ST_Distance(b.geom::geography,
@@ -124,12 +140,22 @@ begin
 end
 $fn$;
 
-revoke all on function public.venue_city_country_guard() from public, anon, authenticated;
+revoke all on function public.entity_city_country_guard() from public, anon, authenticated;
 
 drop trigger if exists trg_venues_city_country_guard on public.venues;
 create trigger trg_venues_city_country_guard
   before insert or update of city_id, country_id, latitude, longitude on public.venues
-  for each row execute function public.venue_city_country_guard();
+  for each row execute function public.entity_city_country_guard();
+
+drop trigger if exists hotel_aa_city_country_guard on public.hotels;
+create trigger hotel_aa_city_country_guard
+  before insert or update of city_id, country_id, latitude, longitude on public.hotels
+  for each row execute function public.entity_city_country_guard();
+
+drop trigger if exists organization_aa_city_country_guard on public.organizations;
+create trigger organization_aa_city_country_guard
+  before insert or update of city_id, country_id, latitude, longitude on public.organizations
+  for each row execute function public.entity_city_country_guard();
 
 do $verify$
 declare
@@ -144,6 +170,23 @@ begin
   if not exists (select 1 from pg_trigger where tgrelid = 'public.venues'::regclass
                   and tgname = 'trg_venues_city_country_guard' and tgenabled <> 'D') then
     raise exception 'trg_venues_city_country_guard is not attached';
+  end if;
+  -- Hotels / organizations: the guard must fire before EVERY trigger that
+  -- derives country from city on that table. Checked against the live
+  -- catalog, so a derivation trigger added later under a lower name fails here.
+  if exists (
+    select 1 from pg_trigger t join pg_proc p on p.oid = t.tgfoid
+     where t.tgrelid in ('public.venues'::regclass, 'public.hotels'::regclass, 'public.organizations'::regclass)
+       and not t.tgisinternal
+       and p.proname in ('tg_city_country_derivation', 'derive_entity_geo_address')
+       and t.tgname < (select g.tgname from pg_trigger g
+                        where g.tgrelid = t.tgrelid and g.tgname like '%city_country_guard'))
+  then
+    raise exception 'a city->country derivation trigger fires before the guard';
+  end if;
+  if (select count(*) from pg_trigger where tgname in ('trg_venues_city_country_guard',
+        'hotel_aa_city_country_guard', 'organization_aa_city_country_guard') and tgenabled <> 'D') <> 3 then
+    raise exception 'guard not attached to all three tables';
   end if;
 
   -- Behavioural check, rolled back by the exception block: a pin in Valencia,
@@ -172,6 +215,20 @@ begin
      where id = v_id returning city_id into v_far_same;
     if v_far_same is distinct from v_es_valencia then
       raise exception 'P3 failed: a same-country far city was refused';
+    end if;
+    -- Same probe on hotels and organizations, where tg_city_country_derivation
+    -- would otherwise overwrite VE with ES unconditionally.
+    insert into public.hotels (name, latitude, longitude, city_id, country_id)
+    values ('zz guard probe', 10.162, -68.007, v_es_valencia, v_ve)
+    returning city_id, country_id into v_city, v_country;
+    if v_city is not null or v_country is distinct from v_ve then
+      raise exception 'P4 failed: hotel kept the foreign city or lost VE';
+    end if;
+    insert into public.organizations (name, slug, latitude, longitude, city_id, country_id)
+    values ('zz guard probe', 'zz-guard-probe-' || md5(random()::text), 10.162, -68.007, v_es_valencia, v_ve)
+    returning city_id, country_id into v_city, v_country;
+    if v_city is not null or v_country is distinct from v_ve then
+      raise exception 'P5 failed: organization kept the foreign city or lost VE';
     end if;
     raise exception 'guard_probe_ok';
   exception when others then
