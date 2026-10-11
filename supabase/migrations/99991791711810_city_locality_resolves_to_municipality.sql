@@ -80,7 +80,7 @@ insert into public.city_localities
   (country_id, locality_name, locality_qid, kind, municipality_name, municipality_qid,
    anchor_lat, anchor_lng, radius_m, source, note)
 select c.id, v.name, v.qid, v.kind, 'Hinterzarten', 'Q515356', 47.907778, 8.100833, 9000,
-       'migration:99991791631994', v.note
+       'migration:99991791711810', v.note
   from public.countries c
   cross join (values
     ('Alpersbach',       null,          'zinken',    null),
