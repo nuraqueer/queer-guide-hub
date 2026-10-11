@@ -1,5 +1,5 @@
 import { EntityAuditHistory } from '@/components/cms/EntityAuditHistory';
-import { useState } from 'react';
+import { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Plus, MapPin } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { FieldRenderer, type FieldProps } from './FieldRenderer';
@@ -18,9 +18,27 @@ export function OrganisationLocationsField({
   allValues,
 }: FieldProps) {
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
-  const locations = Array.isArray(value) ? (value as OrganisationLocation[]) : [];
-  const update = (index: number, patch: OrganisationLocation) => {
-    onChange(locations.map((row, i) => (i === index ? { ...row, ...patch } : row)));
+  const locations = useMemo(
+    () => (Array.isArray(value) ? (value as OrganisationLocation[]) : []),
+    [value],
+  );
+  // Geocoding callbacks may finish after another field edit or row removal.
+  // Merge into the latest value and identify rows by their stable ID, not position.
+  const latest = useRef(locations);
+  useLayoutEffect(() => {
+    latest.current = locations;
+  }, [locations]);
+  const rowKey = (row: OrganisationLocation, index: number) =>
+    String(row.id ?? row._client_id ?? `new-${index}`);
+  const commit = (next: OrganisationLocation[]) => {
+    latest.current = next;
+    onChange(next);
+  };
+  const update = (key: string, patch: OrganisationLocation) => {
+    if (!latest.current.some((row, index) => rowKey(row, index) === key)) return;
+    commit(
+      latest.current.map((row, index) => (rowKey(row, index) === key ? { ...row, ...patch } : row)),
+    );
   };
   return (
     <section aria-label="Organisation locations" className="space-y-4">
@@ -36,8 +54,8 @@ export function OrganisationLocationsField({
           variant="outline"
           disabled={disabled}
           onClick={() =>
-            onChange([
-              ...locations,
+            commit([
+              ...latest.current,
               {
                 _client_id: crypto.randomUUID(),
                 name: '',
@@ -67,7 +85,7 @@ export function OrganisationLocationsField({
         </p>
       )}
       {locations.map((row, index) => {
-        const key = String(row.id ?? row._client_id ?? `new-${index}`);
+        const key = rowKey(row, index);
         const open = expanded[key] ?? (!row.id || row.id === allValues?._focused_location_id);
         const validation = validateAgainstRegistry(venueContentType, row);
         const issues = validation.ok ? [] : validation.issues;
@@ -105,8 +123,8 @@ export function OrganisationLocationsField({
                             <FieldRenderer
                               field={{ ...field, name: `location-${index}-${field.name}` }}
                               value={row[field.name]}
-                              onChange={(next) => update(index, { [field.name]: next })}
-                              setFields={(patch) => update(index, patch)}
+                              onChange={(next) => update(key, { [field.name]: next })}
+                              setFields={(patch) => update(key, patch)}
                               allValues={row}
                               disabled={disabled}
                               error={issues.find((issue) => issue.field === field.name)?.message}
@@ -126,7 +144,7 @@ export function OrganisationLocationsField({
                       variant="outline"
                       disabled={disabled}
                       onClick={() =>
-                        update(index, {
+                        update(key, {
                           review_status: row.review_status === 'archived' ? 'pending' : 'archived',
                         })
                       }
@@ -138,7 +156,9 @@ export function OrganisationLocationsField({
                       type="button"
                       variant="ghost"
                       disabled={disabled}
-                      onClick={() => onChange(locations.filter((_, i) => i !== index))}
+                      onClick={() =>
+                        commit(latest.current.filter((item, i) => rowKey(item, i) !== key))
+                      }
                     >
                       Discard new location
                     </Button>
