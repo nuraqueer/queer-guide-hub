@@ -2,7 +2,7 @@
  * Guards the public feedback board's projection.
  *
  * Context, because the shape of this is a reaction to what was measured: before
- * migration 99991791712094, `public.community_submissions` was
+ * migration 99991791723990, `public.community_submissions` was
  * `anon=awd/postgres` — INSERT, UPDATE, DELETE and NO SELECT — so the
  * long-standing `community_submissions_anon_read_feedback` policy
  * (SELECT to anon USING content_type='feedback', unqualified) had no privilege
@@ -21,7 +21,7 @@
  *
  *  2. They read the LATEST migration that defines the view, not a pinned
  *     filename. `CREATE OR REPLACE VIEW` means a future migration can widen the
- *     allowlist without ever re-running 99991791712094's postconditions, which
+ *     allowlist without ever re-running 99991791723990's postconditions, which
  *     is the only way this can regress silently.
  */
 import { describe, it, expect } from 'vitest';
@@ -167,7 +167,7 @@ describe('feedback_board_v — the allowlist projection', () => {
   });
 });
 
-describe('99991791712094 — anon privilege narrowing', () => {
+describe('99991791723990 — anon privilege narrowing', () => {
   const { file, sql } = latestMigrationDefining(VIEW);
   const stripped = stripComments(sql);
 
