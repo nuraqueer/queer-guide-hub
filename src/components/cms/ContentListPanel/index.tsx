@@ -5,7 +5,7 @@
  */
 
 import { lazy, Suspense, useEffect, useRef, useState } from 'react';
-import { useParams, useSearchParams } from 'react-router';
+import { Navigate, useParams, useSearchParams } from 'react-router';
 import { Plus, Search, RefreshCw, X } from 'lucide-react';
 import { ContentEntityTabs } from '@/components/admin/ContentEntityTabs';
 import { Button } from '@/components/ui/button';
@@ -56,6 +56,7 @@ interface ContentListPanelProps {
   hideHeader?: boolean;
 
   contentTypeId?: string;
+  legacyLocationIds?: boolean;
   onEdit?: (contentType: string, itemId: string) => void;
   onCreate?: (contentType: string) => void;
 }
@@ -96,6 +97,23 @@ function activeFilterLabel(filter: Filter, fields: FieldConfig[]): string {
 export function ContentListPanel(props: ContentListPanelProps) {
   const { type } = useParams();
   const typeId = props.contentTypeId ?? type;
+  const [params] = useSearchParams();
+  if (typeId === 'venues' && !props.contentTypeId) {
+    const next = new URLSearchParams(params);
+    if (next.has('edit')) next.set('location', next.get('edit')!);
+    next.delete('edit');
+    next.delete('view');
+    return <Navigate replace to={`/admin/content/organizations${next.size ? `?${next}` : ''}`} />;
+  }
+  if (typeId === 'venues')
+    return (
+      <ContentListPanelBody
+        key="organizations"
+        {...props}
+        contentTypeId="organizations"
+        legacyLocationIds
+      />
+    );
   return <ContentListPanelBody key={typeId ?? '__all__'} {...props} contentTypeId={typeId} />;
 }
 
@@ -200,13 +218,15 @@ function ContentListPanelBody(props: ContentListPanelProps) {
   const editTypeId = props.contentTypeId ?? type;
   useEffect(() => {
     if (editHandledRef.current) return;
-    const id = searchParams.get('edit');
+    const locationId = searchParams.get('location');
+    const id = locationId ?? searchParams.get('edit');
     if (!id || !editTypeId) return;
     editHandledRef.current = true;
-    c.onEdit(editTypeId, id);
+    c.onEdit(locationId || props.legacyLocationIds ? 'venues' : editTypeId, id);
     setSearchParams(
       (p) => {
         p.delete('edit');
+        p.delete('location');
         return p;
       },
       { replace: true },

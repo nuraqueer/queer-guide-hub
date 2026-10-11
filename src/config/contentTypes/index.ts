@@ -53,7 +53,6 @@ const ACCESSIBILITY_CATEGORIES = [
 ];
 
 export const contentTypeRegistry: Record<string, ContentTypeConfig> = {
-  venues: venueContentType,
   events: eventContentType,
   personalities: personalityContentType,
   news_articles: newsArticleContentType,
@@ -138,12 +137,13 @@ export function getContentTypeIds(): string[] {
 
 /** Get a content type config by ID */
 export function getContentType(id: string): ContentTypeConfig | undefined {
-  return contentTypeRegistry[id];
+  // Internal location config retained for validation and legacy integrations.
+  return id === 'venues' ? venueContentType : contentTypeRegistry[id];
 }
 
 /** Get field configs for a content type, optionally filtered by group */
 export function getFieldsByGroup(contentTypeId: string, group?: FieldGroup): FieldConfig[] {
-  const config = contentTypeRegistry[contentTypeId];
+  const config = getContentType(contentTypeId);
   if (!config) return [];
   if (!group) return config.fields.filter((f) => !f.hidden);
   return config.fields.filter((f) => f.group === group && !f.hidden);
@@ -151,7 +151,7 @@ export function getFieldsByGroup(contentTypeId: string, group?: FieldGroup): Fie
 
 /** Get all available field groups for a content type */
 export function getFieldGroups(contentTypeId: string): FieldGroup[] {
-  const config = contentTypeRegistry[contentTypeId];
+  const config = getContentType(contentTypeId);
   if (!config) return [];
   if (config.fieldGroupOrder) return config.fieldGroupOrder;
   const groups = new Set(config.fields.filter((f) => !f.hidden).map((f) => f.group));

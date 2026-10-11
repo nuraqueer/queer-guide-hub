@@ -20,6 +20,7 @@ import {
   ExternalLink,
   Sparkles,
 } from 'lucide-react';
+import { useVenueOrganisation } from '@/hooks/useVenueOrganisation';
 import { useCMSEditor } from '@/hooks/useCMSEditor';
 import { useCMSWorkflow } from '@/hooks/useCMSWorkflow';
 import {
@@ -73,28 +74,107 @@ interface CMSEditorLayoutProps {
   itemId: string | null;
   /** When present, the editor runs in cockpit mode: N/M nav + approve/advance. */
   queue?: EditorQueue;
+  initialValues?: Record<string, unknown>;
+  legacyLocationId?: string;
   /** Jump to a position in the queue (cockpit prev/next + auto-advance). */
   onNavigate?: (index: number) => void;
   onClose: () => void;
   onSaved?: (id: string) => void;
 }
 
-export function CMSEditorLayout({
+export function CMSEditorLayout(props: CMSEditorLayoutProps) {
+  const legacy = props.contentType === 'venues';
+  const resolved = useVenueOrganisation(legacy ? props.itemId : null);
+  if (legacy && props.itemId && !resolved.data) {
+    return (
+      <div className="p-8" role="status">
+        {resolved.isError ? (
+          <Alert variant="destructive">
+            <AlertDescription>
+              Could not open the organisation for this location.{' '}
+              <Button variant="outline" onClick={() => void resolved.refetch()}>
+                Try again
+              </Button>
+            </AlertDescription>
+          </Alert>
+        ) : (
+          <TrackLoader label="Opening organisation" />
+        )}
+      </div>
+    );
+  }
+  return (
+    <CMSEditorBody
+      {...props}
+      key={`${legacy ? 'organizations' : props.contentType}:${resolved.data ?? props.itemId ?? 'new'}:${legacy ? (props.itemId ?? 'new') : ''}`}
+      contentType={legacy ? 'organizations' : props.contentType}
+      itemId={legacy ? (resolved.data ?? null) : props.itemId}
+      legacyLocationId={legacy ? (props.itemId ?? undefined) : undefined}
+      initialValues={
+        legacy && !props.itemId
+          ? {
+              roles: ['venue'],
+              _locations: [
+                {
+                  name: '',
+                  slug: '',
+                  address: '',
+                  city: '',
+                  country: '',
+                  category: 'other',
+                  verified: false,
+                  is_featured: false,
+                },
+              ],
+            }
+          : props.initialValues
+      }
+    />
+  );
+}
+
+function CMSEditorBody({
   contentType,
   itemId,
   queue,
   onNavigate,
   onClose,
   onSaved,
+  initialValues,
+  legacyLocationId,
 }: CMSEditorLayoutProps) {
   const config = getContentType(contentType);
 
-  const { state, setField, setFields, save, reset, setActiveGroup, metadata, updateMetadata } =
-    useCMSEditor({ contentType, itemId });
+  const {
+    state,
+    setField,
+    setFields,
+    save,
+    reset,
+    refresh,
+    setActiveGroup,
+    metadata,
+    updateMetadata,
+  } = useCMSEditor({
+    contentType,
+    itemId,
+    initialValues,
+    initialGroup: legacyLocationId ? 'location' : undefined,
+  });
 
   // Cockpit workflow transitions (approve / request changes). The queue feeds
   // items that are in `review`; fall back to the record's own workflow_state.
-  const workflowState = (metadata?.workflow_state as WorkflowState) ?? 'review';
+  const workflowState =
+    queue && legacyLocationId
+      ? 'review'
+      : ((metadata?.workflow_state as WorkflowState) ??
+        (contentType === 'organizations'
+          ? state.data.status === 'active'
+            ? 'published'
+            : state.data.status === 'archived'
+              ? 'archived'
+              : 'draft'
+          : 'review'));
   const { transition, isTransitioning } = useCMSWorkflow(workflowState);
 
   const titleValue = (config ? (state.data[config.titleField] as string) : '') ?? '';
@@ -181,8 +261,9 @@ export function CMSEditorLayout({
     queue,
     onNavigate,
     onClose,
-    state,
-    config,
+    // Legacy review queues still publish the location they queued.
+    state: queue && legacyLocationId ? { ...state, itemId: legacyLocationId } : state,
+    config: queue && legacyLocationId ? getContentType('venues') : config,
     save,
     transition,
     isTransitioning,
@@ -196,9 +277,11 @@ export function CMSEditorLayout({
       if (!saved) return;
     }
     const ok = await transition(config.tableName, state.itemId, 'published');
-    if (ok) toast.success('Published');
-    else toast.error('Could not publish — check workflow state / permissions');
-  }, [config, state.itemId, state.isDirty, save, transition]);
+    if (ok) {
+      await refresh();
+      toast.success('Published');
+    } else toast.error('Could not publish — check workflow state / permissions');
+  }, [config, state.itemId, state.isDirty, save, transition, refresh]);
 
   useEditorShortcuts({
     publishEnabled: !inQueue,
@@ -326,16 +409,21 @@ export function CMSEditorLayout({
       )}
 
       {/* ── Body (main + sidebar) ───────────────────────────── */}
-      <div className="flex-1 overflow-hidden flex flex-col lg:flex-row">
+      <div className="flex-1 overflow-auto lg:overflow-hidden flex flex-col lg:flex-row">
         {/* ── Main Column ─────────────────────────────────── */}
-        <div className="flex-1 overflow-auto lg:w-[70%] lg:max-w-[70%]">
+        <div className="flex-none lg:flex-1 overflow-visible lg:overflow-auto lg:w-[70%] lg:max-w-[70%]">
           <div className="rounded-element bg-muted m-4 mb-1 lg:mb-4 overflow-hidden">
             {/* Group tabs */}
             <Tabs value={state.activeGroup} onValueChange={(v) => setActiveGroup(v as FieldGroup)}>
               <TabsList className="border-b border-border min-h-12 bg-background w-full justify-start overflow-x-auto">
                 {fieldGroups.map((group) => {
                   const GroupIcon = fieldGroupIcons[group];
-                  const count = fieldCountsByGroup[group] ?? 0;
+                  const count =
+                    contentType === 'organizations' &&
+                    group === 'location' &&
+                    Array.isArray(state.data._locations)
+                      ? state.data._locations.length
+                      : (fieldCountsByGroup[group] ?? 0);
                   const dotColor = fieldGroupColors[group];
 
                   return (
@@ -348,7 +436,11 @@ export function CMSEditorLayout({
                         style={{ width: 15, height: 15, color: dotColor }}
                         className="shrink-0"
                       />
-                      <span>{fieldGroupLabels[group] || group}</span>
+                      <span>
+                        {contentType === 'organizations' && group === 'location'
+                          ? 'Locations'
+                          : fieldGroupLabels[group] || group}
+                      </span>
                       <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] rounded-full bg-muted text-muted-foreground text-2xs font-bold leading-[18px] px-1">
                         {count}
                       </span>
@@ -369,9 +461,15 @@ export function CMSEditorLayout({
                     }}
                   >
                     <div
-                      className={`p-4 rounded-element border bg-background transition-colors focus-within:border-primary focus-within:shadow-[0_0_0_2px_hsl(var(--primary)/0.2)] ${
-                        state.errors[field.name] ? 'border border-destructive' : 'border-border'
-                      }`}
+                      className={
+                        field.type === 'organisation_locations'
+                          ? 'p-4 bg-background'
+                          : `p-4 rounded-element border bg-background transition-colors focus-within:border-primary focus-within:shadow-[0_0_0_2px_hsl(var(--primary)/0.2)] ${
+                              state.errors[field.name]
+                                ? 'border border-destructive'
+                                : 'border-border'
+                            }`
+                      }
                     >
                       <FieldRenderer
                         field={field}
@@ -380,7 +478,11 @@ export function CMSEditorLayout({
                         error={state.errors[field.name]}
                         disabled={state.isSaving}
                         setFields={setFields}
-                        allValues={state.data}
+                        allValues={
+                          legacyLocationId
+                            ? { ...state.data, _focused_location_id: legacyLocationId }
+                            : state.data
+                        }
                       />
                     </div>
                   </div>
@@ -397,12 +499,13 @@ export function CMSEditorLayout({
         </div>
 
         {/* ── Sidebar ─────────────────────────────────────── */}
-        <div className="overflow-auto lg:w-[30%] lg:min-w-[300px] lg:max-w-[400px] border-t lg:border-t-0 lg:border-l border-border">
+        <div className="shrink-0 overflow-visible lg:overflow-auto lg:w-[30%] lg:min-w-[300px] lg:max-w-[400px] border-t lg:border-t-0 lg:border-l border-border">
           <EditorSidebar
             contentType={contentType}
             itemId={state.itemId ?? itemId}
             metadata={metadata}
             onUpdateMetadata={updateMetadata}
+            onWorkflowChange={config.editorRpc ? refresh : undefined}
             qualitySource={state.data}
             onApplyField={setField}
             onJumpToField={handleJumpToField}
