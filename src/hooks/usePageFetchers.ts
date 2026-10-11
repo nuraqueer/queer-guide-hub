@@ -836,7 +836,7 @@ export async function toggleMarketplaceFavorite(
  *
  * `vote_count` is aggregated by the view so anon gets real counts without being
  * granted SELECT on `feedback_votes`, which carries `user_id` (who voted for
- * what). Migration 99991791712094_feedback_board_projection.sql.
+ * what). Migration 99991791723990_feedback_board_projection.sql.
  */
 export async function fetchFeedbackBoardItems<T = unknown>(): Promise<T[]> {
   const { data, error } = await supabase
