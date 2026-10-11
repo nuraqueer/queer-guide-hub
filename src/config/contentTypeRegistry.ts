@@ -5,6 +5,8 @@
  */
 export {
   contentTypeRegistry,
+  internalContentTypeRegistry,
+  contentTypeRouteAliases,
   getContentTypeIds,
   getContentType,
   getFieldsByGroup,

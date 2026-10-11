@@ -14,6 +14,9 @@ import {
   Newspaper,
   MapPin,
 } from 'lucide-react';
+import { organizationFields } from './contentTypes/organization';
+import { venueFields } from './contentTypes/venue';
+import type { FieldConfig } from '@/types/cms';
 import type { LucideIcon } from 'lucide-react';
 
 // ── Types ────────────────────────────────────────────────────────
@@ -37,6 +40,7 @@ export interface SubmissionTypeConfig {
   color: string;
   group: SubmissionGroup;
   steps: SubmissionStep[];
+  fields?: FieldConfig[];
   defaults?: Record<string, unknown>;
   titleField: string;
 }
@@ -45,7 +49,8 @@ export interface SubmissionTypeConfig {
 
 const venueSubmission: SubmissionTypeConfig = {
   id: 'venue',
-  contentType: 'venues',
+  contentType: 'organizations',
+  fields: venueFields,
   targetTable: 'venues',
   label: 'Venue',
   description: 'Know a queer-friendly space? Share it with the community.',
@@ -53,7 +58,7 @@ const venueSubmission: SubmissionTypeConfig = {
   color: '#DB2777',
   group: 'primary',
   titleField: 'name',
-  defaults: { featured: false, verified: false },
+  defaults: { is_featured: false, verified: false, roles: ['venue'] },
   steps: [
     { id: 'basics', label: 'Basics', fields: ['name', 'description', 'category'] },
     { id: 'location', label: 'Location', fields: ['address', 'city', 'country', 'postal_code'] },
@@ -149,7 +154,8 @@ const personalitySubmission: SubmissionTypeConfig = {
 
 const hotelSubmission: SubmissionTypeConfig = {
   id: 'hotel',
-  contentType: 'venues',
+  contentType: 'organizations',
+  fields: venueFields,
   targetTable: 'venues',
   label: 'Hotel / BnB',
   description: 'Add a queer-friendly hotel, hostel, or BnB.',
@@ -235,10 +241,30 @@ const placeSubmission: SubmissionTypeConfig = {
   ],
 };
 
+// Locationless organisations use the same content type without fabricated addresses.
+const organizationSubmission: SubmissionTypeConfig = {
+  id: 'organization',
+  contentType: 'organizations',
+  targetTable: 'organizations',
+  label: 'Organisation',
+  description: 'Share a queer organisation, support service or community initiative.',
+  icon: Building,
+  color: '#DB2777',
+  group: 'primary',
+  titleField: 'name',
+  fields: organizationFields,
+  defaults: { roles: ['community'] },
+  steps: [
+    { id: 'identity', label: 'Identity', fields: ['name', 'description', 'roles'] },
+    { id: 'contact', label: 'Contact', fields: ['website', 'email', 'phone'] },
+  ],
+};
+
 // ── Registry ─────────────────────────────────────────────────────
 
 export const submissionRegistry: Record<string, SubmissionTypeConfig> = {
   venue: venueSubmission,
+  organization: organizationSubmission,
   event: eventSubmission,
   product: productSubmission,
   personality: personalitySubmission,
@@ -256,6 +282,7 @@ export const submissionRegistry: Record<string, SubmissionTypeConfig> = {
 export const submissionTypes: SubmissionTypeConfig[] = [
   eventSubmission,
   venueSubmission,
+  organizationSubmission,
   productSubmission,
   personalitySubmission,
   placeSubmission,

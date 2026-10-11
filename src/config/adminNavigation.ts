@@ -188,11 +188,12 @@ export const adminNavSections: AdminNavSection[] = [
       },
       // Places & Events — the two highest-traffic content types.
       {
-        id: 'venues',
-        label: 'Venues',
+        id: 'organizations',
+        label: 'Organisations',
+        minRole: 'admin',
         icon: Building,
-        route: '/admin/content/venues',
-        countTable: 'venues',
+        route: '/admin/content/organizations',
+        countTable: 'organizations',
         group: 'Places & Events',
       },
       {

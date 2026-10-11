@@ -14786,6 +14786,9 @@ export type Database = {
           updated_at: string
           website: string | null
           website_domain: string | null
+          founded_at: string | null
+          dissolved_at: string | null
+          is_defunct: boolean
         }
         Insert: {
           address?: string | null
@@ -14826,6 +14829,9 @@ export type Database = {
           updated_at?: string
           website?: string | null
           website_domain?: string | null
+          founded_at?: string | null
+          dissolved_at?: string | null
+          is_defunct?: boolean
         }
         Update: {
           address?: string | null
@@ -14866,6 +14872,9 @@ export type Database = {
           updated_at?: string
           website?: string | null
           website_domain?: string | null
+          founded_at?: string | null
+          dissolved_at?: string | null
+          is_defunct?: boolean
         }
         Relationships: [
           {
