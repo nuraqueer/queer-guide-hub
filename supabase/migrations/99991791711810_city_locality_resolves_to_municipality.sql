@@ -1,6 +1,6 @@
 -- An Ortsteil is not a city: resolve localities onto their municipality.
 --
--- Prompted by `Hinterzarten` (deleted by 99991791631989): a Gemeinde whose
+-- Prompted by `Hinterzarten` (deleted by 99991791711798): a Gemeinde whose
 -- territory is a village plus a dozen Zinken and Wohnplaetze — Alpersbach,
 -- Am Feldberg, Bisten, Bruderhalde, Erlenbruck, Loeffeltal, Oberzarten,
 -- Rinken, Rotwasser, Windeck, Winterhalde, Altenvogtshuette, Ramselegut,
