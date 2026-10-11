@@ -9,7 +9,7 @@ import { join } from 'node:path';
  * COMMENT-STRIPPED SQL: the header quotes every rule in prose.
  */
 
-const MIGRATION = '99991791721684_city_dedup_no_name_only_autoapprove.sql';
+const MIGRATION = '99991791734817_city_dedup_no_name_only_autoapprove.sql';
 
 const sql = readFileSync(join(process.cwd(), 'supabase', 'migrations', MIGRATION), 'utf8')
   .split('\n')
