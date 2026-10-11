@@ -13,7 +13,7 @@ import { join } from 'node:path';
  * so an unstripped check passes with the patch deleted.
  */
 
-const MIGRATION = '99991791721643_cron_startup_timeout_not_a_failure.sql';
+const MIGRATION = '99991791728081_cron_startup_timeout_not_a_failure.sql';
 
 function stripSql(src: string): string {
   return src
