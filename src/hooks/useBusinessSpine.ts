@@ -10,18 +10,7 @@ import type { Tables } from '@/integrations/supabase/types';
 
 export type OrgEntityType = 'venue' | 'hotel' | 'merchant' | 'affiliate_partner' | 'brand';
 
-export const ORG_ROLE_LABELS: Record<string, string> = {
-  venue: 'Venue',
-  hotel: 'Hotel',
-  seller: 'Merchant',
-  affiliate_partner: 'Partner',
-  brand: 'Brand',
-  publisher: 'Publisher',
-  support: 'Support',
-  advocacy: 'Advocacy',
-  organizer: 'Organizer',
-  community: 'Community',
-};
+export { ORG_ROLE_LABELS } from '@/lib/organizationRoles';
 
 export type AdminOrg = Tables<'organizations'>;
 

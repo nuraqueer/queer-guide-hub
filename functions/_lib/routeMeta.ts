@@ -50,11 +50,13 @@ export const STATIC_ROUTE_META: Record<string, RouteMeta> = {
     description:
       'Welcoming, queer-friendly hotels and accommodations for safer travel — vetted by the community.',
   },
-  '/places': {
-    title: 'Queer Places — Cities, Neighborhoods, Villages | Queer Guide',
-    description:
-      'Browse cities, neighborhoods and queer villages around the world with LGBTQ+ life and history.',
-  },
+  // No '/places' entry: the route is a LocalizedRedirect to /travel. Exactly
+  // the '/shop' case documented below, except the redirect is CLIENT-SIDE, so
+  // the edge answers 200 and nothing flagged it — routeMetaContract's
+  // redirectedSources parses public/_redirects only, and the Intent Router
+  // check reads INTENT_NAV, which has named /travel (not /places) for a while.
+  // So this entry sat in sitemap-static.xml advertising a redirect, with a full
+  // STATIC_ROUTE_BODY behind it. Both are gone; /places is noindexed below.
   // Without an exact entry, dynamicMeta() reads this as `/city/:slug` and
   // titles the page "Compare — City".
   '/city/compare': {
@@ -160,6 +162,18 @@ export const STATIC_ROUTE_META: Record<string, RouteMeta> = {
     description:
       'A daily, ad-free feed of LGBTQ+ news from trusted outlets, deduplicated and tagged by topic.',
   },
+  // Same two-surface split as /tags/interactions below: reserving `all` in
+  // RESERVED_DETAIL_SLUGS (functions/_lib/detail.ts) stopped the hard 404, but
+  // the meta table is separate and the generic `/(news)/([^/]+)` matcher kept
+  // reading this as kind=news, slug="all". Measured on prod 2026-10-10 with a
+  // Googlebot UA: the real archive page served "All — New | Queer Guide" plus
+  // "All on Queer Guide — New listing curated by the LGBTQ+ community" — note
+  // the stripped plural, which is the tell that a listing template produced it.
+  '/news/all': {
+    title: 'LGBTQ+ News Archive | Queer Guide',
+    description:
+      'Every LGBTQ+ news story Queer Guide has published, searchable and filterable by topic, place and date.',
+  },
   '/podcasts': {
     title: 'LGBTQ+ Podcasts | Queer Guide',
     description:
@@ -189,8 +203,13 @@ export const STATIC_ROUTE_META: Record<string, RouteMeta> = {
   // URL. It was never a React Router route, so "keeping it indexable" gave
   // it real meta but an SPA 404 body; it now 301s to /help from
   // public/_redirects and so can never reach this table.
+  // 71 chars until 2026-10-11, against the 60 Google truncates at — on the
+  // crisis page, where a cut-off title is worst. It went unchecked because
+  // LENGTH_ENFORCED hand-listed '/support' as the support intent long after
+  // INTENT_NAV moved it to '/help'; both lists are derived now, which is what
+  // surfaced this. Description (125) was always in bounds and is unchanged.
   '/help': {
-    title: 'LGBTQ+ help hotlines, crisis lines, and country resources | Queer Guide',
+    title: 'LGBTQ+ Crisis Lines and Help Hotlines | Queer Guide',
     description:
       'Free, confidential LGBTQ+ help hotlines and crisis lines worldwide, organized by country. Verified, queer-affirming, ad-free.',
   },
@@ -310,11 +329,10 @@ export const STATIC_ROUTE_META: Record<string, RouteMeta> = {
     description:
       'Legal gender recognition worldwide, what changing a document costs, and TGEU’s record of documented anti-trans violence — kept separate, never combined into a score.',
   },
-  '/support': {
-    title: 'Find LGBTQ+ Support Organizations Near You',
-    description:
-      'Support organizations, advocacy groups and crisis helplines for LGBTQ+ people, listed by country with direct links.',
-  },
+  // No '/support' entry: LocalizedRedirect to /help, same class as '/places'
+  // above. It was additionally sampled in scripts/seo-check.mjs's Intent Router
+  // block — stale, since the intent moved to /help — and that file's own comment
+  // forbids both a redirect source and a noindex route there.
   // No '/shop' entry: it 301s to /marketplace at the edge. A meta entry for a
   // redirect source is dead code AND puts the URL in sitemap-static.xml (which
   // is Object.keys(STATIC_ROUTE_META).filter(isIndexable)), i.e. a sitemap that
@@ -478,6 +496,54 @@ export function canonicalUrl(pathname: string): string {
   return `${SITE_ORIGIN}${clean}`;
 }
 
+/**
+ * Static sub-routes whose element is a client-side `<Navigate>` /
+ * `LocalizedRedirect`, so the edge answers them 200 with React not yet run.
+ *
+ * They are also in RESERVED_DETAIL_SLUGS (functions/_lib/detail.ts) — they have
+ * to be, or the edge would hard-404 them before the redirect could run — and
+ * that reservation is exactly what left them visible to crawlers. Measured on
+ * prod 2026-10-10 with a Googlebot UA, every one served the generic listing
+ * template: /hotels/guides → "Guides — Hotel | Queer Guide", /news/all →
+ * "All — New | Queer Guide" (note the stripped plural, which is the tell that a
+ * `/(kind)/(slug)` matcher produced it rather than a real entry).
+ *
+ * Noindex is the fix here and a STATIC_ROUTE_META entry is NOT: sitemap-static.xml
+ * is `Object.keys(STATIC_ROUTE_META).filter(isIndexable)`, so giving a redirect
+ * source meta advertises it in the sitemap. Same call as `/shop` below, for the
+ * same reason, and `routeMetaContract.test.ts` enforces it.
+ *
+ * EXACT paths, never a `^/venues/` prefix — that would deindex the whole venue
+ * directory (~26k pages) to suppress ten stubs. `isIndexable` receives the
+ * locale-stripped `basePath`, so `/de/venues/hotels` is covered too, which is
+ * the localized gap an unprefixed `public/_redirects` rule cannot close.
+ *
+ * `/news/all` is deliberately ABSENT: it is a real page (NewsArchive), not a
+ * redirect, and it keeps its own meta entry above.
+ */
+const CLIENT_REDIRECT_STUBS = new Set([
+  '/venues/events',
+  '/venues/groups',
+  '/venues/guides',
+  '/venues/hotels',
+  '/venues/leaderboard',
+  '/venues/marketplace',
+  '/venues/news',
+  '/venues/passport',
+  '/venues/resources',
+  '/venues/travel',
+  '/events/guides',
+  '/news/me',
+  // Not reserved detail slugs — these two are top-level LocalizedRedirects
+  // (/places -> /travel, /support -> /help) that also carried STATIC_ROUTE_META
+  // and a STATIC_ROUTE_BODY, so they were in sitemap-static.xml serving real
+  // crawler copy at a URL that bounces every human. Both entries are deleted
+  // above; this is the defensive layer, and it is what covers the localized
+  // `/de/places` form an unprefixed public/_redirects rule cannot reach.
+  '/places',
+  '/support',
+]);
+
 export function isIndexable(pathname: string): boolean {
   // These Hub modules have useful anonymous content. The remaining modules are
   // personal, consent-gated, or signed-in workspaces.
@@ -485,6 +551,7 @@ export function isIndexable(pathname: string): boolean {
   if (new Set(['/hub/feed', '/hub/members', '/hub/groups', '/hub/people']).has(clean)) {
     return true;
   }
+  if (CLIENT_REDIRECT_STUBS.has(clean)) return false;
 
   const noindex = [
     /^\/auth(\/|$)/,

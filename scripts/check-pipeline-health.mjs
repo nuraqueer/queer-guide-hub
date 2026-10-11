@@ -4705,6 +4705,36 @@ const DISOWNED_PROSE_CEILING = 380
       console.log(`✓ city regions consistent (${sig.cities_live} live cities, ${sig.subdivisions} subdivisions)`)
     }
   }
+
+  // 99991791721754: region_code filled from Natural Earth admin-1 polygons.
+  // The backlog only warns (it drains every 15 min); a filled code from
+  // another country is a zero-invariant, and a probe that saw no polygons
+  // measured nothing.
+  const polyRes = await fetch(`${BASE}/rest/v1/rpc/city_region_polygon_signals`, {
+    method: 'POST',
+    headers: { ...headers, 'Content-Type': 'application/json' },
+    body: '{}',
+  })
+  if (polyRes.status === 404) {
+    console.warn('⚠ city_region_polygon_signals → HTTP 404 (not applied? migration 99991791721754)')
+    console.warn('  This check measured NOTHING — it did not pass.')
+  } else if (!polyRes.ok) {
+    console.error(`✗ city_region_polygon_signals → HTTP ${polyRes.status}`)
+    FAILED = true
+  } else {
+    const poly = (await polyRes.json()) ?? {}
+    if (poly.probe_ok !== true || !(Number(poly.admin1_polygons) > 0) || !('filled_wrong_country' in poly)) {
+      console.error('✗ city_region_polygon_signals returned no probe_ok / no polygons — the probe is broken, not the data')
+      FAILED = true
+    } else if (Number(poly.filled_wrong_country) > 0) {
+      console.error(`✗ ${poly.filled_wrong_country} cities got a polygon region_code from another country`)
+      FAILED = true
+    } else {
+      const left = Number(poly.unvisited_with_coords ?? 0)
+      if (left > 0) console.warn(`⚠ ${left} cities with coordinates still await the polygon region fill (advisory)`)
+      console.log(`✓ polygon region fill: ${JSON.stringify(poly.stamped_by_state ?? {})}`)
+    }
+  }
 }
 
 // § Venue city text — a venue whose own `city` text names ANOTHER existing city

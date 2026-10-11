@@ -329,6 +329,16 @@ function ContentDuplicates({
                           <span className="font-medium">{m.title}</span>
                           {isKeep && <Badge variant="default">canonical</Badge>}
                           <code className="text-muted-foreground text-13">{m.slug}</code>
+                          {/* Same-name cities in different states looked identical
+                              here, and 17 of them were merged on 2026-10-10. */}
+                          {(m.region || m.country) && (
+                            <span className="text-muted-foreground text-13">
+                              {[m.region, m.country].filter(Boolean).join(', ')}
+                            </span>
+                          )}
+                          {m.has_coords === false && (
+                            <Badge variant="outline">no coordinates</Badge>
+                          )}
                           {typeof vm?.quality_score === 'number' && (
                             <Badge variant="outline">q {Math.round(vm.quality_score)}</Badge>
                           )}

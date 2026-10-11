@@ -43,7 +43,8 @@ import { cn } from '@/lib/utils';
 import { RouteBullet } from '@/components/transit/RouteBullet';
 import { TrackLoader } from '@/components/transit/TrackLoader';
 import { getCategoryShortName, parentOrder } from '@/components/resources/categoryMeta';
-import { CATEGORY_LINE_ORDER, lineForCategory } from '@/lib/tags/categoryIdentity';
+import { CATEGORY_LINE_ORDER } from '@/lib/tags/categoryIdentity';
+import { resolveTagGlyph } from '@/lib/tags/tagIconography';
 import { redirectedCategorySlug } from '@/lib/tags/categorySlugRedirects';
 import { GatedTagsNotice } from '@/components/tags/GatedTagsNotice';
 import {
@@ -75,6 +76,10 @@ interface TagIndexEntry {
   haystack: string;
   letter: string;
   parentName: string | null;
+  /** The primary category's OWN slug — the taxonomy stop, which is what decides
+   *  the term's glyph. Carried because `parentName` deliberately collapses a
+   *  stop to its line, so it cannot tell the 46 stops apart. */
+  stopSlug: string | null;
   categoryNames: (string | null | undefined)[];
 }
 
@@ -86,7 +91,7 @@ export default function TagsIndex() {
   const { allTags, categoriesTree, loading, error } = useCentralizedTags();
   const { data: usageCounts = {} } = useTagUsageCounts();
   const safeMode = useSafeMode();
-  const { affirm } = useAgeAffirmation();
+  const { affirmed, checking: checkingAgeAffirmation, affirm } = useAgeAffirmation();
 
   // ── URL state ───────────────────────────────────────────────────────────
   const resolveCategorySlug = useCallback(
@@ -182,6 +187,7 @@ export default function TagsIndex() {
         haystack: `${tag.name} ${tag.slug} ${tag.description ?? ''}`.toLowerCase(),
         letter: letterFor(tag.name),
         parentName: primary?.parent_name ?? primary?.name ?? null,
+        stopSlug: primary?.slug ?? null,
         categoryNames,
       };
     });
@@ -220,7 +226,7 @@ export default function TagsIndex() {
   /** Safe mode + the explicit `?adult=1` opt-in. The index did NO safe-mode
    *  filtering at all before this, so 18+ terms sat in the grid for signed-out
    *  visitors while the detail page dutifully gated them. */
-  const hideAdult = safeMode.enabled && !state.adult;
+  const hideAdult = safeMode.enabled && !state.adult && !affirmed;
 
   const inScope = useCallback(
     (e: TagIndexEntry) => {
@@ -329,8 +335,20 @@ export default function TagsIndex() {
   );
 
   // ── Presentation helpers ────────────────────────────────────────────────
-  const lineFor = useCallback(
-    (tag: CentralizedTag) => lineForCategory(byId.get(tag.id)?.parentName),
+  // One chokepoint for every view's glyph. Until 2026-10-10 this was
+  // `lineForCategory(parentName)`, i.e. eight marks for 8,460 terms, with 2,415
+  // of them sharing `consent`. `resolveTagGlyph` prefers the term's own
+  // override, then its taxonomy stop, then the line, then its entity kind.
+  const glyphFor = useCallback(
+    (tag: CentralizedTag) => {
+      const entry = byId.get(tag.id);
+      return resolveTagGlyph({
+        slug: tag.slug,
+        stopSlug: entry?.stopSlug,
+        parentName: entry?.parentName,
+        entityKind: tag.entity_kind,
+      });
+    },
     [byId],
   );
   const categoryLabelFor = useCallback((tag: CentralizedTag) => {
@@ -503,7 +521,7 @@ export default function TagsIndex() {
                   ? t('tags.searching', 'Searching…')
                   : t('tags.count', '{{count}} terms', { count: primaryResults.length })}
               </p>
-              {hideAdult && (
+              {hideAdult && !checkingAgeAffirmation && (
                 <button
                   type="button"
                   onClick={() => {
@@ -548,7 +566,7 @@ export default function TagsIndex() {
                   view={state.view}
                   tags={primaryResults.map((e) => e.tag)}
                   usageCounts={usageCounts}
-                  lineFor={lineFor}
+                  glyphFor={glyphFor}
                   categoryLabelFor={categoryLabelFor}
                   aliasIds={aliasIds}
                   graphCategory={scope?.id ?? null}
@@ -573,7 +591,7 @@ export default function TagsIndex() {
                     view={state.view}
                     tags={aliasResults.map((e) => e.tag)}
                     usageCounts={usageCounts}
-                    lineFor={lineFor}
+                    glyphFor={glyphFor}
                     categoryLabelFor={categoryLabelFor}
                     aliasIds={aliasIds}
                   />

@@ -13,7 +13,15 @@ const cluster = {
   normalized_title: '440 castro',
   members: [
     { id: 'v1', title: '440 Castro', slug: '440-castro', city: 'San Francisco', country: 'US' },
-    { id: 'v2', title: '440 Castro', slug: '440-castro-3', city: 'San Francisco', country: 'US' },
+    {
+      id: 'v2',
+      title: '440 Castro',
+      slug: '440-castro-3',
+      city: 'San Francisco',
+      country: 'US',
+      region: 'California',
+      has_coords: false,
+    },
   ],
 };
 
@@ -35,8 +43,22 @@ vi.mock('@/integrations/supabase/client', () => ({
         in: () =>
           Promise.resolve({
             data: [
-              { id: 'v1', quality_score: 80, trust_score: 70, images: ['x.jpg'], created_at: '2024-01-01', is_featured: false },
-              { id: 'v2', quality_score: 50, trust_score: 40, images: [], created_at: '2025-01-01', is_featured: false },
+              {
+                id: 'v1',
+                quality_score: 80,
+                trust_score: 70,
+                images: ['x.jpg'],
+                created_at: '2024-01-01',
+                is_featured: false,
+              },
+              {
+                id: 'v2',
+                quality_score: 50,
+                trust_score: 40,
+                images: [],
+                created_at: '2025-01-01',
+                is_featured: false,
+              },
             ],
             error: null,
           }),
@@ -51,7 +73,7 @@ describe('AdminDuplicates', () => {
   it('builds the type selector from the registry (beyond the old hardcoded four)', async () => {
     renderWithProviders(<AdminDuplicates />);
     await waitFor(() => expect(screen.getByText('Duplicates & merge')).toBeInTheDocument());
-    expect(screen.getByRole('button', { name: 'Venues' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Locations' })).toBeInTheDocument();
     // Cities is registry-driven — it was NOT in the old hardcoded list.
     expect(screen.getByRole('button', { name: 'Cities' })).toBeInTheDocument();
   });
@@ -62,6 +84,15 @@ describe('AdminDuplicates', () => {
     expect(screen.getByText('440-castro')).toBeInTheDocument();
     // v1 (quality 80) should be the suggested canonical, not v2 (quality 50).
     expect(screen.getByText('canonical')).toBeInTheDocument();
+  });
+
+  it('shows region and missing coordinates, so same-name places are distinguishable', async () => {
+    // Portland OR / Portland ME rendered as two identical "Portland" rows and
+    // 17 such pairs were merged on 2026-10-10.
+    renderWithProviders(<AdminDuplicates />);
+    await waitFor(() => expect(screen.getByText('2 copies')).toBeInTheDocument());
+    expect(screen.getByText('California, US')).toBeInTheDocument();
+    expect(screen.getByText('no coordinates')).toBeInTheDocument();
   });
 
   it('routes a venue merge to the dedicated merge_venues RPC', async () => {

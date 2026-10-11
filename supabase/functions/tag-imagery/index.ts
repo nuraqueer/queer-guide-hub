@@ -83,8 +83,24 @@ interface RowResult {
   url?: string
 }
 
+/**
+ * Commons Artist / ImageDescription values are HTML. Strip tags to a FIXPOINT:
+ * one pass is bypassable, because removing the inner tag of `<scr<script>ipt>`
+ * splices the outer one back into a live tag (CodeQL
+ * js/incomplete-multi-character-sanitization). Then drop stray angle brackets.
+ *
+ * Byte-identical to `queer-imagery-backfill`'s stripHtml, which already carried
+ * this fix — same input (Commons `extmetadata` HTML), so same shape rather than
+ * a second one.
+ */
 function stripHtml(value: string | undefined | null): string {
-  return (value ?? '').replace(/<[^>]*>/g, '').trim()
+  let s = value ?? ''
+  let prev: string
+  do {
+    prev = s
+    s = s.replace(/<[^>]*>/g, '')
+  } while (s !== prev)
+  return s.replace(/[<>]/g, '').trim()
 }
 
 /** One Commons imageinfo call: canonical URL, dimensions, artist, licence. */
@@ -148,7 +164,7 @@ async function p18File(qid: string): Promise<string | null> {
   return typeof file === 'string' && file.length > 0 ? `File:${file}` : null
 }
 
-/** Register the asset, returning its id. Links only when asked. */
+/** Register the asset, returning its id. It NEVER links — see below. */
 async function registerAsset(
   supabase: SupabaseClient,
   input: {
@@ -162,7 +178,6 @@ async function registerAsset(
     height?: number
     bytes?: number
   },
-  link: { tagId: string } | null,
 ): Promise<string | null> {
   const canonical = canonicaliseUrl(input.url)
   if (!canonical) return null
@@ -193,19 +208,18 @@ async function registerAsset(
     return null
   }
 
-  if (link) {
-    // Only the publish path claims the link here. A review proposal must not:
-    // `tag_cover_one_tag_uniq` would then let a candidate nobody approved hold
-    // the picture against every other tag indefinitely. The apply arm in
-    // 99991791617122 claims it at approval instead.
-    const { error: linkErr } = await supabase
-      .from('image_asset_links')
-      .insert({ asset_id: data.id, entity_type: 'tag', entity_id: link.tagId, role: 'cover' })
-    if (linkErr) {
-      console.warn('[tag-imagery] link insert failed', linkErr.message)
-      return null
-    }
-  }
+  // THE LINK IS NOT CLAIMED HERE, and that is the whole reason this function
+  // only registers. Two constraints decide it:
+  //
+  //   * A REVIEW PROPOSAL must never claim it. `tag_cover_one_tag_uniq` would
+  //     then let a candidate nobody approved hold the picture against every
+  //     other tag indefinitely; the apply arm claims it at approval instead.
+  //   * A PUBLISH must claim it in the SAME TRANSACTION as the six image
+  //     columns. Inserting it here and writing the columns afterwards means a
+  //     contract refusal (unlicensed, non-https, stock-on-adult) leaves a live
+  //     cover link on a tag whose `image_url` is still null -- an orphan that
+  //     holds the asset hostage against every other tag while rendering
+  //     nowhere. `tag_image_apply(p_asset_id => ...)` does both or neither.
   return data.id as string
 }
 
@@ -458,7 +472,6 @@ Deno.serve(async (req) => {
           height: candidate.height,
           bytes: mirrored.bytes,
         },
-        verdict.decision === 'publish' ? { tagId: tag.id } : null,
       )
       if (!assetId) {
         results.push({
@@ -473,17 +486,24 @@ Deno.serve(async (req) => {
       }
 
       if (verdict.decision === 'publish') {
-        const { error: upErr } = await supabase
-          .from('unified_tags')
-          .update({
-            image_url: mirrored.url,
-            image_alt: alt,
-            image_source: candidate.source,
-            image_license: candidate.license,
-            image_attribution: candidate.attribution,
-            image_explicit: verdict.explicit,
-          })
-          .eq('id', tag.id)
+        // NOT a PostgREST update. `log_unified_tag_change()` RAISEs when an
+        // UNDECLARED actor (`system:%`, which is what a service-role write is)
+        // modifies a `human_reviewed` row, and 79% of prose-bearing active tags
+        // carry that flag -- so the direct write failed on exactly the rows most
+        // worth illustrating. The RPC declares `machine:tag-imagery` and claims
+        // the asset link in the same transaction; it does NOT bypass
+        // `enforce_tag_image_contract`, so an unlicensed or stock-on-adult write
+        // is still refused here and that refusal is a bug in the guard above.
+        const { error: upErr } = await supabase.rpc('tag_image_apply', {
+          p_tag_id: tag.id,
+          p_url: mirrored.url,
+          p_alt: alt,
+          p_source: candidate.source,
+          p_license: candidate.license,
+          p_attribution: candidate.attribution,
+          p_explicit: verdict.explicit,
+          p_asset_id: assetId,
+        })
         if (upErr) {
           // A check_violation here is the contract refusing something the guard
           // let through, which is a BUG in the guard and must be loud.
@@ -590,21 +610,15 @@ async function bumpMiss(
   dryRun: boolean,
 ): Promise<void> {
   if (dryRun) return
-  const status = (tag.enrichment_status ?? {}) as Record<string, unknown>
-  const prev = (status.tag_image ?? {}) as { attempts?: number }
-  const attempts = Number(prev.attempts ?? 0) + 1
-  await supabase
-    .from('unified_tags')
-    .update({
-      enrichment_status: {
-        ...status,
-        tag_image: {
-          attempts,
-          last_why: why,
-          last_at: new Date().toISOString(),
-          state: attempts >= 3 ? 'data_unavailable' : 'searching',
-        },
-      },
-    })
-    .eq('id', tag.id)
+  // The increment is SERVER-SIDE. The read-modify-write this replaced
+  // (`select enrichment_status` -> `attempts + 1` -> `update`) loses a count
+  // whenever two batches touch one tag, and an undercounted attempt means the
+  // terminal sentinel never fires and the row is re-probed forever. The RPC
+  // also declares the actor, which a direct write cannot on a `human_reviewed`
+  // row -- see the publish site above.
+  const { error } = await supabase.rpc('tag_image_bump_miss', {
+    p_tag_id: tag.id,
+    p_why: why,
+  })
+  if (error) console.warn('[tag-imagery] bump_miss failed', error.message)
 }

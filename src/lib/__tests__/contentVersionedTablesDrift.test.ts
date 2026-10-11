@@ -14,7 +14,7 @@
 import { describe, it, expect } from 'vitest';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { contentTypeRegistry } from '@/config/contentTypes';
+import { contentTypeRegistry, internalContentTypeRegistry } from '@/config/contentTypes';
 
 const MIGRATIONS = join(process.cwd(), 'supabase/migrations');
 
@@ -57,8 +57,11 @@ describe('content_versioned_tables mirrors the content type registry', () => {
     expect(seeded.size, `no pairs parsed out of ${file}`).toBeGreaterThan(20);
   });
 
-  it('registers every content type, and nothing else', () => {
-    const inRegistry = Object.keys(contentTypeRegistry).sort();
+  it('versions registered content and internal location details', () => {
+    const inRegistry = Object.keys({
+      ...contentTypeRegistry,
+      ...internalContentTypeRegistry,
+    }).sort();
     const inDb = [...seeded.keys()].sort();
     expect(
       inDb,
@@ -71,7 +74,10 @@ describe('content_versioned_tables mirrors the content type registry', () => {
     // The registry key is not always the table name — `feedback` writes
     // `community_submissions`. Getting this wrong registers a table nothing
     // edits and leaves the real one unversioned.
-    for (const [key, config] of Object.entries(contentTypeRegistry)) {
+    for (const [key, config] of Object.entries({
+      ...contentTypeRegistry,
+      ...internalContentTypeRegistry,
+    })) {
       expect(seeded.get(key), `${key} is not seeded in ${file}`).toBe(config.tableName);
     }
   });

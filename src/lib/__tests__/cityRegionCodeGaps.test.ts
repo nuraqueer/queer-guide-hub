@@ -75,8 +75,24 @@ describe('hierarchy repairs', () => {
     }
   });
 
+  // Later migrations add their own parent repairs (99991791721754: FR-70,
+  // FR-75C, MA-NOU, MA-CHT, RS-01..07); the generator must carry the union, exactly.
+  const LATER_PAIRS: Record<string, string> = {
+    'FR-70': 'FR-BFC',
+    'FR-75C': 'FR-IDF',
+    'MA-NOU': 'MA-06',
+    'MA-CHT': 'MA-09',
+    'RS-01': 'RS-VO',
+    'RS-02': 'RS-VO',
+    'RS-03': 'RS-VO',
+    'RS-04': 'RS-VO',
+    'RS-05': 'RS-VO',
+    'RS-06': 'RS-VO',
+    'RS-07': 'RS-VO',
+  };
+
   it('the generator carries exactly the same overrides', () => {
-    expect(generatorPairs).toEqual(migrationPairs);
+    expect(generatorPairs).toEqual({ ...migrationPairs, ...LATER_PAIRS });
   });
 
   it('neither side lets a unit be its own parent', () => {

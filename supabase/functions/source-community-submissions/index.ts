@@ -9,6 +9,7 @@ import { withErrorReporting } from '../_shared/report-api-error.ts'
 // Keep in sync with CONTENT_TYPE_BY_ENTITY in workers/submit/src/supabase.ts.
 const TARGET_TABLE: Record<string, string> = {
   venue:       'venues',
+  organization: 'organizations',
   event:       'events',
   hotel:       'venues',                // accommodation_type marks it as a hotel downstream
   place:       'venues',                // place is a venue subtype

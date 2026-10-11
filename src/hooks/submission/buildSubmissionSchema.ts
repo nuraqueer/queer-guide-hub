@@ -101,6 +101,7 @@ function schemaForField(field: FieldConfig): ZodTypeAny {
 
 function fieldsFor(config: SubmissionTypeConfig): FieldConfig[] {
   return (
+    config.fields ??
     contentTypeRegistry[config.contentType]?.fields ??
     (config.id === 'place' ? placeSubmissionContentType.fields : [])
   );
