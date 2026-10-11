@@ -4,8 +4,8 @@ import { describe, expect, it } from 'vitest';
 
 // Write-time guard against linking a venue, hotel or organization to a
 // same-name city abroad.
-// See supabase/migrations/99991791728180_venue_city_country_guard.sql.
-const MIGRATION = '99991791728180_venue_city_country_guard.sql';
+// See supabase/migrations/99991791735828_venue_city_country_guard.sql.
+const MIGRATION = '99991791735828_venue_city_country_guard.sql';
 const raw = readFileSync(join(process.cwd(), 'supabase/migrations', MIGRATION), 'utf8');
 // Comment-stripped: the header quotes the rules it describes.
 const sql = raw
