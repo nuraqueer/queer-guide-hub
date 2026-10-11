@@ -30,8 +30,17 @@ describe('city duplicate clusters split by distance', () => {
   });
 
   it('keeps coordinate-less rows visible rather than hiding them', () => {
-    expect(body).toMatch(/n\.lat is null or a\.lat is null/);
+    expect(body).toMatch(/n\.lat is null or n\.lng is null/);
+    expect(body).toMatch(/a\.lat is not null and a\.lng is not null/);
+    expect(body).toMatch(/order by \(a\.lat is null or a\.lng is null\)/);
     expect(body).toContain("'has_coords'");
+  });
+
+  it('rejects an anchored group when any known pair exceeds the distance bound', () => {
+    const groups = body.slice(body.indexOf('groups as ('));
+    expect(groups).toMatch(/having count\(\*\) > 1[\s\S]*not exists/);
+    expect(groups).toMatch(/a\.anchor = anchored\.anchor/);
+    expect(groups).toMatch(/haversine_m\(a\.lat, a\.lng, b\.lat, b\.lng\) > 50000/);
   });
 
   it('exposes the region to the reviewer', () => {

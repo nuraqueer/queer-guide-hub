@@ -26,9 +26,11 @@
 --
 -- RULE
 --   Within a (name, country) group, a city joins the cluster of the first
---   member (by slug) within 50 km of it. A member with no coordinates cannot be
---   separated and stays with the first member -- visible, not hidden, because
---   absence of evidence is not evidence they differ. Members now carry
+--   known member (by slug) within 50 km of it. A member with either coordinate
+--   missing joins the first known anchor (or the first unknown row when none
+--   are known), but cannot anchor distant known points. Every known pair in a
+--   proposed group must also be within 50 km; ambiguous over-wide groups are
+--   withheld. Members now carry
 --   region and has_coords so the reviewer sees what the finder saw.
 --   Non-city types are unchanged.
 
@@ -64,7 +66,7 @@ as $function$
   ),
   anchored as (
     -- cities: the first same-name member (by slug) within 50 km anchors the
-    -- cluster; missing coordinates fall to the first member of the name group.
+    -- cluster; unknown points prefer a known anchor but never anchor known points.
     -- other types: one anchor per group, i.e. the old grouping.
     select n.*,
            case when p_content_type <> 'city' then ''
@@ -72,9 +74,10 @@ as $function$
                   select a.entity_id::text
                   from cand a
                   where a.nt = n.nt and a.nc = n.nc and a.nco = n.nco
-                    and (n.lat is null or a.lat is null
-                         or public.haversine_m(n.lat, n.lng, a.lat, a.lng) <= 50000)
-                  order by a.slug nulls last, a.entity_id
+                    and (n.lat is null or n.lng is null
+                         or (a.lat is not null and a.lng is not null
+                             and public.haversine_m(n.lat, n.lng, a.lat, a.lng) <= 50000))
+                  order by (a.lat is null or a.lng is null), a.slug nulls last, a.entity_id
                   limit 1
                 ) end as anchor
     from cand n
@@ -89,6 +92,18 @@ as $function$
     from anchored
     group by nt, nc, nco, anchor
     having count(*) > 1
+      -- Two points can each be within 50 km of an anchor while being 100 km
+      -- apart from each other. Do not offer that ambiguous group for merging.
+      and (p_content_type <> 'city' or not exists (
+        select 1 from anchored a join anchored b
+          on a.nt = b.nt and a.nc = b.nc and a.nco = b.nco and a.anchor = b.anchor
+        where a.nt = anchored.nt and a.nc = anchored.nc
+          and a.nco = anchored.nco and a.anchor = anchored.anchor
+          and a.entity_id < b.entity_id
+          and a.lat is not null and a.lng is not null
+          and b.lat is not null and b.lng is not null
+          and public.haversine_m(a.lat, a.lng, b.lat, b.lng) > 50000
+      ))
   )
   select coalesce((
     select jsonb_agg(jsonb_build_object('normalized_title', nt, 'city', nullif(nc, ''),
