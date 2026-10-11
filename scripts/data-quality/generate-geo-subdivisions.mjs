@@ -76,10 +76,15 @@ const EXTRA_ALIASES = {
 // Extremadura (as Cáceres already is). ES-O / ES-S / ES-LO are listed twice
 // under one code (province and community), which made each its own parent;
 // the community is the first-level unit.
+// 99991791713213: Haute-Saône hangs under Grand Est; it is
+// Bourgogne-Franche-Comté like every sibling department. Paris (the
+// collectivity FR-75C) has no parent, so a point in Paris climbed to FR-75C
+// while every Paris city carries FR-IDF.
 const PARENT_OVERRIDES = {
   'ES-O': 'ES-AS', 'ES-S': 'ES-CB', 'ES-LO': 'ES-RI', 'ES-BA': 'ES-EX',
   'IT-GR': 'IT-52', 'IT-LI': 'IT-52', 'IT-LU': 'IT-52', 'IT-MS': 'IT-52',
   'IT-PI': 'IT-52', 'IT-PO': 'IT-52', 'IT-PT': 'IT-52', 'IT-SI': 'IT-52',
+  'FR-70': 'FR-BFC', 'FR-75C': 'FR-IDF',
 }
 
 const q = (s) => (s == null || s === '' ? 'null' : `'${String(s).trim().replace(/'/g, "''")}'`)
