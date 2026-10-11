@@ -9,6 +9,7 @@ import {
 } from '../../functions/_lib/routeMeta';
 import { STATIC_ROUTE_BODY } from '../../functions/_lib/routeBody';
 import { INTENT_NAV } from '@/config/navigation';
+import { clientRedirectPaths } from '../test/routeTable';
 
 /**
  * Contract tests for the edge SEO tables.
@@ -67,12 +68,14 @@ const LENGTH_ENFORCED = [
   '/organizations',
   '/pride',
   '/hub/feed',
-  // Intent Router landing pages. (Shop's is /marketplace, already above.)
-  '/going-out',
-  '/rights',
-  '/support',
-  '/hub/people',
-];
+  // Intent Router landing pages — DERIVED, not hand-listed, for the reason the
+  // INTENT_ROUTES docblock below already gives. This list hand-wrote '/support'
+  // long after the support intent moved to '/help', so it held a
+  // LocalizedRedirect to landing-page standards and never mentioned the real
+  // landing page: exactly the '/shop' failure that docblock describes, sitting
+  // two lines above it. Deriving makes the drift unspellable.
+  ...INTENT_NAV.map((i) => i.to),
+].filter((p, i, a) => a.indexOf(p) === i);
 
 /**
  * Every Intent Router path must be indexable and carry its own meta + body.
@@ -125,7 +128,10 @@ describe('STATIC_ROUTE_META', () => {
   it('makes intent pages link downward into the browse routes', () => {
     // Intent pages are hubs. If they stopped linking out to the canonical
     // browse/detail routes they would compete with them instead of feeding them.
-    for (const path of ['/going-out', '/rights', '/support', '/marketplace', '/hub/people']) {
+    // Derived from INTENT_NAV, not hand-listed: this loop named '/support',
+    // which has no body at all now that it is a noindexed LocalizedRedirect,
+    // and never named '/help' — the page the intent has actually pointed at.
+    for (const path of INTENT_ROUTES) {
       const links = STATIC_ROUTE_BODY[path]?.links ?? [];
       expect(links.length, `${path} should link out`).toBeGreaterThanOrEqual(3);
     }
@@ -147,6 +153,57 @@ describe('STATIC_ROUTE_META', () => {
       offenders,
       'these appear in sitemap-static.xml but 301 away at the edge before React runs',
     ).toEqual([]);
+  });
+
+  /**
+   * The check above sees `public/_redirects` only, so it is blind to a route
+   * whose element is a client-side `<Navigate>` / `LocalizedRedirect`. The edge
+   * answers those 200 — React has not run — so they look like pages to every
+   * gate we had: this file, the Intent Router check (which reads INTENT_NAV,
+   * and neither was in it), and seo-check.mjs (whose fetch saw a 200 with the
+   * route's own body and canonical).
+   *
+   * `/places` (-> /travel) and `/support` (-> /help) both sat in
+   * sitemap-static.xml with a full STATIC_ROUTE_BODY behind them, advertising
+   * crawler copy at URLs that bounce every human. Nothing was red.
+   */
+  it('has no key whose route is a client-side redirect', () => {
+    const stubs = clientRedirectPaths();
+    // Positive control: an empty stub set would make this assertion vacuous,
+    // and the parser is a regex over routes.tsx, so it can silently find none.
+    expect(stubs.size, 'the route-table parser found no redirect stubs').toBeGreaterThan(20);
+
+    const offenders = Object.keys(STATIC_ROUTE_META).filter((p) => stubs.has(p));
+    expect(
+      offenders,
+      'these routes redirect client-side, so meta for them puts a redirect ' +
+        'source in sitemap-static.xml. Key the meta to the redirect TARGET and ' +
+        'add the source to CLIENT_REDIRECT_STUBS in functions/_lib/routeMeta.ts.',
+    ).toEqual([]);
+  });
+
+  it('keeps /places and /support noindexed as well as meta-less', () => {
+    // Named, because deleting the meta entry alone leaves NOTHING watching the
+    // noindex half: the gate above only inspects META KEYS, and these two are
+    // no longer keys. Dropped from CLIENT_REDIRECT_STUBS they would become
+    // indexable again, fall through to DEFAULT_META and put two more
+    // homepage-titled URLs in the index — outside the sitemap, so quieter than
+    // before and still wrong.
+    //
+    // NOT generalised to "every client-side stub must be noindexed": measured
+    // 2026-10-11, 42 other static stubs are still indexable (/africa, /home,
+    // /discover, /cities/compare, …). Those are legacy aliases whose fix is an
+    // edge 301 in public/_redirects, so that assertion would ship red.
+    for (const path of ['/places', '/support']) {
+      expect(isIndexable(path), `${path} redirects away and must stay noindex`).toBe(false);
+      expect(Object.keys(STATIC_ROUTE_META), `${path} must not be a meta key`).not.toContain(path);
+      expect(Object.keys(STATIC_ROUTE_BODY), `${path} must not carry a body`).not.toContain(path);
+    }
+    // Mirror: the redirect TARGETS must stay indexable, with their own meta.
+    for (const path of ['/travel', '/help']) {
+      expect(isIndexable(path), `${path} is a real page`).toBe(true);
+      expect(STATIC_ROUTE_META[path], `${path} needs its own meta`).toBeDefined();
+    }
   });
 });
 
@@ -190,8 +247,19 @@ describe('STATIC_ROUTE_BODY', () => {
   it('never links the crawler at a redirect source', () => {
     // `/resources` 301s to `/tags`; five body entries pointed at it, so every
     // one spent a crawl hop on a redirect.
+    //
+    // Client-side stubs count too, and they used to slip through BOTH link
+    // checks: this one saw `public/_redirects` only, and the homepage-title
+    // check above SKIPS a noindexed href — so once /places was noindexed, a
+    // body link aimed at it became invisible to everything. Found by mutation
+    // (re-pointing a link back at /places passed the whole suite); four such
+    // links existed, three at /places and one at /support.
+    const stubs = clientRedirectPaths();
+    // Positive control: an empty set would silently disable the new half.
+    expect(stubs.size, 'the route-table parser found no redirect stubs').toBeGreaterThan(20);
+
     const offenders = bodyLinks
-      .filter(({ href }) => href.startsWith('/') && isShadowedByRedirect(href))
+      .filter(({ href }) => href.startsWith('/') && (isShadowedByRedirect(href) || stubs.has(href)))
       .map(({ from, href }) => `${from} -> ${href}`);
     expect([...new Set(offenders)], 'link the redirect TARGET instead').toEqual([]);
   });
