@@ -200,7 +200,7 @@ const CONTENT_TYPE_BY_ENTITY: Record<string, string> = {
   event: "event",
   stay: "hotel",
   marketplace_item: "product",
-  organization: "personality",
+  organization: "organization",
   news_article: "news",
   place: "place",
 };

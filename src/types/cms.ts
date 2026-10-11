@@ -40,7 +40,8 @@ export type FieldType =
   | 'venue_autocomplete'
   | 'profession_autocomplete'
   | 'roles_autocomplete'
-  | 'link_list';
+  | 'link_list'
+  | 'organisation_locations';
 
 export type FieldGroup =
   'basic' | 'details' | 'location' | 'media' | 'seo' | 'settings' | 'lgbtq' | 'external';
@@ -294,6 +295,8 @@ export interface ContentTypeConfig {
     /** Maps the editor's form values to the RPC's arguments. */
     args: (saveData: Record<string, unknown>) => Record<string, unknown>;
   };
+  /** Transactional editor IO for identity plus internal location records. */
+  editorRpc?: { load: string; save: string };
   /** Primary key column (usually 'id') */
   primaryKey: string;
   /** Column used as title in lists */

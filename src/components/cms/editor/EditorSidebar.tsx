@@ -36,6 +36,7 @@ interface EditorSidebarProps {
   onJumpToField?: (field: string) => void;
   /** Auto-run quality review on open (cockpit mode). */
   autoRunQuality?: boolean;
+  onWorkflowChange?: () => Promise<void>;
 }
 
 interface PanelProps {
@@ -83,6 +84,7 @@ export function EditorSidebar({
   onApplyField,
   onJumpToField,
   autoRunQuality,
+  onWorkflowChange,
 }: EditorSidebarProps) {
   const config = getContentType(contentType);
   const showQuality = Boolean(onApplyField && onJumpToField);
@@ -147,7 +149,20 @@ export function EditorSidebar({
 
       {/* Workflow Panel */}
       <Panel title="Workflow" open={expandedPanels.workflow} onOpenChange={setPanel('workflow')}>
-        <WorkflowPanel contentType={contentType} itemId={itemId} />
+        <WorkflowPanel
+          contentType={contentType}
+          itemId={itemId}
+          onWorkflowChange={onWorkflowChange}
+          initialState={
+            contentType === 'organizations'
+              ? qualitySource?.status === 'active'
+                ? 'published'
+                : qualitySource?.status === 'archived'
+                  ? 'archived'
+                  : 'draft'
+              : undefined
+          }
+        />
       </Panel>
 
       {/* Internal notes + evidence attachments (personalities only) */}

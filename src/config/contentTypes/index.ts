@@ -53,7 +53,6 @@ const ACCESSIBILITY_CATEGORIES = [
 ];
 
 export const contentTypeRegistry: Record<string, ContentTypeConfig> = {
-  venues: venueContentType,
   events: eventContentType,
   personalities: personalityContentType,
   news_articles: newsArticleContentType,
@@ -131,6 +130,13 @@ export const contentTypeRegistry: Record<string, ContentTypeConfig> = {
   }),
 };
 
+/** Internal location contracts remain versioned and deduplicated, without CMS list entries. */
+export const internalContentTypeRegistry: Record<string, ContentTypeConfig> = {
+  venues: venueContentType,
+};
+/** Supported legacy routes resolve to a canonical CMS content type. */
+export const contentTypeRouteAliases: Record<string, string> = { venues: 'organizations' };
+
 /** Get all content type IDs */
 export function getContentTypeIds(): string[] {
   return Object.keys(contentTypeRegistry);
@@ -138,12 +144,13 @@ export function getContentTypeIds(): string[] {
 
 /** Get a content type config by ID */
 export function getContentType(id: string): ContentTypeConfig | undefined {
-  return contentTypeRegistry[id];
+  // Internal location config retained for validation and legacy integrations.
+  return contentTypeRegistry[id] ?? internalContentTypeRegistry[id];
 }
 
 /** Get field configs for a content type, optionally filtered by group */
 export function getFieldsByGroup(contentTypeId: string, group?: FieldGroup): FieldConfig[] {
-  const config = contentTypeRegistry[contentTypeId];
+  const config = getContentType(contentTypeId);
   if (!config) return [];
   if (!group) return config.fields.filter((f) => !f.hidden);
   return config.fields.filter((f) => f.group === group && !f.hidden);
@@ -151,7 +158,7 @@ export function getFieldsByGroup(contentTypeId: string, group?: FieldGroup): Fie
 
 /** Get all available field groups for a content type */
 export function getFieldGroups(contentTypeId: string): FieldGroup[] {
-  const config = contentTypeRegistry[contentTypeId];
+  const config = getContentType(contentTypeId);
   if (!config) return [];
   if (config.fieldGroupOrder) return config.fieldGroupOrder;
   const groups = new Set(config.fields.filter((f) => !f.hidden).map((f) => f.group));

@@ -17,10 +17,18 @@ const ROLE_LABEL: Partial<Record<OrgRole, string>> = {
   publisher: 'News outlet',
   seller: 'Shop',
   venue: 'Physical venue',
+  organizer: 'Organiser',
+  community: 'Community',
+  hotel: 'Accommodation',
+  brand: 'Brand',
+  affiliate_partner: 'Partner',
 };
 
 const TABS: { id: string; label: string; role?: OrgRole }[] = [
   { id: 'all', label: 'All' },
+  { id: 'venue', label: 'Venues', role: 'venue' },
+  { id: 'organizer', label: 'Organisers', role: 'organizer' },
+  { id: 'community', label: 'Community', role: 'community' },
   { id: 'support', label: 'Support', role: 'support' },
   // Advocacy is deliberately its own tab and not folded into Support: a reader
   // looking for help must not be handed a lobbying group or a dissolved one.

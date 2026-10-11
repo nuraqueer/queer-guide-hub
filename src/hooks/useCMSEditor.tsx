@@ -9,6 +9,7 @@ import { untypedRpc } from '@/integrations/supabase/untyped';
 import { toast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { getContentType } from '@/config/contentTypeRegistry';
+import { validateOrganisationLocations } from '@/lib/cms/organisationLocations';
 import { validateAgainstRegistry } from '@/lib/cms/zodFromFields';
 import type { EditorState, CMSContentMetadata, FieldGroup } from '@/types/cms';
 
@@ -39,6 +40,8 @@ interface UseCMSEditorOptions {
   itemId: string | null;
   /** Auto-save interval in ms (0 = disabled) */
   autoSaveInterval?: number;
+  initialValues?: Record<string, unknown>;
+  initialGroup?: FieldGroup;
 }
 
 interface UseCMSEditorReturn {
@@ -51,6 +54,8 @@ interface UseCMSEditorReturn {
   save: () => Promise<boolean>;
   /** Reset form to original data */
   reset: () => void;
+  /** Refresh server state after publication changes while retaining unsaved fields. */
+  refresh: () => Promise<void>;
   /** Set the active field group tab */
   setActiveGroup: (group: FieldGroup) => void;
   /** Metadata for CMS features */
@@ -63,6 +68,8 @@ export function useCMSEditor({
   contentType,
   itemId,
   autoSaveInterval = 0,
+  initialValues,
+  initialGroup,
 }: UseCMSEditorOptions): UseCMSEditorReturn {
   const { user } = useAuth();
   const config = getContentType(contentType);
@@ -76,13 +83,13 @@ export function useCMSEditor({
   const [state, setState] = useState<EditorState>({
     contentType,
     itemId,
-    data: config?.defaults ? { ...config.defaults } : {},
-    originalData: {},
+    data: { ...config?.defaults, ...initialValues },
+    originalData: { ...config?.defaults, ...initialValues },
     isDirty: false,
     isSaving: false,
     isLoading: !!itemId,
     errors: {},
-    activeGroup: config?.fieldGroupOrder?.[0] ?? 'basic',
+    activeGroup: initialGroup ?? config?.fieldGroupOrder?.[0] ?? 'basic',
     metadata: undefined,
   });
 
@@ -103,15 +110,19 @@ export function useCMSEditor({
 
     try {
       // Fetch content from source table
-      const { data, error } = await supabase
-        .from(config.tableName as 'venues')
-        .select('*')
-        .eq(config.primaryKey, itemId)
-        .single();
+      const { data: loaded, error } = config.editorRpc
+        ? await untypedRpc(config.editorRpc.load, { p_id: itemId })
+        : await supabase
+            .from(config.tableName as 'venues')
+            .select('*')
+            .eq(config.primaryKey, itemId)
+            .single();
 
       if (error) throw error;
+      if (!loaded) throw new Error('Content not found');
+      const data = loaded as Record<string, unknown>;
 
-      serverUpdatedAt.current = data.updated_at || null;
+      serverUpdatedAt.current = (data.updated_at as string) || null;
       dirtyFieldsRef.current = new Set();
 
       // Fetch CMS metadata if exists
@@ -142,6 +153,35 @@ export function useCMSEditor({
       }));
     }
   }, [itemId, config]);
+
+  const refresh = useCallback(async () => {
+    const id = state.itemId ?? itemId;
+    if (!config?.editorRpc || !id) return;
+    const { data, error } = await untypedRpc(config.editorRpc.load, { p_id: id });
+    if (error || !data) {
+      setState((prev) => ({
+        ...prev,
+        errors: {
+          ...prev.errors,
+          _save: 'Publication changed, but the editor could not refresh. Reload before saving.',
+        },
+      }));
+      return;
+    }
+    const server = data as Record<string, unknown>;
+    serverUpdatedAt.current = server.updated_at as string;
+    if (server._cms_metadata) setMetadata(server._cms_metadata as CMSContentMetadata);
+    setState((prev) => {
+      const merged = { ...server };
+      const nextDirty = new Set<string>();
+      for (const key of dirtyFieldsRef.current) {
+        merged[key] = prev.data[key];
+        if (JSON.stringify(merged[key]) !== JSON.stringify(server[key])) nextDirty.add(key);
+      }
+      dirtyFieldsRef.current = nextDirty;
+      return { ...prev, data: merged, originalData: server, isDirty: nextDirty.size > 0 };
+    });
+  }, [config, state.itemId, itemId]);
 
   // ── Field updates ──────────────────────────────────────────────
 
@@ -186,7 +226,17 @@ export function useCMSEditor({
 
     // Run validation — Zod schema (registry-derived) + legacy custom validate
     const errorMap: Record<string, string> = {};
-    const zodResult = validateAgainstRegistry(config, state.data);
+    const validationData = config.editorRpc
+      ? {
+          ...state.data,
+          ...Object.fromEntries(
+            ['website', 'email', 'phone']
+              .filter((key) => state.data[key] === '')
+              .map((key) => [key, null]),
+          ),
+        }
+      : state.data;
+    const zodResult = validateAgainstRegistry(config, validationData);
     if (!zodResult.ok) {
       for (const issue of zodResult.issues) {
         if (!errorMap[issue.field]) errorMap[issue.field] = issue.message;
@@ -200,8 +250,20 @@ export function useCMSEditor({
         });
       }
     }
+    if (config.editorRpc && (!state.itemId || dirtyFieldsRef.current.has('_locations'))) {
+      const locationError = validateOrganisationLocations(
+        state.data._locations ?? [],
+        state.originalData._locations,
+      );
+      if (locationError) errorMap._locations = locationError;
+    }
     if (Object.keys(errorMap).length > 0) {
-      setState((prev) => ({ ...prev, errors: errorMap }));
+      const errorGroup = config.fields.find((field) => errorMap[field.name])?.group;
+      setState((prev) => ({
+        ...prev,
+        errors: errorMap,
+        activeGroup: errorGroup ?? prev.activeGroup,
+      }));
       return false;
     }
 
@@ -221,16 +283,20 @@ export function useCMSEditor({
       // is a genuine column and still saves.
       const readOnlyFields = new Set(config.fields.filter((f) => f.readOnly).map((f) => f.name));
       const virtualFields = new Set(config.fields.filter((f) => f.virtual).map((f) => f.name));
-      const systemFields = new Set(['id', 'created_at', 'created_by']);
+      const systemFields = new Set(['id', 'created_at', 'created_by', '_cms_metadata']);
       const saveData: Record<string, unknown> = {};
 
       for (const [key, value] of Object.entries(state.data)) {
         if (readOnlyFields.has(key) || virtualFields.has(key) || systemFields.has(key)) continue;
-        if (itemId && !dirtyFieldsRef.current.has(key)) continue;
+        if ((state.itemId ?? itemId) && !dirtyFieldsRef.current.has(key)) continue;
         saveData[key] = value;
       }
 
-      if (itemId && Object.keys(saveData).length === 0) {
+      if (
+        (state.itemId ?? itemId) &&
+        Object.keys(saveData).length === 0 &&
+        !dirtyFieldsRef.current.has('_locations')
+      ) {
         // Nothing editable changed — no write needed.
         setState((prev) => ({ ...prev, isDirty: false, isSaving: false }));
         return true;
@@ -239,10 +305,26 @@ export function useCMSEditor({
       // Add updated_at
       saveData.updated_at = new Date().toISOString();
 
-      let savedId = itemId;
+      const effectiveId = state.itemId ?? itemId;
+      let savedId = effectiveId;
       let serverRow: Record<string, unknown> | null = null;
 
-      if (itemId) {
+      if (config.editorRpc) {
+        const { data: saved, error } = await untypedRpc(config.editorRpc.save, {
+          p_id: effectiveId,
+          p_data: saveData,
+          p_locations:
+            !effectiveId || dirtyFieldsRef.current.has('_locations')
+              ? (state.data._locations ?? [])
+              : null,
+          p_expected_updated_at: effectiveId ? serverUpdatedAt.current : null,
+        });
+        if (error) throw error;
+        if (!saved) throw new Error('No record returned from save');
+        serverRow = saved as Record<string, unknown>;
+        savedId = serverRow.id as string;
+        if (serverRow._cms_metadata) setMetadata(serverRow._cms_metadata as CMSContentMetadata);
+      } else if (effectiveId) {
         // UPDATE with optimistic concurrency: the row must still carry the
         // updated_at we loaded — zero rows back means someone else saved in
         // between (or the row is gone). Replaces the old pre-save SELECT
@@ -251,7 +333,7 @@ export function useCMSEditor({
         let update = supabase
           .from(config.tableName as 'venues')
           .update(saveData)
-          .eq(config.primaryKey, itemId);
+          .eq(config.primaryKey, effectiveId);
         if (serverUpdatedAt.current) {
           update = update.eq('updated_at', serverUpdatedAt.current);
         }
@@ -364,7 +446,7 @@ export function useCMSEditor({
       // rather than the row the server stored. The trail is now written by a
       // database trigger, which also sees the ~5,400 machine writes a day this
       // path could never have known about.
-      if (savedId) {
+      if (savedId && !config.editorRpc) {
         const bookkeepingId = savedId;
         void (async () => {
           if (!metadata) {
@@ -430,7 +512,7 @@ export function useCMSEditor({
       }));
       return false;
     }
-  }, [config, state.data, itemId, user, metadata]);
+  }, [config, state.data, state.itemId, state.originalData._locations, itemId, user, metadata]);
 
   // ── Reset ──────────────────────────────────────────────────────
 
@@ -520,6 +602,7 @@ export function useCMSEditor({
     setFields,
     save,
     reset,
+    refresh,
     setActiveGroup,
     metadata,
     updateMetadata,

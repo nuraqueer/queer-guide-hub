@@ -193,7 +193,9 @@ function SubmitFormInner({ config, embedded, onBack }: SubmitFormInnerProps) {
     (fieldNames: string[]) => {
       if (!contentConfig) return [];
       return fieldNames
-        .map((fieldName) => contentConfig.fields.find((f) => f.name === fieldName))
+        .map((fieldName) =>
+          (config.fields ?? contentConfig.fields).find((f) => f.name === fieldName),
+        )
         .filter((f): f is NonNullable<typeof f> => f !== undefined)
         .map((f) => ({
           ...f,
@@ -204,7 +206,7 @@ function SubmitFormInner({ config, embedded, onBack }: SubmitFormInnerProps) {
           ...(f.name === 'event_type' ? { options: eventTypeOptions } : {}),
         }));
     },
-    [contentConfig, eventTypeOptions],
+    [config.fields, contentConfig, eventTypeOptions],
   );
 
   // Current step's fields (wizard mode)

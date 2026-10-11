@@ -3,6 +3,7 @@
  */
 import { describe, it, expect, vi } from 'vitest';
 import { render } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 vi.mock('@/hooks/useAuth', () => ({ useAuth: () => ({ user: { id: 'u1' } }) }));
 vi.mock('@/hooks/useCMSWorkflow', () => ({
@@ -33,7 +34,23 @@ vi.mock('@/components/cms/media/MediaPickerDialog', () => ({ default: () => null
 vi.mock('../EditorSidebar', () => ({ EditorSidebar: () => null }));
 vi.mock('@/hooks/useCMSEditor', () => ({
   useCMSEditor: () => ({
-    state: { data: {}, dirty: false, itemId: null, errors: {}, saving: false, loading: false },
+    state: {
+      data: {},
+      originalData: {},
+      isDirty: false,
+      itemId: null,
+      errors: {},
+      isSaving: false,
+      isLoading: false,
+      activeGroup: 'basic',
+    },
+    setField: vi.fn(),
+    setFields: vi.fn(),
+    save: vi.fn(),
+    reset: vi.fn(),
+    refresh: vi.fn(),
+    setActiveGroup: vi.fn(),
+    updateMetadata: vi.fn(),
     contentType: null,
     loading: false,
     onChange: vi.fn(),
@@ -49,7 +66,9 @@ import { CMSEditorLayout } from '../CMSEditorLayout';
 describe('CMSEditorLayout', () => {
   it('renders', () => {
     const { container } = render(
-      <CMSEditorLayout contentType="venues" itemId={null} onClose={vi.fn()} onSaved={vi.fn()} />,
+      <QueryClientProvider client={new QueryClient()}>
+        <CMSEditorLayout contentType="venues" itemId={null} onClose={vi.fn()} onSaved={vi.fn()} />
+      </QueryClientProvider>,
     );
     expect(container).toBeTruthy();
   });

@@ -31,12 +31,19 @@ import {
 interface WorkflowPanelProps {
   contentType: string;
   itemId: string | null;
+  initialState?: WorkflowState;
+  onWorkflowChange?: () => Promise<void>;
 }
 
-export function WorkflowPanel({ contentType, itemId }: WorkflowPanelProps) {
+export function WorkflowPanel({
+  contentType,
+  itemId,
+  initialState,
+  onWorkflowChange,
+}: WorkflowPanelProps) {
   const config = getContentType(contentType);
 
-  const [currentState, setCurrentState] = useState<WorkflowState>('draft');
+  const [currentState, setCurrentState] = useState<WorkflowState>(initialState ?? 'draft');
   const [publishedAt, setPublishedAt] = useState<string | undefined>(undefined);
   const [scheduledPublishAt, setScheduledPublishAt] = useState<string | undefined>(undefined);
   const [scheduleDraft, setScheduleDraft] = useState<string>('');
@@ -59,7 +66,7 @@ export function WorkflowPanel({ contentType, itemId }: WorkflowPanelProps) {
     // eslint-disable-next-line react-hooks/immutability -- loadMetadata declared below; effect fires after render so binding is initialized.
     loadMetadata();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [itemId, config]);
+  }, [itemId, config, initialState]);
 
   const loadMetadata = useCallback(async () => {
     if (!itemId || !config) return;
@@ -73,12 +80,13 @@ export function WorkflowPanel({ contentType, itemId }: WorkflowPanelProps) {
         setScheduledPublishAt(sched || undefined);
         setScheduleDraft(sched ? toLocalInputValue(sched) : '');
       }
+      if (!data && initialState) setCurrentState(initialState);
       setMetadataLoaded(true);
     } catch (err) {
       console.error('WorkflowPanel: failed to load metadata', err);
       setMetadataLoaded(true);
     }
-  }, [itemId, config]);
+  }, [itemId, config, initialState]);
 
   const handleTransition = useCallback(
     async (trans: WorkflowTransition, comment?: string) => {
@@ -93,9 +101,10 @@ export function WorkflowPanel({ contentType, itemId }: WorkflowPanelProps) {
         }
         setCommentTarget(null);
         setCommentText('');
+        await onWorkflowChange?.();
       }
     },
-    [itemId, config, transition],
+    [itemId, config, transition, onWorkflowChange],
   );
 
   const handleTransitionClick = useCallback(
@@ -137,11 +146,12 @@ export function WorkflowPanel({ contentType, itemId }: WorkflowPanelProps) {
         await upsertCMSContentMetadata(config.tableName, itemId, {
           visibility_level: newVisibility,
         });
+        await onWorkflowChange?.();
       } catch (err) {
         console.error('Failed to update visibility:', err);
       }
     },
-    [itemId, config],
+    [itemId, config, onWorkflowChange],
   );
 
   const stateColor = getStateColor(currentState);
