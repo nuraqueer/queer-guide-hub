@@ -39,6 +39,7 @@
 do $patch$
 declare
   v_src  text;
+  v_code text;
   v_new  text;
   -- anchor 1: the status literal in the failed-branch INSERT
   a1_old constant text := E'a.id, a.slug, ''error'', coalesce(d.start_time, now()),';
@@ -52,23 +53,29 @@ declare
   a3_new constant text := E'if d.return_message is distinct from ''job startup timeout'' then\n          v_errors := v_errors + 1;\n        end if;';
 
 begin
-  v_src := pg_get_functiondef('public.admin_automation_project_cron_runs(integer)'::regprocedure);
+  -- Every check reads a comment-stripped copy: a comment quoting an anchor
+  -- must neither satisfy the idempotency test nor inflate an anchor count.
+  v_code := regexp_replace(
+    pg_get_functiondef('public.admin_automation_project_cron_runs(integer)'::regprocedure),
+    '--[^' || chr(10) || ']*', '', 'g');
 
-  if position('cron_startup_timeout' in v_src) > 0 then
+  if position('cron_startup_timeout' in v_code) > 0 then
     raise notice 'admin_automation_project_cron_runs already patched; skipping';
     return;
   end if;
 
-  if (length(v_src) - length(replace(v_src, a1_old, ''))) / length(a1_old) <> 1 then
+  if (length(v_code) - length(replace(v_code, a1_old, ''))) / length(a1_old) <> 1 then
     raise exception 'anchor 1 (failed-branch status literal) not found exactly once';
   end if;
-  if (length(v_src) - length(replace(v_src, a2_old, ''))) / length(a2_old) <> 1 then
+  if (length(v_code) - length(replace(v_code, a2_old, ''))) / length(a2_old) <> 1 then
     raise exception 'anchor 2 (failed-branch summary) not found exactly once';
   end if;
-  if (length(v_src) - length(replace(v_src, a3_old, ''))) / length(a3_old) <> 1 then
+  if (length(v_code) - length(replace(v_code, a3_old, ''))) / length(a3_old) <> 1 then
     raise exception 'anchor 3 (v_errors tally) not found exactly once';
   end if;
 
+  -- the patch itself is applied to the live body verbatim
+  v_src := pg_get_functiondef('public.admin_automation_project_cron_runs(integer)'::regprocedure);
   v_new := replace(replace(replace(v_src, a1_old, a1_new), a2_old, a2_new), a3_old, a3_new);
   execute v_new;
 end
