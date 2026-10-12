@@ -32,7 +32,6 @@ import {
   Newspaper,
   Users,
   UserCog,
-  Map,
   Tag,
   ShoppingBag,
   BookOpen,
@@ -55,7 +54,6 @@ import {
   SpellCheck,
   Award,
   PenLine,
-  UserPlus,
   Waypoints,
   Network,
   Trash2,
@@ -230,19 +228,6 @@ export const adminNavSections: AdminNavSection[] = [
         icon: UsersRound,
         route: '/admin/content/community_groups',
         countTable: 'community_groups',
-        group: 'People',
-      },
-      {
-        id: 'group-requests',
-        label: 'Group Requests',
-        icon: UserPlus,
-        route: '/admin/content/group-requests',
-        reviewCountKey: 'review_group_requests',
-        // Explicit, matching the `group-requests` queue in adminQueues.ts. Same
-        // omission as the Quality row: the queue said moderator, the nav row took
-        // Content's `editor` floor, so the page was reachable by users the queue
-        // was hidden from.
-        minRole: 'moderator',
         group: 'People',
       },
       // Editorial
@@ -453,13 +438,6 @@ export const adminNavSections: AdminNavSection[] = [
         countTable: 'redirects',
         group: 'Configuration',
       },
-      {
-        id: 'maps',
-        label: 'Maps',
-        icon: Map,
-        route: '/admin/maps',
-        group: 'Configuration',
-      },
     ],
   },
 ];
@@ -526,9 +504,9 @@ export const ADMIN_ROUTE_ROLE_OVERRIDES: Record<string, AdminRole> = {
   '/admin/business': 'admin',
 
   // Deep-link-only triage pages, matching their adminQueues.ts definitions.
-  // /admin/quality and /admin/content/group-requests had the same mismatch but
-  // DO have nav rows, so they are fixed on the item instead — an override there
-  // would leave the sidebar advertising a link that then denies you.
+  // Membership decisions remain moderator-only within the Groups workspace.
+  '/admin/content/community_groups/requests': 'moderator',
+  '/admin/content/group-requests': 'moderator',
   '/admin/content/liveness': 'moderator',
   '/admin/content/event-quality': 'moderator',
 };
