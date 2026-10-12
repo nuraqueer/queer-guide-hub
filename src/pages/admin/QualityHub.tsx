@@ -110,6 +110,9 @@ export default function QualityHub() {
           </Button>
         }
       />
+      <Button asChild variant="ghost" className="mb-4">
+        <Link to="/admin/editorial-tools">Editorial generation and covers</Link>
+      </Button>
       <Accordion type="single" collapsible value={active} onValueChange={setActive}>
         {panels.map(({ key, label, component: Panel }) => (
           <AccordionItem key={key} value={key}>

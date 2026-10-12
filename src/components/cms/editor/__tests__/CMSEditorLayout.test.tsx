@@ -2,7 +2,28 @@
  * @vitest-environment jsdom
  */
 import { describe, it, expect, vi } from 'vitest';
-import { render as rtlRender } from '@testing-library/react';
+import { fireEvent, render as rtlRender, screen } from '@testing-library/react';
+
+const { setField } = vi.hoisted(() => ({ setField: vi.fn() }));
+
+vi.mock('../RichTextEditor', () => ({
+  RichTextEditor: ({
+    value,
+    onChange,
+    editable,
+  }: {
+    value: string;
+    onChange: (json: Record<string, unknown>, html: string) => void;
+    editable: boolean;
+  }) => (
+    <textarea
+      aria-label="Page main text editor"
+      value={value}
+      disabled={!editable}
+      onChange={(event) => onChange({ type: 'doc' }, event.target.value)}
+    />
+  ),
+}));
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router';
@@ -49,7 +70,7 @@ vi.mock('../EditorSidebar', () => ({ EditorSidebar: () => null }));
 vi.mock('@/hooks/useCMSEditor', () => ({
   useCMSEditor: () => ({
     state: {
-      data: {},
+      data: { body_html: '<p>Existing page text</p>' },
       originalData: {},
       isDirty: false,
       itemId: null,
@@ -58,7 +79,7 @@ vi.mock('@/hooks/useCMSEditor', () => ({
       isLoading: false,
       activeGroup: 'basic',
     },
-    setField: vi.fn(),
+    setField,
     setFields: vi.fn(),
     save: vi.fn(),
     reset: vi.fn(),
@@ -83,5 +104,16 @@ describe('CMSEditorLayout', () => {
       <CMSEditorLayout contentType="venues" itemId={null} onClose={vi.fn()} onSaved={vi.fn()} />,
     );
     expect(container).toBeTruthy();
+  });
+
+  it('loads page main text and binds rich-text edits to the saved HTML field', async () => {
+    render(<CMSEditorLayout contentType="cms_pages" itemId={null} onClose={vi.fn()} />);
+
+    const editor = await screen.findByRole('textbox', { name: 'Page main text editor' });
+    expect(editor).toHaveValue('<p>Existing page text</p>');
+    expect(editor).toBeEnabled();
+
+    fireEvent.change(editor, { target: { value: '<p>Updated page text</p>' } });
+    expect(setField).toHaveBeenCalledWith('body_html', '<p>Updated page text</p>');
   });
 });

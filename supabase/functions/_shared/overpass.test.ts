@@ -61,11 +61,25 @@ Deno.test('busy is RETRYABLE and regional is TERMINAL — the probe must not con
 // --- trap 2: probe every endpoint with a planet control query ----------------
 
 Deno.test('the endpoint list holds only planet mirrors', () => {
-  for (const url of OVERPASS_ENDPOINTS) {
-    assertEquals(url.includes('overpass.osm.ch'), false, 'the Swiss extract must never be listed')
-    assertEquals(url.startsWith('https://'), true)
+  const parsedEndpoints = OVERPASS_ENDPOINTS.map((url) => new URL(url))
+
+  for (const endpoint of parsedEndpoints) {
+    assertEquals(endpoint.hostname === 'overpass.osm.ch', false, 'the Swiss extract must never be listed')
+    assertEquals(endpoint.protocol, 'https:')
   }
+
   assertEquals(OVERPASS_ENDPOINTS.length >= 2, true, 'one mirror is not a fallback')
+  assertEquals(
+    parsedEndpoints.some((endpoint) =>
+      endpoint.hostname === 'overpass.private.coffee' && endpoint.pathname === '/api/interpreter'
+    ),
+    true,
+  )
+  assertEquals(
+    parsedEndpoints.some((endpoint) => endpoint.hostname === 'kumi.systems'),
+    false,
+    'use the current operator endpoint',
+  )
 })
 
 Deno.test('the control query needs real elements, not merely a 200', () => {

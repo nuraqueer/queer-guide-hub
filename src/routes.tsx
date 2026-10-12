@@ -1,4 +1,4 @@
-import { reviewRedirectUrl } from '@/components/admin/review-workspace/reviewRedirects';
+import { GovernanceRedirect } from '@/components/admin/GovernanceRedirect';
 import React, { Suspense } from 'react';
 import { Routes, Route, Navigate, useLocation, useParams } from 'react-router';
 import { useTranslation } from 'react-i18next';
@@ -92,10 +92,7 @@ const AdminDiagnostics = lazyRetry(() => import('./pages/admin/QualityHub'));
 const AdminTrash = lazyRetry(() => import('./pages/admin/AdminTrash'));
 const ContentGraph = lazyRetry(() => import('./pages/admin/ContentGraph'));
 const EmailTemplates = lazyRetry(() => import('./pages/admin/EmailTemplates'));
-const AdminPlacesEditorial = lazyRetry(() => import('./pages/admin/AdminPlacesEditorial'));
 const AdminPipelines = lazyRetry(() => import('./pages/admin/AdminPipelines'));
-const AdminEmailIngestions = lazyRetry(() => import('./pages/admin/AdminEmailIngestions'));
-const AdminImports = lazyRetry(() => import('./pages/admin/AdminImports'));
 
 const AdminSearchIntelligence = lazyRetry(() => import('./pages/admin/AdminSearchIntelligence'));
 const AdminDesignSystem = lazyRetry(() => import('./pages/admin/DesignSystem'));
@@ -110,6 +107,7 @@ const PlaceDetail = lazyRetry(() => import('./pages/PlaceDetail'));
 
 // New admin pages
 const AdminGeography = lazyRetry(() => import('./pages/admin/AdminGeography'));
+const AdminPlacesEditorial = lazyRetry(() => import('./pages/admin/AdminPlacesEditorial'));
 const AdminGovernance = lazyRetry(() => import('./pages/admin/AdminGovernance'));
 const AdminAutomation = lazyRetry(() => import('./pages/admin/AdminAutomation'));
 const AdminFeedback = lazyRetry(() => import('./pages/admin/feedback'));
@@ -198,25 +196,6 @@ function ReviewRedirect() {
   return (
     <Navigate to={`/admin/governance?mode=triage&${location.search.replace(/^\?/, '')}`} replace />
   );
-}
-
-/**
- * The three governance surfaces collapsed onto one route (`?mode=`), with the
- * old paths kept as search-preserving shims.
- *
- * SHIMS RATHER THAN A SWEEP. ~60 places name these URLs — 12 `duplicatesRoute`
- * and 5 `qualityRoute` literals across `src/config/contentTypes/*`, 3 nav
- * entries, 8 hardcoded component links, and 16 `?queue=` builders. Redirecting
- * keeps every one of them working on the day this lands, so the sweep is
- * opportunistic instead of a 60-file change that has to be right all at once.
- *
- * `useLocation().search` is carried through because `?queue=` is orthogonal to
- * `?mode=`: `/admin/inbox?queue=quality-city` must survive as
- * `/admin/governance?mode=triage&queue=quality-city`, not lose its filter.
- */
-function GovernanceRedirect({ mode }: { mode: 'triage' | 'engines' | 'merge' }) {
-  const location = useLocation();
-  return <Navigate to={reviewRedirectUrl(location.search, mode)} replace />;
 }
 
 /** Maps the legacy /profile/footprint/:userId/public URL to the unified profile Travel tab. */
@@ -458,19 +437,22 @@ export const AppRoutes = () => {
                   <Route path="media" element={<MediaLibrary />} />
                   <Route path="media/:id" element={<MediaDetailPage />} />
 
-                  {/* Imports & Data section — admin-internal aliases for the old
-                    /admin/imports/* surfaces were pruned 2026-07 (migration to
-                    /admin/pipelines completed 2026-04); a catch-all keeps deep
-                    bookmarks landing on the pipelines hub. */}
-                  <Route path="imports/email-ingestions" element={<AdminEmailIngestions />} />
-                  <Route path="imports/data" element={<AdminImports />} />
+                  {/* Legacy import URLs retain bookmarks while Sources owns the tools. */}
+                  <Route
+                    path="imports/email-ingestions"
+                    element={<Navigate to="/admin/pipelines?tab=sources&sub=email" replace />}
+                  />
+                  <Route
+                    path="imports/data"
+                    element={<Navigate to="/admin/pipelines?tab=sources&sub=imports" replace />}
+                  />
                   <Route path="imports/*" element={<Navigate to="/admin/pipelines" replace />} />
                   <Route path="imports" element={<Navigate to="/admin/pipelines" replace />} />
                   <Route path="workflows" element={<Navigate to="/admin/pipelines" replace />} />
                   <Route path="pipelines" element={<AdminPipelines />} />
                   <Route
                     path="ingestion-rules"
-                    element={<Navigate to="/admin/imports/data" replace />}
+                    element={<Navigate to="/admin/pipelines?tab=sources&sub=imports" replace />}
                   />
                   <Route
                     path="pipelines/dashboard"
@@ -485,6 +467,7 @@ export const AppRoutes = () => {
                   <Route path="review" element={<ReviewRedirect />} />
                   <Route path="governance" element={<AdminGovernance />} />
                   <Route path="diagnostics" element={<AdminDiagnostics />} />
+                  <Route path="editorial-tools" element={<AdminPlacesEditorial />} />
                   <Route path="inbox" element={<GovernanceRedirect mode="triage" />} />
                   <Route path="automation" element={<AdminAutomation />} />
                   <Route path="feedback" element={<AdminFeedback />} />
@@ -631,7 +614,10 @@ export const AppRoutes = () => {
                     element={<Navigate to="/admin/content/personalities" replace />}
                   />
                   <Route path="quests" element={<Navigate to="/admin/content/guides" replace />} />
-                  <Route path="places-editorial" element={<AdminPlacesEditorial />} />
+                  <Route
+                    path="places-editorial"
+                    element={<GovernanceRedirect mode="editorial" />}
+                  />
                   <Route
                     path="marketplace"
                     element={<Navigate to="/admin/content/marketplace_listings" replace />}

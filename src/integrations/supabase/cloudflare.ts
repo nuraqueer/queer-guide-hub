@@ -1,197 +1,169 @@
-import { supabase } from './client'
+import { supabase } from './client';
 
 export interface CloudflareAnalytics {
-  success: boolean
+  success: boolean;
   result: {
     totals: {
-      requests: { all: number; cached: number; uncached: number }
-      bandwidth: { all: number; cached: number; uncached: number }
-      threats: { all: number; type: Record<string, number> }
-      pageviews: { all: number; search_engines: Record<string, number> }
-      uniques: { all: number }
-    }
+      requests: { all: number; cached: number; uncached: number };
+      bandwidth: { all: number; cached: number; uncached: number };
+      threats: { all: number; type: Record<string, number> };
+      pageviews: { all: number; search_engines: Record<string, number> };
+      uniques: { all: number };
+    };
     timeseries: Array<{
-      since: string
-      until: string
-      requests: { all: number; cached: number; uncached: number }
-      bandwidth: { all: number; cached: number; uncached: number }
-      threats: { all: number; type: Record<string, number> }
-      pageviews: { all: number; search_engines: Record<string, number> }
-      uniques: { all: number }
-    }>
-  }
+      since: string;
+      until: string;
+      requests: { all: number; cached: number; uncached: number };
+      bandwidth: { all: number; cached: number; uncached: number };
+      threats: { all: number; type: Record<string, number> };
+      pageviews: { all: number; search_engines: Record<string, number> };
+      uniques: { all: number };
+    }>;
+  };
 }
 
 export interface CloudflareZoneInfo {
-  success: boolean
+  success: boolean;
   result: {
-    id: string
-    name: string
-    status: string
-    paused: boolean
-    type: string
-    development_mode: number
-    name_servers: string[]
-    original_name_servers: string[]
-    original_registrar: string
-    original_dnshost: string
-    modified_on: string
-    created_on: string
-    activated_on: string
+    id: string;
+    name: string;
+    status: string;
+    paused: boolean;
+    type: string;
+    development_mode: number;
+    name_servers: string[];
+    original_name_servers: string[];
+    original_registrar: string;
+    original_dnshost: string;
+    modified_on: string;
+    created_on: string;
+    activated_on: string;
     meta: {
-      step: number
-      wildcard_proxiable: boolean
-      custom_certificate_quota: number
-      page_rule_quota: number
-      phishing_detected: boolean
-      multiple_railguns_allowed: boolean
-    }
+      step: number;
+      wildcard_proxiable: boolean;
+      custom_certificate_quota: number;
+      page_rule_quota: number;
+      phishing_detected: boolean;
+      multiple_railguns_allowed: boolean;
+    };
     plan: {
-      id: string
-      name: string
-      price: number
-      currency: string
-      frequency: string
-      is_subscribed: boolean
-      can_subscribe: boolean
-      legacy_id: string
-      legacy_discount: boolean
-      externally_managed: boolean
-    }
-  }
+      id: string;
+      name: string;
+      price: number;
+      currency: string;
+      frequency: string;
+      is_subscribed: boolean;
+      can_subscribe: boolean;
+      legacy_id: string;
+      legacy_discount: boolean;
+      externally_managed: boolean;
+    };
+  };
 }
 
 export interface CloudflareSecuritySettings {
-  success: boolean
+  success: boolean;
   result: {
-    security_level: { id: string; value: string; editable: boolean; modified_on: string }
-    ssl: { id: string; value: string; editable: boolean; modified_on: string }
-    always_use_https: { id: string; value: string; editable: boolean; modified_on: string }
-    min_tls_version: { id: string; value: string; editable: boolean; modified_on: string }
-  }
+    security_level: { id: string; value: string; editable: boolean; modified_on: string };
+    ssl: { id: string; value: string; editable: boolean; modified_on: string };
+    always_use_https: { id: string; value: string; editable: boolean; modified_on: string };
+    min_tls_version: { id: string; value: string; editable: boolean; modified_on: string };
+  };
 }
 
 export interface CloudflarePerformanceSettings {
-  success: boolean
+  success: boolean;
   result: {
-    browser_cache_ttl: { id: string; value: number; editable: boolean; modified_on: string }
-    cache_level: { id: string; value: string; editable: boolean; modified_on: string }
-    development_mode: { id: string; value: string; editable: boolean; modified_on: string }
-    minify: { 
-      id: string
-      value: { css: string; html: string; js: string }
-      editable: boolean
-      modified_on: string 
-    }
-  }
+    browser_cache_ttl: { id: string; value: number; editable: boolean; modified_on: string };
+    cache_level: { id: string; value: string; editable: boolean; modified_on: string };
+    development_mode: { id: string; value: string; editable: boolean; modified_on: string };
+  };
 }
 
 export class CloudflareAPI {
   private async makeRequest(action: string, params?: Record<string, string>) {
-    try {
-      const { data, error } = await supabase.functions.invoke('cloudflare-api', {
-        method: 'POST',
-        body: { action, params }
-      })
+    const { data, error } = await supabase.functions.invoke('cloudflare-api', {
+      method: 'POST',
+      body: { action, params },
+    });
 
-      if (error) {
-        console.error(`Cloudflare API error for ${action}:`, error)
-        throw new Error(error.message || `Failed to fetch ${action}`)
-      }
-      
-      return data
-    } catch (error: unknown) {
-      console.error(`Cloudflare API request failed for ${action}:`, error)
-      
-      // Provide fallback data for specific actions
-      if (action === 'analytics') {
-        return {
-          success: true,
-          result: {
-            totals: {
-              requests: { all: 0, cached: 0, uncached: 0 },
-              bandwidth: { all: 0, cached: 0, uncached: 0 },
-              threats: { all: 0, type: {} },
-              pageviews: { all: 0, search_engines: {} },
-              uniques: { all: 0 }
-            },
-            timeseries: []
-          }
+    if (error) {
+      let message = error.message || `Failed to fetch ${action}`;
+      // FunctionsHttpError carries the server response, including setup and permission errors.
+      if (error.context instanceof Response) {
+        try {
+          const body = await error.context.clone().json();
+          message = body.error || body.message || message;
+        } catch {
+          /* Keep the transport error when the body is not JSON. */
         }
       }
-      
-      if (action === 'threat-analytics') {
-        return {
-          success: true,
-          result: [],
-          result_info: {
-            total_count: 0,
-            page: 1,
-            per_page: 20
-          }
-        }
-      }
-      
-      throw error
+      throw new Error(message);
     }
+    if (!data || data.success !== true || data.error || !data.result) {
+      throw new Error(
+        data?.error || data?.errors?.[0]?.message || `Invalid Cloudflare response for ${action}`,
+      );
+    }
+    return data;
   }
 
   async getZoneInfo(): Promise<CloudflareZoneInfo> {
-    return this.makeRequest('zone-info')
+    return this.makeRequest('zone-info');
   }
 
   async getAnalytics(since?: string, until?: string): Promise<CloudflareAnalytics> {
-    const params: Record<string, string> = {}
-    if (since) params.since = since
-    if (until) params.until = until
-    return this.makeRequest('analytics', params)
+    const params: Record<string, string> = {};
+    if (since) params.since = since;
+    if (until) params.until = until;
+    return this.makeRequest('analytics', params);
   }
 
   async getDNSRecords() {
-    return this.makeRequest('dns-records')
+    return this.makeRequest('dns-records');
   }
 
   async getPageRules() {
-    return this.makeRequest('page-rules')
+    return this.makeRequest('page-rules');
   }
 
   async getCacheStats() {
-    return this.makeRequest('cache-stats')
+    return this.makeRequest('cache-stats');
   }
 
   async getSecuritySettings(): Promise<CloudflareSecuritySettings> {
-    return this.makeRequest('security-settings')
+    return this.makeRequest('security-settings');
   }
 
   async getPerformanceSettings(): Promise<CloudflarePerformanceSettings> {
-    return this.makeRequest('performance-settings')
+    return this.makeRequest('performance-settings');
   }
 
   async getBandwidthStats(since?: string, until?: string) {
-    const params: Record<string, string> = {}
-    if (since) params.since = since
-    if (until) params.until = until
-    return this.makeRequest('bandwidth-stats', params)
+    const params: Record<string, string> = {};
+    if (since) params.since = since;
+    if (until) params.until = until;
+    return this.makeRequest('bandwidth-stats', params);
   }
 
   async getThreatAnalytics(since?: string, until?: string) {
-    const params: Record<string, string> = {}
-    if (since) params.since = since
-    if (until) params.until = until
-    return this.makeRequest('threat-analytics', params)
+    const params: Record<string, string> = {};
+    if (since) params.since = since;
+    if (until) params.until = until;
+    return this.makeRequest('threat-analytics', params);
   }
 
   async getEdgeCertificates() {
-    return this.makeRequest('edge-certificates')
+    return this.makeRequest('edge-certificates');
   }
 
   async getWorkers() {
-    return this.makeRequest('workers')
+    return this.makeRequest('workers');
   }
 
   async getAccountInfo() {
-    return this.makeRequest('account-info')
+    return this.makeRequest('account-info');
   }
 }
 
-export const cloudflareAPI = new CloudflareAPI()
+export const cloudflareAPI = new CloudflareAPI();

@@ -1059,3 +1059,38 @@ Return ONLY the JSON object described in the system prompt.`
     return []
   }
 }
+
+export interface HotelMoatEnrichment {
+  description?: string
+  amenities?: string[]
+  queer_safety_notes?: string
+  star_rating?: number
+  price_range?: number
+  lgbtq_relevance_score?: number
+  confidence?: number
+}
+
+/** Extract only facts supported by the supplied accommodation source. */
+export async function researchEnrichHotelFromPage(
+  supabase: SupabaseClient,
+  hotel: {
+    name: string; city?: string | null; country?: string | null; hotel_type?: string | null;
+    existingDescription?: string | null; sourceText: string; safetyContext?: string;
+  },
+): Promise<HotelMoatEnrichment | null> {
+  if (!(await isOpenAIAvailable(supabase))) return null
+  const result = await chatCompletion(supabase, {
+    callerFn: 'hotel-agentic-enrich',
+    messages: [
+      { role: 'system', content: `${BASE_CONTEXT}\nExtract accommodation facts exclusively from the supplied source. Omit unsupported fields. Do not infer LGBTQ+ friendliness from location or booking-platform membership. Star rating must explicitly describe official hotel stars, never guest-review scores. Do not infer safety from an equality score. Return JSON with description, amenities, queer_safety_notes, star_rating (1-5), price_range (1-4), lgbtq_relevance_score (0-1), confidence (0-1).` },
+      { role: 'user', content: `Name: ${ud(hotel.name)}\nCity: ${ud(hotel.city || '')}\nCountry: ${ud(hotel.country || '')}\nType: ${ud(hotel.hotel_type || '')}\nSource: ${ud(hotel.sourceText.slice(0, 10000))}\nCountry context: ${ud(hotel.safetyContext || '')}` },
+    ],
+    temperature: 0.1,
+    max_tokens: 700,
+    response_format: { type: 'json_object' },
+  })
+  return parseAIResponse<HotelMoatEnrichment>(result.content, [
+    'description', 'amenities', 'queer_safety_notes', 'star_rating', 'price_range',
+    'lgbtq_relevance_score', 'confidence',
+  ])
+}

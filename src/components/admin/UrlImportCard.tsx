@@ -68,6 +68,7 @@ export function UrlImportCard() {
       <CardContent className="flex flex-col gap-2">
         <div className="flex gap-2">
           <Input
+            aria-label="URL to import"
             className="flex-1"
             placeholder="https://bsky.app/profile/… or https://www.tiktok.com/… or any URL"
             value={importUrl}

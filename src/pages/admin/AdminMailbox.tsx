@@ -171,7 +171,7 @@ export default function AdminMailbox() {
         className="mb-0"
         title={
           <span className="flex items-center gap-2">
-            <Mail size={22} aria-hidden /> Postfach
+            <Mail size={22} aria-hidden /> Staff messages
           </span>
         }
         actions={

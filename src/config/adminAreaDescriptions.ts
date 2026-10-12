@@ -37,15 +37,14 @@ export const ADMIN_AREA_DESCRIPTIONS: Record<string, string> = {
   '/admin/content/community_groups': 'Community groups. Edit listings and review join requests.',
   '/admin/content/community_groups/requests': 'Group join requests. Approve or reject pending members.',
   '/admin/content/group-requests': 'Group join requests. Approve or reject pending members.',
-  '/admin/places-editorial':
-    'Editorial drafts. Review LLM-written hooks and covers before publish.',
+  '/admin/governance':
+    'Review incoming changes, quality engines, tags, places editorial, and duplicates.',
   '/admin/content/unified_tags': 'Tags. Manage the taxonomy, merge duplicates, prune orphans.',
   '/admin/content/cms_pages': 'CMS pages. Edit static and editorial pages.',
   '/admin/media': 'Media & brand assets. Upload, tag, govern access, and version.',
 
   // Review & Data
   '/admin/feedback': 'Community feedback and API error reports. Triage and resolve.',
-  '/admin/imports/email-ingestions': 'Email-based ingestion. Track inbound source subscriptions.',
 
   // Automation
   '/admin/automation': 'Automated workflow rules and triggers.',

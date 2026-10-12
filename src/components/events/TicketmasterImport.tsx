@@ -1,13 +1,25 @@
-import { useState } from "react";
+import { useState } from 'react';
 import { TrackLoader } from '@/components/transit/TrackLoader';
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useToast } from "@/hooks/use-toast";
-import { supabase } from "@/integrations/supabase/client";
-import { Ticket } from "lucide-react";
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { useToast } from '@/hooks/use-toast';
+import { supabase } from '@/integrations/supabase/client';
+import { Ticket } from 'lucide-react';
 
 interface TicketmasterImportProps {
   onImportComplete?: () => void;
@@ -16,38 +28,38 @@ interface TicketmasterImportProps {
 export const TicketmasterImport = ({ onImportComplete }: TicketmasterImportProps) => {
   const [isOpen, setIsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [keyword, setKeyword] = useState("");
-  const [countryCode, setCountryCode] = useState("US");
+  const [keyword, setKeyword] = useState('');
+  const [countryCode, setCountryCode] = useState('US');
   const { toast } = useToast();
 
   const countries = [
-    { code: "US", name: "United States" },
-    { code: "CA", name: "Canada" },
-    { code: "MX", name: "Mexico" },
-    { code: "AU", name: "Australia" },
-    { code: "NZ", name: "New Zealand" },
-    { code: "GB", name: "United Kingdom" },
-    { code: "IE", name: "Ireland" },
-    { code: "DE", name: "Germany" },
-    { code: "FR", name: "France" },
-    { code: "ES", name: "Spain" },
-    { code: "IT", name: "Italy" },
-    { code: "NL", name: "Netherlands" },
-    { code: "BE", name: "Belgium" },
-    { code: "AT", name: "Austria" },
-    { code: "CH", name: "Switzerland" },
-    { code: "DK", name: "Denmark" },
-    { code: "SE", name: "Sweden" },
-    { code: "NO", name: "Norway" },
-    { code: "FI", name: "Finland" }
+    { code: 'US', name: 'United States' },
+    { code: 'CA', name: 'Canada' },
+    { code: 'MX', name: 'Mexico' },
+    { code: 'AU', name: 'Australia' },
+    { code: 'NZ', name: 'New Zealand' },
+    { code: 'GB', name: 'United Kingdom' },
+    { code: 'IE', name: 'Ireland' },
+    { code: 'DE', name: 'Germany' },
+    { code: 'FR', name: 'France' },
+    { code: 'ES', name: 'Spain' },
+    { code: 'IT', name: 'Italy' },
+    { code: 'NL', name: 'Netherlands' },
+    { code: 'BE', name: 'Belgium' },
+    { code: 'AT', name: 'Austria' },
+    { code: 'CH', name: 'Switzerland' },
+    { code: 'DK', name: 'Denmark' },
+    { code: 'SE', name: 'Sweden' },
+    { code: 'NO', name: 'Norway' },
+    { code: 'FI', name: 'Finland' },
   ];
 
   const handleImport = async () => {
     if (!keyword.trim()) {
       toast({
-        title: "Error",
-        description: "Please enter a search keyword",
-        variant: "destructive"
+        title: 'Error',
+        description: 'Please enter a search keyword',
+        variant: 'destructive',
       });
       return;
     }
@@ -60,27 +72,31 @@ export const TicketmasterImport = ({ onImportComplete }: TicketmasterImportProps
       const { data, error } = await supabase.functions.invoke('source-ticketmaster', {
         body: {
           keywords: [keyword.trim()],
-          countryCode
-        }
+          countryCode,
+        },
       });
 
       if (error) throw error;
+      if (data?.error || data?.success === false) throw new Error(data?.error ?? 'Import failed');
+      if (data?.skipped === true)
+        throw new Error(`Import skipped: ${data.reason ?? 'source unavailable'}`);
 
       toast({
-        title: "Staged for review",
-        description: `Staged ${data.items ?? 0} Ticketmaster events for the review pipeline`
+        title: 'Staged for review',
+        description: `Staged ${data.items ?? 0} Ticketmaster events for the review pipeline`,
       });
 
       setIsOpen(false);
-      setKeyword("");
-      setCountryCode("US");
+      setKeyword('');
+      setCountryCode('US');
       onImportComplete?.();
     } catch (error: unknown) {
       console.error('Import error:', error);
       toast({
-        title: "Import failed",
-        description: error instanceof Error ? error.message : "Failed to import events from Ticketmaster",
-        variant: "destructive"
+        title: 'Import failed',
+        description:
+          error instanceof Error ? error.message : 'Failed to import events from Ticketmaster',
+        variant: 'destructive',
       });
     } finally {
       setIsLoading(false);
@@ -117,7 +133,7 @@ export const TicketmasterImport = ({ onImportComplete }: TicketmasterImportProps
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {countries.map(country => (
+                {countries.map((country) => (
                   <SelectItem key={country.code} value={country.code}>
                     {country.name}
                   </SelectItem>
@@ -146,7 +162,7 @@ export const TicketmasterImport = ({ onImportComplete }: TicketmasterImportProps
                   Importing...
                 </>
               ) : (
-                "Import Events"
+                'Import Events'
               )}
             </Button>
           </div>

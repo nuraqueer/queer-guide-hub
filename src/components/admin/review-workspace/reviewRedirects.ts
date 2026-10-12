@@ -15,6 +15,7 @@ export function reviewRedirectUrl(search: string, mode?: string): string {
       params.delete('family');
     } else params.set('family', 'merge');
   }
+  if (!params.has('queue') && oldMode === 'editorial') params.set('queue', 'editorial');
   params.delete('mode');
   params.delete('tab');
   params.delete('tagPanel');

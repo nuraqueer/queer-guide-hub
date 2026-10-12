@@ -1,42 +1,34 @@
+import { Link } from 'react-router';
 import { useId, useState } from 'react';
 import { TrackLoader } from '@/components/transit/TrackLoader';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
-import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
-import { Check, X, Sparkles } from 'lucide-react';
+import { Sparkles } from 'lucide-react';
 import { useMeta } from '@/hooks/useMeta';
 import {
   type EditorialEntityType,
-  type EditorialDraft,
   type EditorialCoverRow,
-  usePendingDrafts,
-  useEntityName,
   useGenerateDrafts,
-  useSaveDraft,
-  useApproveDraft,
-  useRejectDraft,
   useAdminCovers,
   useToggleCoverPublished,
 } from '@/hooks/useAdminEditorial';
 import { AdminArchetypeHeader } from '@/components/admin/frames/AdminArchetypeHeader';
-import { AdminTextSkeleton } from '@/components/admin/primitives/AdminLoading';
-import { AdminEmpty } from '@/components/admin/primitives/AdminEmpty';
 
 export default function AdminPlacesEditorial() {
   useMeta({
-    title: 'Editorial — Places',
+    title: 'Editorial tools — Admin',
     description: 'Admin: drafts queue, covers. Rails moved to /admin/content/guides (format=list).',
-    canonicalPath: '/admin/places-editorial',
+    canonicalPath: '/admin/editorial-tools',
   });
 
   return (
     <div className="flex flex-col gap-6">
       {/* mb-0: the parent already spaces children with gap-6. */}
-      <AdminArchetypeHeader className="mb-0" title="Editorial — Places" />
+      <AdminArchetypeHeader className="mb-0" title="Editorial tools" />
 
       {/* Kept as body copy rather than dropped with the subtitle slot: the last
         sentence is a live POINTER — rails moved to Guides — and an operator who
@@ -48,7 +40,7 @@ export default function AdminPlacesEditorial() {
 
       <Tabs defaultValue="drafts">
         <TabsList>
-          <TabsTrigger value="drafts">Hooks queue</TabsTrigger>
+          <TabsTrigger value="drafts">Generate drafts</TabsTrigger>
           <TabsTrigger value="covers">Covers</TabsTrigger>
         </TabsList>
         <TabsContent value="drafts" className="mt-6">
@@ -74,7 +66,6 @@ function DraftsQueue() {
   const entityTypeId = useId();
   const batchSizeId = useId();
 
-  const drafts = usePendingDrafts(entityType);
   const generate = useGenerateDrafts();
 
   const handleGenerate = () => {
@@ -140,17 +131,9 @@ function DraftsQueue() {
         </Button>
       </Card>
 
-      {drafts.isLoading ? (
-        <AdminTextSkeleton lines={2} />
-      ) : (drafts.data ?? []).length === 0 ? (
-        <p className="text-muted-foreground">No pending drafts. Generate some.</p>
-      ) : (
-        <div className="flex flex-col gap-4">
-          {(drafts.data ?? []).map((d) => (
-            <DraftRow key={d.id} draft={d} />
-          ))}
-        </div>
-      )}
+      <Button asChild variant="outline">
+        <Link to="/admin?queue=editorial">Review generated drafts in the Review queue</Link>
+      </Button>
     </div>
   );
 }
