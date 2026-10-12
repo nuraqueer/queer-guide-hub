@@ -44,8 +44,42 @@ beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(cloudflareAPI.getZoneInfo).mockResolvedValue({
     success: true,
-    result: { name: 'queer.guide', status: 'active', name_servers: [], development_mode: 0 },
-  } as CloudflareZoneInfo);
+    result: {
+      id: 'zone-test',
+      name: 'queer.guide',
+      status: 'active',
+      paused: false,
+      type: 'full',
+      name_servers: [],
+      development_mode: 0,
+      original_name_servers: [],
+      original_registrar: '',
+      original_dnshost: '',
+      modified_on: '2026-10-12T00:00:00Z',
+      created_on: '2026-10-12T00:00:00Z',
+      activated_on: '2026-10-12T00:00:00Z',
+      meta: {
+        step: 0,
+        wildcard_proxiable: false,
+        custom_certificate_quota: 0,
+        page_rule_quota: 0,
+        phishing_detected: false,
+        multiple_railguns_allowed: false,
+      },
+      plan: {
+        id: 'plan-test',
+        name: 'Test plan',
+        price: 0,
+        currency: 'USD',
+        frequency: '',
+        is_subscribed: false,
+        can_subscribe: false,
+        legacy_id: '',
+        legacy_discount: false,
+        externally_managed: false,
+      },
+    },
+  } satisfies CloudflareZoneInfo);
   vi.mocked(cloudflareAPI.getAnalytics).mockResolvedValue({
     success: true,
     result: { totals: { requests: { all: 123 }, uniques: { all: 10 } } },
