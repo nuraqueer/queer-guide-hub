@@ -1,3 +1,10 @@
+import { FieldRenderer } from '@/components/cms/fields/FieldRenderer';
+import { StructuredValueView } from '@/components/cms/fields/structured/StructuredValueView';
+import { RenderedContent } from '@/components/cms/fields/RenderedContent';
+import {
+  contentKind,
+  normalizeStructured,
+} from '@/components/cms/fields/structured/structuredValue';
 import { useEffect, useMemo, useState } from 'react';
 import { ExternalLink, Save } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -72,7 +79,16 @@ function displayString(value: string) {
   return value;
 }
 
-export function StructuredValue({ value, depth = 0 }: { value: unknown; depth?: number }) {
+export function StructuredValue({
+  value: original,
+  depth = 0,
+}: {
+  value: unknown;
+  depth?: number;
+}) {
+  const value = normalizeStructured(original);
+  if (contentKind(value) === 'unreadable') return <StructuredValueView value={value} />;
+  if (contentKind(value) === 'richtext') return <RenderedContent value={value} />;
   if (value === null || value === undefined || value === '') {
     return (
       <span className="text-muted-foreground" aria-label="Not provided">
@@ -105,11 +121,7 @@ export function StructuredValue({ value, depth = 0 }: { value: unknown; depth?: 
       <span className="flex flex-wrap gap-1.5">
         {value.map((entry, index) => (
           <span key={`${String(entry)}-${index}`} className="rounded-badge bg-muted px-2 py-0.5">
-            {typeof entry === 'object' ? (
-              <StructuredValue value={entry} depth={depth + 1} />
-            ) : (
-              String(entry)
-            )}
+            <StructuredValue value={entry} depth={depth + 1} />
           </span>
         ))}
       </span>
@@ -276,6 +288,17 @@ export function StructuredFieldEditor({
                 !Array.isArray(value) ? (
                 <GovernanceLocationField
                   value={value as Record<string, unknown>}
+                  onChange={(next) => updateTypedField(key, original, next)}
+                />
+              ) : contentKind(value) !== 'text' ? (
+                <FieldRenderer
+                  field={{
+                    group: 'basic',
+                    name: key,
+                    label: humanizeField(key),
+                    type: typeof original === 'string' ? 'text' : 'json',
+                  }}
+                  value={value}
                   onChange={(next) => updateTypedField(key, original, next)}
                 />
               ) : !editableValue(original) ? (

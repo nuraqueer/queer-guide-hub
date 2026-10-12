@@ -1,3 +1,4 @@
+import { RichTextField } from '../RichTextField';
 import { useState } from 'react';
 import { Plus, X } from 'lucide-react';
 import { Input } from '@/components/ui/input';
@@ -12,6 +13,11 @@ import {
 } from '@/components/ui/dropdown-menu';
 import {
   KIND_LABELS,
+  UNRENDERABLE_CONTENT,
+  hasInvalidStructuredSource,
+  contentKind,
+  isRichTextDocument,
+  preserveStructuredStorage,
   MAX_LIST_ROWS,
   emptyOfKind,
   humanizeKey,
@@ -38,7 +44,13 @@ function AddMenu({
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button type="button" variant="ghost" size="sm" className="self-start gap-1" disabled={disabled}>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="self-start gap-1"
+          disabled={disabled}
+        >
           <Plus size={14} aria-hidden />
           {label}
         </Button>
@@ -54,7 +66,15 @@ function AddMenu({
   );
 }
 
-function RemoveButton({ label, onClick, disabled }: { label: string; onClick: () => void; disabled?: boolean }) {
+function RemoveButton({
+  label,
+  onClick,
+  disabled,
+}: {
+  label: string;
+  onClick: () => void;
+  disabled?: boolean;
+}) {
   return (
     <Button
       type="button"
@@ -113,7 +133,7 @@ function KeyInput({
 }
 
 function ScalarInput({
-  value,
+  value: original,
   onChange,
   label,
   disabled,
@@ -123,6 +143,38 @@ function ScalarInput({
   label: string;
   disabled?: boolean;
 }) {
+  const value = normalizeStructured(original);
+  if (hasInvalidStructuredSource(value))
+    return (
+      <p role="alert" className="text-13">
+        {UNRENDERABLE_CONTENT}
+      </p>
+    );
+  if (contentKind(value) === 'structured') {
+    return (
+      <NodeEditor
+        value={value}
+        onChange={(next) => onChange(preserveStructuredStorage(original, next))}
+        label={label}
+        disabled={disabled}
+      />
+    );
+  }
+  if (contentKind(value) === 'richtext') {
+    return (
+      <RichTextField
+        field={{
+          group: 'basic',
+          name: label,
+          label,
+          type: isRichTextDocument(value) && typeof original !== 'string' ? 'json' : 'richtext',
+        }}
+        value={value}
+        onChange={onChange}
+        disabled={disabled}
+      />
+    );
+  }
   if (typeof value === 'boolean') {
     return (
       <div className="flex h-8 items-center gap-2">
@@ -179,12 +231,12 @@ function GroupEditor({ value, onChange, label, disabled }: NodeProps & { value: 
     <div className="flex flex-col gap-2">
       {entries.length === 0 && <p className="text-sm text-muted-foreground">No fields yet.</p>}
       {entries.map(([k, v]) => {
-        const nested = Array.isArray(v) || isPlainObject(v);
+        const nested = contentKind(v) !== 'text';
         const childLabel = `${label} › ${humanizeKey(k)}`;
         return (
           <div key={k} className="flex flex-col gap-1">
-            <div className="flex items-start gap-2">
-              <div className="w-40 shrink-0">
+            <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-2 sm:flex">
+              <div className="min-w-0 shrink-0 sm:w-40">
                 <KeyInput
                   name={k}
                   siblings={value}
@@ -193,7 +245,7 @@ function GroupEditor({ value, onChange, label, disabled }: NodeProps & { value: 
                 />
               </div>
               {!nested && (
-                <div className="min-w-0 flex-1">
+                <div className="order-last col-span-2 min-w-0 flex-1 sm:order-none">
                   <ScalarInput
                     value={v}
                     onChange={(next) => onChange({ ...value, [k]: next })}
@@ -202,7 +254,7 @@ function GroupEditor({ value, onChange, label, disabled }: NodeProps & { value: 
                   />
                 </div>
               )}
-              {nested && <div className="flex-1" />}
+              {nested && <div className="hidden flex-1 sm:block" />}
               <RemoveButton
                 label={`Remove ${humanizeKey(k)}`}
                 disabled={disabled}
@@ -248,14 +300,16 @@ function ListEditor({ value, onChange, label, disabled }: NodeProps & { value: u
     <div className="flex flex-col gap-2">
       {value.length === 0 && <p className="text-sm text-muted-foreground">No items yet.</p>}
       {value.map((item, i) => {
-        const nested = Array.isArray(item) || isPlainObject(item);
+        const nested = contentKind(item) !== 'text';
         const childLabel = `${label} › item ${i + 1}`;
         const update = (next: unknown) => onChange(value.map((x, j) => (j === i ? next : x)));
         const remove = () => onChange(value.filter((_, j) => j !== i));
         return nested ? (
           <div key={i} className="flex flex-col gap-1 rounded-element bg-muted/40 p-2">
             <div className="flex items-center justify-between">
-              <span className="text-2xs uppercase tracking-wide text-muted-foreground">Item {i + 1}</span>
+              <span className="text-2xs uppercase tracking-wide text-muted-foreground">
+                Item {i + 1}
+              </span>
               <RemoveButton label={`Remove item ${i + 1}`} onClick={remove} disabled={disabled} />
             </div>
             <NodeEditor value={item} onChange={update} label={childLabel} disabled={disabled} />
@@ -281,7 +335,9 @@ function ListEditor({ value, onChange, label, disabled }: NodeProps & { value: u
               // Same shape as the last item: a group copies its field names.
               const kind = kindOf(last);
               const blank = isPlainObject(last)
-                ? Object.fromEntries(Object.entries(last).map(([k, x]) => [k, emptyOfKind(kindOf(x))]))
+                ? Object.fromEntries(
+                    Object.entries(last).map(([k, x]) => [k, emptyOfKind(kindOf(x))]),
+                  )
                 : emptyOfKind(kind);
               onChange([...value, blank]);
             }}
@@ -301,8 +357,12 @@ function ListEditor({ value, onChange, label, disabled }: NodeProps & { value: u
 }
 
 function NodeEditor({ value, onChange, label, disabled }: NodeProps) {
-  if (Array.isArray(value)) return <ListEditor value={value} onChange={onChange} label={label} disabled={disabled} />;
-  if (isPlainObject(value)) return <GroupEditor value={value} onChange={onChange} label={label} disabled={disabled} />;
+  if (isRichTextDocument(value))
+    return <ScalarInput value={value} onChange={onChange} label={label} disabled={disabled} />;
+  if (Array.isArray(value))
+    return <ListEditor value={value} onChange={onChange} label={label} disabled={disabled} />;
+  if (isPlainObject(value))
+    return <GroupEditor value={value} onChange={onChange} label={label} disabled={disabled} />;
   return <ScalarInput value={value} onChange={onChange} label={label} disabled={disabled} />;
 }
 
@@ -318,16 +378,33 @@ interface StructuredValueEditorProps {
  * Form editor for a jsonb value: groups of named fields, lists, text,
  * numbers and yes/no switches. Emits plain JS values; never shows JSON.
  */
-export function StructuredValueEditor({ value, onChange, label, disabled }: StructuredValueEditorProps) {
+export function StructuredValueEditor({
+  value,
+  onChange,
+  label,
+  disabled,
+}: StructuredValueEditorProps) {
   const v = normalizeStructured(value);
   if (v === null || v === undefined || v === '') {
     return (
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-sm text-muted-foreground">No data yet.</span>
-        <Button type="button" variant="outline" size="sm" disabled={disabled} onClick={() => onChange({})}>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          disabled={disabled}
+          onClick={() => onChange({})}
+        >
           Start with fields
         </Button>
-        <Button type="button" variant="outline" size="sm" disabled={disabled} onClick={() => onChange([])}>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          disabled={disabled}
+          onClick={() => onChange([])}
+        >
           Start with a list
         </Button>
       </div>

@@ -1,3 +1,7 @@
+import {
+  normalizeStructured,
+  preserveStructuredStorage,
+} from '@/components/cms/fields/structured/structuredValue';
 import { useState } from 'react';
 import { StructuredValueEditor } from '@/components/cms/fields/structured/StructuredValueEditor';
 import { EditorActions } from './EditorActions';
@@ -15,12 +19,23 @@ export function StructuredEditor(props: EditorProps) {
 }
 
 function GenericStructuredEditor({ field, initialValue, onSave, onCancel, saving }: EditorProps) {
-  const [value, setValue] = useState<unknown>(initialValue);
+  const [value, setValue] = useState<unknown>(() => normalizeStructured(initialValue));
   return (
     <div className="flex flex-col gap-2 rounded-element bg-muted p-2">
-      <StructuredValueEditor value={value} onChange={setValue} label={field.label} disabled={saving} />
+      <StructuredValueEditor
+        value={value}
+        onChange={setValue}
+        label={field.label}
+        disabled={saving}
+      />
       <div className="flex justify-end">
-        <EditorActions onConfirm={() => onSave(value)} onCancel={onCancel} saving={saving} />
+        <EditorActions
+          onConfirm={() =>
+            onSave(field.type === 'json' ? value : preserveStructuredStorage(initialValue, value))
+          }
+          onCancel={onCancel}
+          saving={saving}
+        />
       </div>
     </div>
   );
