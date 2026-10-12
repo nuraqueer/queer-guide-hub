@@ -146,6 +146,12 @@ export const EVENT_SELECT_FIELDS = `
   organizer:venues!organizer_id(id, slug, name, website, email, instagram, phone, organizer_handles)
 `;
 
+export function resolveEventCountry(
+  event: Pick<EventWithRelations, 'countries' | 'cities'> | null | undefined,
+) {
+  return event?.countries ?? event?.cities?.countries ?? null;
+}
+
 export async function fetchEvent(
   slug: string,
   userId: string | undefined,

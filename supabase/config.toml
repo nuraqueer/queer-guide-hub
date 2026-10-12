@@ -649,3 +649,6 @@ verify_jwt = false
 # Cloudflare admin UI uses user JWTs; the handler also validates the admin role.
 [functions.cloudflare-api]
 verify_jwt = true
+
+[functions.complete-entity-location]
+verify_jwt = false

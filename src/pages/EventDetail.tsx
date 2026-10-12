@@ -41,6 +41,7 @@ import {
   fetchEvent,
   exportEventToCalendar,
   formatEventDate,
+  resolveEventCountry,
 } from './EventDetail.parts';
 import { PageContainer } from '@/components/layout/PageContainer';
 import { SinglePage } from '@/components/transit/SinglePage';
@@ -196,15 +197,9 @@ export default function EventDetail() {
   }, [error, t]);
 
   const cityName = event?.cities?.name ?? event?.city ?? null;
-  // D10: prefer the city's country when it disagrees with the event's
-  // denormalised country (cities are coordinate-anchored, so they win).
-  const effectiveCountry =
-    event?.cities?.country_id &&
-    event?.countries?.id &&
-    event.cities.country_id !== event.countries.id &&
-    event.cities.countries
-      ? event.cities.countries
-      : (event?.countries ?? null);
+  // Use the event's explicit country. A namesake city can be thousands of
+  // kilometres away; its country must not silently replace the event's location.
+  const effectiveCountry = resolveEventCountry(event);
   const countryName = effectiveCountry?.name ?? event?.country ?? null;
   const cityLink = event?.cities?.id ? `/city/${event.cities.slug || event.cities.id}` : null;
   const countryLink = effectiveCountry?.id
@@ -448,12 +443,7 @@ export default function EventDetail() {
         }
         body={
           <>
-            {/* The city-resolved country, not `event.countries`. The page has
-                always computed `effectiveCountry` because cities are
-                coordinate-anchored and win when the two disagree — but the
-                banner read the denormalised FK, so a disagreement would have
-                stated the wrong country's law. 0 events disagree today; the
-                fix is for the next time a relink moves one. */}
+            {/* Country links and safety information use the same resolved country. */}
             {effectiveCountry?.lgbti_criminalization && (
               <SafetyAlertBanner
                 criminalization={effectiveCountry.lgbti_criminalization as Record<string, unknown>}
