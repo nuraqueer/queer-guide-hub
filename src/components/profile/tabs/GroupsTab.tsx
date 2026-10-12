@@ -48,7 +48,7 @@ export function GroupsTab({
       <p className="py-8 text-center text-13 text-muted-foreground">
         {t('profile.groups.hidden', 'Groups hidden at this visibility.')}{' '}
         {isOwnProfile && (
-          <LocalizedLink to="/settings?section=privacy" className="underline">
+          <LocalizedLink to="/hub/settings?section=privacy" className="underline">
             {t('profile.privacySettings', 'Privacy settings')}
           </LocalizedLink>
         )}

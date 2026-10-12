@@ -35,6 +35,8 @@ vi.mock('@/components/hub/modules/PlansModule', () => ({
 vi.mock('@/components/hub/modules/SavedModule', () => ({
   SavedModule: () => <div data-testid="module-saved" />,
 }));
+vi.mock('@/pages/Settings', () => ({ default: () => <div data-testid="module-settings" /> }));
+
 vi.mock('@/pages/Feed', () => ({
   default: ({ embedded }: { embedded?: boolean }) => (
     <div data-testid="module-feed" data-embedded={String(Boolean(embedded))} />
@@ -47,7 +49,7 @@ import HubPage from '../HubPage';
 // pathname rather than from a prop, so a bare MemoryRouter (pathname "/")
 // correctly highlights nothing — the old `activeModule` prop let the nav claim
 // an active module the address bar did not agree with.
-const renderPage = (module?: 'overview' | 'feed' | 'messages' | 'plans' | 'saved') =>
+const renderPage = (module?: 'overview' | 'feed' | 'messages' | 'plans' | 'saved' | 'settings') =>
   render(
     <MemoryRouter initialEntries={[!module || module === 'overview' ? '/hub' : `/hub/${module}`]}>
       <HubPage module={module} />
@@ -112,6 +114,23 @@ describe('HubPage', () => {
   it('renders the saved module when module="saved"', () => {
     renderPage('saved');
     expect(screen.getByTestId('module-saved')).toBeTruthy();
+  });
+
+  it('renders settings in the shell with its navigation active', async () => {
+    renderPage('settings');
+    expect(await screen.findByTestId('module-settings')).toBeTruthy();
+    for (const link of screen.getAllByRole('link', { name: 'Settings' })) {
+      expect(link).toHaveAttribute('href', '/hub/settings');
+      expect(link).toHaveAttribute('aria-current', 'page');
+    }
+  });
+
+  it('keeps settings private while preserving the shell', () => {
+    authState.user = null;
+    renderPage('settings');
+    expect(screen.queryByTestId('module-settings')).toBeNull();
+    expect(screen.getByRole('link', { name: 'Sign In' })).toBeTruthy();
+    expect(screen.getAllByRole('link', { name: 'Settings' })).toHaveLength(1);
   });
 
   it('shows the unread badge on the messages nav entry', () => {

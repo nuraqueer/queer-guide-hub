@@ -52,7 +52,7 @@ export function OverviewTab({
         isOwnProfile && (
           <p className="text-13 text-muted-foreground">
             Community summary hidden at this visibility.{' '}
-            <LocalizedLink to="/settings?section=privacy" className="underline">
+            <LocalizedLink to="/hub/settings?section=privacy" className="underline">
               Privacy settings
             </LocalizedLink>
           </p>

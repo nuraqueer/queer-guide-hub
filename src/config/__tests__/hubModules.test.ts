@@ -23,6 +23,7 @@ describe('hubModules registry', () => {
       'messages',
       'plans',
       'saved',
+      'settings',
     ]);
   });
 
