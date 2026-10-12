@@ -52,10 +52,9 @@ const CARD_LINK =
 // out at 120s and failed on an empty page rather than on a violation. It is
 // listed now BECAUSE the rows are anchors, so it pins that.
 //
-// The query is load-bearing: this waits on a venue/event link, so it needs a
-// term that reliably returns them. Unlike the other routes here, /search
-// depends on the search-proxy worker — if that is down or quota'd the page
-// renders with zero results and this fails on the wait, not on a violation.
+// Search receives a deterministic result below, following search.spec.ts.
+// Its external index can be empty or unavailable independently of this build;
+// this test must exercise the actual card controls rather than time out on data.
 const CARD_ROUTES = [
   '/city/berlin',
   '/cities',
@@ -112,12 +111,42 @@ test.describe('No nested interactive elements', () => {
 
   for (const route of CARD_ROUTES) {
     test(`${route} has no interactive element nested inside an <a>`, async ({ page }) => {
+      if (route.startsWith('/search?')) {
+        await page.route(/^https:\/\/search\.queer\.guide\//, (request) =>
+          request.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify({
+              hits: [
+                {
+                  objectID: 'nested-venue',
+                  slug: 'nested-venue',
+                  title: 'Berlin fixture venue',
+                  type: 'venue',
+                  category: 'Bar',
+                  tags: ['Community'],
+                },
+              ],
+              suggestions: [],
+              facetDistribution: { type: { venue: 1 } },
+              totalHits: 1,
+              page: 1,
+              hitsPerPage: 20,
+            }),
+          }),
+        );
+      }
       await page.goto(route, { waitUntil: 'domcontentloaded' });
       // 60s, not 30s: against prod the FIRST route of a run pays a cold
       // Cloudflare edge miss. /city/berlin timed out at 30s waiting for `main`
       // on a real run, then passed in 6.8s on an immediate re-run.
       await page.waitForSelector('main', { timeout: 60_000 });
       await page.waitForSelector(CARD_LINK, { timeout: 120_000 });
+      if (route.startsWith('/search?')) {
+        await expect(
+          page.getByRole('heading', { name: 'Berlin fixture venue', exact: true }),
+        ).toBeVisible();
+      }
       // Let the rest of the lazy sections hydrate before snapshotting the DOM.
       await page.waitForTimeout(3_000);
 

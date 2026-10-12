@@ -13,6 +13,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { deleteRowsByIds } from '@/hooks/usePageFetchers';
 import { untypedFrom } from '@/integrations/supabase/untyped';
+import { fetchAdminUsersForExport } from '@/lib/adminUsers';
 import { toast } from 'sonner';
 import { DataTableBulkEditDialog } from './DataTableBulkEditDialog';
 import type { BulkEditFieldConfig } from './types';
@@ -54,11 +55,16 @@ export function DataTableBulkActions({
   const handleExportCsv = async () => {
     setExporting(true);
     try {
-      const { data, error } = await untypedFrom(tableName)
-        .select('*')
-        .in('id', Array.from(selectedIds));
-      if (error) throw error;
-      const rows = (data ?? []) as Array<Record<string, unknown>>;
+      let rows: Array<Record<string, unknown>>;
+      if (tableName === 'profiles') {
+        rows = await fetchAdminUsersForExport(Array.from(selectedIds));
+      } else {
+        const { data, error } = await untypedFrom(tableName)
+          .select('*')
+          .in('id', Array.from(selectedIds));
+        if (error) throw error;
+        rows = (data ?? []) as Array<Record<string, unknown>>;
+      }
       if (rows.length === 0) {
         toast.error('Nothing to export');
         return;
