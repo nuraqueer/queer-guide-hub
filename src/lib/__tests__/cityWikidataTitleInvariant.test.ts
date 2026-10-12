@@ -96,6 +96,15 @@ describe('city_wikidata_signals: the title invariant compares, it does not deman
     );
   });
 
+  it('preserves the persisted coordinate verdicts required by pipeline health', () => {
+    expect(body).toContain("'coord_disagree', v_coord_disagree");
+    expect(body).toContain("'coord_checked', v_coord_checked");
+    expect(body).toContain("wikidata_qid = enrichment_status->'wikidata_coords'->>'qid'");
+    expect(body).toContain("enrichment_status->'wikidata_coords'->'detail'->>'verdict' is not null");
+    expect(body).toContain("coalesce((v ->> 'coord_checked')::int, 0) < 100");
+    expect(body).not.toContain('coord_unswept');
+  });
+
   it('asserts the reached state AND that the cohort it watches is non-empty', () => {
     // A zero over an empty corpus, a revoked grant or a literal-returning stub is
     // not a clean corpus. Both inherited controls must survive the narrowing,
@@ -116,7 +125,7 @@ describe('city_wikidata_signals: the title invariant compares, it does not deman
     // this migration exists for is additionally anchored on its own raise rather
     // than on the condition that guards it.
     const verify = body.slice(body.indexOf('$verify$'));
-    expect((verify.match(/raise exception/g) ?? []).length).toBe(10);
+    expect((verify.match(/raise exception/g) ?? []).length).toBe(11);
     expect(verify).not.toMatch(/if\s+false\s+then/i);
     expect(verify).toMatch(/wrong_title_back'\)::int <> 0 then\s*\n\s*raise exception 'P1 failed:/);
   });

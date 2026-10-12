@@ -55,11 +55,9 @@
 -- haversine casts, which is why the postcondition asserts the comparison appears
 -- TWICE and the broad form ZERO times.
 --
--- The function is restated rather than patched through `pg_get_functiondef`,
--- which is safe here because it was checked first: the live body carries exactly
--- two mentions of `retracted_wikipedia_title` and still contains the broad form,
--- i.e. it has not diverged from `99991790359075`. (`99991790719601`'s rule applies
--- when live and repo HAVE diverged; asserting that is cheaper than assuming it.)
+-- Restate the current body from 99991790619179, preserving its persisted
+-- coordinate-verdict work list and positive control. Pipeline health requires
+-- coord_checked; restoring the earlier coord_unswept body would break that gate.
 
 create or replace function public.city_wikidata_signals()
 returns jsonb
@@ -73,7 +71,8 @@ declare
   v_qid_regressed   int;
   v_title_back      int;
   v_desc_back       int;
-  v_coord_unswept   int;
+  v_coord_disagree  int;
+  v_coord_checked   int;
   v_examples        jsonb;
 begin
   select count(*) into v_rows_with_qid
@@ -113,13 +112,19 @@ begin
      and description is not null
      and description = field_provenance->'description'->'retracted'->>'from';
 
-  -- WORK LIST, never gated.
-  select count(*) into v_coord_unswept
+  -- Work list drains when the identifier its persisted verdict refers to changes.
+  select count(*) into v_coord_disagree
     from cities
    where duplicate_of_id is null
-     and wikidata_qid ~ '^Q[0-9]+$'
-     and latitude is not null and longitude is not null
-     and enrichment_status->'wikidata_link'->>'coord_swept_at' is null;
+     and enrichment_status->'wikidata_coords'->'detail'->>'verdict' = 'disagree'
+     and wikidata_qid is not null
+     and wikidata_qid = enrichment_status->'wikidata_coords'->>'qid';
+
+  -- Positive control: zero disagreements only means clean if verdicts exist.
+  select count(*) into v_coord_checked
+    from cities
+   where duplicate_of_id is null
+     and enrichment_status->'wikidata_coords'->'detail'->>'verdict' is not null;
 
   select coalesce(jsonb_agg(x), '[]'::jsonb) into v_examples from (
     select slug || ' -> ' || coalesce(wikidata_qid, '(null)')
@@ -144,7 +149,8 @@ begin
     'qid_regressed', v_qid_regressed,
     'wrong_title_back', v_title_back,
     'retracted_desc_back', v_desc_back,
-    'coord_unswept', v_coord_unswept,
+    'coord_disagree', v_coord_disagree,
+    'coord_checked', v_coord_checked,
     'examples', v_examples
   );
 end
@@ -201,6 +207,9 @@ begin
   if (v ->> 'dispositioned')::int < 11 then
     raise exception 'P2 failed: only % dispositioned rows -- expected at least the 11-row repair',
       v ->> 'dispositioned';
+  end if;
+  if coalesce((v ->> 'coord_checked')::int, 0) < 100 then
+    raise exception 'P2 failed: coordinate verdict positive control was lost: %', v;
   end if;
 
   -- P3. The cohort arm (b) protects must still EXIST and still be covered. These
