@@ -18,7 +18,7 @@ import { normalizeName } from './venue-pipeline-utils.ts'
  */
 export const OVERPASS_ENDPOINTS: readonly string[] = [
   'https://overpass-api.de/api/interpreter',
-  'https://overpass.kumi.systems/api/interpreter',
+  'https://overpass.private.coffee/api/interpreter',
 ]
 
 /**

@@ -66,6 +66,8 @@ Deno.test('the endpoint list holds only planet mirrors', () => {
     assertEquals(url.startsWith('https://'), true)
   }
   assertEquals(OVERPASS_ENDPOINTS.length >= 2, true, 'one mirror is not a fallback')
+  assertEquals(OVERPASS_ENDPOINTS.includes('https://overpass.private.coffee/api/interpreter'), true)
+  assertEquals(OVERPASS_ENDPOINTS.some(url => url.includes('kumi.systems')), false, 'use the current operator endpoint')
 })
 
 Deno.test('the control query needs real elements, not merely a 200', () => {
