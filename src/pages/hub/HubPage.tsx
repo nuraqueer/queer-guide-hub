@@ -1,4 +1,3 @@
-import { Suspense } from 'react';
 import { useTranslation } from 'react-i18next';
 import { AuthGate } from '@/components/layout/AuthGate';
 import { HubShell } from '@/components/hub/HubShell';
@@ -8,11 +7,7 @@ import { PlansModule } from '@/components/hub/modules/PlansModule';
 import { SavedModule } from '@/components/hub/modules/SavedModule';
 import Feed from '@/pages/Feed';
 import { useMeta } from '@/hooks/useMeta';
-import { lazyRetry } from '@/utils/lazyRetry';
-import { PageLoadingState } from '@/components/layout/PageLoadingState';
 import type { HubModuleId } from '@/config/hubModules';
-
-const Settings = lazyRetry(() => import('@/pages/Settings'));
 
 const MODULE_TITLES: Record<HubModuleId, string> = {
   overview: 'Overview',
@@ -27,7 +22,6 @@ const MODULE_TITLES: Record<HubModuleId, string> = {
   messages: 'Messages',
   plans: 'Plans',
   saved: 'Saved',
-  settings: 'Settings',
 };
 
 /**
@@ -60,10 +54,6 @@ export default function HubPage({ module = 'overview' }: { module?: HubModuleId 
       <PlansModule />
     ) : module === 'saved' ? (
       <SavedModule />
-    ) : module === 'settings' ? (
-      <Suspense fallback={<PageLoadingState variant="list" count={4} />}>
-        <Settings />
-      </Suspense>
     ) : (
       <OverviewModule />
     );

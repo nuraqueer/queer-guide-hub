@@ -551,7 +551,7 @@ export interface NavItem {
 // "View public profile", Admin and Sign out are rendered inline in the Header
 // because they need user.id / role gating.
 export const USER_MENU_ITEMS: NavItem[] = [
-  { to: '/hub/settings', icon: Settings, labelKey: 'header.userMenu.settings' },
+  { to: '/me/account', icon: Settings, labelKey: 'header.userMenu.account' },
   { to: '/extension', icon: Puzzle, labelKey: 'header.userMenu.extension' },
 ];
 
