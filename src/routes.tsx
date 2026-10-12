@@ -154,7 +154,6 @@ const PodcastShow = lazyRetry(() => import('./pages/PodcastShow'));
 const NewsDetail = lazyRetry(() => import('./pages/NewsDetail'));
 const NewsStoryDetail = lazyRetry(() => import('./pages/NewsStoryDetail'));
 
-const Settings = lazyRetry(() => import('./pages/Settings'));
 const IntimateOnboard = lazyRetry(() => import('./pages/intimate/IntimateOnboard'));
 const Cruising = lazyRetry(() => import('./pages/Cruising'));
 const IntimateUserDetail = lazyRetry(() => import('./pages/intimate/IntimateUserDetail'));
@@ -184,10 +183,16 @@ const CMSPage = lazyRetry(() => import('./pages/Page'));
 const ShareTarget = lazyRetry(() => import('./pages/ShareTarget'));
 const PridePage = lazyRetry(() => import('./pages/Pride'));
 
-/** Preserves ?tab=/?section= deep links when /profile/settings moves to /settings. */
-function SettingsRedirect() {
+/** Preserve legacy settings sections, locales, query parameters, and anchors. */
+function SettingsRedirect({ privacy = false }: { privacy?: boolean }) {
+  const { locale } = useParams<{ locale?: string }>();
   const location = useLocation();
-  return <Navigate to={`/settings${location.search}`} replace />;
+  const prefix =
+    locale && isSupportedLocale(locale) && locale !== DEFAULT_LOCALE ? `/${locale}` : '';
+  const params = new URLSearchParams(location.search);
+  if (privacy) params.set('section', 'privacy');
+  const search = params.size ? `?${params.toString()}` : '';
+  return <Navigate to={`${prefix}/hub/settings${search}${location.hash}`} replace />;
 }
 
 /** /admin/review merged into governance triage — preserve ?tab=/?queue= deep links. */
@@ -1027,6 +1032,7 @@ export const AppRoutes = () => {
                   <Route path="hub/messages" element={<HubPage module="messages" />} />
                   <Route path="hub/plans" element={<HubPage module="plans" />} />
                   <Route path="hub/saved" element={<HubPage module="saved" />} />
+                  <Route path="hub/settings" element={<HubPage module="settings" />} />
                   {/* Retired module paths → their consolidated home. LocalizedRedirect
                   preserves the query string (e.g. ?conversation=). */}
                   <Route path="hub/calendar" element={<LocalizedRedirect to="/hub/plans" />} />
@@ -1047,12 +1053,12 @@ export const AppRoutes = () => {
                   <Route path="me/passport" element={<MeRedirect tab="progress" />} />
                   <Route path="me/missions" element={<MeRedirect tab="progress" />} />
                   <Route path="me/leaderboard" element={<MeRedirect tab="progress" />} />
-                  <Route path="me/settings" element={<Navigate to="/settings" replace />} />
+                  <Route path="me/settings" element={<SettingsRedirect />} />
                   <Route path="me/tiers" element={<MeRedirect tab="progress" />} />
-                  <Route path="settings" element={<Settings />} />
+                  <Route path="settings" element={<SettingsRedirect />} />
                   <Route
                     path="settings/privacy"
-                    element={<Navigate to="/settings?section=privacy" replace />}
+                    element={<SettingsRedirect privacy />}
                   />
                   <Route path="profile/settings" element={<SettingsRedirect />} />
                   {/* Legacy People routes preserve inbound links while Hub remains

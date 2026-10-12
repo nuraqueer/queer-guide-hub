@@ -49,4 +49,3 @@ BEGIN
 END $$;
 REVOKE ALL ON FUNCTION public.marketplace_claim_variant_extract(integer,uuid) FROM PUBLIC,anon,authenticated;
 GRANT EXECUTE ON FUNCTION public.marketplace_claim_variant_extract(integer,uuid) TO service_role;
-

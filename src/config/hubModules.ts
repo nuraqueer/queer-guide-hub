@@ -11,6 +11,7 @@ import {
   MessageCircle,
   CalendarClock,
   Bookmark,
+  Settings,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -38,7 +39,8 @@ export type HubModuleId =
   | 'nearby'
   | 'messages'
   | 'plans'
-  | 'saved';
+  | 'saved'
+  | 'settings';
 
 export type HubSectionId = 'home' | 'community' | 'connect' | 'personal';
 
@@ -150,6 +152,14 @@ export const HUB_MODULES: HubModule[] = [
     icon: Bookmark,
     labelKey: 'hub.modules.saved',
     defaultLabel: 'Saved',
+    section: 'personal',
+  },
+  {
+    id: 'settings',
+    path: '/hub/settings',
+    icon: Settings,
+    labelKey: 'header.userMenu.settings',
+    defaultLabel: 'Settings',
     section: 'personal',
   },
 ];

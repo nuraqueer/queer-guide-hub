@@ -26,7 +26,7 @@ export function ContributionsTab({ userId, isOwnProfile, lens = 'you', privacySe
       <p className="py-8 text-center text-13 text-muted-foreground">
         Contributions hidden at this visibility.{' '}
         {isOwnProfile && (
-          <LocalizedLink to="/settings?section=privacy" className="underline">
+          <LocalizedLink to="/hub/settings?section=privacy" className="underline">
             Privacy settings
           </LocalizedLink>
         )}
