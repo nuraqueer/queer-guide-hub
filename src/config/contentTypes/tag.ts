@@ -15,7 +15,7 @@ export const tagFields: FieldConfig[] = [
     searchable: true,
     sortable: true,
   },
-  { name: 'slug', label: 'Slug', type: 'text', required: true, group: 'basic' },
+  { name: 'slug', label: 'Slug', type: 'text', readOnly: true, group: 'basic' },
   { name: 'description', label: 'Description', type: 'textarea', group: 'basic', colSpan: 2 },
   { name: 'short_description', label: 'Short Description', type: 'text', group: 'basic' },
   {
