@@ -65,7 +65,7 @@ vi.mock('@/components/cms/ContentListPanel', async () => {
 vi.mock('@/pages/admin/AdminDashboard', async () => {
   const { useLocation } = await import('react-router');
   return {
-    default: () => {
+    default: function AdminDashboardMock() {
       const location = useLocation();
       return <div>REVIEW_QUEUE_SENTINEL:{location.search}</div>;
     },
