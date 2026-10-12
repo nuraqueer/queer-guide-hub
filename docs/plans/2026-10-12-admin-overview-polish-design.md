@@ -69,10 +69,13 @@ change or database write was performed. Existing local refinements are preserved
 
 ## Production release prerequisite
 
-The required CI migration and schema-object checks found 33 already-applied
+The required CI migration and schema-object checks found 34 already-applied
 production migrations absent from main, including four active location guards.
 Recovered the existing files from the repository's migration recovery branch,
 retaining their applied versions and SQL. Read-only catalog queries confirmed
 the guard definitions and their migration-history entries. No production schema
 changes are introduced or executed by this recovery. CI must verify the restored
 history before the admin release merges.
+
+A further concurrently-applied migration (`99991791810019`) was recovered from
+the database history; its reconstructed SQL matches the server-computed MD5.
