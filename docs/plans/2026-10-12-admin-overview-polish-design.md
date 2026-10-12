@@ -66,3 +66,13 @@ Screenshots, fixtures, query-state evidence and check logs are saved in
 `/Users/tobiasmaeder/queer-guide-hub/outputs/admin-overview-polish`.
 The runtime evidence uses fixture data. No production deployment, permission
 change or database write was performed. Existing local refinements are preserved.
+
+## Production release prerequisite
+
+The required CI migration and schema-object checks found 33 already-applied
+production migrations absent from main, including four active location guards.
+Recovered the existing files from the repository's migration recovery branch,
+retaining their applied versions and SQL. Read-only catalog queries confirmed
+the guard definitions and their migration-history entries. No production schema
+changes are introduced or executed by this recovery. CI must verify the restored
+history before the admin release merges.
