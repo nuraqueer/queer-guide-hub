@@ -36,6 +36,7 @@ const LAYOUTS = [
 const NONE = '__none__';
 
 interface Props {
+  tableOnly?: boolean;
   lifecycleControls?: ReactNode;
   config: ContentTypeConfig;
   view: ContentView;
@@ -49,6 +50,7 @@ interface Props {
 }
 
 export function ViewSettings({
+  tableOnly,
   lifecycleControls,
   config,
   view,
@@ -93,20 +95,22 @@ export function ViewSettings({
               Layout
             </h6>
             <div role="radiogroup" aria-label="Layout" className="grid grid-cols-2 gap-1">
-              {LAYOUTS.map(({ id, label, Icon }) => (
-                <Button
-                  key={id}
-                  role="radio"
-                  aria-checked={view === id}
-                  size="sm"
-                  variant={view === id ? 'secondary' : 'ghost'}
-                  className="h-8 justify-start"
-                  onClick={() => onViewChange(id)}
-                >
-                  <Icon size={14} className="mr-1.5" />
-                  {label}
-                </Button>
-              ))}
+              {LAYOUTS.filter((layout) => !tableOnly || layout.id === 'table').map(
+                ({ id, label, Icon }) => (
+                  <Button
+                    key={id}
+                    role="radio"
+                    aria-checked={view === id}
+                    size="sm"
+                    variant={view === id ? 'secondary' : 'ghost'}
+                    className="h-8 justify-start"
+                    onClick={() => onViewChange(id)}
+                  >
+                    <Icon size={14} className="mr-1.5" />
+                    {label}
+                  </Button>
+                ),
+              )}
             </div>
           </section>
 

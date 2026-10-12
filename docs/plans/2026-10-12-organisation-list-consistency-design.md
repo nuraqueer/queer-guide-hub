@@ -22,3 +22,20 @@ Use existing query and mutation contracts behind the common list UI. Avoid
 introducing generic writes to privileged merchant, partner or brand fields.
 Verify all five tabs in one desktop/mobile inspection, fix that batch, then
 confirm once. Run focused interaction tests plus required repository checks.
+
+## Implementation and validation
+
+All five tabs use the CMS list controls and table renderer. Operational lists
+use stable view IDs and source adapters; generic inline edits and mutations
+are disabled, with actions delegated to existing protected handlers. Hotel
+bulk edits retain the original field whitelist. Selected operational records
+can be exported without introducing bulk writes. Existing editor saves refresh
+the lists, and changing tabs clears foreign saved-view IDs.
+
+Desktop/mobile inspection of all five lists confirmed no document overflow.
+A single correction batch unified mobile header stacking, reduced default
+merchant metrics, removed duplicate brand publication columns and kept row
+actions sticky during horizontal scrolling. Confirmation passed. The design
+detector reported no findings. Focused list/source/claim tests passed; no new
+TypeScript errors were introduced. Temporary example-data previews are not
+part of the shipped artifact.
