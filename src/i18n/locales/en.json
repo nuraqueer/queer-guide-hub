@@ -380,7 +380,13 @@
     "contact": "Contact",
     "login": "Sign In",
     "logout": "Sign Out",
-    "profile": "Profile"
+    "profile": "Profile",
+    "external": {
+      "title": "Open another website?",
+      "description": "You are leaving queer.guide. The destination has its own content and privacy policy.",
+      "cancel": "Stay here",
+      "continue": "Open website"
+    }
   },
   "footer": {
     "madeWith": "Made with",
@@ -645,7 +651,8 @@
         "similar": "Similar vibe",
         "tags": "Shared tags"
       }
-    }
+    },
+    "typeLegend": "Event icons & types"
   },
   "venues": {
     "title": "Venues",
@@ -777,7 +784,18 @@
         "signals": "Visitor signals",
         "reviews": "Reviews",
         "photos": "Photos"
-      }
+      },
+      "nearby": "More places in this city"
+    },
+    "rating": {
+      "hint": "How was your visit? Give this place 0–5 rainbows. Your rating is public.",
+      "label": "Your rating",
+      "error": "Your rating could not be saved. Try again.",
+      "loadError": "Your previous rating could not be loaded. Refresh to try again.",
+      "signIn": "Sign in to rate this place",
+      "saving": "Saving…",
+      "save": "Save rating",
+      "saved": "Your rating is saved."
     }
   },
   "marketplace": {
@@ -827,7 +845,8 @@
     "notifications": "Notifications",
     "blockedUsers": "Blocked Users",
     "reportUser": "Report User",
-    "sendMessage": "Send Message"
+    "sendMessage": "Send Message",
+    "favoritesShortcut": "Favorites"
   },
   "groups": {
     "title": "Groups",

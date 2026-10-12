@@ -200,7 +200,13 @@
     "contact": "Contatti",
     "login": "Accedi",
     "logout": "Esci",
-    "profile": "Profilo"
+    "profile": "Profilo",
+    "external": {
+      "title": "Aprire un altro sito?",
+      "description": "Stai lasciando queer.guide. Il sito di destinazione ha i propri contenuti e la propria informativa sulla privacy.",
+      "cancel": "Resta qui",
+      "continue": "Apri sito"
+    }
   },
   "footer": {
     "madeWith": "Fatto con",
@@ -1387,7 +1393,8 @@
         "similar": "Atmosfera simile",
         "tags": "Tag in comune"
       }
-    }
+    },
+    "typeLegend": "Icone e tipi di eventi"
   },
   "venues": {
     "title": "Luoghi",
@@ -1526,7 +1533,18 @@
         "signals": "[IT] Visitor signals",
         "reviews": "[IT] Reviews",
         "photos": "[IT] Photos"
-      }
+      },
+      "nearby": "Altri luoghi in questa città"
+    },
+    "rating": {
+      "hint": "Com’è stata la visita? Assegna da 0 a 5 arcobaleni a questo luogo. La tua valutazione è pubblica.",
+      "label": "La tua valutazione",
+      "error": "Impossibile salvare la valutazione. Riprova.",
+      "loadError": "Impossibile caricare la valutazione precedente. Aggiorna la pagina.",
+      "signIn": "Accedi per valutare questo luogo",
+      "saving": "Salvataggio…",
+      "save": "Salva valutazione",
+      "saved": "La tua valutazione è stata salvata."
     }
   },
   "marketplace": {
@@ -1576,7 +1594,8 @@
     "notifications": "Notifiche",
     "blockedUsers": "Utenti bloccati",
     "reportUser": "Segnala utente",
-    "sendMessage": "Invia messaggio"
+    "sendMessage": "Invia messaggio",
+    "favoritesShortcut": "Preferiti"
   },
   "groups": {
     "title": "Gruppi",

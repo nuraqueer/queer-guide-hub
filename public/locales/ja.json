@@ -200,7 +200,13 @@
     "contact": "お問い合わせ",
     "login": "ログイン",
     "logout": "ログアウト",
-    "profile": "プロフィール"
+    "profile": "プロフィール",
+    "external": {
+      "title": "別のウェブサイトを開きますか？",
+      "description": "queer.guide を離れます。移動先には独自のコンテンツとプライバシーポリシーがあります。",
+      "cancel": "ここに留まる",
+      "continue": "サイトを開く"
+    }
   },
   "footer": {
     "madeWith": "作成ツール",
@@ -1387,7 +1393,8 @@
         "similar": "似た雰囲気",
         "tags": "共通のタグ"
       }
-    }
+    },
+    "typeLegend": "イベントのアイコンと種類"
   },
   "venues": {
     "title": "スポット",
@@ -1526,7 +1533,18 @@
         "signals": "[JA] Visitor signals",
         "reviews": "[JA] Reviews",
         "photos": "[JA] Photos"
-      }
+      },
+      "nearby": "この街のほかのスポット"
+    },
+    "rating": {
+      "hint": "訪問はいかがでしたか？このスポットを虹0〜5個で評価してください。評価は公開されます。",
+      "label": "あなたの評価",
+      "error": "評価を保存できませんでした。もう一度お試しください。",
+      "loadError": "以前の評価を読み込めませんでした。ページを更新してください。",
+      "signIn": "ログインしてこのスポットを評価",
+      "saving": "保存中…",
+      "save": "評価を保存",
+      "saved": "評価を保存しました。"
     }
   },
   "marketplace": {
@@ -1576,7 +1594,8 @@
     "notifications": "通知",
     "blockedUsers": "ブロック中のユーザー",
     "reportUser": "ユーザーを報告",
-    "sendMessage": "メッセージを送る"
+    "sendMessage": "メッセージを送る",
+    "favoritesShortcut": "お気に入り"
   },
   "groups": {
     "title": "グループ",

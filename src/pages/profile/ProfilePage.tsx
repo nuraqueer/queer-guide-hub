@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router';
 import { useLocalizedNavigate } from '@/hooks/useLocalizedNavigate';
+import { LocalizedLink } from '@/components/routing/LocalizedLink';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsTrigger } from '@/components/ui/tabs';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
-import { ArrowLeft, Eye, Flag, Share2, Shield, User } from 'lucide-react';
+import { ArrowLeft, Eye, Flag, Share2, Shield, User, Heart } from 'lucide-react';
 import { ProfileHeader } from '@/components/profile/ProfileHeader';
 import { ScrollableTabList } from '@/components/profile/ScrollableTabList';
 import { UserRelationshipActions } from '@/components/profile/UserRelationshipActions';
@@ -197,7 +198,15 @@ export default function ProfilePage({ tab: tabProp }: { tab?: string } = {}) {
               Back
             </Button>
           )}
-          <div className="flex items-center gap-2 ml-auto">
+          <div className="flex flex-wrap items-center justify-end gap-2 ml-auto">
+            {ownView && (
+              <Button variant="outline" asChild>
+                <LocalizedLink to="/hub/saved">
+                  <Heart size={16} className="mr-2" aria-hidden="true" />
+                  {t('profile.favoritesShortcut', 'Favorites')}
+                </LocalizedLink>
+              </Button>
+            )}
             {isOwnProfile && (
               <>
                 <ViewAsToggle lens={lens} onChange={setLens} className="hidden md:inline-flex" />
