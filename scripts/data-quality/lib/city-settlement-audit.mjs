@@ -33,7 +33,7 @@ export function classifyClasses(labels = [], description = '') {
   // kreisfreie Stadt also carries an urban-district class; that is not a suburb.
   const independent = labels.some(
     (l) =>
-      /^(?:city(?:\b|$)|big city$|charter city$|statutory city\b|urban municipality\b|rural municipality\b|market municipality\b|independent city\b|municipality(?:$| of | in | without )|commune of (?:France|Chile|Italy|Belgium)|borough of (?:Pennsylvania|New Jersey)|township of |civil parish\b|place with town rights)/i.test(
+      /^(?:city(?:\b|$)|big city$|largest city$|global city$|metropolis$|megacity$|national capital$|federal capital$|charter city$|statutory city\b|urban municipality\b|rural municipality\b|market municipality\b|independent city\b|municipality(?:$| of | in | without )|commune of (?:France|Chile|Italy|Belgium)|borough of (?:Pennsylvania|New Jersey)|township of |civil parish\b|place with town rights)/i.test(
         l,
       ) && !/district|county|former|local municipality|municipal district/i.test(l),
   );
