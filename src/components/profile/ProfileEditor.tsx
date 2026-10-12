@@ -35,6 +35,7 @@ import type { ProfileFormData, ComingOutStatus } from '@/types/profileForm';
 import type { Profile, ProfileUpdateResult } from '@/hooks/useProfile';
 import type { AvatarConfig } from '@/components/profile/avatarConfig';
 import type { User as SupabaseUser } from '@supabase/supabase-js';
+import { USER_MODE_VALUES } from '@/config/navigation';
 import type { ProfileEditorSection } from '@/lib/profileEditing';
 
 export interface ProfileEditorHandle {
@@ -270,16 +271,16 @@ function ProfileSettingsContent({
           education: formData.education,
           chosen_name: formData.chosen_name,
           name_pronunciation: formData.name_pronunciation,
-          coming_out_status: formData.coming_out_status,
+          coming_out_status: { ...formData.coming_out_status },
           chosen_family_status: formData.chosen_family_status,
           disability_status: formData.disability_status,
           neurodivergent_status: formData.neurodivergent_status,
           romantic_orientation: formData.romantic_orientation,
           relationship_style: formData.relationship_style,
           current_relationship_status: formData.current_relationship_status,
-          privacy_settings: formData.privacy_settings,
-          user_mode: formData.user_mode,
-        } as Partial<Profile>);
+          privacy_settings: { ...formData.privacy_settings },
+          user_mode: USER_MODE_VALUES.find((mode) => mode === formData.user_mode),
+        });
 
         if (error) {
           setSaveStatus(errorKind === 'auth' ? 'auth-error' : 'error');
@@ -334,6 +335,7 @@ function ProfileSettingsContent({
     if (!hasUnsavedChanges || (await handleSave(false))) onClose?.();
   };
   const username = px?.username ?? null;
+  const autosaves = section === 'profile' || section === 'dating' || section === 'privacy';
   const editor =
     section === 'profile' ? (
       <BasicInfoTab
@@ -455,18 +457,18 @@ function ProfileSettingsContent({
         {onClose && (
           <Button variant="outline" onClick={() => void close()} disabled={saveStatus === 'saving'}>
             <Check className="mr-2 size-4" aria-hidden />
-            Done
+            {autosaves ? 'Done' : 'Close'}
           </Button>
         )}
       </header>
       <div className="flex flex-col gap-6">{editor}</div>
-      <div className="sticky bottom-[calc(4.5rem+var(--island-inset)+env(safe-area-inset-bottom,0px))] z-10 rounded-element bg-card px-4 py-4 md:bottom-4">
+      {autosaves && <div className="sticky bottom-[calc(4.5rem+var(--island-inset)+env(safe-area-inset-bottom,0px))] z-10 rounded-element bg-card px-4 py-4 md:bottom-4">
         <SaveStatusLine
           status={saveStatus}
           onRetry={() => void handleSave(false)}
           onSignIn={() => navigate('/auth')}
         />
-      </div>
+      </div>}
     </section>
   );
 }
