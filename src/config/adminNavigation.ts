@@ -54,7 +54,6 @@ import {
   Palette,
   SpellCheck,
   Award,
-  PenLine,
   UserPlus,
   Waypoints,
   Network,
@@ -260,13 +259,6 @@ export const adminNavSections: AdminNavSection[] = [
         icon: BookOpen,
         route: '/admin/content/guides',
         countTable: 'guides',
-        group: 'Editorial',
-      },
-      {
-        id: 'places-editorial',
-        label: 'Editorial Drafts',
-        icon: PenLine,
-        route: '/admin/places-editorial',
         group: 'Editorial',
       },
       {

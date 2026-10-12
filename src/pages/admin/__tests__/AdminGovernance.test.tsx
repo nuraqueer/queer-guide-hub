@@ -18,7 +18,7 @@
 
 import { describe, it, expect, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
-import { MemoryRouter, Routes, Route, Navigate, useLocation } from 'react-router';
+import { MemoryRouter, Routes, Route, useLocation } from 'react-router';
 
 // The three real pages pull in the whole admin data layer; this suite is about
 // which one is chosen and what the URL carries, not what they render.
@@ -26,20 +26,17 @@ vi.mock('../AdminInbox', () => ({ default: () => <div data-testid="mode-triage" 
 vi.mock('../QualityHub', () => ({ default: () => <div data-testid="mode-engines" /> }));
 vi.mock('../AdminDuplicates', () => ({ default: () => <div data-testid="mode-merge" /> }));
 
+vi.mock('../AdminPlacesEditorial', () => ({ default: () => <div data-testid="mode-editorial" /> }));
+
 vi.mock('../TagGovernance', () => ({ default: () => <div data-testid="mode-tags" /> }));
 
 import AdminGovernance from '../AdminGovernance';
 
-/** Mirrors routes.tsx's GovernanceRedirect exactly — same construction. */
-function GovernanceRedirect({ mode }: { mode: 'triage' | 'engines' | 'merge' }) {
-  const location = useLocation();
-  const rest = location.search.replace(/^\?/, '');
-  return <Navigate to={`/admin/governance?mode=${mode}${rest ? `&${rest}` : ''}`} replace />;
-}
+import { GovernanceRedirect } from '@/components/admin/GovernanceRedirect';
 
 function Probe() {
   const location = useLocation();
-  return <output data-testid="url">{location.pathname + location.search}</output>;
+  return <output data-testid="url">{location.pathname + location.search + location.hash}</output>;
 }
 
 function renderAt(path: string) {
@@ -55,6 +52,7 @@ function renderAt(path: string) {
             </>
           }
         />
+        <Route path="/admin/places-editorial" element={<GovernanceRedirect mode="editorial" />} />
         <Route path="/admin/inbox" element={<GovernanceRedirect mode="triage" />} />
         <Route path="/admin/quality" element={<GovernanceRedirect mode="engines" />} />
         <Route path="/admin/duplicates" element={<GovernanceRedirect mode="merge" />} />
@@ -64,6 +62,31 @@ function renderAt(path: string) {
 }
 
 describe('AdminGovernance — mode selection', () => {
+  it('opens places editorial and clears triage-only parameters on switching', async () => {
+    renderAt('/admin/governance?mode=triage&queue=quality-city&sort=age');
+    fireEvent.click(screen.getByRole('button', { name: 'Places editorial' }));
+    expect(await screen.findByTestId('mode-editorial')).toBeInTheDocument();
+    expect(screen.queryByTestId('mode-triage')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Places editorial' })).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
+    expect(screen.getByTestId('url').textContent).toContain('mode=editorial');
+    expect(screen.getByTestId('url').textContent).toContain('sort=age');
+    expect(screen.getByTestId('url').textContent).not.toContain('queue=');
+    fireEvent.click(screen.getByRole('button', { name: 'Engines' }));
+    expect(await screen.findByTestId('mode-engines')).toBeInTheDocument();
+    expect(screen.queryByTestId('mode-editorial')).not.toBeInTheDocument();
+  });
+
+  it('redirects the legacy editorial route and overrides a stale mode while preserving other URL state', async () => {
+    renderAt('/admin/places-editorial?mode=triage&sort=age#covers');
+    expect(await screen.findByTestId('mode-editorial')).toBeInTheDocument();
+    expect(screen.getByTestId('url')).toHaveTextContent(
+      '/admin/governance?mode=editorial&sort=age#covers',
+    );
+  });
+
   it('defaults to triage when no mode is given', async () => {
     // findBy, not getBy: the three modes are React.lazy, so Suspense resolves
     // them on a microtask and a synchronous query races it.
@@ -94,7 +117,7 @@ describe('AdminGovernance — mode selection', () => {
     expect(await screen.findByTestId('mode-triage')).toBeInTheDocument();
   });
 
-  it('offers all three modes as controls, with the current one marked', () => {
+  it('offers all five modes as controls, with the current one marked', () => {
     renderAt('/admin/governance?mode=merge');
     const nav = screen.getByRole('navigation', { name: /governance mode/i });
     expect(nav).toBeInTheDocument();
