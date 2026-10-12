@@ -439,7 +439,7 @@ function ProfileSettingsContent({
     >
       <header className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h2 id="profile-editor-title" className="text-title font-semibold">
+          <h2 id="profile-editor-title" className="font-sans text-title font-bold">
             {TITLES[section]}
           </h2>
           <p className="mt-1 text-sm text-muted-foreground">
