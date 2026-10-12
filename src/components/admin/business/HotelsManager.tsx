@@ -1,3 +1,4 @@
+import { FieldRenderer } from '@/components/cms/fields/FieldRenderer';
 /**
  * Hotels & BnBs manager — the former /admin/hotels page, now a tab of the
  * Business console (that route redirects here). Brings its own AdminEntityTable
@@ -438,12 +439,17 @@ export function HotelsManager() {
                 />
               </div>
               <div className="flex flex-col gap-2">
-                <Label htmlFor="hotel-desc">Description</Label>
-                <Textarea
-                  id="hotel-desc"
+                <FieldRenderer
+                  field={{
+                    name: 'hotel-desc',
+                    label: 'Description',
+                    type: 'textarea',
+                    group: 'basic',
+                  }}
                   value={formData.description}
-                  onChange={(e) => setFormData((p) => ({ ...p, description: e.target.value }))}
-                  rows={3}
+                  onChange={(next) =>
+                    setFormData((p) => ({ ...p, description: String(next ?? '') }))
+                  }
                 />
               </div>
               <div className="flex flex-col gap-2">

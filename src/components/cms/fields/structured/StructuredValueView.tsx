@@ -1,5 +1,10 @@
+import { RenderedContent } from '../RenderedContent';
 import {
   MAX_LIST_ROWS,
+  UNRENDERABLE_CONTENT,
+  hasInvalidStructuredSource,
+  containsHtml,
+  isRichTextDocument,
   formatScalar,
   humanizeKey,
   isPlainObject,
@@ -16,6 +21,7 @@ interface StructuredValueViewProps {
 const URL_RE = /^https?:\/\/\S+$/i;
 
 function Scalar({ value }: { value: unknown }) {
+  if (containsHtml(value) || isRichTextDocument(value)) return <RenderedContent value={value} />;
   if (typeof value === 'string' && URL_RE.test(value)) {
     return (
       <a href={value} target="_blank" rel="noreferrer" className="break-all underline">
@@ -31,7 +37,10 @@ function Scalar({ value }: { value: unknown }) {
   );
 }
 
-function Node({ value }: { value: unknown }) {
+function Node({ value: original }: { value: unknown }) {
+  const value = normalizeStructured(original);
+  if (hasInvalidStructuredSource(value)) return <span role="alert">{UNRENDERABLE_CONTENT}</span>;
+  if (isRichTextDocument(value)) return <RenderedContent value={value} />;
   if (Array.isArray(value)) {
     if (value.length === 0) return <span className="text-muted-foreground">No items</span>;
     if (value.length > MAX_LIST_ROWS) {
@@ -47,7 +56,7 @@ function Node({ value }: { value: unknown }) {
         <ul className="flex flex-col gap-0.5 list-disc pl-4">
           {value.map((item, i) => (
             <li key={i}>
-              <Scalar value={item} />
+              <Node value={item} />
             </li>
           ))}
         </ul>
@@ -70,7 +79,7 @@ function Node({ value }: { value: unknown }) {
     const entries = Object.entries(value);
     if (entries.length === 0) return <span className="text-muted-foreground">No fields</span>;
     return (
-      <dl className="grid grid-cols-[minmax(6rem,auto)_1fr] gap-x-4 gap-y-1">
+      <dl className="grid grid-cols-1 sm:grid-cols-[minmax(6rem,auto)_1fr] gap-x-4 gap-y-1">
         {entries.map(([k, v]) => (
           <div key={k} className="contents">
             <dt className="text-muted-foreground">{humanizeKey(k)}</dt>
@@ -80,7 +89,7 @@ function Node({ value }: { value: unknown }) {
                   <Node value={v} />
                 </div>
               ) : (
-                <Scalar value={v} />
+                <Node value={v} />
               )}
             </dd>
           </div>
@@ -95,7 +104,11 @@ function Node({ value }: { value: unknown }) {
  * Read-only rendering of a jsonb value as labelled rows and lists.
  * Never shows JSON syntax.
  */
-export function StructuredValueView({ value, emptyLabel = 'No data yet.', className }: StructuredValueViewProps) {
+export function StructuredValueView({
+  value,
+  emptyLabel = 'No data yet.',
+  className,
+}: StructuredValueViewProps) {
   const v = normalizeStructured(value);
   const empty =
     v === null ||
