@@ -43,6 +43,13 @@ begin
      or exists(select 1 from hotels where city_id=target.id and country_id is distinct from other_country)
      or exists(select 1 from organizations where city_id=target.id and country_id is distinct from other_country) then raise exception 'City country edit did not cascade'; end if;
   if exists(select 1 from venues where city_id=target.id and safety_gated is distinct from venue_is_safety_gated(country_id,city_id,category)) then raise exception 'Venue safety gate is stale'; end if;
+  -- Changes in parent identity invalidate a child's otherwise unchanged pin.
+  perform geo_cms_verify(v.id);
+  update cities set wikidata_qid='Q1420043',updated_at=clock_timestamp() where id=target.id;
+  if (select status from geo_cms_verifications where place_id=v.id)<>'stale' then raise exception 'Changed parent identity left village evidence current'; end if;
+  perform geo_cms_verify(v.id);
+  update countries set name=name||' (transaction test)',updated_at=clock_timestamp() where id=other_country;
+  if (select status from geo_cms_verifications where place_id=v.id)<>'stale' then raise exception 'Changed country left village evidence current'; end if;
   -- Unprivileged authenticated callers cannot read admin data or apply evidence.
   perform set_config('request.jwt.claims','{"role":"authenticated","sub":"00000000-0000-0000-0000-000000000000","app_metadata":{}}',true);
   begin
