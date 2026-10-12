@@ -20,7 +20,15 @@ Deno.serve(async req => {
   const counts = { processed: 0, filled: 0, no_match: 0, failed: 0, stale: 0 }
   // 21 keeps the bulk lease at three minutes while fitting the 100-second budget.
   const claim = await db.rpc('claim_entity_location_jobs', { p_limit: bulk ? 21 : 20 })
-  if (claim.error) return errorResponse(claim.error.message, 500, req)
+  if (claim.error) {
+    // PostgREST can briefly lose its schema cache during maintenance. Cron will
+    // retry next minute; a 500 here makes the automation circuit breaker
+    // unschedule the only durable backfill runner.
+    if (/could not query the database for the schema cache/i.test(claim.error.message)) {
+      return jsonResponse({ success: true, retryable: true, reason: 'temporary_database_unavailable', ...counts }, 200, req)
+    }
+    return errorResponse(claim.error.message, 500, req)
+  }
   const jobs = claim.data || []
   for (const job of jobs) {
     if (Date.now() - started > budgetMs) {
@@ -146,7 +154,12 @@ Deno.serve(async req => {
   }
   if (jobs.length) {
     const released = await db.rpc('release_entity_location_lease', { p_claimed_at: jobs[0].updated_at })
-    if (released.error) return errorResponse(released.error.message, 500, req)
+    if (released.error) {
+      if (/could not query the database for the schema cache/i.test(released.error.message)) {
+        return jsonResponse({ success: true, retryable: true, reason: 'temporary_database_unavailable', ...counts }, 200, req)
+      }
+      return errorResponse(released.error.message, 500, req)
+    }
   }
   return jsonResponse({ success: true, ...counts }, 200, req)
 })
