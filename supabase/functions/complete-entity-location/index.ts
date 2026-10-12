@@ -18,7 +18,8 @@ Deno.serve(async req => {
   const budgetMs = bulk ? 100000 : 40000
   const started = Date.now()
   const counts = { processed: 0, filled: 0, no_match: 0, failed: 0, stale: 0 }
-  const claim = await db.rpc('claim_entity_location_jobs', { p_limit: bulk ? 50 : 20 })
+  // 21 keeps the bulk lease at three minutes while fitting the 100-second budget.
+  const claim = await db.rpc('claim_entity_location_jobs', { p_limit: bulk ? 21 : 20 })
   if (claim.error) return errorResponse(claim.error.message, 500, req)
   const jobs = claim.data || []
   for (const job of jobs) {
