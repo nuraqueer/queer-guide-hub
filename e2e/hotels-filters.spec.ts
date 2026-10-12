@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { waitForAppReady } from './support/appReady';
 
 /**
  * Phase 1 smoke for /hotels: type filter, URL state, /venues/<section> redirect,
@@ -10,7 +11,8 @@ import { test, expect } from '@playwright/test';
 
 test.describe('Hotels — Phase 1 quick wins', () => {
   test('apartment filter returns at least one card and reflects in the URL', async ({ page }) => {
-    await page.goto('/hotels', { waitUntil: 'networkidle' });
+    await page.goto('/hotels', { waitUntil: 'domcontentloaded' });
+    await waitForAppReady(page);
 
     // Open the type select. shadcn/Radix select uses combobox role.
     const typeSelect = page.getByRole('combobox').first();
@@ -27,22 +29,25 @@ test.describe('Hotels — Phase 1 quick wins', () => {
     await expect(page).toHaveURL(/[?&]type=apartment/);
 
     // First request settles, results render.
-    await page.waitForLoadState('networkidle');
     await expect(
-      page.locator('[class*="grid"] > a, [class*="grid"] > div').first(),
+      page.locator('[data-bento-preset="mosaic"] a[href^="/hotels/"]').first(),
     ).toBeVisible({ timeout: 10_000 });
   });
 
   test('B&B chip shows display label, not slug', async ({ page }) => {
     // Use a guaranteed-zero query so the empty state with chips renders.
     await page.goto('/hotels?type=bnb&q=__definitely_not_a_real_name__zzz', {
-      waitUntil: 'networkidle',
+      waitUntil: 'domcontentloaded',
     });
     // Scope to the EmptyState's active-filter chip container so we don't
     // strict-mode-collide with the same label inside the Type select. The
     // chip's dismiss glyph is an SVG <X />, not a literal × character.
     const chipsRegion = page.getByTestId('empty-state-active-filters');
-    if ((await chipsRegion.count()) === 0) {
+    const chipsReady = await chipsRegion
+      .waitFor({ state: 'visible', timeout: 15_000 })
+      .then(() => true)
+      .catch(() => false);
+    if (!chipsReady) {
       test.skip(true, 'Empty-state chips region not rendered on this env.');
       return;
     }
@@ -57,15 +62,13 @@ test.describe('Hotels — Phase 1 quick wins', () => {
 
   test('unknown hotel slug renders 404 prerender meta', async ({ page }) => {
     await page.goto('/hotels/__definitely-not-a-real-slug-9999999', {
-      waitUntil: 'networkidle',
+      waitUntil: 'domcontentloaded',
     });
     // Two 404 renderers depending on environment: the CF Pages middleware
     // ("No hotel at this stop.", functions/_middleware.ts) on prod, and
     // the React SPA fallback ("Hotel not found", HotelDetail.tsx) on the
     // vite-preview PR build where the middleware doesn't run. Accept either.
-    await expect(
-      page.getByText(/no hotel at this stop|hotel not found/i).first(),
-    ).toBeVisible();
+    await expect(page.getByText(/no hotel at this stop|hotel not found/i).first()).toBeVisible();
 
     // Prerender meta is only emitted by the static-site prerender pipeline.
     // Skip the meta-tag asserts on environments where prerender is disabled
@@ -82,7 +85,8 @@ test.describe('Hotels — Phase 1 quick wins', () => {
   });
 
   test('Load More yields disjoint pages (no duplicate IDs)', async ({ page }) => {
-    await page.goto('/hotels', { waitUntil: 'networkidle' });
+    await page.goto('/hotels', { waitUntil: 'domcontentloaded' });
+    await waitForAppReady(page);
 
     // Scope to the main result grid only — the page also shows editorial
     // sections (featured hotel, picks, "in queer villages") whose anchors
@@ -91,12 +95,13 @@ test.describe('Hotels — Phase 1 quick wins', () => {
     const collectIds = () =>
       page.evaluate(() =>
         Array.from(
-          document.querySelectorAll(
-            '[data-bento-preset="mosaic"] a[href^="/hotels/"]',
-          ),
+          document.querySelectorAll('[data-bento-preset="mosaic"] a[href^="/hotels/"]'),
         ).map((a) => (a as HTMLAnchorElement).getAttribute('href') ?? ''),
       );
 
+    await expect(
+      page.locator('[data-bento-preset="mosaic"] a[href^="/hotels/"]').first(),
+    ).toBeVisible();
     const beforeIds = new Set(await collectIds());
     expect(beforeIds.size).toBeGreaterThan(0);
 
@@ -107,8 +112,6 @@ test.describe('Hotels — Phase 1 quick wins', () => {
     }
 
     await loadMore.click();
-    await page.waitForLoadState('networkidle');
-    // networkidle can fire before React has re-rendered the appended page.
     // Poll until the grid actually grows, then assert dedupe.
     await expect
       .poll(async () => (await collectIds()).length, { timeout: 10_000 })
@@ -121,7 +124,7 @@ test.describe('Hotels — Phase 1 quick wins', () => {
   });
 
   test('searching "Berlin" returns only Berlin-y results', async ({ page }) => {
-    await page.goto('/hotels?q=Berlin', { waitUntil: 'networkidle' });
+    await page.goto('/hotels?q=Berlin', { waitUntil: 'domcontentloaded' });
 
     // Card subtitles include "City, Country" — every visible card should
     // mention Berlin somewhere (city OR country prefix matches).

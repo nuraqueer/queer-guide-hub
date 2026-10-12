@@ -1,7 +1,8 @@
 /** Read-only engine diagnostics. Every human decision lives in /admin. */
 import { lazy, Suspense, useState } from 'react';
-import { Link } from 'react-router';
+import { Link, useSearchParams } from 'react-router';
 import { Button } from '@/components/ui/button';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Accordion,
   AccordionContent,
@@ -97,7 +98,7 @@ const panels = [
     ),
   },
 ];
-export default function QualityHub() {
+function EngineDiagnostics() {
   const [active, setActive] = useState('');
   return (
     <div>
@@ -128,5 +129,39 @@ export default function QualityHub() {
         ))}
       </Accordion>
     </div>
+  );
+}
+
+const OperationalOverview = lazy(() => import('./AdminOperationalOverview'));
+
+/** One secondary diagnostics destination; all decisions remain in Review. */
+export default function QualityHub() {
+  const [params, setParams] = useSearchParams();
+  const view = params.get('view') === 'engines' ? 'engines' : 'overview';
+  return (
+    <Tabs
+      value={view}
+      onValueChange={(next) =>
+        setParams((current) => {
+          const updated = new URLSearchParams(current);
+          if (next === 'overview') updated.delete('view');
+          else updated.set('view', next);
+          return updated;
+        })
+      }
+    >
+      <TabsList aria-label="Diagnostics sections" className="mb-4">
+        <TabsTrigger value="overview">Overview</TabsTrigger>
+        <TabsTrigger value="engines">Engines</TabsTrigger>
+      </TabsList>
+      <TabsContent value="overview">
+        <Suspense fallback={<AdminTableSkeleton />}>
+          <OperationalOverview />
+        </Suspense>
+      </TabsContent>
+      <TabsContent value="engines">
+        <EngineDiagnostics />
+      </TabsContent>
+    </Tabs>
   );
 }
