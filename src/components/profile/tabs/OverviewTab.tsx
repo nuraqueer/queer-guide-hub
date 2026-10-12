@@ -43,6 +43,12 @@ export function OverviewTab({
     'community',
   );
 
+  // Other profiles rely on the activity RPC's server gate. The owner's
+  // audience preview must not use the owner's privileged activity response.
+  const activityVisible =
+    !isOwnProfile ||
+    sectionVisible(privacy.activity_visibility as string | undefined, lens, 'private');
+
   return (
     <div className="flex flex-col gap-6">
       {ownView && (
@@ -84,7 +90,9 @@ export function OverviewTab({
       {/* Own activity always (incl. empty state); another user's only when they've
           opted in — RLS returns rows only then, and hideWhenEmpty suppresses the
           card otherwise so absence reads as "not shared", not "no activity". */}
-      <ActivityStrip userId={profile.user_id as string} hideWhenEmpty={!ownView} />
+      {activityVisible && (
+        <ActivityStrip userId={profile.user_id as string} hideWhenEmpty={!ownView} />
+      )}
 
       <SecureProfileViewer
         profile={isOwnProfile ? previewFilterProfile(profile, lens) : profile}

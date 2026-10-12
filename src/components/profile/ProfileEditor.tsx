@@ -9,7 +9,6 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { useAuth } from '@/hooks/useAuth';
 import { useProfile } from '@/hooks/useProfile';
 import { useToast } from '@/hooks/use-toast';
-import { useProfileData } from '@/hooks/useProfileData';
 import { OptimizedLoader } from '@/components/loading/OptimizedLoader';
 import OptimizedErrorBoundary, {
   DataErrorFallback,
@@ -45,7 +44,7 @@ interface EditorProps {
   section: ProfileEditorSection;
   onClose?: () => void;
   editorRef?: Ref<ProfileEditorHandle>;
-  privacyField?: string;
+  focusField?: string;
 }
 type ProfileX = Profile & { username?: string | null; username_auto_assigned?: boolean | null };
 const TITLES: Record<ProfileEditorSection, string> = {
@@ -62,20 +61,30 @@ const TITLES: Record<ProfileEditorSection, string> = {
 export default function ProfileEditor(props: EditorProps) {
   const navigate = useLocalizedNavigate();
   const { user, hasPasskey } = useAuth();
-  const { updateProfile, refetchProfile } = useProfile();
+  const { profile, loading: isLoading, error, updateProfile, refetchProfile } = useProfile();
   const { toast } = useToast();
   if (!user) return null;
   return (
     <OptimizedErrorBoundary fallback={DataErrorFallback}>
-      <ProfileSettingsLoader
-        {...props}
-        updateProfile={updateProfile}
-        refetchProfile={refetchProfile}
-        toast={toast}
-        navigate={navigate}
-        hasPasskey={hasPasskey}
-        user={user}
-      />
+      {isLoading && !profile ? (
+        <OptimizedLoader type="profile" />
+      ) : error && !profile ? (
+        <DataErrorFallback
+          errors={[{ message: error }]}
+          resetErrorBoundary={() => void refetchProfile()}
+        />
+      ) : (
+        <ProfileSettingsContent
+          {...props}
+          profile={profile}
+          updateProfile={updateProfile}
+          refetchProfile={refetchProfile}
+          toast={toast}
+          navigate={navigate}
+          hasPasskey={hasPasskey}
+          user={user}
+        />
+      )}
     </OptimizedErrorBoundary>
   );
 }
@@ -86,19 +95,6 @@ interface LoaderProps extends EditorProps {
   navigate: ReturnType<typeof useLocalizedNavigate>;
   hasPasskey: boolean;
   user: SupabaseUser;
-}
-function ProfileSettingsLoader(props: LoaderProps) {
-  const { profile, isLoading, isError, errors, profileLoading, profileError } = useProfileData();
-  if (isLoading || profileLoading) return <OptimizedLoader type="profile" />;
-  if (isError || profileError)
-    return (
-      <DataErrorFallback
-        error={profileError}
-        errors={errors}
-        resetErrorBoundary={() => window.location.reload()}
-      />
-    );
-  return <ProfileSettingsContent {...props} profile={profile} />;
 }
 interface ContentProps extends LoaderProps {
   profile: Profile | null | undefined;
@@ -128,7 +124,7 @@ function SaveStatusLine({
       {status === 'saved' && (
         <>
           <Check size={14} />
-          <span className="text-muted-foreground">All changes saved</span>
+          <span className="text-muted-foreground">Profile changes saved</span>
         </>
       )}
       {status === 'unsaved' && (
@@ -171,7 +167,7 @@ function ProfileSettingsContent({
   section,
   onClose,
   editorRef,
-  privacyField,
+  focusField,
 }: ContentProps) {
   const px = profile as ProfileX | null | undefined;
   const [formData, setFormData] = useState<ProfileFormData>(() => initFormData(profile));
@@ -188,7 +184,12 @@ function ProfileSettingsContent({
   useEffect(() => {
     const panel = panelRef.current;
     if (!panel) return;
-    if (privacyField && panel.contains(document.getElementById(privacyField))) return;
+    const control = focusField ? document.getElementById(focusField) : null;
+    if (control && panel.contains(control)) {
+      control.focus({ preventScroll: true });
+      control.scrollIntoView({ block: 'center' });
+      return;
+    }
     panel.focus({ preventScroll: true });
     panel.scrollIntoView({
       behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches
@@ -196,7 +197,7 @@ function ProfileSettingsContent({
         : 'smooth',
       block: 'start',
     });
-  }, [section, privacyField]);
+  }, [section, focusField]);
   const handleInputChange = (field: string, value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
     markDirty();
@@ -361,7 +362,7 @@ function ProfileSettingsContent({
         formData={formData}
         hasPasskey={hasPasskey}
         onPrivacyChange={handlePrivacyChange}
-        focusField={privacyField}
+        focusField={focusField}
         showSecurity={false}
       />
     ) : section === 'avatar' ? (
@@ -445,13 +446,17 @@ function ProfileSettingsContent({
           <p className="mt-1 text-sm text-muted-foreground">
             {section === 'account'
               ? 'Only you can access these controls.'
-              : section === 'avatar'
-                ? 'Choose how your profile appears.'
-                : section === 'travel'
-                  ? 'Personalize the places and trips you discover.'
-                  : section === 'status'
-                    ? 'Set your vibe and what you’re looking for.'
-                    : 'Changes save automatically.'}
+              : section === 'profile'
+                ? 'Profile details save automatically. Social links use their Save button.'
+                : section === 'dating'
+                  ? 'Identity details save automatically. Dating preferences have their own controls.'
+                  : section === 'avatar'
+                    ? 'Choose how your profile appears.'
+                    : section === 'travel'
+                      ? 'Personalize the places and trips you discover.'
+                      : section === 'status'
+                        ? 'Set your vibe and what you’re looking for.'
+                        : 'Changes save automatically.'}
           </p>
         </div>
         {onClose && (
@@ -462,13 +467,15 @@ function ProfileSettingsContent({
         )}
       </header>
       <div className="flex flex-col gap-6">{editor}</div>
-      {autosaves && <div className="sticky bottom-[calc(4.5rem+var(--island-inset)+env(safe-area-inset-bottom,0px))] z-10 rounded-element bg-card px-4 py-4 md:bottom-4">
-        <SaveStatusLine
-          status={saveStatus}
-          onRetry={() => void handleSave(false)}
-          onSignIn={() => navigate('/auth')}
-        />
-      </div>}
+      {autosaves && (
+        <div className="sticky bottom-[calc(4.5rem+var(--island-inset)+env(safe-area-inset-bottom,0px))] z-10 rounded-element bg-card px-4 py-4 md:bottom-4">
+          <SaveStatusLine
+            status={saveStatus}
+            onRetry={() => void handleSave(false)}
+            onSignIn={() => navigate('/auth')}
+          />
+        </div>
+      )}
     </section>
   );
 }

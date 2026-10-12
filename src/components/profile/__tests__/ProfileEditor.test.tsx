@@ -92,7 +92,7 @@ describe('Settings workspace', () => {
     renderAt();
     expect(screen.getByRole('heading', { name: 'Edit profile' })).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Back' })).toBeNull();
-    expect(screen.getByRole('status')).toHaveTextContent('All changes saved');
+    expect(screen.getByRole('status')).toHaveTextContent('Profile changes saved');
   });
 
   it.each([
@@ -127,7 +127,7 @@ describe('Settings workspace', () => {
     expect(state.updateProfile).toHaveBeenCalledWith(
       expect.objectContaining({ bio: 'My updated bio' }),
     );
-    expect(screen.getByRole('status')).toHaveTextContent('All changes saved');
+    expect(screen.getByRole('status')).toHaveTextContent('Profile changes saved');
   });
   it('flushes pending changes before closing', async () => {
     renderAt();

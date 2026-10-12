@@ -1,3 +1,4 @@
+import { shortLocation } from '@/lib/shortLocation';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -110,7 +111,7 @@ export function ProfileHeader({
                 {!!profile.location && (
                   <span className="inline-flex items-center gap-1">
                     <MapPin size={14} aria-hidden />
-                    {profile.location as string}
+                    {shortLocation(profile.location as string)}
                   </span>
                 )}
               </div>
