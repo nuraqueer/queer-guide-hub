@@ -229,6 +229,8 @@ describe('run_event_programme_link', () => {
     expect(sql).not.toMatch(/min\(parent_id\)/);
   });
 
+  // CREATE OR REPLACE preserves existing permissions and does not register cron again.
+  // Read the latest setup migration for ACL, registration and its corpus assertions.
   it('is not callable by anon or authenticated', () => {
     // CREATE OR REPLACE preserves existing ACLs. Inspect the latest explicit
     // privilege declaration, rather than requiring every body update to repeat it.

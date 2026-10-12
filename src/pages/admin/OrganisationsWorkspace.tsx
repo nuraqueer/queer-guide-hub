@@ -1,10 +1,8 @@
 import { ContentListPanel } from '@/components/cms/ContentListPanel';
-import { lazy, Suspense, useState } from 'react';
+import { lazy, Suspense } from 'react';
 import { TrackLoader } from '@/components/transit/TrackLoader';
-import { Link, Navigate, useSearchParams } from 'react-router';
+import { Navigate, useSearchParams } from 'react-router';
 
-import { toast } from 'sonner';
-import { untypedSupabase } from '@/integrations/supabase/untyped';
 import { AdminArchetypeHeader } from '@/components/admin/frames/AdminArchetypeHeader';
 const AffiliatePartnersManager = lazy(() =>
   import('@/components/admin/AffiliatePartnersManager').then((m) => ({
@@ -19,12 +17,9 @@ const MerchantsManager = lazy(() =>
 const HotelsManager = lazy(() =>
   import('@/components/admin/business/HotelsManager').then((m) => ({ default: m.HotelsManager })),
 );
-const BrandReviewQueue = lazy(() =>
-  import('@/components/admin/review-queues/BrandReviewQueue').then((m) => ({
-    default: m.BrandReviewQueue,
-  })),
+const BrandsManager = lazy(() =>
+  import('@/components/admin/business/BrandsManager').then((m) => ({ default: m.BrandsManager })),
 );
-import { Button } from '@/components/ui/button';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 const TABS = ['directory', 'hotels', 'merchants', 'brands', 'partners'] as const;
 type Tab = (typeof TABS)[number];
@@ -33,29 +28,16 @@ export default function OrganisationsWorkspace() {
   const [searchParams, setSearchParams] = useSearchParams();
   const tabParam = searchParams.get('tab');
   const tab: Tab = TABS.includes(tabParam as Tab) ? (tabParam as Tab) : 'directory';
-  const [applyingOwnership, setApplyingOwnership] = useState(false);
-
-  // Fans approved ownership tags out to the products that carry the badges.
-  const applyOwnership = async () => {
-    setApplyingOwnership(true);
-    try {
-      const { data, error } = await untypedSupabase.rpc('run_marketplace_ownership_apply', {});
-      if (error) throw error;
-      const d = (data ?? {}) as Record<string, unknown>;
-      toast.success(`Ownership applied — ${d.updated ?? 0} products updated`);
-    } catch (e) {
-      toast.error(`Error: ${(e as Error).message}`);
-    } finally {
-      setApplyingOwnership(false);
-    }
-  };
-
   // Link review moved to the Quality hub, where every review gate lives.
   // Declared below the hooks so hook order stays unconditional.
   if (tabParam === 'review') return <Navigate to="/admin/quality" replace />;
 
   const setParam = (key: string, value: string) => {
     const next = new URLSearchParams(searchParams);
+    if (key === 'tab') {
+      next.delete('view');
+      next.delete('edit');
+    }
     if (value) next.set(key, value);
     else next.delete(key);
     setSearchParams(next, { replace: true });
@@ -74,16 +56,7 @@ export default function OrganisationsWorkspace() {
           against the other four. */}
       <div>
         {/* No eyebrow: the route line is derived from the registry. */}
-        <AdminArchetypeHeader
-          title="Organisations"
-          actions={
-            tab === 'brands' ? (
-              <Button variant="outline" disabled={applyingOwnership} onClick={applyOwnership}>
-                {applyingOwnership ? 'Applying…' : 'Apply ownership to products'}
-              </Button>
-            ) : undefined
-          }
-        />
+        <AdminArchetypeHeader title="Organisations" />
 
         <div className="mb-6">
           <TabsList className="max-w-full overflow-x-auto justify-start">
@@ -110,12 +83,7 @@ export default function OrganisationsWorkspace() {
         </TabsContent>
 
         <TabsContent value="brands">
-          <div className="mb-4 flex justify-end">
-            <Button variant="outline" size="sm" asChild>
-              <Link to="/admin/content/marketplace_brands">Brand registry (raw list)</Link>
-            </Button>
-          </div>
-          <BrandReviewQueue />
+          <BrandsManager />
         </TabsContent>
 
         <TabsContent value="partners">
@@ -128,7 +96,7 @@ export default function OrganisationsWorkspace() {
         hidden={tab !== 'directory'}
         className={`${tab === 'directory' ? 'flex' : 'hidden'} min-h-0 flex-1 flex-col`}
       >
-        <ContentListPanel contentTypeId="organizations" hideHeader />
+        <ContentListPanel contentTypeId="organizations" workspace hideHeader />
       </TabsContent>
     </Tabs>
   );

@@ -331,6 +331,7 @@ export interface ContentTypeConfig {
   listSelect?: string;
   /** Stored text columns searched together; defaults to titleField. */
   listSearchFields?: string[];
+  listStatus?: (row: Record<string, unknown>) => string | undefined;
   /**
    * Embedded resources in `listSelect` to scope to the embedded type's default
    * list slice (unmerged, unarchived), so a count column agrees with the list

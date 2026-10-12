@@ -1,3 +1,17 @@
+-- RECOVERED FROM PROD BY scripts/recover-migration-drift.mjs.
+--
+-- Applied to prod as version 20261012112026 with no repo file — the signature of
+-- MCP `apply_migration`, which stamps a version and commits nothing. An applied
+-- version with no file fails migration-versions on every PR in the repo and
+-- makes `db push` refuse to run.
+--
+-- Reconstructed from `schema_migrations.statements`, which holds the PARSED
+-- statements: trailing semicolons are stripped (re-added here) and any original
+-- comment header is NOT recorded, so the reasoning that accompanied this
+-- migration is lost. Verified by md5 against a server-computed digest.
+--
+-- Never re-run: `db push` matches on version and skips an applied one. The file
+-- exists so history is complete and a rebuild from zero works.
 -- Country and coordinate checks do not prove that a place is a city.
 -- A reviewed classification issue survives point checks until identity inputs change.
 create or replace function public.geo_cms_classification_issue(p_id uuid)
@@ -47,3 +61,4 @@ $guard$||anchor);
 $guard$||anchor);
  execute definition;
 end $patch$;
+;

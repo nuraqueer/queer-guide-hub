@@ -4,6 +4,8 @@
  * ContentList shell. Keeps Rules-of-Hooks order stable.
  */
 
+import type { WorkspaceListOptions } from './workspaceTypes';
+import { queryLocalRows } from './localRows';
 import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import {
@@ -38,7 +40,7 @@ function useAdminShellSafe() {
   return ctx ?? { openEditor: () => {}, closeEditor: () => {} };
 }
 
-export interface UseContentListControllerArgs {
+export interface UseContentListControllerArgs extends WorkspaceListOptions {
   contentTypeId?: string;
   onEdit?: (contentType: string, itemId: string) => void;
   onCreate?: (contentType: string) => void;
@@ -48,15 +50,19 @@ export function useContentListController({
   contentTypeId: propTypeId,
   onEdit: propOnEdit,
   onCreate: propOnCreate,
+  configOverride,
+  source,
+  refreshKey,
+  operational,
 }: UseContentListControllerArgs) {
   const { type: routeType } = useParams<{ type?: string }>();
   const { openEditor } = useAdminShellSafe();
 
-  const contentTypeId = propTypeId ?? routeType;
+  const contentTypeId = configOverride?.id ?? propTypeId ?? routeType;
   const onEdit = propOnEdit ?? ((ct: string, id: string) => openEditor(ct, id));
   const onCreate = propOnCreate ?? ((ct: string) => openEditor(ct, null));
 
-  const config = contentTypeId ? getContentType(contentTypeId) : null;
+  const config = configOverride ?? (contentTypeId ? getContentType(contentTypeId) : null);
 
   const persistKey = contentTypeId ? `cms-list:${contentTypeId}` : null;
   const persisted = useMemo(
@@ -71,6 +77,7 @@ export function useContentListController({
   const [items, setItems] = useState<ListItem[]>([]);
   const [totalCount, setTotalCount] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [page, setPage] = useState(0);
@@ -98,7 +105,9 @@ export function useContentListController({
   );
   // View + board grouping persist per content type, so a chosen layout survives
   // navigating away and back.
-  const [view, setView] = useState<ContentView>(persisted?.view ?? 'table');
+  const [view, setView] = useState<ContentView>(
+    operational ? 'table' : (persisted?.view ?? 'table'),
+  );
   const [groupBy, setGroupBy] = useState<string | null>(persisted?.groupBy ?? null);
   const [dateField, setDateField] = useState<string | null>(persisted?.dateField ?? null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -194,8 +203,22 @@ export function useContentListController({
   // Data loading
   const loadItems = useCallback(async () => {
     setLoading(true);
+    setLoadError(null);
     try {
-      if (contentTypeId && config) {
+      if (source?.error) throw new Error(source.error);
+      if (source && config) {
+        const result = queryLocalRows(
+          source.rows,
+          config,
+          debouncedSearch,
+          filters,
+          sorts,
+          page,
+          rowsPerPage,
+        );
+        setItems(result.rows.map((row) => toListItem(row, config)));
+        setTotalCount(result.total);
+      } else if (contentTypeId && config) {
         // eslint-disable-next-line react-hooks/immutability -- function declared below; effect/callback fires after render so the binding is initialized when called.
         await loadSingleType(config);
       } else {
@@ -204,6 +227,7 @@ export function useContentListController({
       }
     } catch (err) {
       console.error('Error loading content:', err);
+      setLoadError(err instanceof Error ? err.message : 'Could not load records.');
     } finally {
       setLoading(false);
     }
@@ -212,6 +236,10 @@ export function useContentListController({
   }, [
     contentTypeId,
     config,
+    refreshKey,
+    source?.rows,
+    source?.loading,
+    source?.error,
     page,
     rowsPerPage,
     debouncedSearch,
@@ -362,6 +390,14 @@ export function useContentListController({
     loadItems();
   }, [loadItems]);
 
+  useEffect(() => {
+    const saved = () => {
+      void loadItems();
+    };
+    window.addEventListener('cms:record-saved', saved);
+    return () => window.removeEventListener('cms:record-saved', saved);
+  }, [loadItems]);
+
   // Reset page on search/filter change
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- effect synchronizes state with external props/data; React Compiler can't infer the sync direction. Documented exemption from the eslint.config.js staged-ratchet plan.
@@ -429,7 +465,7 @@ export function useContentListController({
   const applySpec = useCallback(
     (next: ViewSpec) => {
       const safe = normalizeSpec(next, config ?? null);
-      setView(safe.kind);
+      setView(operational ? 'table' : safe.kind);
       setColumns(safe.columns);
       setFilters(safe.filters);
       setSorts(safe.sorts.length ? safe.sorts : [{ field: initialSortField, dir: initialSortDir }]);
@@ -439,7 +475,7 @@ export function useContentListController({
       setDebouncedSearch(safe.search);
       setPage(0);
     },
-    [config, initialSortField, initialSortDir],
+    [config, initialSortField, initialSortDir, operational],
   );
 
   const allVisibleIds = useMemo(() => items.map((it) => `${it.contentType}-${it.id}`), [items]);
@@ -477,7 +513,8 @@ export function useContentListController({
     onCreate,
     items,
     totalCount,
-    loading,
+    loading: loading || Boolean(source?.loading),
+    loadError,
     search,
     setSearch,
     debouncedSearch,
