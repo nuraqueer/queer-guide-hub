@@ -230,10 +230,15 @@ describe('run_event_programme_link', () => {
   });
 
   it('is not callable by anon or authenticated', () => {
+    // CREATE OR REPLACE preserves existing ACLs. Inspect the latest explicit
+    // privilege declaration, rather than requiring every body update to repeat it.
     const migration = latestMigrationMatching(
-      /create\s+or\s+replace\s+function\s+public\.run_event_programme_link/i,
+      /(?:revoke|grant)\s+(?:all|execute)\s+on\s+function\s+public\.run_event_programme_link\s*\(/i,
     ).toLowerCase();
     expect(migration).toMatch(/revoke\s+all\s+on\s+function\s+public\.run_event_programme_link/);
+    expect(migration).not.toMatch(
+      /grant\s+execute\s+on\s+function\s+public\.run_event_programme_link[^;]*\bto\s+(?:public|anon|authenticated)\b/,
+    );
   });
 
   it('names the NOT NULL trigger column when registering its cron', () => {
@@ -241,15 +246,15 @@ describe('run_event_programme_link', () => {
     // migration including its ALTER TABLE, and prod served a frontend against a
     // column that did not exist.
     const migration = latestMigrationMatching(
-      /create\s+or\s+replace\s+function\s+public\.run_event_programme_link/i,
+      /insert\s+into\s+public\.admin_automations[^;]*run_event_programme_link/i,
     ).toLowerCase();
     expect(migration).toMatch(/insert\s+into\s+public\.admin_automations[\s\S]{0,200}trigger/);
   });
 
   it('asserts the reported lila case specifically', () => {
-    const migration = latestMigrationMatching(
-      /create\s+or\s+replace\s+function\s+public\.run_event_programme_link/i,
-    ).toLowerCase();
+    // This is the original backfill's verification, not part of a later
+    // CREATE OR REPLACE of the recurring worker's body.
+    const migration = latestMigrationMatching(/v_lila\s*<>\s*3/i).toLowerCase();
     expect(migration).toMatch(/lila-queer-festival/);
     expect(migration).toMatch(/v_lila\s*<>\s*3/);
   });
