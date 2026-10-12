@@ -23,7 +23,7 @@ import { useMemo, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { LayoutDashboard, RefreshCw, SlidersHorizontal } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { cn } from '@/lib/utils';
 import { AdminPageHeader } from '@/components/admin/AdminPageHeader';
 import { AdminTextSkeleton } from '@/components/admin/primitives/AdminLoading';
 import { CockpitSection } from '@/components/admin/cockpit/CockpitSection';
@@ -73,6 +73,11 @@ export default function AdminDashboard() {
     qc.invalidateQueries({ queryKey: ['admin-counts'] });
     qc.invalidateQueries({ queryKey: ['cockpit', 'ops'] });
   };
+  const refreshing = counts.isFetching || ops.isFetching;
+  const opsUnavailable =
+    canSeeOps &&
+    brokenVisible &&
+    (!ops.data || ops.isError || (ops.data.unavailableSources?.length ?? 0) > 0);
 
   useRegisterAdminCommandAction({
     id: 'dashboard.refresh',
@@ -105,12 +110,15 @@ export default function AdminDashboard() {
         subtitle={
           rolesLoading || counts.isLoading ? (
             <AdminTextSkeleton lines={1} className="max-w-xs" />
+          ) : counts.isError ? (
+            <span className="text-13 text-destructive">Queue status unavailable.</span>
           ) : (
             <CockpitStatusLine
               rows={rows}
               opsBroken={opsBroken}
               dataUpdatedAt={counts.dataUpdatedAt}
               isFetching={counts.isFetching}
+              opsUnavailable={opsUnavailable}
             />
           )
         }
@@ -125,23 +133,48 @@ export default function AdminDashboard() {
               <SlidersHorizontal size={14} className="mr-1.5" aria-hidden />
               Sections
             </Button>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-8 w-8 rounded-element p-0"
-                  onClick={refresh}
-                  aria-label="Refresh"
-                >
-                  <RefreshCw size={15} aria-hidden />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>Refresh all</TooltipContent>
-            </Tooltip>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="min-h-11 rounded-element"
+              onClick={refresh}
+              disabled={refreshing}
+              aria-label={refreshing ? 'Refreshing cockpit' : 'Refresh cockpit'}
+              aria-busy={refreshing}
+            >
+              <RefreshCw
+                size={15}
+                className={cn('mr-1.5', refreshing && 'motion-safe:animate-spin')}
+                aria-hidden
+              />
+              {refreshing ? 'Refreshing…' : 'Refresh'}
+            </Button>
           </>
         }
       />
+      {counts.isError && (
+        <div
+          role="alert"
+          className="mb-6 flex flex-wrap items-center justify-between gap-4 rounded-container bg-muted p-4"
+        >
+          <div>
+            <p className="text-sm font-medium">Could not refresh queue counts.</p>
+            <p className="mt-1 text-13 text-muted-foreground">
+              {counts.data
+                ? 'Showing the last successful counts. They may be out of date.'
+                : 'Pending work is unknown until counts can be loaded.'}
+            </p>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => void counts.refetch()}
+            disabled={counts.isFetching}
+          >
+            {counts.isFetching ? 'Retrying…' : 'Retry queue counts'}
+          </Button>
+        </div>
+      )}
 
       {/* One column up to lg, then feed + sticky rail. The rail is a sibling
           that moves visually; the DOM order never changes. */}
@@ -149,12 +182,22 @@ export default function AdminDashboard() {
         <div className="flex flex-col gap-8 lg:col-start-1">
           {showNeedsYou && (
             <CockpitSection id="needs-you" title="Needs you">
-              <NeedsYouList rows={rows} loading={rolesLoading || counts.isLoading} />
+              {counts.isError && !counts.data ? (
+                <p className="text-13 text-muted-foreground">Queue counts unavailable.</p>
+              ) : (
+                <NeedsYouList rows={rows} loading={rolesLoading || counts.isLoading} />
+              )}
             </CockpitSection>
           )}
           {canSeeOps && brokenVisible && (
             <CockpitSection id="broken" title="Broken">
-              <BrokenList ops={ops.data} loading={ops.isLoading} error={ops.isError} />
+              <BrokenList
+                ops={ops.data}
+                loading={ops.isLoading}
+                error={ops.isError}
+                onRetry={() => void ops.refetch()}
+                refreshing={ops.isFetching}
+              />
             </CockpitSection>
           )}
         </div>
@@ -163,12 +206,12 @@ export default function AdminDashboard() {
           <div className="mt-8 flex flex-col gap-8 lg:sticky lg:top-6 lg:col-start-2 lg:mt-0">
             {showJumpTo && (
               <CockpitSection id="jump-to" title="Jump to">
-                <JumpToGrid counts={counts.data} role={effectiveRole} />
+                <JumpToGrid counts={counts.data} role={effectiveRole} loading={counts.isLoading} />
               </CockpitSection>
             )}
             {showFootprint && (
               <CockpitSection id="footprint" title="Footprint">
-                <FootprintPanel counts={counts.data} />
+                <FootprintPanel counts={counts.data} loading={counts.isLoading} />
               </CockpitSection>
             )}
           </div>
