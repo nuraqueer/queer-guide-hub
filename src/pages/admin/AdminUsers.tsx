@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router';
 import { useAdminRoles } from '@/hooks/useAdminRoles';
 import { useUserRoles } from '@/hooks/useUserRoles';
@@ -6,13 +7,9 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { ExportExcelButton } from '@/components/admin/ExportExcelButton';
-import {
-  exportToExcel,
-  fetchAllRows,
-  generateFilename,
-  type ExportColumnDef,
-} from '@/utils/excelExport';
+import { exportToExcel, generateFilename, type ExportColumnDef } from '@/utils/excelExport';
 import { formatDateTime } from '@/lib/format';
+import { fetchAdminUsersForExport } from '@/lib/adminUsers';
 import { AdminEntityTable } from '@/components/admin/data-table/AdminEntityTable';
 import type { AdminTableConfig, AdminColumnMeta } from '@/components/admin/data-table/types';
 import { createColumnHelper } from '@tanstack/react-table';
@@ -40,7 +37,6 @@ interface UserRow {
   last_seen_at: string | null;
   /** Confirmation handle for the danger zone on the detail sheet. */
   username?: string | null;
-  _roles?: string[];
 }
 
 const ROLE_COLORS: Record<string, string> = {
@@ -55,9 +51,9 @@ const columnHelper = createColumnHelper<AdminTableFeatures, UserRow>();
 export default function AdminUsers() {
   const navigate = useNavigate();
   const { isAdmin } = useAdminRoles();
-  const { data: _roleMap } = useUserRoles();
+  const queryClient = useQueryClient();
+  const { data: roleMap } = useUserRoles();
   const [selectedUser, setSelectedUser] = useState<UserRow | null>(null);
-  const [_tableKey, setTableKey] = useState(0);
   const [createOpen, setCreateOpen] = useState(false);
 
   const columns = useMemo(
@@ -111,7 +107,7 @@ export default function AdminUsers() {
         id: 'role',
         header: 'Role',
         cell: (info) => {
-          const roles = info.row.original._roles;
+          const roles = roleMap?.get(info.row.original.user_id);
           if (!roles || roles.length === 0)
             return <span className="text-xs text-muted-foreground">user</span>;
           const primary = roles.includes('admin') ? 'admin' : roles[0];
@@ -224,7 +220,7 @@ export default function AdminUsers() {
         } satisfies AdminColumnMeta,
       }),
     ],
-    [],
+    [roleMap],
   );
 
   const tableConfig: AdminTableConfig<UserRow> = useMemo(
@@ -317,10 +313,7 @@ export default function AdminUsers() {
                 { header: 'Created At', accessor: (r) => formatDateTime(r.created_at) },
                 { header: 'Last Seen', accessor: (r) => formatDateTime(r.last_seen_at) },
               ];
-              const allData = await fetchAllRows('profiles', '*', {
-                column: 'display_name',
-                ascending: true,
-              });
+              const allData = await fetchAdminUsersForExport();
               await exportToExcel(allData, cols, generateFilename('users'));
             }}
           />
@@ -346,7 +339,10 @@ export default function AdminUsers() {
             onOpenChange={(open) => {
               if (!open) setSelectedUser(null);
             }}
-            onUserUpdated={() => setTableKey((k) => k + 1)}
+            onUserUpdated={() => {
+              queryClient.invalidateQueries({ queryKey: ['admin-table', 'profiles'] });
+              queryClient.invalidateQueries({ queryKey: ['admin-user-stats'] });
+            }}
           />
           <CreateUserDialog open={createOpen} onOpenChange={setCreateOpen} />
         </>
