@@ -157,7 +157,7 @@ if (process.argv.includes('--prepare')) {
   // Direct queue seeding avoids updating address and firing thousands of legacy HTTP webhooks.
   for (const table of TABLES) {
     const seeded = await sql(`insert into public.entity_location_jobs(entity_table,entity_id,fingerprint,priority)
-      select ${q(table)},id,public.entity_location_fingerprint(to_jsonb(t)),10 from public.${table} t
+      select ${q(table)},id,public.entity_location_fingerprint(to_jsonb(t)),${table === 'venues' ? 10 : 5} from public.${table} t
       where duplicate_of_id is null ${table === 'organizations' ? 'and primary_venue_id is null' : ''}
         and (country_id is null or city_id is null or nullif(trim(postal_code),'') is null or latitude is null or longitude is null or nullif(trim(timezone),'') is null)
         and (nullif(trim(address),'') is not null or (latitude is not null and longitude is not null) or nullif(trim(website),'') is not null)
