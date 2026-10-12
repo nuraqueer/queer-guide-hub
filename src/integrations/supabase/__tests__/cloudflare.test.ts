@@ -14,7 +14,7 @@ beforeEach(() => {
 
 describe('CloudflareAPI dispatch', () => {
   it('invokes the cloudflare-api edge function with the action and params', async () => {
-    invokeMock.mockResolvedValueOnce({ data: { ok: true }, error: null });
+    invokeMock.mockResolvedValueOnce({ data: { success: true, result: {} }, error: null });
     await cloudflareAPI.getAnalytics('2026-01-01', '2026-02-01');
 
     expect(invokeMock).toHaveBeenCalledWith('cloudflare-api', {
@@ -34,7 +34,7 @@ describe('CloudflareAPI dispatch', () => {
     ['getWorkers', 'workers'],
     ['getAccountInfo', 'account-info'],
   ] as const)('%s maps to action=%s', async (method, action) => {
-    invokeMock.mockResolvedValueOnce({ data: { ok: true }, error: null });
+    invokeMock.mockResolvedValueOnce({ data: { success: true, result: {} }, error: null });
     // @ts-expect-error: dynamic dispatch
     await cloudflareAPI[method]();
     const [, opts] = invokeMock.mock.calls[0];
@@ -42,7 +42,7 @@ describe('CloudflareAPI dispatch', () => {
   });
 
   it('omits since/until params when not provided', async () => {
-    invokeMock.mockResolvedValueOnce({ data: {}, error: null });
+    invokeMock.mockResolvedValueOnce({ data: { success: true, result: {} }, error: null });
     await cloudflareAPI.getBandwidthStats();
     const [, opts] = invokeMock.mock.calls[0];
     expect(opts.body.params).toEqual({});
@@ -50,20 +50,41 @@ describe('CloudflareAPI dispatch', () => {
 });
 
 describe('Error handling', () => {
-  it("returns analytics fallback shape when 'analytics' fails", async () => {
-    invokeMock.mockResolvedValueOnce({ data: null, error: { message: 'edge down' } });
-    const r = await cloudflareAPI.getAnalytics();
-    expect(r.success).toBe(true);
-    expect(r.result.totals.requests).toEqual({ all: 0, cached: 0, uncached: 0 });
-    expect(r.result.timeseries).toEqual([]);
+  it.each(['getAnalytics', 'getThreatAnalytics'] as const)(
+    'rejects %s failures instead of inventing zero metrics',
+    async (method) => {
+      invokeMock.mockResolvedValueOnce({ data: null, error: { message: 'edge down' } });
+      await expect(cloudflareAPI[method]()).rejects.toThrow('edge down');
+    },
+  );
+
+  it('preserves actionable server errors from an HTTP failure', async () => {
+    invokeMock.mockResolvedValueOnce({
+      data: null,
+      error: {
+        message: 'Edge Function returned a non-2xx status code',
+        context: new Response(
+          JSON.stringify({ error: 'Cloudflare API token lacks Zone Settings read permission' }),
+          { status: 502 },
+        ),
+      },
+    });
+    await expect(cloudflareAPI.getZoneInfo()).rejects.toThrow(
+      'lacks Zone Settings read permission',
+    );
   });
 
-  it("returns threat-analytics fallback shape on failure", async () => {
-    invokeMock.mockResolvedValueOnce({ data: null, error: { message: 'edge down' } });
-    const r = await cloudflareAPI.getThreatAnalytics();
-    expect(r.success).toBe(true);
-    expect(r.result).toEqual([]);
-    expect(r.result_info.total_count).toBe(0);
+  it('rejects unsuccessful Cloudflare envelopes', async () => {
+    invokeMock.mockResolvedValueOnce({
+      data: { success: false, errors: [{ message: 'Not authorized for this zone' }] },
+      error: null,
+    });
+    await expect(cloudflareAPI.getZoneInfo()).rejects.toThrow('Not authorized for this zone');
+  });
+
+  it('rejects empty successful responses', async () => {
+    invokeMock.mockResolvedValueOnce({ data: null, error: null });
+    await expect(cloudflareAPI.getZoneInfo()).rejects.toThrow('Invalid Cloudflare response');
   });
 
   it('re-throws errors for actions without a fallback', async () => {
