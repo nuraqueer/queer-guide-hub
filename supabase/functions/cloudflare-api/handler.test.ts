@@ -64,7 +64,7 @@ Deno.test("GraphQL failures do not produce successful zero analytics", async () 
 Deno.test("normalizes GraphQL totals without double counting unique visitors", async () => {
   const original = globalThis.fetch;
   globalThis.fetch = async (_input, init) => {
-    const body = JSON.parse(String(init?.body));
+    const body = JSON.parse(String((init as RequestInit | undefined)?.body));
     assertStringIncludes(body.query, "httpRequests1hGroups(limit: 1");
     assertEquals(body.variables.zone, "test-zone");
     return Response.json({
@@ -135,7 +135,7 @@ Deno.test("admin authentication uses the current runtime secret key after legacy
     calls.push(url);
     if (url.includes("/auth/v1/user")) {
       assertEquals(
-        new Headers(init?.headers).get("apikey"),
+        new Headers((init as RequestInit | undefined)?.headers).get("apikey"),
         "sb_secret_current",
       );
       return Response.json({
@@ -146,7 +146,7 @@ Deno.test("admin authentication uses the current runtime secret key after legacy
     }
     if (url.includes("/rest/v1/user_roles")) {
       assertEquals(
-        new Headers(init?.headers).get("apikey"),
+        new Headers((init as RequestInit | undefined)?.headers).get("apikey"),
         "sb_secret_current",
       );
       return Response.json({ role: "admin" });
