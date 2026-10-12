@@ -9219,6 +9219,7 @@ export type Database = {
           star_rating: number | null
           state: string | null
           tags: string[] | null
+          timezone: string | null
           updated_at: string
           updated_by: string | null
           verified: boolean | null
@@ -9280,6 +9281,7 @@ export type Database = {
           star_rating?: number | null
           state?: string | null
           tags?: string[] | null
+          timezone?: string | null
           updated_at?: string
           updated_by?: string | null
           verified?: boolean | null
@@ -9341,6 +9343,7 @@ export type Database = {
           star_rating?: number | null
           state?: string | null
           tags?: string[] | null
+          timezone?: string | null
           updated_at?: string
           updated_by?: string | null
           verified?: boolean | null
@@ -14783,6 +14786,7 @@ export type Database = {
           tags: string[]
           target_groups: string[]
           trust_score: number | null
+          timezone: string | null
           updated_at: string
           website: string | null
           website_domain: string | null
@@ -14826,6 +14830,7 @@ export type Database = {
           tags?: string[]
           target_groups?: string[]
           trust_score?: number | null
+          timezone?: string | null
           updated_at?: string
           website?: string | null
           website_domain?: string | null
@@ -14869,6 +14874,7 @@ export type Database = {
           tags?: string[]
           target_groups?: string[]
           trust_score?: number | null
+          timezone?: string | null
           updated_at?: string
           website?: string | null
           website_domain?: string | null
@@ -25860,6 +25866,7 @@ export type Database = {
           tripadvisor_id: string | null
           tripadvisor_rating: number | null
           tripadvisor_review_count: number | null
+          timezone: string | null
           updated_at: string
           url_checked_at: string | null
           url_status: string | null
@@ -25952,6 +25959,7 @@ export type Database = {
           tripadvisor_id?: string | null
           tripadvisor_rating?: number | null
           tripadvisor_review_count?: number | null
+          timezone?: string | null
           updated_at?: string
           url_checked_at?: string | null
           url_status?: string | null
@@ -26044,6 +26052,7 @@ export type Database = {
           tripadvisor_id?: string | null
           tripadvisor_rating?: number | null
           tripadvisor_review_count?: number | null
+          timezone?: string | null
           updated_at?: string
           url_checked_at?: string | null
           url_status?: string | null
