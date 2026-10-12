@@ -12,6 +12,7 @@ import {
   Timer,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { TrackLoader } from '@/components/transit/TrackLoader';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -251,7 +252,7 @@ export default function AdminReviewQueue() {
       <header className="flex shrink-0 flex-wrap items-center justify-between gap-4 border-b border-border px-4 py-4 md:px-6">
         <div>
           {/* eslint-disable-next-line queerguide/admin-ui-primitives -- compact title inside the full-height review workspace */}
-          <h1 className="text-xl font-semibold tracking-tight">Review queue</h1>
+          <h1 className="font-sans text-title font-bold tracking-tight">Review queue</h1>
           <p
             className={`${mobile && selected ? 'hidden' : ''} mt-1 text-sm text-muted-foreground`}
             aria-live="polite"
@@ -287,8 +288,13 @@ export default function AdminReviewQueue() {
             onClick={() => void query.refetch()}
             disabled={query.isFetching}
             aria-label="Refresh review queue"
+            aria-busy={query.isFetching}
           >
-            <RefreshCw size={16} className={query.isFetching ? 'animate-spin' : ''} />
+            {query.isFetching ? (
+              <TrackLoader size={16} label="Refreshing review queue" />
+            ) : (
+              <RefreshCw size={16} aria-hidden="true" />
+            )}
           </Button>
           <Button asChild variant="outline" size="sm" className="hidden md:inline-flex">
             <Link to="/admin/diagnostics">Diagnostics</Link>
@@ -379,7 +385,7 @@ export default function AdminReviewQueue() {
           role="alert"
           className="flex flex-1 flex-col items-center justify-center gap-4 p-6 text-center"
         >
-          <h2 className="text-lg font-semibold">The review queue could not be loaded</h2>
+          <h2 className="font-sans text-title font-bold">The review queue could not be loaded</h2>
           <p className="max-w-prose text-sm text-muted-foreground">{query.error.message}</p>
           <Button onClick={() => void query.refetch()}>Retry</Button>
         </div>
@@ -408,7 +414,7 @@ export default function AdminReviewQueue() {
                 {items.length === 0 ? (
                   <div className="flex flex-col items-center gap-4 px-6 py-12 text-center">
                     <Check className="size-7 text-muted-foreground" />
-                    <h2 className="text-lg font-medium">
+                    <h2 className="font-sans text-title font-bold">
                       {query.data?.all_total === 0 ? 'All caught up' : 'No matching decisions'}
                     </h2>
                     <p className="text-sm text-muted-foreground">
@@ -585,7 +591,7 @@ export default function AdminReviewQueue() {
               ) : (
                 <div className="flex h-full flex-col items-center justify-center gap-4 p-8 text-center">
                   <Inbox className="size-7 text-muted-foreground" />
-                  <h2 className="text-lg font-medium">
+                  <h2 className="font-sans text-title font-bold">
                     {bookmarked.isLoading
                       ? 'Loading bookmarked decision'
                       : selectedKey
