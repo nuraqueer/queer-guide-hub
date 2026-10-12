@@ -1,9 +1,9 @@
 /** @vitest-environment jsdom */
 import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest';
 import { act, fireEvent, render, screen } from '@testing-library/react';
-import { MemoryRouter, Link } from 'react-router';
+import { MemoryRouter, Link, useSearchParams } from 'react-router';
 
-const state = vi.hoisted(() => ({ updateProfile: vi.fn(), navigate: vi.fn() }));
+const state = vi.hoisted(() => ({ updateProfile: vi.fn(), navigate: vi.fn(), onClose: vi.fn() }));
 vi.mock('@/hooks/useLocalizedNavigate', () => ({ useLocalizedNavigate: () => state.navigate }));
 vi.mock('@/hooks/useAuth', () => ({
   useAuth: () => ({ user: { id: 'u1', email: 'alex@example.com' }, hasPasskey: false }),
@@ -59,13 +59,24 @@ vi.mock('@/components/profile/PushNotificationSettings', () => ({
 }));
 vi.mock('@/components/trips/DocumentsList', () => ({ DocumentsList: () => null }));
 
-import Settings from '../Settings';
+import Settings from '../ProfileEditor';
+import { profileEditorSection } from '@/lib/profileEditing';
 
-function renderAt(path = '/hub/settings') {
+function Editor() {
+  const [params] = useSearchParams();
+  return (
+    <Settings
+      section={profileEditorSection(params.get('edit')) ?? 'profile'}
+      onClose={state.onClose}
+    />
+  );
+}
+
+function renderAt(path = '/user/u1?edit=profile') {
   return render(
     <MemoryRouter initialEntries={[path]}>
-      <Settings />
-      <Link to="/hub/settings?section=privacy">Open privacy</Link>
+      <Editor />
+      <Link to="/user/u1?edit=privacy">Open privacy</Link>
     </MemoryRouter>,
   );
 }
@@ -73,39 +84,37 @@ function renderAt(path = '/hub/settings') {
 describe('Settings workspace', () => {
   beforeEach(() => {
     state.updateProfile.mockReset().mockResolvedValue({ error: null });
+    state.onClose.mockReset();
   });
   afterEach(() => vi.useRealTimers());
 
-  it('renders a hub header and save feedback without a separate Back action', () => {
+  it('renders one contextual editor with save feedback and no duplicate Settings header', () => {
     renderAt();
-    expect(screen.getByRole('heading', { name: 'Settings' })).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Edit profile' })).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Back' })).toBeNull();
     expect(screen.getByRole('status')).toHaveTextContent('All changes saved');
   });
 
   it.each([
-    ['?section=privacy', 'Privacy editor'],
-    ['?tab=identity', 'Identity editor'],
-    ['?section=avatar', 'Avatar editor'],
+    ['?edit=privacy', 'Privacy editor'],
+    ['?edit=dating', 'Identity editor'],
+    ['?edit=avatar', 'Avatar editor'],
   ])('preserves the %s editor deep link', (query, editor) => {
-    renderAt(`/hub/settings${query}`);
+    renderAt(`/user/u1${query}`);
     expect(screen.getByText(editor)).toBeTruthy();
   });
 
   it('follows a new section link within the mounted workspace and keeps only one editor open', () => {
-    renderAt('/hub/settings?section=profile');
+    renderAt('/user/u1?edit=profile');
     expect(screen.getByRole('textbox', { name: 'Bio' })).toBeTruthy();
     fireEvent.click(screen.getByRole('link', { name: 'Open privacy' }));
     expect(screen.getByText('Privacy editor')).toBeTruthy();
     expect(screen.queryByRole('textbox', { name: 'Bio' })).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: /^Profile Bio/ }));
-    expect(screen.getByRole('textbox', { name: 'Bio' })).toBeTruthy();
-    expect(screen.queryByText('Privacy editor')).toBeNull();
   });
 
   it('debounces profile changes and reports a successful autosave', async () => {
     vi.useFakeTimers();
-    renderAt('/hub/settings?section=profile');
+    renderAt('/user/u1?edit=profile');
     fireEvent.change(screen.getByRole('textbox', { name: 'Bio' }), {
       target: { value: 'My updated bio' },
     });
@@ -119,5 +128,31 @@ describe('Settings workspace', () => {
       expect.objectContaining({ bio: 'My updated bio' }),
     );
     expect(screen.getByRole('status')).toHaveTextContent('All changes saved');
+  });
+  it('flushes pending changes before closing', async () => {
+    renderAt();
+    fireEvent.change(screen.getByRole('textbox', { name: 'Bio' }), {
+      target: { value: 'Pending edit' },
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Done' }));
+    });
+    expect(state.updateProfile).toHaveBeenCalledWith(
+      expect.objectContaining({ bio: 'Pending edit' }),
+    );
+    expect(state.onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the editor open when the final save fails', async () => {
+    state.updateProfile.mockResolvedValue({ error: 'Failed', errorKind: 'unknown' });
+    renderAt();
+    fireEvent.change(screen.getByRole('textbox', { name: 'Bio' }), {
+      target: { value: 'Pending edit' },
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Done' }));
+    });
+    expect(state.onClose).not.toHaveBeenCalled();
+    expect(screen.getByRole('status')).toHaveTextContent('Save failed');
   });
 });

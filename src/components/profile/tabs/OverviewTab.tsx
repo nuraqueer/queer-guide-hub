@@ -1,3 +1,7 @@
+import type { ReactNode } from 'react';
+import type { ProfileEditorSection } from '@/lib/profileEditing';
+import { Button } from '@/components/ui/button';
+import { profileEditPath } from '@/lib/profileEditing';
 import { LocalizedLink } from '@/components/routing/LocalizedLink';
 import { SecureProfileViewer } from '@/components/profile/SecureProfileViewer';
 import { SocialSummaryRow } from '@/components/profile/SocialSummaryRow';
@@ -13,6 +17,9 @@ interface OverviewTabProps {
   lens?: ProfileLens;
   completionPct?: number;
   onPostsClick?: () => void;
+  onEdit?: (section: ProfileEditorSection, privacyField?: string) => void;
+  editor?: ReactNode;
+  editingSection?: ProfileEditorSection | null;
 }
 
 export function OverviewTab({
@@ -21,6 +28,9 @@ export function OverviewTab({
   lens = 'you',
   completionPct,
   onPostsClick,
+  onEdit,
+  editor,
+  editingSection,
 }: OverviewTabProps) {
   const ownView = isOwnProfile && lens === 'you';
   // One completion surface only: the actionable gap prompt when there's a
@@ -35,12 +45,21 @@ export function OverviewTab({
 
   return (
     <div className="flex flex-col gap-6">
-      {hasGap ? (
-        <GapPromptCard profile={profile} />
-      ) : (
-        ownView &&
-        typeof completionPct === 'number' && <CompletionNudge percent={completionPct} />
+      {ownView && (
+        <div className="flex flex-wrap gap-2">
+          <Button variant="ghost" onClick={() => onEdit?.('privacy')}>
+            Privacy & visibility
+          </Button>
+        </div>
       )}
+      {ownView && editor}
+      {!editor &&
+        (hasGap ? (
+          <GapPromptCard profile={profile} />
+        ) : (
+          ownView &&
+          typeof completionPct === 'number' && <CompletionNudge percent={completionPct} />
+        ))}
 
       {socialVisible ? (
         <SocialSummaryRow
@@ -52,7 +71,10 @@ export function OverviewTab({
         isOwnProfile && (
           <p className="text-13 text-muted-foreground">
             Community summary hidden at this visibility.{' '}
-            <LocalizedLink to="/hub/settings?section=privacy" className="underline">
+            <LocalizedLink
+              to={profileEditPath(profile.user_id as string, 'privacy')}
+              className="underline"
+            >
               Privacy settings
             </LocalizedLink>
           </p>
@@ -67,6 +89,8 @@ export function OverviewTab({
       <SecureProfileViewer
         profile={isOwnProfile ? previewFilterProfile(profile, lens) : profile}
         isOwnProfile={ownView}
+        onEdit={ownView ? onEdit : undefined}
+        editingSection={editingSection}
       />
     </div>
   );

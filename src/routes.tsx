@@ -14,6 +14,7 @@ import { lazyRetry } from '@/utils/lazyRetry';
 import { submissionRegistry } from '@/config/submissionRegistry';
 import { DEFAULT_LOCALE, isSupportedLocale } from '@/i18n/languages';
 import { useAuth } from '@/hooks/useAuth';
+import { legacySettingsDestination } from '@/lib/profileEditing';
 
 const Index = lazyRetry(() => import('./pages/Index'));
 const Venues = lazyRetry(() => import('./pages/Venues'));
@@ -183,16 +184,27 @@ const CMSPage = lazyRetry(() => import('./pages/Page'));
 const ShareTarget = lazyRetry(() => import('./pages/ShareTarget'));
 const PridePage = lazyRetry(() => import('./pages/Pride'));
 
-/** Preserve legacy settings sections, locales, query parameters, and anchors. */
+/** Old settings links now open the authenticated owner's contextual profile editor. */
 function SettingsRedirect({ privacy = false }: { privacy?: boolean }) {
   const { locale } = useParams<{ locale?: string }>();
   const location = useLocation();
+  const { user, loading } = useAuth();
   const prefix =
     locale && isSupportedLocale(locale) && locale !== DEFAULT_LOCALE ? `/${locale}` : '';
-  const params = new URLSearchParams(location.search);
-  if (privacy) params.set('section', 'privacy');
-  const search = params.size ? `?${params.toString()}` : '';
-  return <Navigate to={`${prefix}/hub/settings${search}${location.hash}`} replace />;
+  if (loading) return <PageLoadingState variant="list" count={2} />;
+  if (!user)
+    return (
+      <Navigate
+        to={`${prefix}/auth?redirect=${encodeURIComponent(location.pathname + location.search + location.hash)}`}
+        replace
+      />
+    );
+  return (
+    <Navigate
+      to={`${prefix}${legacySettingsDestination(user.id, location.search, privacy)}${location.hash}`}
+      replace
+    />
+  );
 }
 
 /** /admin/review merged into governance triage — preserve ?tab=/?queue= deep links. */
@@ -1032,7 +1044,7 @@ export const AppRoutes = () => {
                   <Route path="hub/messages" element={<HubPage module="messages" />} />
                   <Route path="hub/plans" element={<HubPage module="plans" />} />
                   <Route path="hub/saved" element={<HubPage module="saved" />} />
-                  <Route path="hub/settings" element={<HubPage module="settings" />} />
+                  <Route path="hub/settings" element={<SettingsRedirect />} />
                   {/* Retired module paths → their consolidated home. LocalizedRedirect
                   preserves the query string (e.g. ?conversation=). */}
                   <Route path="hub/calendar" element={<LocalizedRedirect to="/hub/plans" />} />
@@ -1054,12 +1066,10 @@ export const AppRoutes = () => {
                   <Route path="me/missions" element={<MeRedirect tab="progress" />} />
                   <Route path="me/leaderboard" element={<MeRedirect tab="progress" />} />
                   <Route path="me/settings" element={<SettingsRedirect />} />
+                  <Route path="me/account" element={<MeRedirect tab="account" />} />
                   <Route path="me/tiers" element={<MeRedirect tab="progress" />} />
                   <Route path="settings" element={<SettingsRedirect />} />
-                  <Route
-                    path="settings/privacy"
-                    element={<SettingsRedirect privacy />}
-                  />
+                  <Route path="settings/privacy" element={<SettingsRedirect privacy />} />
                   <Route path="profile/settings" element={<SettingsRedirect />} />
                   {/* Legacy People routes preserve inbound links while Hub remains
                   the single canonical shell. */}

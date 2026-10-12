@@ -23,7 +23,6 @@ describe('hubModules registry', () => {
       'messages',
       'plans',
       'saved',
-      'settings',
     ]);
   });
 
@@ -49,5 +48,8 @@ describe('hubModules registry', () => {
     const messages = HUB_MODULES.find((m) => m.id === 'messages');
     expect(messages?.path).toBe('/hub/messages');
     expect(messages?.badge).toBe('unread');
+  });
+  it('keeps personal editing in the profile rather than a duplicate hub module', () => {
+    expect(HUB_MODULES.some((module) => module.path === '/hub/settings')).toBe(false);
   });
 });
