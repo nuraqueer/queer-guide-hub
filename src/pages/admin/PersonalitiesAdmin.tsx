@@ -1,8 +1,7 @@
 import { ContentListPanel } from '@/components/cms/ContentListPanel';
-import { PersonhoodApprovalInfo } from '@/components/admin/PersonhoodApprovalInfo';
 
 /**
- * Personalities admin surface: approval guidance above the standard CMS list.
+ * Personalities admin surface: the standard CMS list.
  * The generic ContentListPanel is reused untouched via contentTypeId, so all
  * list/edit/bulk behaviour stays identical for personalities.
  *
@@ -14,13 +13,5 @@ import { PersonhoodApprovalInfo } from '@/components/admin/PersonhoodApprovalInf
  * and `cmsEditPath` can build the link for any of them.
  */
 export default function PersonalitiesAdmin() {
-  return (
-    /* gap-4, not px-4 pt-4 wrappers: AdminShell's <main> already owns the
-       horizontal gutter, so the old wrappers double-padded the guidance panel
-       against the list below them. */
-    <div className="flex flex-col gap-4">
-      <PersonhoodApprovalInfo />
-      <ContentListPanel contentTypeId="personalities" />
-    </div>
-  );
+  return <ContentListPanel contentTypeId="personalities" />;
 }
