@@ -1,5 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { storefrontPage } from '../../supabase/functions/_shared/shopify-storefront.ts';
+import {
+  storefrontPage,
+  publicThemeToken,
+  publicStorefrontCredentials,
+} from '../../supabase/functions/_shared/shopify-storefront.ts';
 
 afterEach(() => vi.unstubAllGlobals());
 const response = {
@@ -84,5 +88,44 @@ describe('Shopify public Storefront pages', () => {
     vi.stubGlobal('fetch', fetch);
     await expect(storefrontPage('127.0.0.1', null, 'US', null)).rejects.toThrow();
     expect(fetch).not.toHaveBeenCalled();
+  });
+});
+
+describe('public Shopify theme credentials', () => {
+  it('reads only the published Shopify features token', () => {
+    const token = '0123456789abcdef0123456789abcdef';
+    expect(
+      publicThemeToken(
+        `<script id="shopify-features" type="application/json">{"accessToken":"${token}"}</script>`,
+      ),
+    ).toBe(token);
+    expect(publicThemeToken('<script>{"accessToken":"private"}</script>')).toBeNull();
+    expect(publicThemeToken('<script id="shopify-features">invalid</script>')).toBeNull();
+  });
+  it('keeps the canonical storefront domain after a public homepage redirect', async () => {
+    const token = '0123456789abcdef0123456789abcdef';
+    const fetch = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(null, { status: 302, headers: { location: 'https://www.example.com/' } }),
+      )
+      .mockResolvedValueOnce(
+        new Response(`<script id="shopify-features">{"accessToken":"${token}"}</script>`),
+      );
+    vi.stubGlobal('fetch', fetch);
+    expect(await publicStorefrontCredentials('example.com')).toEqual({
+      token,
+      domain: 'www.example.com',
+    });
+  });
+  it('rejects private redirect destinations before any follow-up request', async () => {
+    const fetch = vi
+      .fn()
+      .mockResolvedValue(
+        new Response(null, { status: 302, headers: { location: 'http://127.0.0.1/' } }),
+      );
+    vi.stubGlobal('fetch', fetch);
+    await expect(publicStorefrontCredentials('example.com')).rejects.toThrow();
+    expect(fetch).toHaveBeenCalledTimes(1);
   });
 });

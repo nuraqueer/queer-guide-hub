@@ -4,6 +4,40 @@ const UA = 'QueerGuideBot/1.0 (+https://queer.guide/bot)'
 const STOREFRONT_API_VERSION = '2026-10'
 const STOREFRONT_PER_PAGE = 50 // tokenless complexity limit is 1,000
 
+/** The storefront theme publishes this read-only token to every visitor. */
+export function publicThemeToken(html: string): string | null {
+  const script = html.match(/<script\b[^>]*\bid=["']shopify-features["'][^>]*>([\s\S]*?)<\/script>/i)
+  if (!script) return null
+  try {
+    const token = JSON.parse(script[1]).accessToken
+    return typeof token === 'string' && /^[a-z0-9_-]{16,256}$/i.test(token) ? token : null
+  } catch { return null }
+}
+
+export async function publicStorefrontCredentials(shopDomain: string): Promise<{ token: string; domain: string } | null> {
+  let url = assertPublicHttpUrl(`https://${shopDomain}/`)
+  const signal = AbortSignal.timeout(10000)
+  for (let redirects = 0; redirects <= 3; redirects++) {
+    const response = await fetch(url, { redirect: 'manual', signal, headers: { 'User-Agent': UA } })
+    if ([301,302,303,307,308].includes(response.status)) {
+      const location = response.headers.get('location')
+      await response.body?.cancel()
+      if (!location || redirects === 3) return null
+      url = assertPublicHttpUrl(new URL(location, url).toString())
+      continue
+    }
+    if (!response.ok || Number(response.headers.get('content-length') ?? 0) > 5000000) {
+      await response.body?.cancel()
+      return null
+    }
+    const html = await response.text()
+    if (html.length > 5000000) return null
+    const token = publicThemeToken(html)
+    return token ? { token, domain: url.hostname } : null
+  }
+  return null
+}
+
 // `country` is passed as a $variable rather than interpolated into the query string:
 // it originates from merchant config, and a directive built by concatenation would be
 // an injection point into the GraphQL document.
@@ -64,4 +98,3 @@ export async function storefrontPage(
     return { nodes: p.nodes ?? [], hasNext: p.pageInfo.hasNextPage, endCursor: p.pageInfo.endCursor }
   } finally { clearTimeout(timer) }
 }
-

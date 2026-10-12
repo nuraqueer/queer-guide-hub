@@ -4,7 +4,7 @@ import { writeToStaging, skippedResponse } from '../_shared/source-adapter.ts'
 import { brandFromVendor, extractMerchantDomain, normalizeCurrency } from '../_shared/marketplace-pipeline-utils.ts'
 import { withErrorReporting } from '../_shared/report-api-error.ts'
 import { assertPublicHttpUrl } from '../_shared/ssrf-guard.ts'
-import { storefrontPage, type StorefrontProduct } from '../_shared/shopify-storefront.ts'
+import { storefrontPage, publicStorefrontCredentials, type StorefrontProduct } from '../_shared/shopify-storefront.ts'
 import { stripProductHtml } from '../_shared/product-html.ts'
 
 // ============================================================
@@ -255,8 +255,14 @@ Deno.serve(withErrorReporting('source-shopify-public', async (req) => {
     const refresh = body.refresh === true
 
     // ── Storefront GraphQL path (currency-correct) ────────────────────────────
-    const storefrontToken = (typeof body.storefront_token === 'string' && body.storefront_token)
+    let storefrontToken = (typeof body.storefront_token === 'string' && body.storefront_token)
       || cfgStr('storefront_token')
+    // Legacy products.json feeds can become rate-limited after a successful
+    // import. Try the theme's public token before remaining on that old path.
+    // Persist it only after the supported API and currencies have been verified.
+    const discovered = !storefrontToken && mcfg.legacy_feed === true
+      ? await publicStorefrontCredentials(shopDomain).catch(() => null) : null
+    storefrontToken ||= discovered?.token ?? null
     if (mcfg.legacy_feed !== true || storefrontToken) {
       if (!marketCountry) return jsonResponse(skippedResponse('missing_config', ['market_country']), 200, req)
       const expected = normalizeCurrency(currency)
@@ -290,7 +296,7 @@ Deno.serve(withErrorReporting('source-shopify-public', async (req) => {
         if (pages > 0 && Date.now() - sweepStarted > 30_000) break
         let page: { nodes: StorefrontProduct[]; hasNext: boolean; endCursor: string | null }
         try {
-          page = await storefrontPage(cfgStr('storefront_domain') || shopDomain, storefrontToken, marketCountry, cursor)
+          page = await storefrontPage(discovered?.domain || cfgStr('storefront_domain') || shopDomain, storefrontToken, marketCountry, cursor)
         } catch (err) {
           // Storefront cursors are opaque and go stale when the product set shifts.
           // A persisted bad cursor would otherwise wedge this merchant forever, so
@@ -351,6 +357,7 @@ Deno.serve(withErrorReporting('source-shopify-public', async (req) => {
           .update({
             config: {
               ...mcfg,
+              ...(discovered ? { storefront_token: discovered.token, storefront_domain: discovered.domain, legacy_feed: false } : {}),
               storefront_cursor: {
                 after: cursor, wraps,
                 completed_sweep: completedSweep,
