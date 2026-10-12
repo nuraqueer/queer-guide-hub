@@ -1,10 +1,10 @@
+import { FieldRenderer } from '@/components/cms/fields/FieldRenderer';
 import React, { useState, useMemo } from 'react';
 import { Link } from 'react-router';
 import { useCentralizedTags } from '@/hooks/useCentralizedTags';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
 import {
   Select,
   SelectContent,
@@ -404,12 +404,17 @@ export default function AdminTags() {
                   </Select>
                 </div>
                 <div>
-                  <Label htmlFor="description">Description</Label>
-                  <Textarea
-                    id="description"
+                  <FieldRenderer
+                    field={{
+                      name: 'description',
+                      label: 'Description',
+                      type: 'textarea',
+                      group: 'basic',
+                    }}
                     value={formData.description}
-                    onChange={(e) => setFormData((p) => ({ ...p, description: e.target.value }))}
-                    rows={3}
+                    onChange={(next) =>
+                      setFormData((p) => ({ ...p, description: String(next ?? '') }))
+                    }
                   />
                 </div>
                 {editingTag && <TagAliasesSection tagId={editingTag.id} />}
@@ -476,11 +481,18 @@ export default function AdminTags() {
                       <span className="font-medium">{tag.name}</span>
                       <Badge variant="outline">{tag.category}</Badge>
                     </div>
-                    <Textarea
+                    <FieldRenderer
+                      field={{
+                        name: `description-${tagId}`,
+                        label: `${tag.name} description`,
+                        type: 'textarea',
+                        group: 'basic',
+                        placeholder: 'Enter description...',
+                      }}
                       value={description}
-                      onChange={(e) => setBulkEditTags((p) => ({ ...p, [tagId]: e.target.value }))}
-                      placeholder="Enter description..."
-                      rows={2}
+                      onChange={(next) =>
+                        setBulkEditTags((p) => ({ ...p, [tagId]: String(next ?? '') }))
+                      }
                     />
                   </div>
                 );

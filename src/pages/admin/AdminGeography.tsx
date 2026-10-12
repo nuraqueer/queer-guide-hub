@@ -1,3 +1,4 @@
+import { FieldRenderer } from '@/components/cms/fields/FieldRenderer';
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router';
 import { AdminTextSkeleton } from '@/components/admin/primitives/AdminLoading';
@@ -368,12 +369,10 @@ function LandmarkDialog({
             </div>
           </div>
           <div>
-            <Label htmlFor="lm-desc">Description</Label>
-            <Textarea
-              id="lm-desc"
-              rows={3}
+            <FieldRenderer
+              field={{ name: 'lm-desc', label: 'Description', type: 'textarea', group: 'basic' }}
               value={form.description}
-              onChange={(e) => setForm({ ...form, description: e.target.value })}
+              onChange={(next) => setForm({ ...form, description: String(next ?? '') })}
             />
           </div>
           <div>

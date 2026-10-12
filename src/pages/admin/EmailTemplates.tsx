@@ -5,7 +5,6 @@ import { AdminArchetypeHeader } from '@/components/admin/frames/AdminArchetypeHe
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -31,7 +30,9 @@ import { supabase } from '@/integrations/supabase/client';
 import { fetchEmailTemplates, upsertEmailTemplate } from '@/hooks/usePageFetchers';
 import { useAuth } from '@/hooks/useAuth';
 import { toast } from 'sonner';
-import { ContentSanitizer } from '@/components/security/ContentSanitizer';
+import { HtmlDocumentEditor } from '@/components/cms/fields/HtmlDocumentEditor';
+import { FieldRenderer } from '@/components/cms/fields/FieldRenderer';
+import { StructuredValueView } from '@/components/cms/fields/structured/StructuredValueView';
 
 interface EmailTemplate {
   id: string;
@@ -341,15 +342,16 @@ export default function EmailTemplates() {
                   </div>
 
                   <div className="flex flex-col gap-2">
-                    <Label htmlFor="description">Description</Label>
-                    <Input
-                      id="description"
+                    <FieldRenderer
+                      field={{
+                        name: 'description',
+                        label: 'Description',
+                        type: 'textarea',
+                        group: 'basic',
+                      }}
                       value={editingTemplate.description || ''}
-                      onChange={(e) =>
-                        setEditingTemplate({
-                          ...editingTemplate,
-                          description: e.target.value,
-                        })
+                      onChange={(next) =>
+                        setEditingTemplate({ ...editingTemplate, description: String(next ?? '') })
                       }
                     />
                   </div>
@@ -370,38 +372,39 @@ export default function EmailTemplates() {
 
                   <Tabs defaultValue="html" style={{ width: '100%' }}>
                     <TabsList>
-                      <TabsTrigger value="html">HTML Content</TabsTrigger>
+                      <TabsTrigger value="html">Email content</TabsTrigger>
                       <TabsTrigger value="text">Text Content</TabsTrigger>
                       <TabsTrigger value="variables">Variables</TabsTrigger>
                     </TabsList>
 
                     <TabsContent value="html">
                       <div className="flex flex-col gap-2">
-                        <Label htmlFor="html-content">HTML Content</Label>
-                        <Textarea
-                          className="text-sm"
-                          id="html-content"
+                        <HtmlDocumentEditor
+                          label="Email content"
                           value={editingTemplate.html_content}
-                          onChange={(e) =>
-                            setEditingTemplate({ ...editingTemplate, html_content: e.target.value })
+                          onChange={(html_content) =>
+                            setEditingTemplate({ ...editingTemplate, html_content })
                           }
-                          style={{ minHeight: 300, fontFamily: 'monospace' }}
                         />
                       </div>
                     </TabsContent>
 
                     <TabsContent value="text">
                       <div className="flex flex-col gap-2">
-                        <Label htmlFor="text-content">Text Content (Optional)</Label>
-                        <Textarea
-                          className="text-sm"
-                          id="text-content"
+                        <FieldRenderer
+                          field={{
+                            name: 'text-content',
+                            label: 'Text Content (Optional)',
+                            type: 'textarea',
+                            group: 'basic',
+                          }}
                           value={editingTemplate.text_content || ''}
-                          onChange={(e) =>
-                            setEditingTemplate({ ...editingTemplate, text_content: e.target.value })
+                          onChange={(next) =>
+                            setEditingTemplate({
+                              ...editingTemplate,
+                              text_content: String(next ?? ''),
+                            })
                           }
-                          style={{ minHeight: 300, fontFamily: 'monospace' }}
-                          placeholder="Plain text version of the email..."
                         />
                       </div>
                     </TabsContent>
@@ -594,8 +597,7 @@ export default function EmailTemplates() {
 
                       <Tabs defaultValue="html-preview" style={{ width: '100%' }}>
                         <TabsList>
-                          <TabsTrigger value="html-preview">HTML Preview</TabsTrigger>
-                          <TabsTrigger value="html-code">HTML Code</TabsTrigger>
+                          <TabsTrigger value="html-preview">Email preview</TabsTrigger>
                           {selectedTemplate.text_content && (
                             <TabsTrigger value="text-preview">Text Version</TabsTrigger>
                           )}
@@ -607,49 +609,11 @@ export default function EmailTemplates() {
                               <strong>Subject:</strong>{' '}
                               {generatePreview(selectedTemplate, previewData).subject}
                             </div>
-                            <ContentSanitizer
-                              style={{ maxWidth: 'none' }}
-                              className="prose"
-                              content={generatePreview(selectedTemplate, previewData).htmlContent}
-                              allowedTags={[
-                                'p',
-                                'br',
-                                'strong',
-                                'em',
-                                'u',
-                                'a',
-                                'ul',
-                                'ol',
-                                'li',
-                                'blockquote',
-                                'code',
-                                'pre',
-                                'h1',
-                                'h2',
-                                'h3',
-                                'h4',
-                                'h5',
-                                'h6',
-                                'img',
-                                'table',
-                                'thead',
-                                'tbody',
-                                'tr',
-                                'th',
-                                'td',
-                              ]}
+                            <HtmlDocumentEditor
+                              label="Email preview"
+                              value={generatePreview(selectedTemplate, previewData).htmlContent}
+                              editable={false}
                             />
-                          </div>
-                        </TabsContent>
-
-                        <TabsContent value="html-code">
-                          <div className="rounded-element bg-muted p-4">
-                            <pre
-                              style={{ whiteSpace: 'pre-wrap', fontFamily: 'monospace' }}
-                              className="text-sm"
-                            >
-                              {generatePreview(selectedTemplate, previewData).htmlContent}
-                            </pre>
                           </div>
                         </TabsContent>
 
@@ -660,9 +624,9 @@ export default function EmailTemplates() {
                                 <strong>Subject:</strong>{' '}
                                 {generatePreview(selectedTemplate, previewData).subject}
                               </div>
-                              <pre style={{ whiteSpace: 'pre-wrap' }} className="text-sm">
-                                {generatePreview(selectedTemplate, previewData).textContent}
-                              </pre>
+                              <StructuredValueView
+                                value={generatePreview(selectedTemplate, previewData).textContent}
+                              />
                             </div>
                           </TabsContent>
                         )}
