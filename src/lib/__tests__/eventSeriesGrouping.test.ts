@@ -59,7 +59,8 @@ function latestMigrationMatching(pattern: RegExp): string {
     .sort();
   for (const f of [...files].reverse()) {
     const sql = readFileSync(join(MIGRATIONS, f), 'utf8');
-    if (pattern.test(sql)) return stripSqlComments(sql);
+    const body = stripSqlComments(sql);
+    if (pattern.test(body)) return body;
   }
   throw new Error(`no migration matches ${pattern}`);
 }
@@ -229,13 +230,23 @@ describe('run_event_programme_link', () => {
     expect(sql).not.toMatch(/min\(parent_id\)/);
   });
 
-  // CREATE OR REPLACE preserves existing permissions and does not register cron again.
-  // Read the latest setup migration for ACL, registration and its corpus assertions.
   it('is not callable by anon or authenticated', () => {
+    // CREATE OR REPLACE retains the established ACL. Check the most recent
+    // explicit permission change, rather than demanding duplicated grants in
+    // every function-body repair.
     const migration = latestMigrationMatching(
-      /revoke\s+all\s+on\s+function\s+public\.run_event_programme_link/i,
+      /(?:revoke|grant)\s+(?:all|execute)\s+on\s+function\s+public\.run_event_programme_link\s*\(/i,
     ).toLowerCase();
-    expect(migration).toMatch(/revoke\s+all\s+on\s+function\s+public\.run_event_programme_link/);
+    expect(migration).toMatch(
+      /revoke\s+all\s+on\s+function\s+public\.run_event_programme_link\([^)]*\)\s+from\s+public,\s*anon,\s*authenticated/,
+    );
+    expect(migration).toMatch(
+      /grant\s+execute\s+on\s+function\s+public\.run_event_programme_link\([^)]*\)\s+to\s+service_role/,
+    );
+    expect(migration).not.toMatch(
+      /grant\s+(?:execute|all)\s+on\s+function\s+public\.run_event_programme_link\([^)]*\)\s+to\s+[^;]*\b(?:public|anon|authenticated)\b/,
+    );
+    expect(sql).toMatch(/create\s+or\s+replace\s+function\s+public\.run_event_programme_link\s*\(/);
   });
 
   it('names the NOT NULL trigger column when registering its cron', () => {
@@ -243,14 +254,14 @@ describe('run_event_programme_link', () => {
     // migration including its ALTER TABLE, and prod served a frontend against a
     // column that did not exist.
     const migration = latestMigrationMatching(
-      /revoke\s+all\s+on\s+function\s+public\.run_event_programme_link/i,
+      /insert\s+into\s+public\.admin_automations[\s\S]*'event_programme_link'/i,
     ).toLowerCase();
     expect(migration).toMatch(/insert\s+into\s+public\.admin_automations[\s\S]{0,200}trigger/);
   });
 
   it('asserts the reported lila case specifically', () => {
     const migration = latestMigrationMatching(
-      /revoke\s+all\s+on\s+function\s+public\.run_event_programme_link/i,
+      /insert\s+into\s+public\.admin_automations[\s\S]*'event_programme_link'/i,
     ).toLowerCase();
     expect(migration).toMatch(/lila-queer-festival/);
     expect(migration).toMatch(/v_lila\s*<>\s*3/);

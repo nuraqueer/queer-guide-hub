@@ -471,7 +471,7 @@ export const useImportHub = () => {
       return (data || []) as IngestionSource[];
     } catch (error) {
       console.error('Failed to fetch ingestion sources:', error);
-      return [];
+      throw error;
     }
   }, []);
 
@@ -494,10 +494,19 @@ export const useImportHub = () => {
 
   const triggerSource = useCallback(async (source: IngestionSource) => {
     try {
-      const { error } = await supabase.functions.invoke(source.edge_function, {
+      const { data, error } = await supabase.functions.invoke(source.edge_function, {
         body: {}
       });
       if (error) throw error;
+      if (data?.error || data?.success === false) throw new Error(data?.error ?? 'Source failed');
+      if (data?.skipped === true) {
+        toast({
+          title: 'Source skipped',
+          description: `${source.name}: ${data.reason ?? 'source unavailable'}`,
+          variant: 'destructive',
+        });
+        return;
+      }
       toast({
         title: 'Source Triggered',
         description: `${source.name} import has been started.`,

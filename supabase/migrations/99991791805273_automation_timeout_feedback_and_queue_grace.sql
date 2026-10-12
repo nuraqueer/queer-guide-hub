@@ -213,3 +213,4 @@ DO $backfill$ DECLARE r public.admin_automation_runs; BEGIN
     ORDER BY automation_slug,id DESC LOOP PERFORM public.report_automation_failure(r); END LOOP;
 END $backfill$;
 SELECT public.sync_automations_to_cron(true);
+

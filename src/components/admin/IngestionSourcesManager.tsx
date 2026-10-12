@@ -42,14 +42,18 @@ export const IngestionSourcesManager = () => {
   const { fetchSources, toggleSource, triggerSource } = useImportHub();
 
   const [sources, setSources] = useState<IngestionSource[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [triggeringId, setTriggeringId] = useState<string | null>(null);
 
   const loadSources = useCallback(async () => {
     setLoading(true);
+    setLoadError(false);
     try {
       const data = await fetchSources();
       setSources(data);
+    } catch {
+      setLoadError(true);
     } finally {
       setLoading(false);
     }
@@ -80,6 +84,11 @@ export const IngestionSourcesManager = () => {
 
   return (
     <div className="flex flex-col gap-6">
+      {loadError && (
+        <div role="alert" className="text-sm text-destructive">
+          Could not load ingestion sources. Use Refresh to try again.
+        </div>
+      )}
       {/* Summary Row */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <Card>
@@ -198,6 +207,7 @@ export const IngestionSourcesManager = () => {
 
                   <div className="flex items-center gap-4">
                     <Switch
+                      aria-label={`Enable ${source.name}`}
                       checked={source.is_enabled}
                       onCheckedChange={() => handleToggle(source)}
                     />

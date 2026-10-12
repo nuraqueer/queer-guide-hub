@@ -190,6 +190,21 @@ Deno.serve(async (req) => {
 
   try {
     const kind = body.kind as string | undefined;
+    if (kind === 'realtime') {
+      if (body.dry_run === true) {
+        return new Response(JSON.stringify({ ok: true, dry_run: true, kinds: ['dm', 'next_item'] }), {
+          headers: { ...cors, 'Content-Type': 'application/json' },
+        });
+      }
+      const outcomes = await Promise.allSettled([handleDm(), handleNextItem()]);
+      const failures = outcomes.filter((r) => r.status === 'rejected');
+      const sent = outcomes.reduce((n, r) => n + (r.status === 'fulfilled' ? r.value : 0), 0);
+      return new Response(JSON.stringify({ ok: failures.length === 0, sent,
+        error: failures.length ? 'Realtime notification dispatch failed' : undefined }), {
+        status: failures.length ? 500 : 200,
+        headers: { ...cors, 'Content-Type': 'application/json' },
+      });
+    }
     if (kind === 'next_item') {
       const sent = await handleNextItem();
       return new Response(JSON.stringify({ ok: true, sent }), {

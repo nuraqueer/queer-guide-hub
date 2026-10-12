@@ -26,6 +26,7 @@ import { Input } from '@/components/ui/input';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 import { adminNavSections, resolveItemMinRole } from '@/config/adminNavigation';
+import { matchesAdminNavSearch } from '@/config/adminNavSearch';
 import type { AdminNavItem, AdminNavSection } from '@/config/adminNavigation';
 import { supabase } from '@/integrations/supabase/client';
 import { useTheme } from '@/components/theme/ThemeProvider';
@@ -139,7 +140,7 @@ export function AdminSidebar() {
   const isItemActive = (item: AdminNavItem) =>
     item.route === '/admin'
       ? location.pathname === '/admin'
-      : location.pathname.startsWith(item.route);
+      : location.pathname === item.route || location.pathname.startsWith(item.route + '/');
 
   /**
    * The ONE row that may announce itself as the current page.
@@ -289,27 +290,19 @@ export function AdminSidebar() {
 
   // ── Render a section's items, with optional group subheaders ─────
   function SectionItems({ items }: { items: AdminNavItem[] }) {
-    const ungrouped = items.filter((i) => !i.group);
-    const groups: string[] = [];
-    for (const i of items) if (i.group && !groups.includes(i.group)) groups.push(i.group);
-
     return (
       <div className="flex flex-col">
-        {ungrouped.map((item) => (
-          <NavRow key={item.id} item={item} />
-        ))}
-        {groups.map((g) => (
-          <div key={g}>
-            {!collapsed && (
+        {items.map((item, index) => (
+          <div key={item.id}>
+            {!collapsed && item.group && item.group !== items[index - 1]?.group && (
               <div className="mx-4 mt-2 mb-0.5 text-3xs font-semibold uppercase tracking-label text-muted-foreground">
-                {g}
+                {item.group}
               </div>
             )}
-            {items
-              .filter((i) => i.group === g)
-              .map((item) => (
-                <NavRow key={item.id} item={item} />
-              ))}
+            {!item.group && index > 0 && items[index - 1]?.group && (
+              <div className="my-1.5 mx-4 border-t border-border" />
+            )}
+            <NavRow item={item} />
           </div>
         ))}
       </div>
@@ -318,9 +311,7 @@ export function AdminSidebar() {
 
   const searching = search.trim().length > 0;
   const searchResults = searching
-    ? visibleItems.filter(({ item }) =>
-        item.label.toLowerCase().includes(search.trim().toLowerCase()),
-      )
+    ? visibleItems.filter(({ item, section }) => matchesAdminNavSearch(item, section, search))
     : [];
 
   const pinnedItems = pins
@@ -383,7 +374,7 @@ export function AdminSidebar() {
               <Input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Find a section…"
+                placeholder="Find a page…"
                 className="h-10 pl-8 text-13 rounded-element"
                 aria-label="Search navigation"
               />

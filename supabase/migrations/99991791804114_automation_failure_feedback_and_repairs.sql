@@ -715,3 +715,4 @@ UPDATE public.admin_automations SET action=jsonb_set(action,'{command}',
   to_jsonb('SET statement_timeout = ''600s''; SELECT public.refresh_business_brand_quality();'::text))
 WHERE slug='business_brand_quality_refresh';
 SELECT public.sync_automations_to_cron(true);
+

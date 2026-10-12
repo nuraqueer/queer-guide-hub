@@ -1,17 +1,3 @@
--- RECOVERED FROM PROD BY scripts/recover-migration-drift.mjs.
---
--- Applied to prod as version 20261012114638 with no repo file — the signature of
--- MCP `apply_migration`, which stamps a version and commits nothing. An applied
--- version with no file fails migration-versions on every PR in the repo and
--- makes `db push` refuse to run.
---
--- Reconstructed from `schema_migrations.statements`, which holds the PARSED
--- statements: trailing semicolons are stripped (re-added here) and any original
--- comment header is NOT recorded, so the reasoning that accompanied this
--- migration is lost. Verified by md5 against a server-computed digest.
---
--- Never re-run: `db push` matches on version and skips an applied one. The file
--- exists so history is complete and a rebuild from zero works.
 create or replace function public.apply_entity_location(p_table text,p_id uuid,p_fingerprint text,p_patch jsonb,p_source text)
 returns jsonb language plpgsql security definer set search_path=public,pg_temp as $$
 declare r jsonb; after_row jsonb; patch jsonb:='{}'; k text; v jsonb; assignments text;
@@ -36,3 +22,5 @@ begin
 end $$;
 revoke all on function public.apply_entity_location(text,uuid,text,jsonb,text) from public,anon,authenticated;
 grant execute on function public.apply_entity_location(text,uuid,text,jsonb,text) to service_role;
+
+

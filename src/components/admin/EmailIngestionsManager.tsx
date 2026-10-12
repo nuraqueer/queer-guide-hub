@@ -1,5 +1,4 @@
 import { useState, useEffect, useCallback } from 'react';
-import { AdminArchetypeHeader } from '@/components/admin/frames/AdminArchetypeHeader';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -90,6 +89,7 @@ function relativeTime(dateStr: string): string {
 export function EmailIngestionsManager() {
   const [ingestions, setIngestions] = useState<EmailIngestion[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
@@ -98,6 +98,7 @@ export function EmailIngestionsManager() {
   const fetchIngestions = useCallback(async () => {
     try {
       setLoading(true);
+      setLoadError(false);
       const data = await listFrom<EmailIngestion>(
         'email_ingestions',
         '*',
@@ -106,6 +107,7 @@ export function EmailIngestionsManager() {
       );
       setIngestions(data);
     } catch (_error) {
+      setLoadError(true);
       toast.error('Error: Failed to fetch email ingestions');
     } finally {
       setLoading(false);
@@ -149,35 +151,49 @@ export function EmailIngestionsManager() {
   const failedCount = ingestions.filter((i) => i.status === 'failed').length;
   const processingCount = ingestions.filter((i) => i.status === 'processing').length;
 
-  if (loading) {
+  const header = (
+    <div className="flex flex-wrap items-center justify-between gap-4">
+      <div>
+        <h2 className="flex items-center gap-2 text-title font-semibold">
+          <Mail size={20} aria-hidden /> Email history
+        </h2>
+        <p className="text-sm text-muted-foreground">
+          Recent inbound emails and extraction results. Review submitted content in the inbox.
+        </p>
+      </div>
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={fetchIngestions}
+        disabled={loading}
+        loading={loading}
+      >
+        <RefreshCw size={14} className="mr-1.5" aria-hidden /> Refresh
+      </Button>
+    </div>
+  );
+
+  if (loading || loadError) {
     return (
-      <div className="text-center p-8">
-        <AdminTextSkeleton lines={2} />
+      <div className="flex flex-col gap-6">
+        {header}
+        {loading ? (
+          <AdminTextSkeleton lines={2} />
+        ) : (
+          <div role="alert" className="flex flex-wrap items-center gap-4">
+            <p className="text-sm text-destructive">Could not load email history. Try again.</p>
+            <Button variant="outline" size="sm" onClick={fetchIngestions}>
+              Retry
+            </Button>
+          </div>
+        )}
       </div>
     );
   }
 
   return (
     <div className="flex flex-col gap-6">
-      {/* Archetype A. The page title was an <h6> — the LOWEST heading level in
-        HTML used for the most important text on the route. Across this console
-        the audit turned up <h4>, <h5>, <h6> and a bare <p> all serving as page
-        titles; a screen-reader user got either nothing or a bottom-of-hierarchy
-        entry on each. That is the concrete case for a fixed header grammar. */}
-      <AdminArchetypeHeader
-        title={
-          <span className="flex items-center gap-4">
-            <Mail size={24} className="text-foreground" aria-hidden />
-            Email Ingestions
-          </span>
-        }
-        actions={
-          <Button variant="outline" size="sm" onClick={fetchIngestions}>
-            <RefreshCw size={14} className="mr-1.5" />
-            Refresh
-          </Button>
-        }
-      />
+      {header}
 
       {/* Stats grid */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -222,6 +238,7 @@ export function EmailIngestionsManager() {
           <Input
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
+            aria-label="Search email history"
             placeholder="Search by subject or sender..."
             style={{ paddingLeft: 32 }}
           />

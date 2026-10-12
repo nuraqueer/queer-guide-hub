@@ -11,6 +11,7 @@ import {
   CommandSeparator,
 } from '@/components/ui/command';
 import { adminNavSections, resolveItemMinRole } from '@/config/adminNavigation';
+import { getAdminNavSearchText } from '@/config/adminNavSearch';
 import { roleAtLeast } from '@/config/adminRoles';
 import { useGranularRoles } from '@/hooks/useGranularRoles';
 import { useAdminCounts, readCount } from '@/hooks/useAdminCounts';
@@ -74,6 +75,7 @@ export function AdminCommandPalette({ open, onOpenChange }: Props) {
       route: string;
       section: string;
       countKey?: string;
+      searchText: string;
     }[] = [];
     for (const section of adminNavSections) {
       for (const item of section.items) {
@@ -85,6 +87,7 @@ export function AdminCommandPalette({ open, onOpenChange }: Props) {
           route: item.route,
           section: section.label,
           countKey: item.countTable ?? item.reviewCountKey,
+          searchText: getAdminNavSearchText(item, section),
         });
       }
     }
@@ -92,7 +95,10 @@ export function AdminCommandPalette({ open, onOpenChange }: Props) {
   }, [effectiveRole]);
 
   const pinnedItems = useMemo(
-    () => pins.map((id) => navItems.find((n) => n.id === id)).filter((n): n is (typeof navItems)[number] => Boolean(n)),
+    () =>
+      pins
+        .map((id) => navItems.find((n) => n.id === id))
+        .filter((n): n is (typeof navItems)[number] => Boolean(n)),
     [pins, navItems],
   );
 
@@ -145,7 +151,11 @@ export function AdminCommandPalette({ open, onOpenChange }: Props) {
           <>
             <CommandGroup heading="Pinned">
               {pinnedItems.map((n) => (
-                <CommandItem key={`pin-${n.id}`} value={`pinned ${n.label}`} onSelect={() => go(n.route, n.label)}>
+                <CommandItem
+                  key={`pin-${n.id}`}
+                  value={`pinned ${n.label}`}
+                  onSelect={() => go(n.route, n.label)}
+                >
                   <span>{n.label}</span>
                   <CommandShortcut>{n.section}</CommandShortcut>
                 </CommandItem>
@@ -177,11 +187,7 @@ export function AdminCommandPalette({ open, onOpenChange }: Props) {
           {navItems.map((n) => {
             const { count, overdue } = readCount(counts, n.countKey);
             return (
-              <CommandItem
-                key={n.id}
-                value={`${n.label} ${n.section} ${n.route}`}
-                onSelect={() => go(n.route, n.label)}
-              >
+              <CommandItem key={n.id} value={n.searchText} onSelect={() => go(n.route, n.label)}>
                 <span>{n.label}</span>
                 {count !== undefined && count > 0 && (
                   <span

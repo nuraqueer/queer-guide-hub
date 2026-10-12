@@ -1,8 +1,9 @@
 /**
- * Governance — triage, quality engines, tag review, and duplicate merging.
+ * Governance — triage, quality engines, tag review, places editorial, and duplicate merging.
  *
  * `?mode=triage` decide items · `?mode=engines` watch engines · `?mode=merge`
- * merge by hand · `?mode=tags` review the tag vocabulary.
+ * merge by hand · `?mode=tags` review the tag vocabulary · `?mode=editorial`
+ * review place hooks and covers.
  *
  * WHY A ROUTER AND NOT A MERGE. These are three different interaction
  * archetypes, not three copies of one thing: triage is list → detail → act
@@ -28,7 +29,7 @@
 
 import { lazy, Suspense, useEffect } from 'react';
 import { useSearchParams } from 'react-router';
-import { Inbox, ShieldCheck, CopyCheck, Tag } from 'lucide-react';
+import { Inbox, ShieldCheck, CopyCheck, Tag, PenLine } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { AdminTableSkeleton } from '@/components/admin/primitives/AdminLoading';
@@ -38,8 +39,9 @@ const QualityHub = lazy(() => import('./QualityHub'));
 const AdminDuplicates = lazy(() => import('./AdminDuplicates'));
 
 const TagGovernance = lazy(() => import('./TagGovernance'));
+const AdminPlacesEditorial = lazy(() => import('./AdminPlacesEditorial'));
 
-export type GovernanceMode = 'triage' | 'engines' | 'merge' | 'tags';
+export type GovernanceMode = 'triage' | 'engines' | 'merge' | 'tags' | 'editorial';
 
 const MODES: Array<{ key: GovernanceMode; label: string; hint: string; icon: LucideIcon }> = [
   { key: 'triage', label: 'Triage', hint: 'Decide the items waiting on a person', icon: Inbox },
@@ -50,12 +52,20 @@ const MODES: Array<{ key: GovernanceMode; label: string; hint: string; icon: Luc
     icon: ShieldCheck,
   },
   { key: 'tags', label: 'Tags', hint: 'Review tags and vocabulary health', icon: Tag },
+  {
+    key: 'editorial',
+    label: 'Places editorial',
+    hint: 'Review place hooks and curate covers',
+    icon: PenLine,
+  },
   { key: 'merge', label: 'Merge', hint: 'Find and merge duplicates by hand', icon: CopyCheck },
 ];
 
 /** Unrecognised values fall back to triage rather than rendering nothing. */
 function parseMode(raw: string | null): GovernanceMode {
-  return raw === 'engines' || raw === 'merge' || raw === 'tags' ? raw : 'triage';
+  return raw === 'engines' || raw === 'merge' || raw === 'tags' || raw === 'editorial'
+    ? raw
+    : 'triage';
 }
 
 export default function AdminGovernance() {
@@ -153,6 +163,7 @@ export default function AdminGovernance() {
           {mode === 'triage' && <AdminInbox />}
           {mode === 'engines' && <QualityHub />}
           {mode === 'tags' && <TagGovernance />}
+          {mode === 'editorial' && <AdminPlacesEditorial />}
           {mode === 'merge' && <AdminDuplicates />}
         </Suspense>
       </div>

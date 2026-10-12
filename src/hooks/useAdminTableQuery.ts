@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import type { AdminTableState } from '@/components/admin/data-table/types';
+import { fetchAdminUsers } from '@/lib/adminUsers';
 
 interface UseAdminTableQueryOptions {
   tableName: string;
@@ -84,16 +85,39 @@ export function useAdminTableQuery<T = Record<string, unknown>>(
   const query = useQuery({
     queryKey,
     queryFn: async () => {
+      if (tableName === 'profiles') {
+        const filter = (key: string) => {
+          const value = state.filters[key];
+          return value === 'all' || value === '' ? undefined : value;
+        };
+        return fetchAdminUsers<T>({
+          p_search: state.debouncedSearch || undefined,
+          p_is_online: filter('is_online') as boolean | undefined,
+          p_moderation_status: filter('moderation_status') as string | undefined,
+          p_user_mode: filter('user_mode') as string | undefined,
+          p_sort: state.sorting?.column ?? 'created_at',
+          p_sort_asc: state.sorting?.direction === 'asc',
+          p_page: state.pagination.page,
+          p_per_page: state.pagination.pageSize,
+        });
+      }
       // Count query
       const countBuilder = supabase
         .from(tableName as 'venues')
         .select(select, { count: 'exact', head: true });
-      const filtered = applyFilters(countBuilder as unknown as ReturnType<typeof supabase.from>, state, searchColumns, baseFilters);
+      const filtered = applyFilters(
+        countBuilder as unknown as ReturnType<typeof supabase.from>,
+        state,
+        searchColumns,
+        baseFilters,
+      );
       const { count, error: countError } = await (filtered as ReturnType<typeof supabase.from>);
       if (countError) throw countError;
 
       // Data query
-      let dataBuilder: ReturnType<ReturnType<typeof supabase.from>['select']> = supabase.from(tableName as 'venues').select(select);
+      let dataBuilder: ReturnType<ReturnType<typeof supabase.from>['select']> = supabase
+        .from(tableName as 'venues')
+        .select(select);
       dataBuilder = applyFilters(dataBuilder, state, searchColumns, baseFilters);
 
       // Sorting

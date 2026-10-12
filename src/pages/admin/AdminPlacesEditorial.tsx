@@ -28,9 +28,9 @@ import { AdminEmpty } from '@/components/admin/primitives/AdminEmpty';
 
 export default function AdminPlacesEditorial() {
   useMeta({
-    title: 'Editorial — Places',
+    title: 'Places editorial — Governance',
     description: 'Admin: drafts queue, covers. Rails moved to /admin/content/guides (format=list).',
-    canonicalPath: '/admin/places-editorial',
+    canonicalPath: '/admin/governance?mode=editorial',
   });
 
   return (

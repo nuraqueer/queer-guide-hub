@@ -139,17 +139,6 @@ export const ADMIN_ARCHETYPES: AdminArchetypeEntry[] = [
       'ReviewRedirect renders no UI — it resolves the legacy /admin/review entry point and ' +
       'navigates. An element-bearing redirect is still a redirect.',
   },
-  {
-    path: 'imports/data',
-    archetype: null,
-    exempt:
-      'RETIRE rather than reframe. AdminImports is a launcher grid of eight import widgets with ' +
-      'no data of its own; each tool belongs in its entity index as the primary action, which is ' +
-      'exactly what the fixed header grammar reserves that slot for. TRAP: removing its nav row ' +
-      'also removes the Data section FIRST item, which getBreadcrumbsForRoute links the section ' +
-      'crumb to — and the next item, `pipelines`, is adminOnly, so the Data breadcrumb would 403 ' +
-      'for editors. Promote email-ingestions first.',
-  },
 
   // ── A · Index (the archetype the claim lives or dies on) ───────────────
   { path: 'content', archetype: 'A', title: 'Content', adopted: true },
@@ -160,7 +149,6 @@ export const ADMIN_ARCHETYPES: AdminArchetypeEntry[] = [
   { path: 'content/organizations', archetype: 'A', title: 'Organisations', adopted: true },
   { path: 'business', archetype: 'A', title: 'Organisations', adopted: true },
   { path: 'audit', archetype: 'A', title: 'Audit log', adopted: true },
-  { path: 'imports/email-ingestions', archetype: 'A', title: 'Email ingestions', adopted: true },
   {
     path: 'media',
     archetype: 'A',

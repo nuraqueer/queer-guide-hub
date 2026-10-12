@@ -25,4 +25,3 @@ returns void language sql security definer set search_path=public,pg_temp as $$
 $$;
 revoke all on function public.release_entity_location_lease(timestamptz) from public,anon,authenticated;
 grant execute on function public.release_entity_location_lease(timestamptz) to service_role;
-

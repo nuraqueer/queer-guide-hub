@@ -574,4 +574,3 @@ begin
  return null;
 end $$;
 revoke all on function public.sync_entity_location_to_organization() from public,anon,authenticated;
-

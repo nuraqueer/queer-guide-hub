@@ -2,18 +2,20 @@
  * @vitest-environment jsdom
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
-
-import { MemoryRouter } from 'react-router';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { renderWithProviders, screen, fireEvent } from '@/test/test-utils';
 
 const { useAffiliateMock } = vi.hoisted(() => ({ useAffiliateMock: vi.fn() }));
 
 vi.mock('sonner', () => ({ toast: Object.assign(vi.fn(), { success: vi.fn(), error: vi.fn() }) }));
 vi.mock('@/hooks/useAffiliateLinks', () => ({ useAffiliateLinks: useAffiliateMock }));
-
 vi.mock('@/hooks/useContentViews', () => ({
-  useContentViews: () => ({ views: [], loading: false, create: vi.fn(), update: vi.fn(), remove: vi.fn() }),
+  useContentViews: () => ({
+    views: [],
+    loading: false,
+    create: vi.fn(),
+    update: vi.fn(),
+    remove: vi.fn(),
+  }),
 }));
 
 import { AffiliatePartnersManager } from '../AffiliatePartnersManager';
@@ -29,24 +31,16 @@ beforeEach(() => {
   });
 });
 
-function renderPartners() {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return render(
-    <QueryClientProvider client={client}>
-      <MemoryRouter><AffiliatePartnersManager /></MemoryRouter>
-    </QueryClientProvider>,
-  );
-}
-
 describe('AffiliatePartnersManager', () => {
   it('renders partner rows', async () => {
-    renderPartners();
+    renderWithProviders(<AffiliatePartnersManager />);
     expect(await screen.findByText('Booking.com')).toBeInTheDocument();
   });
 
   it('opens dialog on Add', () => {
-    renderPartners();
+    renderWithProviders(<AffiliatePartnersManager />);
     fireEvent.click(screen.getByRole('button', { name: 'Add Partner' }));
-    expect(screen.getByRole('dialog')).toHaveTextContent('Add Affiliate Partner');
+    expect(screen.getByRole('dialog', { name: 'Add Affiliate Partner' })).toBeInTheDocument();
+    expect(screen.getByLabelText('Partner Name *')).toHaveValue('');
   });
 });

@@ -30,5 +30,3 @@ begin
 end $$;
 revoke all on function public.apply_entity_location(text,uuid,text,jsonb,text) from public,anon,authenticated;
 grant execute on function public.apply_entity_location(text,uuid,text,jsonb,text) to service_role;
-
-

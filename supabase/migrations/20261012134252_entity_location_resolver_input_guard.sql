@@ -345,4 +345,3 @@ BEGIN
   RETURN QUERY SELECT v_new_id, 'created',
     CASE WHEN v_twin THEN 'region_twin' ELSE 'none' END, 1.0::numeric, NULL::text, NULL::jsonb;
 END; $function$;
-

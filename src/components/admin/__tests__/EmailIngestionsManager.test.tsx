@@ -2,15 +2,30 @@
  * @vitest-environment jsdom
  */
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
 
 vi.mock('sonner', () => ({ toast: Object.assign(vi.fn(), { success: vi.fn(), error: vi.fn() }) }));
 vi.mock('@/hooks/usePageFetchers', () => ({ listFrom: vi.fn().mockResolvedValue([]) }));
 
+import { listFrom } from '@/hooks/usePageFetchers';
 import { EmailIngestionsManager } from '../EmailIngestionsManager';
 
 describe('EmailIngestionsManager', () => {
+  it('shows a retryable load failure instead of an empty inbox', async () => {
+    vi.mocked(listFrom).mockRejectedValueOnce(new Error('network')).mockResolvedValueOnce([]);
+    render(
+      <MemoryRouter>
+        <EmailIngestionsManager />
+      </MemoryRouter>,
+    );
+    expect(await screen.findByRole('alert')).toHaveTextContent('Could not load email history');
+    expect(screen.queryByText(/Forward emails/)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    await waitFor(() => expect(screen.queryByRole('alert')).not.toBeInTheDocument());
+    expect(screen.getByRole('heading', { level: 2, name: 'Email history' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { level: 1 })).not.toBeInTheDocument();
+  });
   it('renders empty state', async () => {
     // MemoryRouter: the page now emits AdminArchetypeHeader, which DERIVES its
     // route line from useLocation() rather than taking it as a prop — that is

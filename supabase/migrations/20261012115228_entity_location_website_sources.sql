@@ -93,4 +93,3 @@ create trigger link_merchant_location_identity before insert or update of shop_d
 create policy location_jobs_service on public.entity_location_jobs to service_role using(true) with check(true);
 create policy location_audit_service on public.entity_location_audit to service_role using(true) with check(true);
 create policy location_lease_service on public.entity_location_worker_lease to service_role using(true) with check(true);
-;

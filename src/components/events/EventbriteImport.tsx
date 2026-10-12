@@ -1,12 +1,18 @@
-import { useState } from "react";
+import { useState } from 'react';
 import { TrackLoader } from '@/components/transit/TrackLoader';
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { useToast } from "@/hooks/use-toast";
-import { supabase } from "@/integrations/supabase/client";
-import { Calendar } from "lucide-react";
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
+import { useToast } from '@/hooks/use-toast';
+import { supabase } from '@/integrations/supabase/client';
+import { Calendar } from 'lucide-react';
 
 interface EventbriteImportProps {
   onImportComplete?: () => void;
@@ -15,16 +21,16 @@ interface EventbriteImportProps {
 export const EventbriteImport = ({ onImportComplete }: EventbriteImportProps) => {
   const [isOpen, setIsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [query, setQuery] = useState("");
-  const [location, setLocation] = useState("");
+  const [query, setQuery] = useState('');
+  const [location, setLocation] = useState('');
   const { toast } = useToast();
 
   const handleImport = async () => {
     if (!query.trim()) {
       toast({
-        title: "Error",
-        description: "Please enter a search query",
-        variant: "destructive"
+        title: 'Error',
+        description: 'Please enter a search query',
+        variant: 'destructive',
       });
       return;
     }
@@ -37,27 +43,31 @@ export const EventbriteImport = ({ onImportComplete }: EventbriteImportProps) =>
       const { data, error } = await supabase.functions.invoke('source-eventbrite', {
         body: {
           keywords: [query.trim()],
-          cities: location.trim() ? [location.trim()] : undefined
-        }
+          cities: location.trim() ? [location.trim()] : undefined,
+        },
       });
 
       if (error) throw error;
+      if (data?.error || data?.success === false) throw new Error(data?.error ?? 'Import failed');
+      if (data?.skipped === true)
+        throw new Error(`Import skipped: ${data.reason ?? 'source unavailable'}`);
 
       toast({
-        title: "Staged for review",
-        description: `Staged ${data.items ?? 0} Eventbrite events for the review pipeline`
+        title: 'Staged for review',
+        description: `Staged ${data.items ?? 0} Eventbrite events for the review pipeline`,
       });
 
       setIsOpen(false);
-      setQuery("");
-      setLocation("");
+      setQuery('');
+      setLocation('');
       onImportComplete?.();
     } catch (error: unknown) {
       console.error('Import error:', error);
       toast({
-        title: "Import failed",
-        description: error instanceof Error ? error.message : "Failed to import events from Eventbrite",
-        variant: "destructive"
+        title: 'Import failed',
+        description:
+          error instanceof Error ? error.message : 'Failed to import events from Eventbrite',
+        variant: 'destructive',
       });
     } finally {
       setIsLoading(false);
@@ -117,7 +127,7 @@ export const EventbriteImport = ({ onImportComplete }: EventbriteImportProps) =>
                   Importing...
                 </>
               ) : (
-                "Import Events"
+                'Import Events'
               )}
             </Button>
           </div>

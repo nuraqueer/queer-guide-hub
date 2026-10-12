@@ -209,3 +209,4 @@ WHERE slug IN ('event_image_quality','marketplace_image_upscale','hotel_agentic_
  AND EXISTS(SELECT 1 FROM public.admin_automation_runs r WHERE r.automation_id=admin_automations.id
    AND r.started_at>now()-interval '2 hours' AND r.status='success');
 SELECT public.sync_automations_to_cron(true);
+
