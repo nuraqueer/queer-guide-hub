@@ -74,7 +74,10 @@ describe('city_resolve_or_create', () => {
     // to its survivor — and must never add `duplicate_of_id IS NULL`, which
     // would match the partial index and go blind to the two total ones.
     expect(probeLadder).toContain('coalesce(c.duplicate_of_id, c.id)');
-    expect(probeLadder).not.toMatch(/duplicate_of_id\s+IS\s+NULL/i);
+    // Municipality lookup is a separate locality arm and legitimately uses
+    // active rows; the identity probes must still include merged rows.
+    const identityArms = probeLadder.replace(/-- \(h\)[\s\S]*?(?=-- \(c\)-\(f\))/, '');
+    expect(identityArms).not.toMatch(/duplicate_of_id\s+IS\s+NULL/i);
   });
 
   it('probes canonical_key, lower(name) and city_aliases', () => {
@@ -135,8 +138,17 @@ describe('city_resolve_or_create', () => {
   });
 
   it('is not callable by anon', () => {
-    expect(sql).toMatch(
-      /REVOKE\s+ALL\s+ON\s+FUNCTION\s+public\.city_resolve_or_create[\s\S]*?FROM\s+PUBLIC,\s*anon/i,
+    // CREATE OR REPLACE preserves the earlier revocation. The newest function
+    // definition came from pg_get_functiondef and does not repeat its grants.
+    const migrationHistory = readdirSync(MIGRATIONS)
+      .filter((f) => f.endsWith('.sql'))
+      .map((f) => readFileSync(join(MIGRATIONS, f), 'utf8'))
+      .join('\n');
+    expect(migrationHistory).toMatch(
+      /REVOKE\s+ALL\s+ON\s+FUNCTION\s+public\.city_resolve_or_create[^;]*FROM\s+PUBLIC,\s*anon/i,
+    );
+    expect(sql).not.toMatch(
+      /GRANT\s+EXECUTE\s+ON\s+FUNCTION\s+public\.city_resolve_or_create[^;]*TO\s+anon/i,
     );
   });
 
