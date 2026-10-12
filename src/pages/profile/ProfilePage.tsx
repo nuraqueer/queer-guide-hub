@@ -70,15 +70,18 @@ export default function ProfilePage({ tab: tabProp }: { tab?: string } = {}) {
 
   useMeta({ title: isMeRoute ? 'Your profile' : 'Profile', noIndex: true });
 
+  const isOwnProfile = !!user && user.id === targetUserId;
   const {
     profile: secureProfile,
-    loading,
-    error,
-    isOwnProfile: profileBelongsToUser,
-  } = useSecurePublicProfile(targetUserId);
-  const { profile: ownProfile } = useProfile();
-  const isOwnProfile = profileBelongsToUser && !!user && user.id === targetUserId;
-  const profile = isOwnProfile ? (ownProfile ?? secureProfile) : secureProfile;
+    loading: publicLoading,
+    error: publicError,
+  } = useSecurePublicProfile(isOwnProfile ? undefined : targetUserId);
+  const { profile: ownProfile, isLoading: ownLoading, error: ownError } = useProfile();
+  // The header and editors share the same self-read cache; public profiles keep
+  // their server-filtered read. Background self-read failures must not discard drafts.
+  const profile = isOwnProfile ? ownProfile : secureProfile;
+  const loading = isOwnProfile ? ownLoading : publicLoading;
+  const error = isOwnProfile ? (ownProfile ? null : ownError) : publicError;
   const [searchParams] = useSearchParams();
   const editorRef = useRef<ProfileEditorHandle>(null);
   const { status: ownStatus } = useStatus();
@@ -118,11 +121,11 @@ export default function ProfilePage({ tab: tabProp }: { tab?: string } = {}) {
     if (editorRef.current && !(await editorRef.current.savePending())) return;
     navigate(next === 'overview' ? basePath : `${basePath}/${next}`, { replace: true });
   };
-  const openEditor = async (section: ProfileEditorSection, privacyField?: string) => {
+  const openEditor = async (section: ProfileEditorSection, focusField?: string) => {
     if (!ownView || !targetUserId) return;
     if (editorRef.current && !(await editorRef.current.savePending())) return;
     const path = profileEditPath(targetUserId, section);
-    navigate(`${path}${privacyField ? `&field=${encodeURIComponent(privacyField)}` : ''}`);
+    navigate(`${path}${focusField ? `&field=${encodeURIComponent(focusField)}` : ''}`);
   };
   const changeLens = async (next: ProfileLens) => {
     if (editorRef.current && !(await editorRef.current.savePending())) return;
@@ -144,7 +147,7 @@ export default function ProfilePage({ tab: tabProp }: { tab?: string } = {}) {
         section={editSection}
         onClose={closeEditor}
         editorRef={editorRef}
-        privacyField={searchParams.get('field') ?? undefined}
+        focusField={searchParams.get('field') ?? undefined}
       />
     </Suspense>
   ) : undefined;
@@ -372,6 +375,7 @@ export default function ProfilePage({ tab: tabProp }: { tab?: string } = {}) {
               </ScrollableTabList>
 
               <TabsContent value="overview">
+                <h2 className="sr-only">{t('profile.tabs.overview', 'Overview')}</h2>
                 <OverviewTab
                   profile={profile as unknown as Record<string, unknown>}
                   isOwnProfile={isOwnProfile}
@@ -385,6 +389,7 @@ export default function ProfilePage({ tab: tabProp }: { tab?: string } = {}) {
               </TabsContent>
 
               <TabsContent value="travel">
+                <h2 className="sr-only">{t('profile.tabs.travel', 'Travel')}</h2>
                 {ownView && (
                   <div className="mb-6 flex flex-col gap-4">
                     <div className="flex flex-wrap gap-2">
@@ -413,6 +418,7 @@ export default function ProfilePage({ tab: tabProp }: { tab?: string } = {}) {
               </TabsContent>
 
               <TabsContent value="groups">
+                <h2 className="sr-only">{t('profile.tabs.groups', 'Groups')}</h2>
                 <GroupsTab
                   userId={profile.user_id}
                   isOwnProfile={isOwnProfile}
@@ -422,6 +428,7 @@ export default function ProfilePage({ tab: tabProp }: { tab?: string } = {}) {
               </TabsContent>
 
               <TabsContent value="contributions">
+                <h2 className="sr-only">{t('profile.tabs.contributions', 'Contributions')}</h2>
                 <ContributionsTab
                   userId={profile.user_id}
                   isOwnProfile={isOwnProfile}
@@ -440,6 +447,7 @@ export default function ProfilePage({ tab: tabProp }: { tab?: string } = {}) {
 
               {ownView && (
                 <TabsContent value="progress">
+                  <h2 className="sr-only">{t('profile.tabs.progress', 'Progress')}</h2>
                   <ProgressTab />
                 </TabsContent>
               )}

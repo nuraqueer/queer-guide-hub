@@ -3,8 +3,7 @@ import { Button } from '@/components/ui/button';
 import { useAdminRoles } from '@/hooks/useAdminRoles';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Briefcase, GraduationCap, Heart, MapPin, Globe, Phone, Shield } from 'lucide-react';
-import { FlagChipRow } from '@/components/profile/FlagChip';
+import { Briefcase, GraduationCap, Heart, Globe, Phone, Shield } from 'lucide-react';
 
 interface SecureProfileViewerProps {
   profile: Record<string, unknown>;
@@ -34,8 +33,6 @@ export function SecureProfileViewer({
     return typeof v === 'string' && v.trim() ? v : null;
   };
 
-  const location = str('location');
-  const pronouns = str('pronouns');
   const occupation = str('occupation');
   const education = str('education');
   const website = str('website');
@@ -48,26 +45,31 @@ export function SecureProfileViewer({
       ? (profile.interests as string[])
       : null;
 
+  const hasAbout = occupation || education || interests;
   const hasSensitive = genderIdentity || sexualOrientation || relationshipStatus;
 
   return (
     <div className="flex flex-col gap-6">
       {/* Basic Information */}
-      {editingSection !== 'profile' && (
+      {editingSection !== 'profile' && (isOwnProfile || hasAbout) && (
         <Card>
           <CardHeader>
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <CardTitle>Basic Information</CardTitle>
+              <CardTitle>About</CardTitle>
               {isOwnProfile && onEdit && (
                 <div className="flex gap-2">
                   <Button
                     variant="ghost"
                     size="sm"
-                    onClick={() => onEdit('privacy', 'profile_visibility')}
+                    onClick={() => onEdit('privacy', 'interests_visibility')}
                   >
                     Visibility
                   </Button>
-                  <Button variant="outline" size="sm" onClick={() => onEdit('profile')}>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => onEdit('profile', 'occupation')}
+                  >
                     Edit
                   </Button>
                 </div>
@@ -77,23 +79,6 @@ export function SecureProfileViewer({
           <CardContent>
             <div className="flex flex-col gap-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {location && (
-                  <div className="flex items-center gap-4">
-                    <MapPin className="h-5 w-5 text-muted-foreground" />
-                    <div>
-                      <p className="text-sm font-medium">Location</p>
-                      <p className="text-sm text-muted-foreground">{location}</p>
-                    </div>
-                  </div>
-                )}
-
-                {pronouns && (
-                  <div>
-                    <p className="text-sm font-medium">Pronouns</p>
-                    <p className="text-sm text-muted-foreground">{pronouns}</p>
-                  </div>
-                )}
-
                 {occupation && (
                   <div className="flex items-center gap-4">
                     <Briefcase className="h-5 w-5 text-muted-foreground" />
@@ -114,15 +99,6 @@ export function SecureProfileViewer({
                   </div>
                 )}
               </div>
-
-              {/* Server-gated like every field here: the RPC only returns
-                identity_flags when flags_visibility allows this viewer. */}
-              {Array.isArray(profile.identity_flags) && profile.identity_flags.length > 0 && (
-                <div>
-                  <p className="text-base font-medium mb-2">Flags</p>
-                  <FlagChipRow flagIds={profile.identity_flags as string[]} />
-                </div>
-              )}
 
               {interests && (
                 <div className="flex flex-col gap-4">
