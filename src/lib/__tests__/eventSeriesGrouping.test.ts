@@ -230,8 +230,10 @@ describe('run_event_programme_link', () => {
   });
 
   it('is not callable by anon or authenticated', () => {
+    // Registration owns the ACL and cron contract. Later CREATE OR REPLACE
+    // repairs retain the ACL and do not replay registration or its smoke case.
     const migration = latestMigrationMatching(
-      /create\s+or\s+replace\s+function\s+public\.run_event_programme_link/i,
+      /create\s+or\s+replace\s+function\s+public\.run_event_programme_link[\s\S]*v_lila/i,
     ).toLowerCase();
     expect(migration).toMatch(/revoke\s+all\s+on\s+function\s+public\.run_event_programme_link/);
   });
@@ -241,14 +243,14 @@ describe('run_event_programme_link', () => {
     // migration including its ALTER TABLE, and prod served a frontend against a
     // column that did not exist.
     const migration = latestMigrationMatching(
-      /create\s+or\s+replace\s+function\s+public\.run_event_programme_link/i,
+      /create\s+or\s+replace\s+function\s+public\.run_event_programme_link[\s\S]*v_lila/i,
     ).toLowerCase();
     expect(migration).toMatch(/insert\s+into\s+public\.admin_automations[\s\S]{0,200}trigger/);
   });
 
   it('asserts the reported lila case specifically', () => {
     const migration = latestMigrationMatching(
-      /create\s+or\s+replace\s+function\s+public\.run_event_programme_link/i,
+      /create\s+or\s+replace\s+function\s+public\.run_event_programme_link[\s\S]*v_lila/i,
     ).toLowerCase();
     expect(migration).toMatch(/lila-queer-festival/);
     expect(migration).toMatch(/v_lila\s*<>\s*3/);
