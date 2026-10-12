@@ -38,13 +38,18 @@ export function classifyClasses(labels = [], description = '') {
       ) && !/district|county|former|local municipality|municipal district/i.test(l),
   );
   if (independent) return 'municipality';
+  // Country-level district types identify an administrative container. A town
+  // with the same name can share its pin, so they do not prove a neighbourhood.
+  const administrativeDistrict = labels.some((l) =>
+    /^district of (?:India|Bangladesh|the Czech Republic|Costa Rica|Peru)$/i.test(l),
+  );
   const subdivision = labels.some((l) =>
-    /neighbou?rhood|suburb|area of |quarter|arrondissement|district of |municipal district|city district|subdistrict|borough of (?:New York|London)|London borough|city ward|ward of |ortsteil|stadtteil/i.test(
+    /neighbou?rhood|suburb|^area of |quarter|arrondissement|district of |municipal district|city district|subdistrict|borough of (?:New York|London)|London borough|city ward|ward of |ortsteil|stadtteil/i.test(
       l,
     ),
   );
-  const administrative = labels.some((l) =>
-    /county$|province|prefecture|local municipality|metropolitan district|administrative territorial entity|federal state|oblast|district$/i.test(
+  const administrative = administrativeDistrict || labels.some((l) =>
+    /county$|province|prefecture|local municipality|local government area|metropolitan district|administrative territorial entity|federal state|oblast|district$/i.test(
       l,
     ),
   );
@@ -59,6 +64,7 @@ export function classifyClasses(labels = [], description = '') {
       l,
     ),
   );
+  if (administrativeDistrict) return settlement ? 'settlement' : 'administrative_area';
   if (subdivision) return settlement ? 'mixed_subdivision' : 'subdivision';
   if (settlement) return 'settlement';
   if (administrative) return 'administrative_area';
