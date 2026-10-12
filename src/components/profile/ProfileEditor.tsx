@@ -61,7 +61,7 @@ const TITLES: Record<ProfileEditorSection, string> = {
 export default function ProfileEditor(props: EditorProps) {
   const navigate = useLocalizedNavigate();
   const { user, hasPasskey } = useAuth();
-  const { profile, isLoading, error, updateProfile, refetchProfile } = useProfile();
+  const { profile, loading: isLoading, error, updateProfile, refetchProfile } = useProfile();
   const { toast } = useToast();
   if (!user) return null;
   return (

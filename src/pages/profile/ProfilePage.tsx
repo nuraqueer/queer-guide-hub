@@ -76,7 +76,7 @@ export default function ProfilePage({ tab: tabProp }: { tab?: string } = {}) {
     loading: publicLoading,
     error: publicError,
   } = useSecurePublicProfile(isOwnProfile ? undefined : targetUserId);
-  const { profile: ownProfile, isLoading: ownLoading, error: ownError } = useProfile();
+  const { profile: ownProfile, loading: ownLoading, error: ownError } = useProfile();
   // The header and editors share the same self-read cache; public profiles keep
   // their server-filtered read. Background self-read failures must not discard drafts.
   const profile = isOwnProfile ? ownProfile : secureProfile;
