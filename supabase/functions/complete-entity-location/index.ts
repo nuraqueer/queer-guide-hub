@@ -118,7 +118,14 @@ Deno.serve(async req => {
       const applied = await db.rpc('apply_entity_location', { p_table: job.entity_table, p_id: job.entity_id,
         p_fingerprint: job.fingerprint, p_patch: patch, p_source: official ? `official-website:${row.website};photon-openstreetmap` : matched ? 'photon-openstreetmap' : 'city/timezone-boundaries' })
       must(applied)
-      if (applied.data?.stale) { counts.stale++; await finish({ status: 'pending' }); continue }
+      if (applied.data?.stale) {
+        counts.stale++
+        const refreshed = await db.rpc('refresh_stale_entity_location_job', {
+          p_table: job.entity_table, p_id: job.entity_id, p_fingerprint: job.fingerprint,
+        })
+        must(refreshed)
+        continue
+      }
       counts.filled += applied.data?.filled || 0
       const completed = applied.data?.row || row
       const state = completed.city_id && completed.country_id && completed.postal_code?.trim()
