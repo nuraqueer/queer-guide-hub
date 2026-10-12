@@ -256,7 +256,7 @@ export function ReviewTaskDetail({ item, busy, error, onDecision, onSkip, onBack
         )}
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto px-4 py-6 md:px-6">
-        <h2 className="break-words text-xl font-semibold leading-snug">{item.title}</h2>
+        <h2 className="break-words text-title font-semibold leading-snug">{item.title}</h2>
         <p className="mt-2 break-words text-sm text-muted-foreground">
           {item.subtitle || 'Review the evidence and choose the appropriate outcome.'}
         </p>

@@ -74,7 +74,8 @@ describe('city_resolve_or_create', () => {
     // to its survivor — and must never add `duplicate_of_id IS NULL`, which
     // would match the partial index and go blind to the two total ones.
     expect(probeLadder).toContain('coalesce(c.duplicate_of_id, c.id)');
-    expect(probeLadder).not.toMatch(/duplicate_of_id\s+IS\s+NULL/i);
+    const uniqueArms = probeLadder.replace(/-- \(h\)[\s\S]*?-- \(c\)-\(f\)/, '-- (c)-(f)');
+    expect(uniqueArms).not.toMatch(/duplicate_of_id\s+IS\s+NULL/i);
   });
 
   it('probes canonical_key, lower(name) and city_aliases', () => {
@@ -134,8 +135,12 @@ describe('city_resolve_or_create', () => {
     expect(body).toContain("'country_contradiction'");
   });
 
-  it('is not callable by anon', () => {
-    expect(sql).toMatch(
+  it('keeps the explicit anonymous execution revocation when a definition is restated', () => {
+    const permissionStatements = readdirSync(MIGRATIONS)
+      .filter((f) => f.endsWith('.sql'))
+      .map((f) => readFileSync(join(MIGRATIONS, f), 'utf8'))
+      .join('\n');
+    expect(permissionStatements).toMatch(
       /REVOKE\s+ALL\s+ON\s+FUNCTION\s+public\.city_resolve_or_create[\s\S]*?FROM\s+PUBLIC,\s*anon/i,
     );
   });

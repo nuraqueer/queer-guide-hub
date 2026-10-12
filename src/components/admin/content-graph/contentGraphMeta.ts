@@ -1,6 +1,20 @@
 import {
-  Building, Calendar, Users, Newspaper, ShoppingBag, Hotel, Handshake,
-  History, MapPin, Globe, Map, Home, PartyPopper, UsersRound, Tag, Image,
+  Building,
+  Calendar,
+  Users,
+  Newspaper,
+  ShoppingBag,
+  Hotel,
+  Handshake,
+  History,
+  MapPin,
+  Globe,
+  Map,
+  Home,
+  PartyPopper,
+  UsersRound,
+  Tag,
+  Image,
   type LucideIcon,
 } from 'lucide-react';
 import { monoChartPalette } from '@/lib/chartPalette';
@@ -47,28 +61,80 @@ export interface TypeMeta {
 
 export const TYPE_META: Record<string, TypeMeta> = {
   venue: { icon: Building, table: 'venues', titleCol: 'name', adminHref: '/admin/content/venues' },
-  event: { icon: Calendar, table: 'events', titleCol: 'title', adminHref: '/admin/content/event-quality' },
-  personality: { icon: Users, table: 'personalities', titleCol: 'name', adminHref: '/admin/content/personalities' },
-  news: { icon: Newspaper, table: 'news_articles', titleCol: 'title', adminHref: '/admin/content/news_articles' },
-  marketplace: { icon: ShoppingBag, table: 'marketplace_listings', titleCol: 'title', adminHref: '/admin/content/marketplace_listings' },
+  event: {
+    icon: Calendar,
+    table: 'events',
+    titleCol: 'title',
+    adminHref: '/admin/content/events',
+  },
+  personality: {
+    icon: Users,
+    table: 'personalities',
+    titleCol: 'name',
+    adminHref: '/admin/content/personalities',
+  },
+  news: {
+    icon: Newspaper,
+    table: 'news_articles',
+    titleCol: 'title',
+    adminHref: '/admin/content/news_articles',
+  },
+  marketplace: {
+    icon: ShoppingBag,
+    table: 'marketplace_listings',
+    titleCol: 'title',
+    adminHref: '/admin/content/marketplace_listings',
+  },
   hotel: { icon: Hotel, table: 'hotels', titleCol: 'name', adminHref: '/admin/content/hotels' },
-  organization: { icon: Handshake, table: 'organizations', titleCol: 'name', adminHref: '/admin/content/organizations' },
-  milestone: { icon: History, table: 'milestones', titleCol: 'title', adminHref: '/admin/content/milestones' },
+  organization: {
+    icon: Handshake,
+    table: 'organizations',
+    titleCol: 'name',
+    adminHref: '/admin/content/organizations',
+  },
+  milestone: {
+    icon: History,
+    table: 'milestones',
+    titleCol: 'title',
+    adminHref: '/admin/content/milestones',
+  },
   city: { icon: MapPin, table: 'cities', titleCol: 'name', adminHref: '/admin/content/cities' },
-  country: { icon: Globe, table: 'countries', titleCol: 'name', adminHref: '/admin/content/countries' },
+  country: {
+    icon: Globe,
+    table: 'countries',
+    titleCol: 'name',
+    adminHref: '/admin/content/countries',
+  },
   // Continents and regions have no table of their own — the geography tree is
   // the only place they are editable.
   continent: { icon: Globe, table: null, titleCol: 'name', adminHref: '/admin/geography' },
   region: { icon: Map, table: null, titleCol: 'name', adminHref: '/admin/geography' },
-  village: { icon: Home, table: 'queer_villages', titleCol: 'name', adminHref: '/admin/content/queer_villages' },
-  festival: { icon: PartyPopper, table: null, titleCol: 'name', adminHref: '/admin/content/events' },
-  group: { icon: UsersRound, table: null, titleCol: 'name', adminHref: '/admin/content/community_groups' },
+  village: {
+    icon: Home,
+    table: 'queer_villages',
+    titleCol: 'name',
+    adminHref: '/admin/content/queer_villages',
+  },
+  festival: {
+    icon: PartyPopper,
+    table: null,
+    titleCol: 'name',
+    adminHref: '/admin/content/events',
+  },
+  group: {
+    icon: UsersRound,
+    table: null,
+    titleCol: 'name',
+    adminHref: '/admin/content/community_groups',
+  },
   tag: { icon: Tag, table: null, titleCol: 'name', adminHref: '/admin/content/unified_tags' },
   image: { icon: Image, table: null, titleCol: 'name', adminHref: '/admin/media' },
 };
 
 export function typeMeta(type: string): TypeMeta {
-  return TYPE_META[type] ?? { icon: Tag, table: null, titleCol: 'name', adminHref: '/admin/content' };
+  return (
+    TYPE_META[type] ?? { icon: Tag, table: null, titleCol: 'name', adminHref: '/admin/content' }
+  );
 }
 
 /** Stroke pattern per relationship class — monochrome, distinguished by dash
@@ -76,12 +142,17 @@ export function typeMeta(type: string): TypeMeta {
 export function edgeDash(kind: GraphEdgeStat['relation_kind']): string {
   switch (kind) {
     case 'geo':
-    case 'structural': return '';
+    case 'structural':
+      return '';
     case 'tag':
-    case 'ontology': return '6 4';
-    case 'cross': return '2 3';
-    case 'media': return '1 4';
-    default: return '';
+    case 'ontology':
+      return '6 4';
+    case 'cross':
+      return '2 3';
+    case 'media':
+      return '1 4';
+    default:
+      return '';
   }
 }
 

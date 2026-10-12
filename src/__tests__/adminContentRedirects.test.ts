@@ -30,7 +30,7 @@ describe('admin content redirects', () => {
       /path="content\/group-requests"\s+element=\{<Navigate to="\/admin\/content\/community_groups\/requests" replace \/>\}/,
     );
     expect(ROUTES).toMatch(
-      /path="content\/community_groups\/requests"\s+element=\{<AdminGroupRequests \/>\}/,
+      /path="content\/community_groups\/requests"\s+element=\{<Navigate to="\/admin\?queue=group-requests" replace \/>\}/,
     );
   });
   it('finds the redirect table', () => {

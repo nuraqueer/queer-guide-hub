@@ -251,7 +251,7 @@ export default function AdminReviewQueue() {
       <header className="flex shrink-0 flex-wrap items-center justify-between gap-4 border-b border-border px-4 py-4 md:px-6">
         <div>
           {/* eslint-disable-next-line queerguide/admin-ui-primitives -- compact title inside the full-height review workspace */}
-          <h1 className="text-xl font-semibold tracking-tight">Review queue</h1>
+          <h1 className="text-title font-semibold tracking-tight">Review queue</h1>
           <p
             className={`${mobile && selected ? 'hidden' : ''} mt-1 text-sm text-muted-foreground`}
             aria-live="polite"
@@ -288,7 +288,7 @@ export default function AdminReviewQueue() {
             disabled={query.isFetching}
             aria-label="Refresh review queue"
           >
-            <RefreshCw size={16} className={query.isFetching ? 'animate-spin' : ''} />
+            <RefreshCw size={16} className={query.isFetching ? 'opacity-40' : ''} />
           </Button>
           <Button asChild variant="outline" size="sm" className="hidden md:inline-flex">
             <Link to="/admin/diagnostics">Diagnostics</Link>
