@@ -1,4 +1,11 @@
 {
+  "knowledge": {
+    "title": "Знания",
+    "terms": "Термины",
+    "personalities": "Личности",
+    "lede": "Слова, которые мы используем, и люди, повлиявшие на квир-жизнь.",
+    "navigation": "Разделы знаний"
+  },
   "eventTypes": {
     "party": "Вечеринка",
     "festival": "Фестиваль",
@@ -2073,6 +2080,10 @@
       "competitions": "[RU] Drag Race"
     },
     "intents": {
+      "knowledge": {
+        "label": "Знания",
+        "subtitle": "Квир-язык и люди, повлиявшие на нас"
+      },
       "goingOut": {
         "label": "Куда пойти",
         "subtitle": "Бары, клубы и что сегодня вечером"

@@ -1,4 +1,11 @@
 {
+  "knowledge": {
+    "title": "知识",
+    "terms": "术语",
+    "personalities": "人物",
+    "lede": "我们使用的词语，以及塑造酷儿生活的人物。",
+    "navigation": "知识栏目"
+  },
   "eventTypes": {
     "party": "派对",
     "festival": "节日",
@@ -2041,6 +2048,10 @@
       "competitions": "[ZH] Drag Race"
     },
     "intents": {
+      "knowledge": {
+        "label": "知识",
+        "subtitle": "酷儿语言与影响我们的人物"
+      },
       "goingOut": {
         "label": "夜生活",
         "subtitle": "酒吧、俱乐部和今晚的活动"

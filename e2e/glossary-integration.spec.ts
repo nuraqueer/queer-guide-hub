@@ -16,16 +16,16 @@ test.use(REDUCED_MOTION);
 test.describe('glossary in navigation', () => {
   test.skip(({ isMobile }) => !!isMobile, 'desktop chrome');
 
-  test('header carries a Glossary tab that lands on /tags', async ({ page }) => {
+  test('header carries a Knowledge tab that lands on /tags', async ({ page }) => {
     await page.goto('/');
-    const tab = page.locator('header nav[aria-label="Primary"] a', { hasText: 'Glossary' });
+    const tab = page.locator('header nav[aria-label="Primary"] a', { hasText: 'Knowledge' });
     await expect(tab).toBeVisible();
     await tab.click();
     await expect(page).toHaveURL(/\/tags$/);
     await expect(page.locator('main h1')).toBeVisible();
     // The active tab is marked and carries the pink track rule.
     const active = page.locator('header nav[aria-label="Primary"] a[aria-current="page"]');
-    await expect(active).toHaveText('Glossary');
+    await expect(active).toHaveText('Knowledge');
     await expect(active.locator('span[aria-hidden]')).toHaveClass(/bg-track-pink/);
   });
 
@@ -41,10 +41,10 @@ test.describe('glossary in navigation', () => {
     expect(new Set(tops.map((t) => Math.round(t))).size).toBe(1);
   });
 
-  test('footer renders a Glossary column with its wiki links', async ({ page }) => {
+  test('footer renders a Knowledge column with its wiki links', async ({ page }) => {
     await page.goto('/');
     const footer = page.locator('footer nav[aria-label="Footer navigation"]');
-    await expect(footer.getByRole('link', { name: 'Glossary' })).toBeVisible();
+    await expect(footer.getByRole('link', { name: 'Knowledge' })).toBeVisible();
     await expect(footer.getByRole('link', { name: 'All terms' })).toHaveAttribute(
       'href',
       /\/tags$/,

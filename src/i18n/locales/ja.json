@@ -1,4 +1,11 @@
 {
+  "knowledge": {
+    "title": "知識",
+    "terms": "用語",
+    "personalities": "人物",
+    "lede": "私たちが使う言葉と、クィアの暮らしを形づくった人々。",
+    "navigation": "知識のセクション"
+  },
   "eventTypes": {
     "party": "パーティー",
     "festival": "フェスティバル",
@@ -2041,6 +2048,10 @@
       "competitions": "[JA] Drag Race"
     },
     "intents": {
+      "knowledge": {
+        "label": "知識",
+        "subtitle": "クィアの言葉と私たちに影響を与えた人々"
+      },
       "goingOut": {
         "label": "お出かけ",
         "subtitle": "バー、クラブ、今夜のイベント"

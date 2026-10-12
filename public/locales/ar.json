@@ -1,4 +1,11 @@
 {
+  "knowledge": {
+    "title": "المعرفة",
+    "terms": "المصطلحات",
+    "personalities": "الشخصيات",
+    "lede": "الكلمات التي نستخدمها والأشخاص الذين شكّلوا حياة مجتمع الميم.",
+    "navigation": "أقسام المعرفة"
+  },
   "eventTypes": {
     "party": "حفلة",
     "festival": "مهرجان",
@@ -2051,6 +2058,10 @@
       "competitions": "[AR] Drag Race"
     },
     "intents": {
+      "knowledge": {
+        "label": "المعرفة",
+        "subtitle": "لغة مجتمع الميم والشخصيات المؤثرة"
+      },
       "goingOut": {
         "label": "الخروج",
         "subtitle": "الحانات والنوادي وما يحدث الليلة"
