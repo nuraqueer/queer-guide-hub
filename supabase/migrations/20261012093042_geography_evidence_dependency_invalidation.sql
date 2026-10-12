@@ -112,4 +112,3 @@ revoke all on function public.geo_cms_browse(uuid,text,text,int,uuid,uuid,text) 
 grant execute on function public.geo_cms_browse(uuid,text,text,int,uuid,uuid,text) to authenticated,service_role;
 
 
-
