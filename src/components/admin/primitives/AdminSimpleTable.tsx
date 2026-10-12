@@ -136,7 +136,15 @@ export function AdminSimpleTable<Row>({
     // overflow-x-auto, not overflow-hidden: a dense table must be able to scroll
     // inside its own container rather than push the page sideways, which
     // e2e/page-layout.spec.ts asserts never happens.
-    <div className={cn('rounded-container bg-card overflow-x-auto', className)}>
+    <div
+      role="region"
+      aria-label={caption}
+      tabIndex={0}
+      className={cn(
+        'rounded-container bg-card overflow-x-auto focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+        className,
+      )}
+    >
       <table className="w-full text-13" style={{ borderCollapse: 'collapse' }}>
         <caption className={captionVisible ? 'p-4 text-left text-13' : 'sr-only'}>
           {caption}
