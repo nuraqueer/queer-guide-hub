@@ -1,4 +1,11 @@
 {
+  "knowledge": {
+    "title": "Wissen",
+    "terms": "Begriffe",
+    "personalities": "Persönlichkeiten",
+    "lede": "Die Begriffe, die wir verwenden, und die Menschen, die queeres Leben geprägt haben.",
+    "navigation": "Wissensbereiche"
+  },
   "eventTypes": {
     "party": "Party",
     "festival": "Festival",
@@ -2060,6 +2067,10 @@
       "competitions": "[DE] Drag Race"
     },
     "intents": {
+      "knowledge": {
+        "label": "Wissen",
+        "subtitle": "Queere Sprache und prägende Persönlichkeiten"
+      },
       "goingOut": {
         "label": "Ausgehen",
         "subtitle": "Bars, Clubs und was heute Abend läuft"

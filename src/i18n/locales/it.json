@@ -1,4 +1,11 @@
 {
+  "knowledge": {
+    "title": "Conoscenza",
+    "terms": "Termini",
+    "personalities": "Personalità",
+    "lede": "Le parole che usiamo e le persone che hanno plasmato la vita queer.",
+    "navigation": "Sezioni della conoscenza"
+  },
   "eventTypes": {
     "party": "Festa",
     "festival": "Festival",
@@ -2060,6 +2067,10 @@
       "competitions": "[IT] Drag Race"
     },
     "intents": {
+      "knowledge": {
+        "label": "Conoscenza",
+        "subtitle": "Linguaggio queer e personalità che ci hanno segnato"
+      },
       "goingOut": {
         "label": "Uscire",
         "subtitle": "Bar, club e cosa c’è stasera"

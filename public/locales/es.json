@@ -1,4 +1,11 @@
 {
+  "knowledge": {
+    "title": "Saber",
+    "terms": "Términos",
+    "personalities": "Personalidades",
+    "lede": "Las palabras que usamos y las personas que han marcado la vida queer.",
+    "navigation": "Secciones de saber"
+  },
   "eventTypes": {
     "party": "Fiesta",
     "festival": "Festival",
@@ -2060,6 +2067,10 @@
       "competitions": "[ES] Drag Race"
     },
     "intents": {
+      "knowledge": {
+        "label": "Saber",
+        "subtitle": "Lenguaje queer y personalidades que nos marcaron"
+      },
       "goingOut": {
         "label": "Salir",
         "subtitle": "Bares, clubes y qué hay esta noche"

@@ -1,4 +1,11 @@
 {
+  "knowledge": {
+    "title": "Knowledge",
+    "terms": "Terms",
+    "personalities": "Personalities",
+    "lede": "The words we use and the people who shaped queer life.",
+    "navigation": "Knowledge sections"
+  },
   "breadcrumb": {
     "home": "Home",
     "venues": "Venues",
@@ -2227,6 +2234,10 @@
       "competitions": "Drag Race"
     },
     "intents": {
+      "knowledge": {
+        "label": "Knowledge",
+        "subtitle": "Queer language and the people who shaped us"
+      },
       "goingOut": {
         "label": "Going out",
         "subtitle": "Bars, clubs and what is on tonight"
