@@ -44,3 +44,9 @@ test('handles coordinates and multilingual comparison without treating missing p
   assert.equal(normalizePlaceName('São Paulo'), normalizePlaceName('Sao Paulo'));
   assert.notEqual(normalizePlaceName('東京'), normalizePlaceName('京都'));
 });
+test('same-name districts and local government areas cannot prove a town is a neighbourhood', () => {
+  for (const label of ['district of India', 'district of Bangladesh', 'district of the Czech Republic', 'district of Costa Rica', 'district of Peru', 'local government area of South Australia']) {
+    assert.equal(classifyEvidence({ classes: [label], geonames: [{ code: 'PPLA' }] }).status, 'review', label);
+  }
+  assert.equal(classifyEvidence({ classes: ['district of India', 'city'] }).status, 'municipality');
+});
