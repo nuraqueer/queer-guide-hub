@@ -174,6 +174,7 @@ export function AdminShell() {
   const handleEditorSaved = useCallback(
     (_id: string) => {
       void queryClient.invalidateQueries();
+      window.dispatchEvent(new Event('cms:record-saved'));
     },
     [queryClient],
   );
