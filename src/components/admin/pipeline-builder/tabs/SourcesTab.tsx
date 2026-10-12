@@ -88,7 +88,12 @@ export default function SourcesTab() {
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<HealthFilter>('all');
 
-  const { data: sources, isLoading } = useQuery({
+  const {
+    data: sources,
+    isLoading,
+    isError,
+    refetch,
+  } = useQuery({
     queryKey: ['scrape-sources'],
     queryFn: async () => {
       const { data, error } = await untypedFrom('scrape_sources')
@@ -330,24 +335,33 @@ export default function SourcesTab() {
             )}
           </div>
 
-          <AdminSimpleTable
-            caption="Ingest sources"
-            stickyHeader
-            className="max-h-[600px] overflow-y-auto"
-            columns={columns}
-            rows={filtered}
-            rowKey={(s) => s.id}
-            isLoading={isLoading}
-            emptyNoun="sources"
-            filtered={counts.all > 0}
-            onResetFilters={() => {
-              setFilter('all');
-              setSearch('');
-            }}
-            rowClassName={() => 'border-border/40 hover:bg-muted/30 transition-colors'}
-          />
+          {isError ? (
+            <div role="alert" className="flex flex-wrap items-center gap-4 p-4">
+              <p className="text-sm text-destructive">Could not load the source registry.</p>
+              <Button variant="outline" size="sm" onClick={() => refetch()}>
+                Retry
+              </Button>
+            </div>
+          ) : (
+            <AdminSimpleTable
+              caption="Ingest sources"
+              stickyHeader
+              className="max-h-[600px] overflow-y-auto"
+              columns={columns}
+              rows={filtered}
+              rowKey={(s) => s.id}
+              isLoading={isLoading}
+              emptyNoun="sources"
+              filtered={counts.all > 0}
+              onResetFilters={() => {
+                setFilter('all');
+                setSearch('');
+              }}
+              rowClassName={() => 'border-border/40 hover:bg-muted/30 transition-colors'}
+            />
+          )}
 
-          {!isLoading && (
+          {!isLoading && !isError && (
             <div className="px-4 py-1.5 border-t border-border text-xs2 text-muted-foreground">
               Showing {filtered.length} of {counts.all} sources
             </div>

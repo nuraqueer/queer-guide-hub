@@ -45,7 +45,6 @@ export const ADMIN_AREA_DESCRIPTIONS: Record<string, string> = {
 
   // Review & Data
   '/admin/feedback': 'Community feedback and API error reports. Triage and resolve.',
-  '/admin/imports/email-ingestions': 'Email-based ingestion. Track inbound source subscriptions.',
 
   // Automation
   '/admin/automation': 'Automated workflow rules and triggers.',

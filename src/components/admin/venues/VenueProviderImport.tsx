@@ -37,7 +37,12 @@ const FN_MAP: Record<Provider, string> = {
  */
 function buildBody(provider: Provider, config: Record<string, unknown>): Record<string, unknown> {
   if (provider === 'tripadvisor') return config;
-  const c = config as { locations?: string[]; searchTerms?: string[]; limit?: number; radius?: number };
+  const c = config as {
+    locations?: string[];
+    searchTerms?: string[];
+    limit?: number;
+    radius?: number;
+  };
   const body: Record<string, unknown> = {
     sourceType: `import-${provider}`,
     limit: c.limit,
@@ -66,7 +71,8 @@ export function VenueProviderImport({ onImportComplete }: { onImportComplete?: (
         body: buildBody(provider, config),
       });
       if (error) throw error;
-      if (data?.skipped) {
+      if (data?.error || data?.success === false) throw new Error(data?.error ?? 'Import failed');
+      if (data?.skipped === true) {
         toast.error(`Import skipped: ${data.reason ?? 'source unavailable'}`);
         return;
       }
@@ -107,7 +113,9 @@ export function VenueProviderImport({ onImportComplete }: { onImportComplete?: (
           open={dialog.open}
           onOpenChange={(open) => setDialog((d) => ({ ...d, open }))}
           provider={dialog.provider}
-          onImport={(config) => runImport(dialog.provider!, config as unknown as Record<string, unknown>)}
+          onImport={(config) =>
+            runImport(dialog.provider!, config as unknown as Record<string, unknown>)
+          }
           isImporting={isImporting}
         />
       )}

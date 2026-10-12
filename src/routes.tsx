@@ -93,8 +93,6 @@ const ContentGraph = lazyRetry(() => import('./pages/admin/ContentGraph'));
 const EmailTemplates = lazyRetry(() => import('./pages/admin/EmailTemplates'));
 const AdminPlacesEditorial = lazyRetry(() => import('./pages/admin/AdminPlacesEditorial'));
 const AdminPipelines = lazyRetry(() => import('./pages/admin/AdminPipelines'));
-const AdminEmailIngestions = lazyRetry(() => import('./pages/admin/AdminEmailIngestions'));
-const AdminImports = lazyRetry(() => import('./pages/admin/AdminImports'));
 const AdminEventQuality = lazyRetry(() => import('./pages/admin/AdminEventQuality'));
 const AdminGroupRequests = lazyRetry(() => import('./pages/admin/AdminGroupRequests'));
 const AdminSearchIntelligence = lazyRetry(() => import('./pages/admin/AdminSearchIntelligence'));
@@ -459,19 +457,22 @@ export const AppRoutes = () => {
                   <Route path="media" element={<MediaLibrary />} />
                   <Route path="media/:id" element={<MediaDetailPage />} />
 
-                  {/* Imports & Data section — admin-internal aliases for the old
-                    /admin/imports/* surfaces were pruned 2026-07 (migration to
-                    /admin/pipelines completed 2026-04); a catch-all keeps deep
-                    bookmarks landing on the pipelines hub. */}
-                  <Route path="imports/email-ingestions" element={<AdminEmailIngestions />} />
-                  <Route path="imports/data" element={<AdminImports />} />
+                  {/* Legacy import URLs retain bookmarks while Sources owns the tools. */}
+                  <Route
+                    path="imports/email-ingestions"
+                    element={<Navigate to="/admin/pipelines?tab=sources&sub=email" replace />}
+                  />
+                  <Route
+                    path="imports/data"
+                    element={<Navigate to="/admin/pipelines?tab=sources&sub=imports" replace />}
+                  />
                   <Route path="imports/*" element={<Navigate to="/admin/pipelines" replace />} />
                   <Route path="imports" element={<Navigate to="/admin/pipelines" replace />} />
                   <Route path="workflows" element={<Navigate to="/admin/pipelines" replace />} />
                   <Route path="pipelines" element={<AdminPipelines />} />
                   <Route
                     path="ingestion-rules"
-                    element={<Navigate to="/admin/imports/data" replace />}
+                    element={<Navigate to="/admin/pipelines?tab=sources&sub=imports" replace />}
                   />
                   <Route
                     path="pipelines/dashboard"

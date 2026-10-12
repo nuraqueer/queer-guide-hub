@@ -120,7 +120,7 @@ export function BrokenList({
           icon={Download}
           label="Imports failed today"
           count={ops.failedImportsToday}
-          route="/admin/imports/data"
+          route="/admin/pipelines?tab=health&sub=errors"
         />
       )}
     </CockpitList>

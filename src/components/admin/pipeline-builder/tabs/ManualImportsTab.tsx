@@ -1,15 +1,6 @@
-/**
- * AdminImports — "Import data" hub. A single discoverable home for the manual,
- * operator-run import tools that previously lived only on the (now unlinked)
- * legacy entity pages. Pure composition: each tab mounts existing, tested
- * import components; no new import logic lives here.
- */
-
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { VenueProviderImport } from '@/components/admin/venues/VenueProviderImport';
 import { VenuesCsvImport } from '@/components/venues/VenuesCsvImport';
-import { EventbriteImport } from '@/components/events/EventbriteImport';
 import { TicketmasterImport } from '@/components/events/TicketmasterImport';
 import { EventsCsvImport } from '@/components/events/EventsCsvImport';
 import { PersonalitiesCsvImport } from '@/components/personalities/PersonalitiesCsvImport';
@@ -17,33 +8,31 @@ import { AdultModelsCsvImport } from '@/components/personalities/AdultModelsCsvI
 import { BulkCreatePersonalities } from '@/components/personalities/BulkCreatePersonalities';
 import { AwinImportDialog } from '@/components/marketplace/AwinImportDialog';
 import { UrlImportCard } from '@/components/admin/UrlImportCard';
-import { AdminPageHeader } from '@/components/admin/AdminPageHeader';
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-title">{title}</CardTitle>
-      </CardHeader>
-      <CardContent>{children}</CardContent>
-    </Card>
+    <section className="flex flex-col gap-4">
+      <h3 className="text-title font-semibold">{title}</h3>
+      <div>{children}</div>
+    </section>
   );
 }
 
-export default function AdminImports() {
+export default function ManualImportsTab() {
   return (
     <div className="flex flex-col gap-6">
-      {/* mb-0: the parent already spaces children with gap-6. */}
-      <AdminPageHeader
-        className="mb-0"
-        title="Import data"
-        subtitle="Manual, operator-run imports. Each one stages records into the normal review pipeline."
-      />
+      <div>
+        <h2 className="text-title font-semibold">Manual imports</h2>
+        <p className="text-sm text-muted-foreground">
+          Import from a URL, a file, or a provider. Check each tool’s result, then review new
+          content in the inbox.
+        </p>
+      </div>
 
       <UrlImportCard />
 
       <Tabs defaultValue="venues">
-        <TabsList>
+        <TabsList className="max-w-full overflow-x-auto justify-start">
           <TabsTrigger value="venues">Venues</TabsTrigger>
           <TabsTrigger value="events">Events</TabsTrigger>
           <TabsTrigger value="personalities">Personalities</TabsTrigger>
@@ -60,9 +49,10 @@ export default function AdminImports() {
         </TabsContent>
 
         <TabsContent value="events" className="flex flex-col gap-6 pt-4">
-          <Section title="Eventbrite">
-            <EventbriteImport />
-          </Section>
+          <p className="text-sm text-muted-foreground">
+            Eventbrite search is unavailable because its API endpoint was retired. Use a URL or CSV
+            instead.
+          </p>
           <Section title="Ticketmaster">
             <TicketmasterImport />
           </Section>

@@ -41,7 +41,6 @@ import {
   Download,
   Settings,
   Mail,
-  MailOpen,
   MailCheck,
   Route as RouteIcon,
   Handshake,
@@ -299,37 +298,14 @@ export const adminNavSections: AdminNavSection[] = [
     ],
   },
 
-  // ── Data — how content gets in and stays healthy. Ingestion first, then the
-  //    machinery that runs over it. `Import data` leads because Pipelines is
-  //    adminOnly and a section must not lead with an item its own minRole
-  //    cannot open (the breadcrumb links there). ──────
+  // ── Data — source ingestion lives in Pipelines; automations retain their moderator access. ──
   {
     id: 'data',
     label: 'Data',
     icon: Download,
     defaultExpanded: true,
-    minRole: 'editor',
+    minRole: 'moderator',
     items: [
-      {
-        id: 'import-data-hub',
-        label: 'Import data',
-        icon: Download,
-        route: '/admin/imports/data',
-      },
-      {
-        id: 'pipelines',
-        label: 'Pipelines',
-        icon: Workflow,
-        route: '/admin/pipelines',
-        adminOnly: true,
-      },
-      {
-        id: 'email-ingestions',
-        label: 'Email Ingestions',
-        icon: MailOpen,
-        route: '/admin/imports/email-ingestions',
-        countTable: 'email_ingestions',
-      },
       {
         // The cron / job registry that drives every engine above it.
         id: 'automation',
@@ -337,6 +313,13 @@ export const adminNavSections: AdminNavSection[] = [
         icon: Timer,
         route: '/admin/automation',
         minRole: 'moderator',
+      },
+      {
+        id: 'pipelines',
+        label: 'Pipelines & imports',
+        icon: Workflow,
+        route: '/admin/pipelines',
+        adminOnly: true,
       },
       {
         id: 'search-intelligence',
