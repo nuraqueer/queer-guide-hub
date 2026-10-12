@@ -106,36 +106,16 @@ export const adminNavSections: AdminNavSection[] = [
   //    near-synonyms — in different sections either side of a divider. ──────
   {
     id: 'cockpit',
-    label: 'Cockpit',
+    label: 'Workspace',
     icon: LayoutDashboard,
     defaultExpanded: true,
     minRole: 'editor',
     items: [
       {
         id: 'overview',
-        label: 'Overview',
-        icon: LayoutDashboard,
-        route: '/admin',
-      },
-      {
-        // The three governance surfaces are ONE nav entry and one route
-        // (`/admin/governance?mode=`). They were three (Inbox / Quality /
-        // Duplicates & merge) and the split was the problem: deciding an item,
-        // watching the engine that proposed it, and merging its duplicate are
-        // one job done in three places. `?mode=` keeps them distinct without
-        // making them separate destinations.
-        //
-        // Icons must stay unique tree-wide (the 64px rail is a flat icon list),
-        // so collapsing three entries frees ShieldCheck and CopyCheck.
-        //
-        // `moderator`, inherited from the old Quality row: it declared this
-        // explicitly because Cockpit's floor is `editor`, and the merge tool has
-        // always been moderator-and-up in practice.
-        id: 'governance',
-        label: 'Governance',
+        label: 'Review queue',
         icon: Inbox,
-        route: '/admin/governance',
-        minRole: 'moderator',
+        route: '/admin',
       },
       {
         id: 'postfach',
@@ -156,8 +136,7 @@ export const adminNavSections: AdminNavSection[] = [
         id: 'feedback',
         label: 'Feedback',
         icon: MessageSquarePlus,
-        route: '/admin/feedback',
-        reviewCountKey: 'review_feedback',
+        route: '/admin?queue=feedback',
       },
     ],
   },
@@ -485,6 +464,7 @@ export function resolveItemMinRole(item: AdminNavItem, section?: AdminNavSection
  * deliberately.
  */
 export const ADMIN_ROUTE_ROLE_OVERRIDES: Record<string, AdminRole> = {
+  '/admin/diagnostics': 'moderator',
   // Preserve the old settings floor after removing its duplicate nav row.
   '/admin/settings': 'moderator',
 

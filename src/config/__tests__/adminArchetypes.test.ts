@@ -122,14 +122,14 @@ describe('admin archetype registry', () => {
     const caveated = ADMIN_ARCHETYPES.filter((e) => e.archetype && e.caveat).length;
     const exempt = ADMIN_ARCHETYPES.filter((e) => e.archetype === null).length;
     // Organisation workspace has its own static route; Business remains a redirect.
-    expect({ clean, caveated, exempt }).toEqual({ clean: 24, caveated: 11, exempt: 6 });
+    expect({ clean, caveated, exempt }).toEqual({ clean: 24, caveated: 10, exempt: 5 });
     expect(clean + caveated + exempt).toBe(ADMIN_ARCHETYPES.length);
   });
 
   it('resolves a live pathname to its frame', () => {
     expect(getArchetypeForRoute('/admin/automation')).toBe('H');
     expect(getArchetypeForRoute('/admin/inbox')).toBe('F');
-    expect(getArchetypeForRoute('/admin')).toBeNull(); // the shell itself
+    expect(getArchetypeForRoute('/admin')).toBe('F'); // the shell itself
     expect(getArchetypeForRoute('/admin/design')).toBeNull(); // exempt
   });
 

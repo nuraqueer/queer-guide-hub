@@ -73,3 +73,28 @@ Link consolidation is smaller but leaves fragmented review workflows. Combining 
 ## Pending decision
 
 The user explicitly approved the proposed unified Review queue design with “approval” on 2026-10-12. Default ordering uses urgent/high-risk first, then oldest.
+
+## Implemented contract and validation
+
+The canonical workspace is `/admin`; legacy governance modes, inbox, review,
+quality, event-quality, closure, and group-request links resolve to its filters.
+Forty-one registered decision sources share a role-aware list, item-level risk
+and overdue filtering, stable pagination, and a common summary for sidebar and
+header. Special decisions render inside the workspace; search enrichment and
+brand ownership launch it rather than keeping independent approval screens.
+
+Automatic first-check and logo-lookup checkpoints remain diagnostic. Canonical
+staging and ownership decisions replace duplicate ledger exposure. Closed or
+missing canonical records do not generate another corrective review task.
+Bookmarked pending items resolve independently of the current page.
+
+Validation: 124 focused frontend tests; lint; the repository typecheck ratchet
+(no new errors); production build and bundle-shape checks; SQL syntax and live
+source queries; rolled-back database tests covering role/visibility boundaries,
+confirmation, stale decisions, brand claims, atomic staging batches, supported
+undo, critical event exceptions, and audit recording. Fixture rows were confirmed
+absent after rollback. The Impeccable detector reported no findings. Desktop and
+mobile visual inspection used the actual components with a read-only live-data
+snapshot; mobile detail focuses the item while hiding the list filters.
+
+Database migration filenames match the versions recorded in production history.

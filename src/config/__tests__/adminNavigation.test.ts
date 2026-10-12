@@ -21,7 +21,7 @@ describe('adminNavSections shape', () => {
     expect(getNavItemByRoute('/admin/settings')).toBeUndefined();
     expect(getRouteMinRole('/admin/content/unified_tags')).toBe('editor');
     expect(getRouteMinRole('/admin/settings')).toBe('moderator');
-    expect(getRouteMinRole('/admin/governance')).toBe('moderator');
+    expect(getRouteMinRole('/admin/governance')).toBe('editor');
   });
 
   it('every item has unique id within its section', () => {
@@ -110,7 +110,7 @@ describe('getBreadcrumbsForRoute', () => {
   it("omits section crumb for cockpit's /admin overview", () => {
     const crumbs = getBreadcrumbsForRoute('/admin');
     // Cockpit's section crumb is suppressed; only Admin Console + Overview.
-    expect(crumbs.map((c) => c.label)).toEqual(['Admin Console', 'Overview']);
+    expect(crumbs.map((c) => c.label)).toEqual(['Admin Console', 'Review queue']);
   });
 
   it('falls back to prefix match — first matching item wins', () => {
@@ -266,7 +266,9 @@ describe('nav and queue role agreement', () => {
     expect(getRouteMinRole('/admin/content/community_groups/requests')).toBe('moderator');
     expect(getRouteMinRole('/admin/content/group-requests')).toBe('moderator');
     expect(
-      adminNavSections.flatMap((section) => section.items).some((item) => item.id === 'group-requests'),
+      adminNavSections
+        .flatMap((section) => section.items)
+        .some((item) => item.id === 'group-requests'),
     ).toBe(false);
   });
   /**

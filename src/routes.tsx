@@ -1,3 +1,4 @@
+import { reviewRedirectUrl } from '@/components/admin/review-workspace/reviewRedirects';
 import React, { Suspense } from 'react';
 import { Routes, Route, Navigate, useLocation, useParams } from 'react-router';
 import { useTranslation } from 'react-i18next';
@@ -87,7 +88,7 @@ const PersonalityDataSheet = lazyRetry(() => import('./pages/admin/PersonalityDa
 const PersonalitiesAdmin = lazyRetry(() => import('./pages/admin/PersonalitiesAdmin'));
 const MilestonesAdmin = lazyRetry(() => import('./pages/admin/MilestonesAdmin'));
 const AdminMailbox = lazyRetry(() => import('./pages/admin/AdminMailbox'));
-const AdminLiveness = lazyRetry(() => import('./pages/admin/AdminLiveness'));
+const AdminDiagnostics = lazyRetry(() => import('./pages/admin/QualityHub'));
 const AdminTrash = lazyRetry(() => import('./pages/admin/AdminTrash'));
 const ContentGraph = lazyRetry(() => import('./pages/admin/ContentGraph'));
 const EmailTemplates = lazyRetry(() => import('./pages/admin/EmailTemplates'));
@@ -95,8 +96,7 @@ const AdminPlacesEditorial = lazyRetry(() => import('./pages/admin/AdminPlacesEd
 const AdminPipelines = lazyRetry(() => import('./pages/admin/AdminPipelines'));
 const AdminEmailIngestions = lazyRetry(() => import('./pages/admin/AdminEmailIngestions'));
 const AdminImports = lazyRetry(() => import('./pages/admin/AdminImports'));
-const AdminEventQuality = lazyRetry(() => import('./pages/admin/AdminEventQuality'));
-const AdminGroupRequests = lazyRetry(() => import('./pages/admin/AdminGroupRequests'));
+
 const AdminSearchIntelligence = lazyRetry(() => import('./pages/admin/AdminSearchIntelligence'));
 const AdminDesignSystem = lazyRetry(() => import('./pages/admin/DesignSystem'));
 const AdminStyleguide = lazyRetry(() => import('./pages/admin/AdminStyleguide'));
@@ -216,8 +216,7 @@ function ReviewRedirect() {
  */
 function GovernanceRedirect({ mode }: { mode: 'triage' | 'engines' | 'merge' }) {
   const location = useLocation();
-  const rest = location.search.replace(/^\?/, '');
-  return <Navigate to={`/admin/governance?mode=${mode}${rest ? `&${rest}` : ''}`} replace />;
+  return <Navigate to={reviewRedirectUrl(location.search, mode)} replace />;
 }
 
 /** Maps the legacy /profile/footprint/:userId/public URL to the unified profile Travel tab. */
@@ -485,6 +484,7 @@ export const AppRoutes = () => {
                   {/* Review & Workflow section -- unified dashboard */}
                   <Route path="review" element={<ReviewRedirect />} />
                   <Route path="governance" element={<AdminGovernance />} />
+                  <Route path="diagnostics" element={<AdminDiagnostics />} />
                   <Route path="inbox" element={<GovernanceRedirect mode="triage" />} />
                   <Route path="automation" element={<AdminAutomation />} />
                   <Route path="feedback" element={<AdminFeedback />} />
@@ -515,8 +515,14 @@ export const AppRoutes = () => {
                   <Route path="quality" element={<GovernanceRedirect mode="engines" />} />
                   <Route path="trash" element={<AdminTrash />} />
                   <Route path="graph" element={<ContentGraph />} />
-                  <Route path="content/liveness" element={<AdminLiveness />} />
-                  <Route path="content/event-quality" element={<AdminEventQuality />} />
+                  <Route
+                    path="content/liveness"
+                    element={<Navigate to="/admin?queue=liveness" replace />}
+                  />
+                  <Route
+                    path="content/event-quality"
+                    element={<Navigate to="/admin?queue=event-quality" replace />}
+                  />
                   <Route
                     path="content/city-quality"
                     element={<Navigate to="/admin/quality" replace />}
@@ -545,7 +551,7 @@ export const AppRoutes = () => {
                   />
                   <Route
                     path="content/community_groups/requests"
-                    element={<AdminGroupRequests />}
+                    element={<Navigate to="/admin?queue=group-requests" replace />}
                   />
                   <Route
                     path="content/group-requests"
