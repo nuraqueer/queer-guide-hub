@@ -1,5 +1,5 @@
 import { GeographyLandmarks } from '@/components/admin/GeographyLandmarks';
-import { useDeferredValue, useState } from 'react';
+import { useDeferredValue, useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router';
 import { useQueryClient } from '@tanstack/react-query';
 import {
@@ -100,11 +100,10 @@ function GeographyRows({
                 className="flex h-11 w-11 shrink-0 items-center justify-center rounded-element focus-visible:outline focus-visible:outline-2"
                 aria-label={`${open ? 'Collapse' : 'Expand'} ${row.name}`}
                 aria-expanded={open}
-                disabled={!row.child_count || global}
+                disabled={!row.child_count}
                 onClick={() => onExpand(row.id)}
               >
                 {!!row.child_count &&
-                  !global &&
                   (open ? <ChevronDown size={16} /> : <ChevronRight size={16} />)}
               </button>
               <button
@@ -132,7 +131,7 @@ function GeographyRows({
                 </Badge>
               </button>
             </div>
-            {open && !global && !!row.child_count && (
+            {open && !!row.child_count && (
               <GeographyRows
                 parentId={row.id}
                 filters={EMPTY_FILTERS}
@@ -249,6 +248,13 @@ function GeographyDetail({
   onEdit: () => void;
   onCreate: (type: GeographyType) => void;
 }) {
+  const detailRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    if (window.matchMedia('(max-width: 1023px)').matches) {
+      detailRef.current?.focus({ preventScroll: true });
+      detailRef.current?.scrollIntoView({ block: 'start' });
+    }
+  }, [record.id]);
   const [moving, setMoving] = useState(false);
   const verify = useVerifyGeography();
   const href = livePath(record.source_table, record as unknown as Record<string, unknown>);
@@ -258,8 +264,21 @@ function GeographyDetail({
   return (
     <section
       aria-label="Selected geography"
-      className="flex min-w-0 flex-col gap-4 lg:sticky lg:top-4"
+      ref={detailRef}
+      tabIndex={-1}
+      className="order-first flex min-w-0 flex-col gap-4 focus:outline-none lg:order-last lg:sticky lg:top-4"
     >
+      <Button
+        variant="ghost"
+        className="self-start lg:hidden"
+        onClick={() => {
+          const hierarchy = document.getElementById('geography-hierarchy');
+          hierarchy?.focus({ preventScroll: true });
+          hierarchy?.scrollIntoView({ block: 'start' });
+        }}
+      >
+        Back to hierarchy
+      </Button>
       <div>
         <p className="text-13 text-muted-foreground break-words">{record.path}</p>
         <h2 className="text-title font-semibold">{record.name}</h2>
@@ -346,6 +365,12 @@ function GeographyDetail({
             {source.version ? ` (${source.version})` : ''}
           </a>
         ))}
+        {typeof record.verification?.checks.external_distance_m === 'number' && (
+          <p className="text-13">
+            {(record.verification.checks.external_distance_m / 1000).toFixed(1)} km from the
+            external reference pin.
+          </p>
+        )}
         <Button
           variant="outline"
           className="self-start"
@@ -563,7 +588,12 @@ export default function AdminGeography() {
         </p>
       )}
       <div className="grid min-w-0 grid-cols-1 items-start gap-6 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
-        <section aria-label="Geography hierarchy" className="min-w-0 border-y">
+        <section
+          id="geography-hierarchy"
+          tabIndex={-1}
+          aria-label="Geography hierarchy"
+          className="order-last min-w-0 border-y lg:order-first"
+        >
           <GeographyRows
             parentId={null}
             filters={filters}

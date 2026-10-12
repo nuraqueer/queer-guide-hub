@@ -24,7 +24,12 @@ export interface GeographyRecord extends GeoNode {
   verification_status: 'verified' | 'review' | 'missing' | 'stale' | 'country_checked';
   verification: null | {
     checked_at: string;
-    checks: { reason?: string; distance_to_city_m?: number; [key: string]: unknown };
+    checks: {
+      reason?: string;
+      distance_to_city_m?: number;
+      external_distance_m?: number;
+      [key: string]: unknown;
+    };
     sources: Array<{ title: string; url: string; version?: string }>;
   };
 }

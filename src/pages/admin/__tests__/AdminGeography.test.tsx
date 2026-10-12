@@ -78,6 +78,10 @@ describe('Unified geography workspace', () => {
       'false',
     );
   });
+  it('keeps subitems expandable within search results', () => {
+    view('/admin/geography?q=Spain');
+    expect(screen.getByRole('button', { name: 'Expand Spain' })).not.toBeDisabled();
+  });
   it('opens the selected canonical record instead of its entire list', () => {
     mocks.selected = country;
     view('/admin/geography?selected=country-1');
