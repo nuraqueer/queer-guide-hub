@@ -224,6 +224,8 @@ Deno.serve(async (req: Request) => {
   const radiusM: number = body.radius_m ?? DEFAULT_RADIUS_M
   const venueIds: string[] | undefined = body.venue_ids
   const runStarted = new Date()
+  const runHeader = req.headers.get('X-Automation-Run-Id')
+  const runId = runHeader && /^\d+$/.test(runHeader) ? Number(runHeader) : null
   const deadline = Date.now() + WALL_CLOCK_MS
 
   // --- work list -------------------------------------------------------------
@@ -238,7 +240,7 @@ Deno.serve(async (req: Request) => {
     venues = (data ?? []) as VenueRow[]
   }
   if (!venues.length) {
-    if (!venueIds?.length) await recordRun(supabase, runStarted, { processed: 0, message: 'no venues due' })
+    if (!venueIds?.length) await recordRun(supabase, runStarted, { processed: 0, message: 'no venues due' }, runId)
     return jsonResponse({ processed: 0, message: 'no venues due' }, 200, req)
   }
 
@@ -280,10 +282,10 @@ Deno.serve(async (req: Request) => {
     const status = allBusy && !escalate ? 'success' : 'error'
     await recordRun(supabase, runStarted, {
       processed: 0, endpoints_unhealthy: true, upstream_busy: allBusy, escalated: escalate, probe, status,
-    })
+    }, runId)
     return jsonResponse({
-      processed: 0, endpoints_unhealthy: true, upstream_busy: allBusy, escalated: escalate, probe,
-    }, 200, req)
+      success: status !== 'error', processed: 0, endpoints_unhealthy: true, upstream_busy: allBusy, escalated: escalate, probe,
+    }, status === 'error' ? 503 : 200, req)
   }
 
   const vocab = await loadAmenityVocabulary(supabase, true)
@@ -365,7 +367,7 @@ Deno.serve(async (req: Request) => {
       }
     } catch (e) {
       if (e instanceof CircuitOpenError) {
-        await recordRun(supabase, runStarted, { processed: results.length, circuit_open: true, ...queueSummary(), probe, status: 'error' })
+        await recordRun(supabase, runStarted, { processed: results.length, circuit_open: true, ...queueSummary(), probe, status: 'error' }, runId)
         return jsonResponse({ processed: results.length, circuit_open: true, ...queueSummary(), results }, 200, req)
       }
       verdict = 'error'
@@ -609,7 +611,7 @@ Deno.serve(async (req: Request) => {
     probe,
   }
   if (!dryRun && !venueIds?.length) {
-    await recordRun(supabase, runStarted, summary)
+    await recordRun(supabase, runStarted, summary, runId)
   }
   return jsonResponse({
     processed: probed, matched, applied, conflicted, unknown,
@@ -696,20 +698,17 @@ async function recordRun(
   supabase: ReturnType<typeof getServiceClient>,
   startedAt: Date,
   summary: Record<string, unknown>,
+  runId: number | null,
 ) {
-  const { data: a } = await supabase
-    .from('admin_automations').select('id').eq('slug', AUTOMATION_SLUG).maybeSingle()
-  await supabase.from('admin_automation_runs').insert({
-    automation_id: a?.id ?? null,
-    automation_slug: AUTOMATION_SLUG,
-    started_at: startedAt.toISOString(),
-    finished_at: new Date().toISOString(),
-    status: summary.status === 'error' ? 'error' : 'success',
-    items_examined: (summary.processed as number) ?? 0,
-    items_changed: (summary.applied as number) ?? 0,
-    summary,
-  }).then(() => {}, () => {})
-  await supabase.from('admin_automations')
-    .update({ last_run_at: startedAt.toISOString(), last_run_status: summary.status === 'error' ? 'error' : 'success' })
-    .eq('slug', AUTOMATION_SLUG).then(() => {}, () => {})
+  const { error } = await supabase.rpc('admin_automation_finalize_run', {
+    p_slug: AUTOMATION_SLUG,
+    p_run_id: runId,
+    p_started_at: startedAt.toISOString(),
+    p_status: summary.status === 'error' ? 'error' : 'success',
+    p_items_examined: (summary.processed as number) ?? 0,
+    p_items_changed: (summary.applied as number) ?? 0,
+    p_summary: summary,
+    p_error: summary.status === 'error' ? 'Venue accessibility enrichment failed' : null,
+  })
+  if (error) throw new Error(`Automation finalization: ${error.message}`)
 }
