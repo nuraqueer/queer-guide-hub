@@ -1,6 +1,5 @@
 import { FieldRenderer } from '@/components/cms/fields/FieldRenderer';
 import { useEffect, useState } from 'react';
-import { FieldRenderer } from '@/components/cms/fields/FieldRenderer';
 import { Plus, Pencil, ExternalLink } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
