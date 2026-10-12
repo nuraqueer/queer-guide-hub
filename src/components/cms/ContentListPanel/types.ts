@@ -104,7 +104,7 @@ export function toListItem(row: Record<string, unknown>, ct: ContentTypeConfig):
     contentType: ct.id,
     contentTypeLabel: ct.label.singular,
     contentTypeColor: ct.color,
-    status: extractStatus(row, ct),
+    status: ct.listStatus?.(row) ?? extractStatus(row, ct),
     raw: row,
   };
 }

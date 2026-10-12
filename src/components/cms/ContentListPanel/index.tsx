@@ -5,7 +5,7 @@
  */
 
 import { lazy, Suspense, useEffect, useRef, useState } from 'react';
-import { Navigate, useParams, useSearchParams } from 'react-router';
+import { Link, Navigate, useParams, useSearchParams } from 'react-router';
 import { Plus, Search, RefreshCw, X } from 'lucide-react';
 import { contentTypeRouteAliases } from '@/config/contentTypes';
 import { AdminToolsPopover } from '@/components/admin/primitives/AdminToolsPopover';
@@ -34,17 +34,19 @@ import { normalizeSpec, specEquals } from './viewSpec';
 import { toListItem } from './types';
 import { useContentListController } from './useContentListController';
 import { ExportExcelButton } from '@/components/admin/ExportExcelButton';
+import { exportToExcel, generateFilename } from '@/utils/excelExport';
 import { exportContentType } from './exportContentList';
 import { OPERATOR_LABELS } from './filterOps';
 import { FILTER_LABEL_SUFFIX } from '@/lib/cmsFilterHref';
 import type { Filter } from './viewSpec';
+import type { WorkspaceListOptions } from './workspaceTypes';
 import type { FieldConfig } from '@/types/cms';
 
 const BulkActionsBar = lazy(() =>
   import('../BulkActionsBar').then((m) => ({ default: m.BulkActionsBar })),
 );
 
-interface ContentListPanelProps {
+interface ContentListPanelProps extends WorkspaceListOptions {
   /**
    * Suppress this panel's own archetype header.
    *
@@ -97,7 +99,7 @@ function activeFilterLabel(filter: Filter, fields: FieldConfig[]): string {
  */
 export function ContentListPanel(props: ContentListPanelProps) {
   const { type } = useParams();
-  const typeId = props.contentTypeId ?? type;
+  const typeId = props.configOverride?.id ?? props.contentTypeId ?? type;
   const [params] = useSearchParams();
   if (typeId === 'venues' && !props.contentTypeId) {
     const next = new URLSearchParams(params);
@@ -126,7 +128,7 @@ export function ContentListPanel(props: ContentListPanelProps) {
 function ContentListPanelBody(props: ContentListPanelProps) {
   const c = useContentListController(props);
   const { type } = useParams();
-  const v = useContentViews(props.contentTypeId);
+  const v = useContentViews(props.configOverride?.id ?? props.contentTypeId);
   const [activeViewId, setActiveViewId] = useState<string | null>(null);
   const [searchParams, setSearchParams] = useSearchParams();
 
@@ -144,7 +146,7 @@ function ContentListPanelBody(props: ContentListPanelProps) {
     search: c.debouncedSearch,
     archivedView: c.archivedView,
     mergedView: c.mergedView,
-    enabled: c.view === 'board',
+    enabled: !props.operational && c.view === 'board',
   });
 
   const selectView = (view: SavedView) => {
@@ -167,7 +169,7 @@ function ContentListPanelBody(props: ContentListPanelProps) {
   // A stale or foreign id falls through silently rather than erroring.
   const resolvedRef = useRef<string | null>(null);
   useEffect(() => {
-    const scope = props.contentTypeId ?? '';
+    const scope = props.configOverride?.id ?? props.contentTypeId ?? '';
     if (v.loading || resolvedRef.current === scope) return;
     resolvedRef.current = scope;
     const wanted = searchParams.get('view');
@@ -228,7 +230,7 @@ function ContentListPanelBody(props: ContentListPanelProps) {
   // Guarded on a resolved type: on the "All content" list there is no type to
   // open the editor against, and a bare id would be meaningless.
   const editHandledRef = useRef(false);
-  const editTypeId = props.contentTypeId ?? type;
+  const editTypeId = props.configOverride?.id ?? props.contentTypeId ?? type;
   useEffect(() => {
     if (editHandledRef.current) return;
     const locationId = searchParams.get('location');
@@ -277,7 +279,7 @@ function ContentListPanelBody(props: ContentListPanelProps) {
 
   return (
     <div>
-      <ContentEntityTabs type={type ?? props.contentTypeId} />
+      {!props.workspace && <ContentEntityTabs type={type ?? props.contentTypeId} />}
       {/* Archetype A — the fixed header grammar. This route family is 24 of the
         40 admin routes, so it is the one the eight-frame claim actually rests
         on.
@@ -292,6 +294,57 @@ function ContentListPanelBody(props: ContentListPanelProps) {
         wired through useContentList; restructuring that in the same change as
         the header would put a behavioural rewrite inside a layout diff. The
         count rides with the title. */}
+      {props.workspace && config && (
+        <div className="mb-4 flex flex-col items-stretch justify-between gap-4 sm:flex-row sm:items-center">
+          <p className="text-sm text-muted-foreground tabular-nums">
+            {c.loading
+              ? 'Loading records…'
+              : `${c.totalCount.toLocaleString()} ${(c.totalCount === 1 ? config.label.singular : config.label.plural).toLowerCase()}`}
+          </p>
+          <div className="flex items-center justify-end gap-2">
+            <AdminToolsPopover label="List tools">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  props.source?.refresh();
+                  void c.loadItems();
+                }}
+              >
+                Refresh records
+              </Button>
+              {config.admin?.duplicatesRoute && (
+                <Button variant="ghost" size="sm" asChild>
+                  <Link to={config.admin.duplicatesRoute}>Review duplicates</Link>
+                </Button>
+              )}
+              {props.tools}
+              {config.toolbarActions?.()}
+            </AdminToolsPopover>
+            <Button size="sm" onClick={() => c.onCreate(config.id)}>
+              <Plus size={16} className="mr-1.5" />
+              Add {config.label.singular}
+            </Button>
+          </div>
+        </div>
+      )}
+      {c.loadError && (
+        <div
+          role="alert"
+          className="mb-4 flex items-center justify-between gap-4 bg-muted p-4 rounded-element"
+        >
+          <p>Could not load records. {c.loadError}</p>
+          <Button
+            variant="outline"
+            onClick={() => {
+              props.source?.refresh();
+              void c.loadItems();
+            }}
+          >
+            Retry
+          </Button>
+        </div>
+      )}
       {!props.hideHeader && (
         <AdminArchetypeHeader
           title={
@@ -426,6 +479,7 @@ function ContentListPanelBody(props: ContentListPanelProps) {
               {v.views.length === 0 && viewBar}
 
               <ViewSettings
+                tableOnly={props.operational}
                 config={config}
                 view={c.view}
                 columns={c.columns}
@@ -493,7 +547,7 @@ function ContentListPanelBody(props: ContentListPanelProps) {
         )}
       </section>
 
-      {c.view === 'gallery' ? (
+      {!props.operational && c.view === 'gallery' ? (
         <ContentListGallery
           items={c.items}
           loading={c.loading}
@@ -502,21 +556,21 @@ function ContentListPanelBody(props: ContentListPanelProps) {
           toggleSelect={c.toggleSelect}
           onEdit={c.onEdit}
         />
-      ) : c.view === 'timeline' ? (
+      ) : !props.operational && c.view === 'timeline' ? (
         <ContentListTimeline
           items={c.items}
           loading={c.loading}
           dateField={c.dateField}
           onEdit={c.onEdit}
         />
-      ) : c.view === 'calendar' ? (
+      ) : !props.operational && c.view === 'calendar' ? (
         <ContentListCalendar
           items={c.items}
           loading={c.loading}
           dateField={c.dateField}
           onEdit={c.onEdit}
         />
-      ) : c.view === 'board' ? (
+      ) : !props.operational && c.view === 'board' ? (
         <ContentListBoard
           items={c.items}
           loading={c.loading || grouped.loading}
@@ -560,13 +614,56 @@ function ContentListPanelBody(props: ContentListPanelProps) {
           onEdit={c.onEdit}
           onCreate={c.onCreate}
           onRefresh={c.loadItems}
+          workspace={props.workspace}
+          operational={props.operational}
+          onEditRow={props.onEditRow}
+          rowActions={props.rowActions}
         />
       )}
 
+      {props.operational && c.selected.size > 0 && config && (
+        <div className="mt-4 flex items-center justify-between gap-4 rounded-element bg-muted p-4">
+          <p className="text-sm tabular-nums">{c.selected.size} selected</p>
+          {props.selectionTools?.(
+            c.items
+              .filter((item) => c.selected.has(`${item.contentType}-${item.id}`))
+              .map((item) => item.raw ?? {}),
+            () => void c.loadItems(),
+          )}
+          <ExportExcelButton
+            onExport={() =>
+              exportToExcel(
+                c.items
+                  .filter((item) => c.selected.has(`${item.contentType}-${item.id}`))
+                  .map((item) => item.raw ?? {}),
+                [
+                  {
+                    header: config.label.singular,
+                    accessor: (row: Record<string, unknown>) =>
+                      String(row[config.titleField] ?? ''),
+                  },
+                  ...c.extraColumns.map((field) => ({
+                    header: field.label,
+                    accessor: (row: Record<string, unknown>) => {
+                      const value = row[field.name];
+                      return value == null
+                        ? ''
+                        : typeof value === 'object'
+                          ? JSON.stringify(value)
+                          : String(value);
+                    },
+                  })),
+                ],
+                generateFilename(config.id),
+              )
+            }
+          />
+        </div>
+      )}
       {/* Every non-table view needs this too — they shipped able to show only
           the first page, which is meaningless on a 40k-row type. The table
           renders its own inside the bordered container. */}
-      {c.contentTypeId && c.view !== 'table' && (
+      {!props.operational && c.contentTypeId && c.view !== 'table' && (
         <ListPagination
           page={c.page}
           rowsPerPage={c.rowsPerPage}
@@ -577,7 +674,7 @@ function ContentListPanelBody(props: ContentListPanelProps) {
         />
       )}
 
-      {c.selected.size > 0 && c.config && (
+      {!props.operational && c.selected.size > 0 && c.config && (
         <Suspense fallback={null}>
           <BulkActionsBar
             bulkEditFields={c.config.bulkEditFields}

@@ -27,8 +27,8 @@ vi.mock('@/components/admin/affiliate/MerchantsManager', () => ({
 vi.mock('@/components/admin/AffiliatePartnersManager', () => ({
   AffiliatePartnersManager: () => <div>Partner tools</div>,
 }));
-vi.mock('@/components/admin/review-queues/BrandReviewQueue', () => ({
-  BrandReviewQueue: () => <div>Brand review tools</div>,
+vi.mock('@/components/admin/business/BrandsManager', () => ({
+  BrandsManager: () => <div>Brand list tools</div>,
 }));
 function Destination() {
   const loc = useLocation();
@@ -75,7 +75,7 @@ describe('Organisation workspace compatibility', () => {
       ctrlKey: false,
     });
     await waitFor(() => expect(screen.getByTestId('directory')).toBeVisible());
-    expect(screen.getByTestId('destination')).toHaveTextContent('?view=saved-123');
+    expect(screen.getByTestId('destination')).not.toHaveTextContent('view=saved-123');
   });
   it.each(['directory', 'hotels', 'merchants', 'brands', 'partners'])(
     'connects the selected %s tab to a panel',
@@ -97,17 +97,12 @@ describe('Organisation workspace compatibility', () => {
     },
   );
 
-  it('preserves the Brands ownership action and registry link', async () => {
+  it('shows the all-brands manager in the common workspace', async () => {
     render(
       <MemoryRouter initialEntries={['/admin/content/organizations?tab=brands']}>
         <Workspace />
       </MemoryRouter>,
     );
-    expect(await screen.findByText('Brand review tools')).toBeVisible();
-    expect(screen.getByRole('button', { name: 'Apply ownership to products' })).toBeVisible();
-    expect(screen.getByRole('link', { name: 'Brand registry (raw list)' })).toHaveAttribute(
-      'href',
-      '/admin/content/marketplace_brands',
-    );
+    expect(await screen.findByText('Brand list tools')).toBeVisible();
   });
 });

@@ -3,6 +3,9 @@
  * sortable headers, skeleton rows, empty state, and per-row cells.
  */
 
+import { stripHtmlTags, decodeHtmlEntities } from '@/utils/htmlDecode';
+import { WorkspaceRowMenu } from './WorkspaceRowMenu';
+import type { WorkspaceListOptions } from './workspaceTypes';
 import {
   Plus,
   Edit,
@@ -254,7 +257,7 @@ function renderColumnValue(
     if (Number.isNaN(n)) {
       return <span className="text-xs text-muted-foreground/60">--</span>;
     }
-    const formatted = n >= 0 && n <= 1 ? n.toFixed(2) : n.toLocaleString();
+    const formatted = !Number.isInteger(n) && n >= 0 && n <= 1 ? n.toFixed(2) : n.toLocaleString();
     return (
       <span className="text-13" style={{ fontVariantNumeric: 'tabular-nums' }}>
         {formatted}
@@ -296,7 +299,7 @@ import { livePath } from '@/lib/cmsLinks';
 import { isArchived } from '@/hooks/useEntityLifecycle';
 import { summarizeStructured } from '@/components/cms/fields/structured/structuredValue';
 
-export interface ContentListTableProps {
+export interface ContentListTableProps extends WorkspaceListOptions {
   contentTypeId?: string;
   config: ContentTypeConfig | null;
   items: ListItem[];
@@ -350,7 +353,13 @@ export function ContentListTable({
   onEdit,
   onCreate,
   onRefresh,
+  workspace,
+  operational,
+  onEditRow,
+  rowActions,
 }: ContentListTableProps) {
+  const open = (item: ListItem) =>
+    onEditRow ? onEditRow(item.raw ?? {}) : onEdit(item.contentType, item.id);
   const colCount = (contentTypeId ? 5 : 6) + extraColumns.length;
 
   return (
@@ -371,7 +380,7 @@ export function ContentListTable({
               </TableHead>
 
               <SortableHeader
-                label="Title"
+                label={workspace ? 'Name' : 'Title'}
                 field="title"
                 currentField={sortField}
                 currentDir={sortDir}
@@ -416,7 +425,12 @@ export function ContentListTable({
                 sorts={sorts}
               />
 
-              <TableHead style={{ width: 200, textAlign: 'right' }}>Actions</TableHead>
+              <TableHead
+                className={workspace ? 'sticky right-0 bg-card' : undefined}
+                style={{ width: workspace ? 72 : 200, textAlign: 'right' }}
+              >
+                Actions
+              </TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -478,18 +492,28 @@ export function ContentListTable({
 
                     <TableCell className="min-w-[240px]">
                       <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm font-semibold leading-snug text-pretty text-foreground">
-                        <Editable
-                          contentType={item.contentType}
-                          recordId={item.id}
-                          field={titleField ?? '__title'}
-                          value={titleField ? item.raw?.[titleField] : item.title}
-                          requireAltClick={false}
-                          as="div"
-                          className={isHidden ? 'text-muted-foreground' : undefined}
-                          onSaved={onRefresh}
-                        >
-                          <span>{item.title}</span>
-                        </Editable>
+                        {workspace ? (
+                          <button
+                            type="button"
+                            className="text-left font-semibold hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-element"
+                            onClick={() => open(item)}
+                          >
+                            {item.title}
+                          </button>
+                        ) : (
+                          <Editable
+                            contentType={item.contentType}
+                            recordId={item.id}
+                            field={titleField ?? '__title'}
+                            value={titleField ? item.raw?.[titleField] : item.title}
+                            requireAltClick={false}
+                            as="div"
+                            className={isHidden ? 'text-muted-foreground' : undefined}
+                            onSaved={onRefresh}
+                          >
+                            <span>{item.title}</span>
+                          </Editable>
+                        )}
                         {isHidden && (
                           <span className="inline-block rounded-badge bg-muted px-1.5 align-middle text-2xs uppercase tracking-wide text-muted-foreground">
                             {rawVisibility && rawVisibility !== 'public' ? rawVisibility : 'hidden'}
@@ -515,7 +539,9 @@ export function ContentListTable({
                       </div>
                       {item.description && (
                         <span className="mt-1 block max-w-[360px] truncate text-13 leading-relaxed text-muted-foreground">
-                          {item.description}
+                          {workspace
+                            ? decodeHtmlEntities(stripHtmlTags(item.description))
+                            : item.description}
                         </span>
                       )}
                     </TableCell>
@@ -529,17 +555,21 @@ export function ContentListTable({
                         {/* Editable resolves the field config from the registry and
                             owns the save. readOnly/unsupported types fall through to
                             plain display, so this is safe for every column. */}
-                        <Editable
-                          contentType={item.contentType}
-                          recordId={item.id}
-                          field={f.name}
-                          value={(item.raw as Record<string, unknown> | undefined)?.[f.name]}
-                          requireAltClick={false}
-                          as="div"
-                          onSaved={onRefresh}
-                        >
-                          {renderColumnValue(f, item.raw, rowConfig)}
-                        </Editable>
+                        {workspace ? (
+                          renderColumnValue(f, item.raw, rowConfig)
+                        ) : (
+                          <Editable
+                            contentType={item.contentType}
+                            recordId={item.id}
+                            field={f.name}
+                            value={(item.raw as Record<string, unknown> | undefined)?.[f.name]}
+                            requireAltClick={false}
+                            as="div"
+                            onSaved={onRefresh}
+                          >
+                            {renderColumnValue(f, item.raw, rowConfig)}
+                          </Editable>
+                        )}
                       </TableCell>
                     ))}
 
@@ -559,6 +589,7 @@ export function ContentListTable({
 
                     <TableCell>
                       <Editable
+                        disabled={workspace}
                         contentType={item.contentType}
                         recordId={item.id}
                         field={statusField ?? '__status'}
@@ -600,86 +631,99 @@ export function ContentListTable({
                       )}
                     </TableCell>
 
-                    <TableCell className="text-right">
-                      <div className="flex items-center justify-end gap-2">
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-10 gap-2 px-2"
-                              aria-label="Edit"
-                              onClick={() => onEdit(item.contentType, item.id)}
-                              style={{ ['--tw-color' as never]: rowColor } as never}
-                            >
-                              <Edit size={15} aria-hidden="true" /> Edit
-                            </Button>
-                          </TooltipTrigger>
-                          <TooltipContent>Edit</TooltipContent>
-                        </Tooltip>
-                        <div className="admin-row-secondary flex items-center gap-1 transition-opacity">
-                          {(rowConfig?.rowActions ?? [])
-                            .filter((a) => !a.visible || a.visible(item.raw ?? {}))
-                            .map((action) => {
-                              const ActionIcon = action.icon;
+                    <TableCell
+                      className={workspace ? 'sticky right-0 bg-card text-right' : 'text-right'}
+                    >
+                      {workspace ? (
+                        <WorkspaceRowMenu
+                          item={item}
+                          config={rowConfig}
+                          operational={operational}
+                          onEdit={() => open(item)}
+                          refresh={() => onRefresh?.()}
+                          actions={rowActions?.(item.raw ?? {}, () => onRefresh?.()) ?? []}
+                        />
+                      ) : (
+                        <div className="flex items-center justify-end gap-2">
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-10 gap-2 px-2"
+                                aria-label="Edit"
+                                onClick={() => onEdit(item.contentType, item.id)}
+                                style={{ ['--tw-color' as never]: rowColor } as never}
+                              >
+                                <Edit size={15} aria-hidden="true" /> Edit
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>Edit</TooltipContent>
+                          </Tooltip>
+                          <div className="admin-row-secondary flex items-center gap-1 transition-opacity">
+                            {(rowConfig?.rowActions ?? [])
+                              .filter((a) => !a.visible || a.visible(item.raw ?? {}))
+                              .map((action) => {
+                                const ActionIcon = action.icon;
+                                return (
+                                  <Tooltip key={action.id}>
+                                    <TooltipTrigger asChild>
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        className="h-10 w-10 p-0"
+                                        aria-label={action.label}
+                                        onClick={(event) => {
+                                          event.stopPropagation();
+                                          action.onSelect(item.raw ?? {});
+                                        }}
+                                      >
+                                        <ActionIcon size={15} />
+                                      </Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent>{action.label}</TooltipContent>
+                                  </Tooltip>
+                                );
+                              })}
+
+                            {rowConfig?.lifecycle && (
+                              <RowLifecycleActions
+                                lifecycle={rowConfig.lifecycle}
+                                row={item.raw ?? {}}
+                                id={item.id}
+                                title={item.title || item.id}
+                                onDone={() => onRefresh?.()}
+                              />
+                            )}
+
+                            {/* The list is where an editor decides what to work
+                            on, so it is where "what does this look like on the
+                            site" belongs. Rendered only when the row actually
+                            has a public page — an unsaved/unpublishable row and
+                            a type with no page at all both resolve to null. */}
+                            {(() => {
+                              const href = livePath(item.contentType, item.raw ?? {});
+                              if (!href) return null;
                               return (
-                                <Tooltip key={action.id}>
+                                <Tooltip>
                                   <TooltipTrigger asChild>
                                     <Button
                                       variant="ghost"
                                       size="sm"
                                       className="h-10 w-10 p-0"
-                                      aria-label={action.label}
-                                      onClick={(event) => {
-                                        event.stopPropagation();
-                                        action.onSelect(item.raw ?? {});
-                                      }}
+                                      aria-label="View live"
+                                      onClick={() => window.open(href, '_blank', 'noopener')}
                                     >
-                                      <ActionIcon size={15} />
+                                      <SquareArrowOutUpRight size={15} />
                                     </Button>
                                   </TooltipTrigger>
-                                  <TooltipContent>{action.label}</TooltipContent>
+                                  <TooltipContent>View live</TooltipContent>
                                 </Tooltip>
                               );
-                            })}
-
-                          {rowConfig?.lifecycle && (
-                            <RowLifecycleActions
-                              lifecycle={rowConfig.lifecycle}
-                              row={item.raw ?? {}}
-                              id={item.id}
-                              title={item.title || item.id}
-                              onDone={() => onRefresh?.()}
-                            />
-                          )}
-
-                          {/* The list is where an editor decides what to work
-                            on, so it is where "what does this look like on the
-                            site" belongs. Rendered only when the row actually
-                            has a public page — an unsaved/unpublishable row and
-                            a type with no page at all both resolve to null. */}
-                          {(() => {
-                            const href = livePath(item.contentType, item.raw ?? {});
-                            if (!href) return null;
-                            return (
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    className="h-10 w-10 p-0"
-                                    aria-label="View live"
-                                    onClick={() => window.open(href, '_blank', 'noopener')}
-                                  >
-                                    <SquareArrowOutUpRight size={15} />
-                                  </Button>
-                                </TooltipTrigger>
-                                <TooltipContent>View live</TooltipContent>
-                              </Tooltip>
-                            );
-                          })()}
+                            })()}
+                          </div>
                         </div>
-                      </div>
+                      )}
                     </TableCell>
                   </TableRow>
                 );
