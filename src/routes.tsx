@@ -1,3 +1,4 @@
+import { GovernanceRedirect } from '@/components/admin/GovernanceRedirect';
 import React, { Suspense } from 'react';
 import { Routes, Route, Navigate, useLocation, useParams } from 'react-router';
 import { useTranslation } from 'react-i18next';
@@ -91,7 +92,6 @@ const AdminLiveness = lazyRetry(() => import('./pages/admin/AdminLiveness'));
 const AdminTrash = lazyRetry(() => import('./pages/admin/AdminTrash'));
 const ContentGraph = lazyRetry(() => import('./pages/admin/ContentGraph'));
 const EmailTemplates = lazyRetry(() => import('./pages/admin/EmailTemplates'));
-const AdminPlacesEditorial = lazyRetry(() => import('./pages/admin/AdminPlacesEditorial'));
 const AdminPipelines = lazyRetry(() => import('./pages/admin/AdminPipelines'));
 const AdminEventQuality = lazyRetry(() => import('./pages/admin/AdminEventQuality'));
 const AdminGroupRequests = lazyRetry(() => import('./pages/admin/AdminGroupRequests'));
@@ -196,26 +196,6 @@ function ReviewRedirect() {
   return (
     <Navigate to={`/admin/governance?mode=triage&${location.search.replace(/^\?/, '')}`} replace />
   );
-}
-
-/**
- * The three governance surfaces collapsed onto one route (`?mode=`), with the
- * old paths kept as search-preserving shims.
- *
- * SHIMS RATHER THAN A SWEEP. ~60 places name these URLs — 12 `duplicatesRoute`
- * and 5 `qualityRoute` literals across `src/config/contentTypes/*`, 3 nav
- * entries, 8 hardcoded component links, and 16 `?queue=` builders. Redirecting
- * keeps every one of them working on the day this lands, so the sweep is
- * opportunistic instead of a 60-file change that has to be right all at once.
- *
- * `useLocation().search` is carried through because `?queue=` is orthogonal to
- * `?mode=`: `/admin/inbox?queue=quality-city` must survive as
- * `/admin/governance?mode=triage&queue=quality-city`, not lose its filter.
- */
-function GovernanceRedirect({ mode }: { mode: 'triage' | 'engines' | 'merge' }) {
-  const location = useLocation();
-  const rest = location.search.replace(/^\?/, '');
-  return <Navigate to={`/admin/governance?mode=${mode}${rest ? `&${rest}` : ''}`} replace />;
 }
 
 /** Maps the legacy /profile/footprint/:userId/public URL to the unified profile Travel tab. */
@@ -626,7 +606,10 @@ export const AppRoutes = () => {
                     element={<Navigate to="/admin/content/personalities" replace />}
                   />
                   <Route path="quests" element={<Navigate to="/admin/content/guides" replace />} />
-                  <Route path="places-editorial" element={<AdminPlacesEditorial />} />
+                  <Route
+                    path="places-editorial"
+                    element={<GovernanceRedirect mode="editorial" />}
+                  />
                   <Route
                     path="marketplace"
                     element={<Navigate to="/admin/content/marketplace_listings" replace />}

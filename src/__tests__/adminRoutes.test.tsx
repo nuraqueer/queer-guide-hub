@@ -62,6 +62,10 @@ vi.mock('@/components/cms/ContentListPanel', async () => {
   return { default: Panel, ContentListPanel: Panel };
 });
 
+vi.mock('@/pages/admin/AdminPlacesEditorial', () => ({
+  default: () => <div>PLACES_EDITORIAL_SENTINEL</div>,
+}));
+
 import { AppRoutes } from '@/routes';
 
 function renderAt(path: string) {
@@ -95,9 +99,20 @@ describe('admin route resolution', () => {
     }
   });
 
+  it('renders places editorial through the real Governance route and its legacy redirect', async () => {
+    for (const path of ['/admin/governance?mode=editorial', '/admin/places-editorial']) {
+      const { unmount } = renderAt(path);
+      expect(await screen.findByText('PLACES_EDITORIAL_SENTINEL')).toBeTruthy();
+      expect(screen.getByRole('button', { name: 'Places editorial' })).toHaveAttribute(
+        'aria-current',
+        'page',
+      );
+      unmount();
+    }
+  });
+
   it('redirects the orphaned /admin/pages to the canonical cms_pages list', async () => {
     renderAt('/admin/pages');
     expect(await screen.findByText('CONTENT_LIST_SENTINEL:cms_pages')).toBeTruthy();
   });
-
 });
