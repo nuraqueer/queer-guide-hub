@@ -401,7 +401,7 @@ export default function AdminGeography() {
     rawType === 'country' || rawType === 'city' || rawType === 'village' ? rawType : null;
   const rawStatus = params.get('status');
   const status =
-    rawStatus && rawStatus in verificationLabels
+    rawStatus && Object.hasOwn(verificationLabels, rawStatus)
       ? (rawStatus as GeographyRecord['verification_status'])
       : null;
   const filters: GeographyFilters = {

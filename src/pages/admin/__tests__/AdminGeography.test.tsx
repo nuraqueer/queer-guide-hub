@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 const mocks = vi.hoisted(() => ({
@@ -125,8 +125,9 @@ describe('Unified geography workspace', () => {
   it('does not label a country check as full verification', () => {
     mocks.selected = { ...country, verification_status: 'country_checked' };
     view('/admin/geography?selected=country-1');
-    expect(screen.getByText('Country checked')).toBeInTheDocument();
-    expect(screen.queryByText('Verified')).not.toBeInTheDocument();
+    const detail = within(screen.getByRole('region', { name: 'Selected geography' }));
+    expect(detail.getByText('Country checked')).toBeInTheDocument();
+    expect(detail.queryByText('Verified')).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Check geography' }));
     expect(mocks.verify).toHaveBeenCalledWith('country-1');
   });
