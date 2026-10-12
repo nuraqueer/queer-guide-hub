@@ -45,7 +45,7 @@ export default function ResetPassword() {
 
   useEffect(() => {
     if (!loading && !passwordRecovery && user) {
-      navigate('/settings', { replace: true });
+      navigate('/hub/settings', { replace: true });
     }
   }, [loading, passwordRecovery, user, navigate]);
 

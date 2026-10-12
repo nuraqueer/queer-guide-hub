@@ -7,7 +7,6 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import {
   User,
-  ArrowLeft,
   Heart,
   Lock,
   Check,
@@ -20,7 +19,6 @@ import {
 } from 'lucide-react';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { useAuth } from '@/hooks/useAuth';
-import { useMeta } from '@/hooks/useMeta';
 import { useProfile } from '@/hooks/useProfile';
 import { useToast } from '@/hooks/use-toast';
 import { useProfileData } from '@/hooks/useProfileData';
@@ -51,10 +49,10 @@ import { initFormData, calculateCompletion } from '@/types/profileForm';
 import type { ProfileFormData, ComingOutStatus } from '@/types/profileForm';
 import type { Profile, ProfileUpdateResult } from '@/hooks/useProfile';
 import type { AvatarConfig } from '@/components/profile/avatarConfig';
-import { PageHeader } from '@/components/layout/PageHeader';
+import { HubModuleHeader } from '@/components/hub/HubModuleHeader';
+import { useTranslation } from 'react-i18next';
 import { cn } from '@/lib/utils';
 import type { User as SupabaseUser } from '@supabase/supabase-js';
-import { PageContainer } from '@/components/layout/PageContainer';
 
 /** Columns newer than the generated Supabase types. */
 type ProfileX = Profile & {
@@ -70,12 +68,28 @@ type ProfileX = Profile & {
 type SectionKind =
   'profile' | 'status' | 'dating' | 'privacy' | 'travel' | 'account' | 'avatar' | null;
 
+const SECTION_TO_KEY: Record<string, SectionKind> = {
+  profile: 'profile',
+  basic: 'profile',
+  status: 'status',
+  vibe: 'status',
+  intent: 'status',
+  identity: 'dating',
+  account: 'account',
+  notifications: 'account',
+  privacy: 'privacy',
+  travel: 'travel',
+  dating: 'dating',
+  relationships: 'dating',
+  intimate: 'dating',
+  avatar: 'avatar',
+};
+
 /** Personal documents are removed after this date (T+30 export window). */
 const DOCS_REMOVAL_DATE = 'July 11, 2026';
 
 export default function Settings() {
   const navigate = useLocalizedNavigate();
-  useMeta({ title: 'Settings', noIndex: true });
   const { user, hasPasskey } = useAuth();
   const { updateProfile, refetchProfile } = useProfile();
   const { toast } = useToast();
@@ -287,34 +301,31 @@ function ProfileSettingsContent({
   hasPasskey,
   user,
 }: ContentProps) {
+  const { t } = useTranslation();
   const px = profile as ProfileX | null | undefined;
   const [searchParams] = useSearchParams();
   const [formData, setFormData] = useState<ProfileFormData>(() => initFormData(profile));
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('saved');
   // ?section= deep links (and old ?tab= links) expand the matching section.
-  const SECTION_TO_KEY: Record<string, SectionKind> = {
-    profile: 'profile',
-    basic: 'profile',
-    status: 'status',
-    vibe: 'status',
-    intent: 'status',
-    identity: 'dating',
-    account: 'account',
-    notifications: 'account',
-    privacy: 'privacy',
-    travel: 'travel',
-    dating: 'dating',
-    relationships: 'dating',
-    intimate: 'dating',
-    avatar: 'avatar',
-  };
   const [activeSection, setActiveSection] = useState<SectionKind>(
     () =>
       SECTION_TO_KEY[searchParams.get('section') ?? ''] ??
       SECTION_TO_KEY[searchParams.get('tab') ?? ''] ??
       null,
   );
+
+  // Follow section links within this workspace without resetting unsaved form data.
+  const sectionQuery = searchParams.toString();
+  const [previousSectionQuery, setPreviousSectionQuery] = useState(sectionQuery);
+  if (sectionQuery !== previousSectionQuery) {
+    setPreviousSectionQuery(sectionQuery);
+    setActiveSection(
+      SECTION_TO_KEY[searchParams.get('section') ?? ''] ??
+        SECTION_TO_KEY[searchParams.get('tab') ?? ''] ??
+        null,
+    );
+  }
 
   // Scroll the opened section into view (deep link, hero button, or off-screen card).
   useEffect(() => {
@@ -444,16 +455,10 @@ function ProfileSettingsContent({
   const toggleSection = (next: SectionKind) => setActiveSection(next);
 
   return (
-    <PageContainer size="form" className="flex flex-col gap-6">
-      <PageHeader
-        title="Settings"
-        subtitle="Your profile, the way you want to be seen"
-        actions={
-          <Button variant="outline" onClick={() => navigate(-1)} className="rounded-element">
-            <ArrowLeft size={16} className="mr-2" />
-            Back
-          </Button>
-        }
+    <div className="flex w-full max-w-reading flex-col gap-6">
+      <HubModuleHeader
+        title={t('header.userMenu.settings', 'Settings')}
+        description="Your profile, the way you want to be seen"
       />
 
       {/* Identity hero — live preview, tap to edit */}
@@ -665,27 +670,14 @@ function ProfileSettingsContent({
         </CardContent>
       </Card>
 
-      {/* Sticky auto-save status bar, as a floating island rather than an
-          edge-to-edge bar. The fill moved OFF this wrapper and onto the plate
-          inside it: a full-bleed element cannot satisfy the rounded-surface
-          contract, because its bottom corners are the viewport's own and the
-          audit reads all four radii. Same shape as AudioMiniBar and
-          CookieConsentBanner — the wrapper positions, the plate carries the
-          surface.
-
-          The bottom offset clears the mobile dock below `md` (MobileBottomNav
-          is `md:hidden` and sits at `--island-inset`, so without the 4.5rem the
-          island covers the only navigation a phone has); above `md` there is no
-          dock and the plain inset is enough. */}
-      <div className="fixed inset-x-[var(--island-inset)] bottom-[calc(var(--island-inset)+env(safe-area-inset-bottom,0px)+4.5rem)] z-30 md:bottom-[calc(var(--island-inset)+env(safe-area-inset-bottom,0px))]">
-        <div className="rounded-container bg-card px-4 py-4 shadow-soft-lg">
-          <SaveStatusLine
-            status={saveStatus}
-            onRetry={() => handleSave(false)}
-            onSignIn={() => navigate('/auth')}
-          />
-        </div>
+      {/* Save feedback stays in the workspace, clear of the mobile dock. */}
+      <div className="sticky bottom-[calc(4.5rem+var(--island-inset)+env(safe-area-inset-bottom,0px))] z-10 border-t border-border-hairline bg-background py-4 md:bottom-0">
+        <SaveStatusLine
+          status={saveStatus}
+          onRetry={() => handleSave(false)}
+          onSignIn={() => navigate('/auth')}
+        />
       </div>
-    </PageContainer>
+    </div>
   );
 }
