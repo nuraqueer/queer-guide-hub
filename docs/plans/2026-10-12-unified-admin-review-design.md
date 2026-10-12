@@ -88,7 +88,7 @@ staging and ownership decisions replace duplicate ledger exposure. Closed or
 missing canonical records do not generate another corrective review task.
 Bookmarked pending items resolve independently of the current page.
 
-Validation: 124 focused frontend tests; lint; the repository typecheck ratchet
+Validation: 179 focused frontend tests; lint; the repository typecheck ratchet
 (no new errors); production build and bundle-shape checks; SQL syntax and live
 source queries; rolled-back database tests covering role/visibility boundaries,
 confirmation, stale decisions, brand claims, atomic staging batches, supported

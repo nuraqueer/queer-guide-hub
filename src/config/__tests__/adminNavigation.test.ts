@@ -21,12 +21,12 @@ describe('adminNavSections shape', () => {
     expect(getNavItemByRoute('/admin/settings')).toBeUndefined();
     expect(getRouteMinRole('/admin/content/unified_tags')).toBe('editor');
     expect(getRouteMinRole('/admin/settings')).toBe('moderator');
-    expect(getRouteMinRole('/admin/governance')).toBe('editor');
+    expect(getRouteMinRole('/admin/governance')).toBe('moderator');
   });
 
   it('places editorial is reached through Governance rather than a separate sidebar destination', () => {
     const items = adminNavSections.flatMap((section) => section.items);
-    expect(items.filter((item) => item.route === '/admin/governance')).toHaveLength(1);
+    expect(items.filter((item) => item.route === '/admin')).toHaveLength(1);
     expect(items.some((item) => item.route === '/admin/places-editorial')).toBe(false);
   });
 

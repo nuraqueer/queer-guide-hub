@@ -19,6 +19,7 @@ export const MERGE_REVIEW_SOURCES = [
   'milestone-duplicates',
 ];
 export const SPECIAL_REVIEW_SOURCES = new Set([
+  'editorial',
   'org-link-review',
   'sensitive-tags',
   'ai-suggestions',
@@ -57,6 +58,13 @@ export interface ReviewContract {
 }
 export function reviewContract(item: ReviewItem): ReviewContract {
   switch (item.queue_type) {
+    case 'editorial':
+      return {
+        approve: 'Save & publish draft',
+        reject: 'Reject draft',
+        consequence:
+          'Save the reviewed hook and prose, then publish through the validated editorial workflow. Country drafts still require canonical prose and citations.',
+      };
     case 'sensitive-tags':
       return {
         approve: 'Approve & index',

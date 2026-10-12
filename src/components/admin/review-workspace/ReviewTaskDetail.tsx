@@ -95,7 +95,8 @@ export function ReviewTaskDetail({ item, busy, error, onDecision, onSkip, onBack
   const meta = item.meta ?? {};
   const [notes, setNotes] = useState('');
   const [confirmed, setConfirmed] = useState(false);
-  const [description, setDescription] = useState(String(meta.description ?? ''));
+  const [description, setDescription] = useState(String(meta.draft_long ?? meta.description ?? ''));
+  const [draftHook, setDraftHook] = useState(String(meta.draft_hook ?? ''));
   const [category, setCategory] = useState(
     String((meta.proposal as Record<string, unknown> | undefined)?.suggested ?? ''),
   );
@@ -116,6 +117,7 @@ export function ReviewTaskDetail({ item, busy, error, onDecision, onSkip, onBack
   const workflow = item.queue_type;
   const issue = String(meta.issue_code ?? '');
   const needsDescription =
+    workflow === 'editorial' ||
     (workflow === 'tag-restoration' && restoration === 'article') ||
     (workflow === 'milestone-review' && meta.field === 'description') ||
     (workflow === 'tag-editorial' &&
@@ -135,27 +137,29 @@ export function ReviewTaskDetail({ item, busy, error, onDecision, onSkip, onBack
   const editable = Boolean(
     item.entity_table && item.entity_id && item.entity_table !== 'cms_content',
   );
-  const evidenceEntries = Object.entries(meta).filter(
-    ([key, value]) =>
-      value != null &&
-      ![
-        'workflow',
-        'tag_id',
-        'place_id',
-        'finding_id',
-        'audit_id',
-        'id',
-        'entity_id',
-        'milestone_id',
-        'canonical_id',
-        'duplicate_id',
-        'created_at',
-        'updated_at',
-        'reviewer_id',
-        'status',
-        'description_i18n_candidates',
-      ].includes(key),
-  );
+  const evidenceEntries = Object.entries(meta)
+    .filter(([key]) => workflow !== 'editorial' || !['draft_long', 'draft_hook'].includes(key))
+    .filter(
+      ([key, value]) =>
+        value != null &&
+        ![
+          'workflow',
+          'tag_id',
+          'place_id',
+          'finding_id',
+          'audit_id',
+          'id',
+          'entity_id',
+          'milestone_id',
+          'canonical_id',
+          'duplicate_id',
+          'created_at',
+          'updated_at',
+          'reviewer_id',
+          'status',
+          'description_i18n_candidates',
+        ].includes(key),
+    );
 
   function decide(action: 'approve' | 'reject') {
     if (busy) return;
@@ -189,6 +193,8 @@ export function ReviewTaskDetail({ item, busy, error, onDecision, onSkip, onBack
       problem = 'Write a complete reviewed description before saving.';
     if (action === 'approve' && workflow === 'trip-geography' && !cityId && !countryId)
       problem = 'Choose the correct city or country before resolving.';
+    if (action === 'approve' && workflow === 'editorial' && !draftHook.trim())
+      problem = 'Write a reviewed hook before publishing this draft.';
     setValidation(problem);
     if (problem) return;
     onDecision({
@@ -204,6 +210,8 @@ export function ReviewTaskDetail({ item, busy, error, onDecision, onSkip, onBack
         tags,
         decision: workflow === 'tag-editorial' ? ontology : restoration,
         description,
+        draft_hook: draftHook,
+        draft_long: description,
         locale,
         role,
         keep_distinct: keepDistinct,
@@ -377,6 +385,19 @@ export function ReviewTaskDetail({ item, busy, error, onDecision, onSkip, onBack
                 }),
               )}
             />
+          )}
+          {workflow === 'editorial' && (
+            <label
+              htmlFor="review-editorial-hook"
+              className="flex flex-col gap-2 text-sm font-medium"
+            >
+              Reviewed hook
+              <Textarea
+                id="review-editorial-hook"
+                value={draftHook}
+                onChange={(e) => setDraftHook(e.target.value)}
+              />
+            </label>
           )}
           {needsDescription && (
             <label className="flex flex-col gap-2 text-sm font-medium">

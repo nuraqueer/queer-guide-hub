@@ -32,6 +32,19 @@ function renderTask(queue_type: string, overrides: Partial<ReviewItem> = {}) {
   return onDecision;
 }
 describe('inline decisions', () => {
+  it('preserves the full editorial prose when approving a corrected draft', () => {
+    const prose = 'A complete source-grounded description. '.repeat(100);
+    const decide = renderTask('editorial', {
+      meta: { draft_hook: 'A reviewed hook', draft_long: prose },
+    });
+    expect(screen.getByLabelText('Reviewed description')).toHaveValue(prose);
+    fireEvent.click(screen.getByRole('button', { name: 'Save & publish draft' }));
+    expect(decide).toHaveBeenCalledWith(
+      expect.objectContaining({
+        payload: expect.objectContaining({ draft_hook: 'A reviewed hook', draft_long: prose }),
+      }),
+    );
+  });
   it('requires explicit confirmation before indexing a sensitive tag', () => {
     const decide = renderTask('sensitive-tags', { risk_flags: { requires_confirm: true } });
     fireEvent.click(screen.getByRole('button', { name: 'Approve & index' }));

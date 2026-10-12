@@ -125,6 +125,7 @@ export const adminNavSections: AdminNavSection[] = [
           'duplicates',
           'merge',
           'editorial drafts',
+          'places editorial',
         ],
       },
 
@@ -450,6 +451,7 @@ export function resolveItemMinRole(item: AdminNavItem, section?: AdminNavSection
  */
 export const ADMIN_ROUTE_ROLE_OVERRIDES: Record<string, AdminRole> = {
   '/admin/diagnostics': 'moderator',
+  '/admin/governance': 'moderator',
   '/admin/editorial-tools': 'admin',
   '/admin/settings': 'moderator',
   '/admin/business': 'admin',

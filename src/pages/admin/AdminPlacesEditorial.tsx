@@ -1,3 +1,5 @@
+import { AdminTextSkeleton } from '@/components/admin/primitives/AdminLoading';
+import { AdminEmpty } from '@/components/admin/primitives/AdminEmpty';
 import { Link } from 'react-router';
 import { useId, useState } from 'react';
 import { TrackLoader } from '@/components/transit/TrackLoader';
@@ -137,119 +139,6 @@ function DraftsQueue() {
     </div>
   );
 }
-
-function DraftRow({ draft }: { draft: EditorialDraft }) {
-  const { toast } = useToast();
-  const [hook, setHook] = useState(draft.draft_hook ?? '');
-  const [long, setLong] = useState(draft.draft_long ?? '');
-
-  const hookId = useId();
-  const longId = useId();
-
-  const entityName = useEntityName(draft.entity_type, draft.entity_id);
-  const save = useSaveDraft();
-  const approve = useApproveDraft();
-  const reject = useRejectDraft();
-
-  const handleSave = () => {
-    save.mutate(
-      { id: draft.id, draft_hook: hook, draft_long: long || null },
-      { onSuccess: () => toast({ title: 'Saved' }) },
-    );
-  };
-
-  const handleApprove = async () => {
-    try {
-      await save.mutateAsync({ id: draft.id, draft_hook: hook, draft_long: long || null });
-      await approve.mutateAsync(draft.id);
-      toast({ title: 'Approved + published' });
-    } catch (e) {
-      toast({
-        title: 'Approve failed',
-        description: e instanceof Error ? e.message : 'Unknown',
-        variant: 'destructive',
-      });
-    }
-  };
-
-  const handleReject = () => {
-    reject.mutate(draft.id, { onSuccess: () => toast({ title: 'Rejected' }) });
-  };
-
-  return (
-    <Card className="p-4 flex flex-col gap-4">
-      <div className="flex items-center justify-between gap-4">
-        <div className="flex items-center gap-2">
-          <p className="text-title font-semibold">{entityName.data ?? '…'}</p>
-          <Badge variant="outline" className="text-2xs uppercase">
-            {draft.entity_type}
-          </Badge>
-        </div>
-        <p className="text-2xs text-muted-foreground">
-          {new Date(draft.generated_at).toLocaleString()}
-        </p>
-      </div>
-
-      <div className="flex flex-col gap-2">
-        <label htmlFor={hookId} className="text-2xs uppercase tracking-wide text-muted-foreground">
-          Hook
-        </label>
-        <Input
-          id={hookId}
-          value={hook}
-          onChange={(e) => setHook(e.target.value)}
-          maxLength={140}
-          placeholder="One-line editorial pull"
-        />
-        <p className="text-2xs text-muted-foreground">{hook.length}/120 recommended</p>
-      </div>
-
-      {draft.entity_type === 'country' && (
-        <div className="flex flex-col gap-2">
-          <label
-            htmlFor={longId}
-            className="text-2xs uppercase tracking-wide text-muted-foreground"
-          >
-            Long-form (optional)
-          </label>
-          <Textarea
-            id={longId}
-            value={long}
-            onChange={(e) => setLong(e.target.value)}
-            rows={4}
-            placeholder="3–6 sentences for hero / rail features"
-          />
-        </div>
-      )}
-
-      <div className="flex items-center gap-2">
-        <Button
-          onClick={handleApprove}
-          disabled={save.isPending || approve.isPending || !hook.trim()}
-          size="sm"
-        >
-          {approve.isPending ? (
-            <TrackLoader size={16} className="mr-2" />
-          ) : (
-            <Check className="h-4 w-4 mr-2" />
-          )}
-          Approve & publish
-        </Button>
-        <Button variant="outline" onClick={handleSave} disabled={save.isPending} size="sm">
-          Save draft
-        </Button>
-        <Button variant="outline" onClick={handleReject} disabled={reject.isPending} size="sm">
-          <X className="h-4 w-4 mr-2" />
-          Reject
-        </Button>
-      </div>
-    </Card>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Covers editor
-// ---------------------------------------------------------------------------
 
 function CoversEditor() {
   const { toast } = useToast();
