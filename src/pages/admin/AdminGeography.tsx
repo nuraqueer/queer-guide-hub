@@ -1,3 +1,4 @@
+import { useAdminShell } from '@/components/admin/shell/AdminShell';
 import { GeographyLandmarks } from '@/components/admin/GeographyLandmarks';
 import { useDeferredValue, useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router';
@@ -416,6 +417,7 @@ function GeographyDetail({
 export default function AdminGeography() {
   const [params, setParams] = useSearchParams();
   const client = useQueryClient();
+  const { openEditor } = useAdminShell();
   const options = useGeographyFilters();
   const selectedId = params.get('selected');
   const record = useGeographyRecord(selectedId);
@@ -657,10 +659,11 @@ export default function AdminGeography() {
             >
               <span className="font-medium">{issue.entity_name}</span>
               <span className="text-muted-foreground">{issue.violation.replaceAll('_', ' ')}</span>
-              <a
-                className="underline"
-                href={
-                  cmsEditPath(
+              <Button
+                variant="ghost"
+                className="h-auto p-0 underline"
+                onClick={() =>
+                  openEditor(
                     issue.entity_type === 'event'
                       ? 'events'
                       : issue.entity_type === 'venue'
@@ -669,13 +672,15 @@ export default function AdminGeography() {
                           ? 'hotels'
                           : issue.entity_type === 'village'
                             ? 'queer_villages'
-                            : 'cities',
+                            : issue.entity_type === 'country'
+                              ? 'countries'
+                              : 'cities',
                     issue.entity_id,
-                  ) ?? '#'
+                  )
                 }
               >
                 Inspect CMS record
-              </a>
+              </Button>
             </li>
           ))}
         </ul>
