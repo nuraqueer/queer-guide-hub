@@ -1,7 +1,3 @@
--- Recovery record: already applied in production. Do not re-run.
--- Recovered verbatim from supabase_migrations.schema_migrations.statements.
--- Recorded SQL MD5: c363e7fdf8fb0d76e1fb4d8352b9b0e4
-
 -- Keep pending membership distinct from nullable metadata; enforce identity confirmation in the dispatcher.
 create or replace function public.admin_review_action(p_queue_type text,p_item_id uuid,p_action text,
  p_notes text default null,p_confirm boolean default false,p_payload jsonb default '{}'::jsonb)
@@ -163,4 +159,3 @@ begin
 end $$;
 revoke all on function public.admin_review_action(text,uuid,text,text,boolean,jsonb) from public,anon;
 grant execute on function public.admin_review_action(text,uuid,text,text,boolean,jsonb) to authenticated;
-
