@@ -23,7 +23,6 @@ import { useMemo, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { LayoutDashboard, RefreshCw, SlidersHorizontal } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { cn } from '@/lib/utils';
 import { AdminPageHeader } from '@/components/admin/AdminPageHeader';
 import { AdminTextSkeleton } from '@/components/admin/primitives/AdminLoading';
 import { CockpitSection } from '@/components/admin/cockpit/CockpitSection';
@@ -142,11 +141,7 @@ export default function AdminDashboard() {
               aria-label={refreshing ? 'Refreshing cockpit' : 'Refresh cockpit'}
               aria-busy={refreshing}
             >
-              <RefreshCw
-                size={15}
-                className={cn('mr-1.5', refreshing && 'motion-safe:animate-spin')}
-                aria-hidden
-              />
+              <RefreshCw size={15} className="mr-1.5" aria-hidden />
               {refreshing ? 'Refreshing…' : 'Refresh'}
             </Button>
           </>
