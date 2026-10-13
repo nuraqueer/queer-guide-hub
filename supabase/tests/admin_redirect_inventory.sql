@@ -1,4 +1,4 @@
--- Run after 20261013164138. All fixtures are rolled back.
+-- Run after 99991791920002. All fixtures are rolled back.
 BEGIN;
 
 INSERT INTO public.redirects (id, type, source_path, target, is_enabled)
