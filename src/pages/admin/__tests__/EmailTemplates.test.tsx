@@ -122,7 +122,12 @@ describe('EmailTemplates safeguards', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
     fireEvent.click(screen.getByRole('button', { name: 'Use block editor' }));
     fireEvent.click(screen.getByRole('button', { name: 'Convert draft' }));
-    const canvas = await screen.findByRole('textbox', { name: 'Email block content' });
+    // This path loads the real lazy editor and its dependencies on a cold run.
+    const canvas = await screen.findByRole(
+      'textbox',
+      { name: 'Email block content' },
+      { timeout: 10000 },
+    );
     fireEvent.click(screen.getByRole('tab', { name: 'Plain text' }));
     expect(canvas.isConnected).toBe(true);
     fireEvent.click(screen.getByRole('tab', { name: 'Email content' }));
