@@ -1,8 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { webcrypto } from 'node:crypto';
+import { redirectClientIp } from '../../supabase/functions/_shared/redirect-relay';
 import { onRequest } from '../go/[slug]';
 
 afterEach(() => vi.unstubAllGlobals());
-function invoke(method = 'GET', slug = 'pride-zurich', query = '') {
+function invoke(method = 'GET', slug = 'pride-zurich', query = '', secret?: string) {
   return onRequest({
     request: new Request(`https://queer.guide/go/${slug}${query}`, {
       method,
@@ -13,7 +15,11 @@ function invoke(method = 'GET', slug = 'pride-zurich', query = '') {
       },
     }),
     params: { slug },
-    env: { SUPABASE_URL: 'https://example.supabase.co', SUPABASE_ANON_KEY: 'public-key' },
+    env: {
+      SUPABASE_URL: 'https://example.supabase.co',
+      SUPABASE_ANON_KEY: 'public-key',
+      REDIRECT_RELAY_SECRET: secret,
+    },
   } as never);
 }
 describe('branded tracked URL', () => {
@@ -34,6 +40,40 @@ describe('branded tracked URL', () => {
     expect(options.redirect).toBe('manual');
     expect(new Headers(options.headers).get('cf-ipcountry')).toBe('CH');
     expect(new Headers(options.headers).get('x-qg-visitor-country')).toBe('CH');
+  });
+  it('signs the edge visitor IP for the resolver when a relay secret is configured', async () => {
+    vi.stubGlobal('crypto', webcrypto);
+    const secret = 'x'.repeat(32);
+    const fetcher = vi.fn(
+      async () => new Response(null, { status: 302, headers: { Location: 'https://example.com' } }),
+    );
+    vi.stubGlobal('fetch', fetcher);
+    await invoke('GET', 'pride-zurich', '', secret);
+    const options = (fetcher.mock.calls[0] as unknown as [URL, RequestInit])[1];
+    const headers = new Headers(options.headers);
+    headers.set('cf-connecting-ip', '192.0.2.99'); // upstream CDN replaced its own header
+    expect(await redirectClientIp(headers, 'pride-zurich', secret)).toBe('192.0.2.1');
+  });
+  it('preserves the rate-limit page and retry time', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        async () =>
+          new Response('<h1>Try again later</h1>', {
+            status: 429,
+            headers: {
+              'Content-Type': 'text/html',
+              'Retry-After': '900',
+              'Content-Security-Policy': "default-src 'none'",
+            },
+          }),
+      ),
+    );
+    const response = await invoke('POST');
+    expect(response.status).toBe(429);
+    expect(response.headers.get('Retry-After')).toBe('900');
+    expect(response.headers.get('Content-Security-Policy')).toBe("default-src 'none'");
+    expect(await response.text()).toContain('Try again later');
   });
   it('forwards HEAD as HEAD rather than generating a GET visit', async () => {
     const fetcher = vi.fn(

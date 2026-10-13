@@ -18,7 +18,11 @@ function runtime() {
     join(__dirname, '../../../../supabase/functions/_shared/redirect-visitor.ts'),
     'utf8',
   ).replace(/^export\s+/gm, '');
-  const code = ts.transpileModule(shared + '\n' + visitor + '\n' + source, {
+  const relay = readFileSync(
+    join(__dirname, '../../../../supabase/functions/_shared/redirect-relay.ts'),
+    'utf8',
+  ).replace(/^export\s+/gm, '');
+  const code = ts.transpileModule(shared + '\n' + visitor + '\n' + relay + '\n' + source, {
     compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext },
   }).outputText;
   let handler: ((request: Request) => Promise<Response>) | undefined;
@@ -37,10 +41,22 @@ function runtime() {
     settings: { policy: {}, password_hash: null as unknown },
     failed: false,
     quota: true,
+    retry: 0,
+    attemptError: false,
   };
   const rpc = vi.fn(async (name: string, _args?: Record<string, unknown>) => ({
-    error: null,
-    data: name === 'record_redirect_visit' ? (state.quota ? 'click-id' : null) : [],
+    error:
+      name === 'reserve_redirect_password_attempt' && state.attemptError
+        ? { message: 'offline' }
+        : null,
+    data:
+      name === 'reserve_redirect_password_attempt'
+        ? state.retry
+        : name === 'record_redirect_visit'
+          ? state.quota
+            ? 'click-id'
+            : null
+          : [],
   }));
   const db = {
     rpc,
@@ -116,14 +132,34 @@ describe('live short-link resolver', () => {
     expect(denied.status).toBe(401);
     expect(denied.headers.has('Location')).toBe(false);
     expect(await denied.text()).not.toContain('example.com');
-    expect(run.rpc).not.toHaveBeenCalled();
+    expect(run.rpc.mock.calls.map(([name]) => name)).toEqual(['reserve_redirect_password_attempt']);
     const allowed = await run.invoke('GET', 'pw=fixture+password&utm_source=qr');
     expect(allowed.status).toBe(302);
     expect(allowed.headers.get('Location')).not.toContain('pw=');
-    expect(run.rpc.mock.calls[0][1]?.p_query).toBe('utm_source=qr');
+    expect(
+      run.rpc.mock.calls.find(([name]) => name === 'record_redirect_visit')?.[1]?.p_query,
+    ).toBe('utm_source=qr');
     expect((await run.invoke('POST', 'utm_source=qr', 'password=fixture+password')).status).toBe(
       302,
     );
+  });
+  it('returns Retry-After without a target on exhausted attempts and fails closed on limiter errors', async () => {
+    const run = runtime();
+    vi.stubGlobal('crypto', webcrypto);
+    run.state.settings.password_hash = await hashLinkPassword('fixture password');
+    vi.unstubAllGlobals();
+    expect((await run.invoke('HEAD', 'pw=fixture+password')).status).toBe(401);
+    expect((await run.invoke('GET', '')).status).toBe(401);
+    expect(run.rpc).not.toHaveBeenCalled();
+    run.state.retry = 601;
+    const blocked = await run.invoke('POST', '', 'password=fixture+password');
+    expect(blocked.status).toBe(429);
+    expect(blocked.headers.get('Retry-After')).toBe('601');
+    expect(blocked.headers.has('Location')).toBe(false);
+    expect(await blocked.text()).not.toContain('example.com');
+    expect(run.rpc.mock.calls.some(([name]) => name === 'record_redirect_visit')).toBe(false);
+    run.state.attemptError = true;
+    expect((await run.invoke('GET', 'pw=anything')).status).toBe(503);
   });
   it('uses live state instead of a stale cached rule and never tracks expired fallbacks', async () => {
     const run = runtime();

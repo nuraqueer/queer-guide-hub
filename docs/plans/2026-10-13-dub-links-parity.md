@@ -26,7 +26,7 @@ exist. Existing local tools are a foundation, not proof of parity or deployment.
 | Device targeting | iOS/Android destinations, evaluated before geo | Candidate: iOS/Android priority tested |
 | A/B testing | 2–5 destinations, weighted traffic≥10%, end date≤6 weeks, manual winner/end | Candidate: editor/resolver implemented locally |
 | A/B completion | Device→geo→experiment priority; choose winner by sales/conversions, rates, clicks; leads fallback | Candidate: selection/metrics now fed by verified native and scoped server conversion ingestion |
-| Password links | Password challenge, hashed secret, no disclosure/bypass, scoped access | Partial: hashed protection and bypass tests; rate limiting/logo pending |
+| Password links | Password challenge, hashed secret, no disclosure/bypass, scoped access | Partial: hashed protection, atomic attempt throttling and signed IP relay; custom password logo pending |
 | Expiration | Date and expired destination URL, live enforcement without stale cached rules | Candidate: date/phrase parser, custom fallback and live enforcement tested |
 | Link cloaking | Explicit iframe mode with accurate iframe limitations, standard redirect fallback | Missing |
 | Branded QR | Dots square/circle/joined; marker center square/circle; border square/rounded/circle; colors | Candidate: all dot/marker/color controls; scan verification before export |
@@ -205,3 +205,25 @@ targeted lint and typecheck (no new errors) passed. Screenshots under
 `docs/guides/redirect-analytics.md` documents endpoints, filters, UTC semantics,
 heuristics, limits and remaining scope. No production schema was mutated. This
 is another candidate checkpoint, not completion of the full parity objective.
+
+## Checkpoint: password attempt throttling
+
+Implemented locally: atomic service-only reservations before password hashing;
+10 attempts per link/client hash and 1,000 per link in a 15-minute window;
+bounded counters and lazy retention cleanup; no-count HEAD/empty GET challenge;
+fail-closed unavailable limiter; destination-free 429 challenge with Retry-After
+preserved by the branded proxy. Successful checks consume the same budget.
+
+An optional shared REDIRECT_RELAY_SECRET signs the visitor IP, slug and timestamp
+between Pages and the resolver. Without valid recent proof, only the upstream
+CDN address is used; arbitrary X-Forwarded-For is ignored. Deployments must
+configure the matching secret to distinguish visitors behind the Pages relay.
+Without it, relay visitors may share a conservative bucket.
+
+Evidence: 19 policy/resolver/relay/proxy tests and isolated PostgreSQL suite passed for
+limits, independent clients, resets, global budget, retention, private access,
+invalid hashes, signed forwarding/tampering and retry behavior. Native Stripe
+regression, proxy compilation, targeted lint and migration-version validation
+passed; typecheck reports no new errors (704 inherited). Production
+migration and matching relay-secret setup remain pending. Password-page logo
+customization and the other remaining parity requirements are still outstanding.

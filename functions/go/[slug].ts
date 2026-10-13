@@ -1,3 +1,4 @@
+import { signRedirectRelay } from '../../supabase/functions/_shared/redirect-relay';
 import type { Env } from '../_lib/sitemap';
 
 /** Keep the public branded URL while the existing resolver owns rules and visits. */
@@ -40,6 +41,18 @@ export const onRequest: PagesFunction<Env> = async ({ request, params, env }) =>
     if (typeof value === 'string') forwarded.set('x-qg-visitor-' + field, value);
   }
   forwarded.set('x-qg-visitor-domain', new URL(request.url).hostname);
+  const relay = env.REDIRECT_RELAY_SECRET
+    ? await signRedirectRelay(
+        request.headers.get('cf-connecting-ip') ?? '',
+        slug,
+        env.REDIRECT_RELAY_SECRET,
+      )
+    : null;
+  if (relay) {
+    forwarded.set('x-qg-relay-ip', relay.ip);
+    forwarded.set('x-qg-relay-time', relay.timestamp);
+    forwarded.set('x-qg-relay-signature', relay.signature);
+  }
   if (request.method === 'POST')
     forwarded.set('Content-Type', request.headers.get('Content-Type') ?? '');
   try {
@@ -60,13 +73,15 @@ export const onRequest: PagesFunction<Env> = async ({ request, params, env }) =>
         headers,
       });
     if (
-      [200, 401, 410].includes(status) &&
+      [200, 401, 410, 429].includes(status) &&
       response.headers.get('Content-Type')?.startsWith('text/html')
     ) {
       const htmlHeaders = new Headers(headers);
       htmlHeaders.set('Content-Type', 'text/html; charset=utf-8');
       const csp = response.headers.get('Content-Security-Policy');
       if (csp) htmlHeaders.set('Content-Security-Policy', csp);
+      const retry = response.headers.get('Retry-After');
+      if (status === 429 && retry && /^\d{1,3}$/.test(retry)) htmlHeaders.set('Retry-After', retry);
       return new Response(request.method === 'HEAD' ? null : response.body, {
         status,
         headers: htmlHeaders,

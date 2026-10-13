@@ -1,3 +1,4 @@
+import { redirectClientIp } from "../_shared/redirect-relay.ts";
 import { visitorMetadata } from "../_shared/redirect-visitor.ts";
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2.50.5";
@@ -51,7 +52,19 @@ Deno.serve(async (req: Request) => {
     if (settingsError) return page(503,"Link unavailable","Please try again shortly.",false,head);
     const policy:LinkPolicy={...(settings?.policy ?? {}),...(link.end_at ? {expires_at:link.end_at} : {})};
     if (policyErrors(policy).length || !validPublicTarget(link.target)) return page(503,"Link unavailable","The destination settings need attention.",false,head);
-    if (settings?.password_hash && !await verifyLinkPassword(password,settings.password_hash as PasswordHash)) return page(401,"Protected link",password ? "That password was not accepted." : "Enter the password to open this link.",true,head);
+    const ip=await redirectClientIp(req.headers,slug,Deno.env.get("REDIRECT_RELAY_SECRET"));
+    const hash=new Uint8Array(await crypto.subtle.digest("SHA-256",new TextEncoder().encode(ip+(Deno.env.get("REDIRECT_IP_HASH_SALT") ?? "qg-redirect-salt-2026"))));
+    const ipHash=Array.from(hash,(value)=>value.toString(16).padStart(2,"0")).join("");
+    if (settings?.password_hash) {
+      if (head || !password && req.method !== "POST") return page(401,"Protected link","Enter the password to open this link.",true,head);
+      const {data:retry,error:attemptError}=await db.rpc("reserve_redirect_password_attempt",{p_redirect_id:link.id,p_client_hash:ipHash});
+      if(attemptError || !Number.isInteger(retry) || retry<0 || retry>900) return page(503,"Link unavailable","Please try again shortly.",false,head);
+      if(retry>0) {
+        const response=page(429,"Try again later","Too many password attempts. Please wait "+Math.ceil(retry/60)+" minute(s) before trying again.");
+        response.headers.set("Retry-After",String(retry));return response;
+      }
+      if(!await verifyLinkPassword(password,settings.password_hash as PasswordHash)) return page(401,"Protected link","That password was not accepted.",true,head);
+    }
     const country=req.headers.get("x-qg-visitor-country") || req.headers.get("cf-ipcountry");
     const words=crypto.getRandomValues(new Uint32Array(1));
     let stats=[];
@@ -68,9 +81,7 @@ Deno.serve(async (req: Request) => {
     targetUrl.searchParams.delete("qg_click_id"); destination=targetUrl.href;
     if (["queer.guide","www.queer.guide"].includes(targetUrl.hostname) && targetUrl.pathname.startsWith("/go/")) return page(508,"Link loop","This link points to another short link.",false,head);
     if (!head && !selected.expired) {
-      const ip=req.headers.get("cf-connecting-ip") ?? req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
-      const hash=new Uint8Array(await crypto.subtle.digest("SHA-256",new TextEncoder().encode(ip+(Deno.env.get("REDIRECT_IP_HASH_SALT") ?? "qg-redirect-salt-2026"))));
-      const {data:clickId,error}=await db.rpc("record_redirect_visit",{p_redirect_id:link.id,p_path:"/go/"+slug,p_query:incoming.toString() || null,p_referer:cleanReferrer(req.headers.get("referer")),p_user_agent:req.headers.get("user-agent"),p_country:country,p_ip_hash:Array.from(hash,(value)=>value.toString(16).padStart(2,"0")).join(""),p_status:link.status_code,p_variant_id:selected.variantId,p_destination:destination,p_metadata:visitorMetadata(req,isQr)});
+      const {data:clickId,error}=await db.rpc("record_redirect_visit",{p_redirect_id:link.id,p_path:"/go/"+slug,p_query:incoming.toString() || null,p_referer:cleanReferrer(req.headers.get("referer")),p_user_agent:req.headers.get("user-agent"),p_country:country,p_ip_hash:ipHash,p_status:link.status_code,p_variant_id:selected.variantId,p_destination:destination,p_metadata:visitorMetadata(req,isQr)});
       if(error)return page(503,"Link unavailable","Please try again shortly.",false,head);
       if(!clickId)return page(410,"Link unavailable","This link has expired or reached its visit limit.",false,head);
       if(policy.track_conversions){targetUrl.searchParams.set("qg_click_id",clickId);destination=targetUrl.href;}
