@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
-// Guards `99991791910834`, which gives `run_city_trust_recompute`'s scope a fillable-gap arm so a
+// Guards `99991791920004`, which gives `run_city_trust_recompute`'s scope a fillable-gap arm so a
 // city that LOSES its last venue is deindexed on the next nightly pass instead of staying
 // published and empty for up to 30 days.
 //
@@ -12,7 +12,7 @@ import { describe, expect, it } from 'vitest';
 // string literal that carries it. An unstripped `toContain` therefore passes against a file whose
 // executable statement has been deleted, which is the vacuous shape this repo has recorded many
 // times over.
-const MIGRATION = '99991791910834_city_empty_shell_reopen_arm.sql';
+const MIGRATION = '99991791920004_city_empty_shell_reopen_arm.sql';
 const raw = readFileSync(join(process.cwd(), 'supabase/migrations', MIGRATION), 'utf8');
 
 // Strip only LINE-LEADING comments. A mid-line `--` strip would also cut the `-- FILLABLE-GAP ARM`
