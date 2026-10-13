@@ -1,5 +1,6 @@
 import { useAuth } from '@/hooks/useAuth';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
+import { useEffect } from 'react';
 import { untypedFrom, untypedRpc, untypedSupabase } from '@/integrations/supabase/untyped';
 import type { TriageItem } from '@/hooks/useUnifiedTriageQueue';
 import { callSearchIntelligence, createTagFromProposal } from '@/hooks/useSearchIntelligence';
@@ -220,14 +221,31 @@ type ReviewSummary = Pick<
 // Shared landing scope for the review workspace. Sidebar counts use a separate summary RPC.
 export const DEFAULT_REVIEW_SCOPE: ReviewFilters['scope'] = 'decisions';
 
-async function fetchReviewSummary({ signal }: { signal: AbortSignal }): Promise<ReviewSummary> {
+async function fetchReviewSummary({
+  signal,
+  queryKey,
+  client,
+}: {
+  signal: AbortSignal;
+  queryKey: readonly unknown[];
+  client: QueryClient;
+}): Promise<ReviewSummary> {
   const { data, error } = await untypedSupabase.rpc('get_admin_review_summary').abortSignal(signal);
   if (error) throw new Error(error.message);
   if (!data) throw new Error('The review summary returned no data.');
-  return data as ReviewSummary;
+  const incoming = data as ReviewSummary;
+  const cached = client.getQueryData<ReviewSummary>(queryKey);
+  return cached && Date.parse(cached.updated_at) > Date.parse(incoming.updated_at)
+    ? cached
+    : incoming;
 }
 export function useAdminReviewSummary(enabled = true) {
   const { user } = useAuth();
+  const qc = useQueryClient();
+  useEffect(() => {
+    if (!enabled)
+      void qc.cancelQueries({ queryKey: ['admin-review-summary', user?.id], exact: true });
+  }, [enabled, user?.id, qc]);
   return useQuery<ReviewSummary>({
     queryKey: ['admin-review-summary', user?.id],
     enabled: enabled && !!user?.id,

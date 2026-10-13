@@ -1,6 +1,6 @@
 import { renderHook, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({ rpc: vi.fn() }));
@@ -16,8 +16,10 @@ vi.mock('@/hooks/useSearchIntelligence', () => ({
 }));
 import { useAdminReview, useAdminReviewSummary } from '../useAdminReview';
 
-function wrapper({ children }: { children: ReactNode }) {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+function Wrapper({ children }: { children: ReactNode }) {
+  const [client] = useState(
+    () => new QueryClient({ defaultOptions: { queries: { retry: false } } }),
+  );
   return <QueryClientProvider client={client}>{children}</QueryClientProvider>;
 }
 describe('review requests', () => {
@@ -31,7 +33,7 @@ describe('review requests', () => {
     };
     const abortSignal = vi.fn().mockResolvedValue({ data: summary, error: null });
     mocks.rpc.mockReturnValue({ abortSignal });
-    const { result } = renderHook(() => useAdminReviewSummary(), { wrapper });
+    const { result } = renderHook(() => useAdminReviewSummary(), { wrapper: Wrapper });
     await waitFor(() => expect(result.current.data).toEqual(summary));
     expect(mocks.rpc).toHaveBeenCalledExactlyOnceWith('get_admin_review_summary');
     expect(abortSignal).toHaveBeenCalledWith(expect.any(AbortSignal));
@@ -47,7 +49,7 @@ describe('review requests', () => {
     const { unmount } = renderHook(
       () =>
         useAdminReview({ queues: null, search: '', scope: 'decisions', sort: 'priority', page: 1 }),
-      { wrapper },
+      { wrapper: Wrapper },
     );
     await waitFor(() => expect(captured).toBeDefined());
     expect(captured?.aborted).toBe(false);
@@ -82,10 +84,26 @@ describe('review requests', () => {
         }),
         sidebar: useAdminReviewSummary(false),
       }),
-      { wrapper },
+      { wrapper: Wrapper },
     );
     await waitFor(() => expect(result.current.sidebar.data?.decisions_total).toBe(12));
     expect(mocks.rpc).toHaveBeenCalledTimes(1);
     expect(mocks.rpc.mock.calls[0][0]).toBe('get_admin_review_queue');
+  });
+  it('cancels a pending sidebar summary when entering the queue workspace', async () => {
+    let captured: AbortSignal | undefined;
+    mocks.rpc.mockReturnValue({
+      abortSignal: (signal: AbortSignal) => {
+        captured = signal;
+        return new Promise(() => {});
+      },
+    });
+    const { rerender } = renderHook(({ enabled }) => useAdminReviewSummary(enabled), {
+      wrapper: Wrapper,
+      initialProps: { enabled: true },
+    });
+    await waitFor(() => expect(captured).toBeDefined());
+    rerender({ enabled: false });
+    await waitFor(() => expect(captured?.aborted).toBe(true));
   });
 });
