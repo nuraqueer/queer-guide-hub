@@ -14,7 +14,11 @@ function runtime() {
     join(__dirname, '../../../../supabase/functions/_shared/link-policy.ts'),
     'utf8',
   ).replace(/^export\s+/gm, '');
-  const code = ts.transpileModule(shared + '\n' + source, {
+  const visitor = readFileSync(
+    join(__dirname, '../../../../supabase/functions/_shared/redirect-visitor.ts'),
+    'utf8',
+  ).replace(/^export\s+/gm, '');
+  const code = ts.transpileModule(shared + '\n' + visitor + '\n' + source, {
     compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext },
   }).outputText;
   let handler: ((request: Request) => Promise<Response>) | undefined;
@@ -150,5 +154,15 @@ describe('live short-link resolver', () => {
     const get = await run.invoke('GET', 'qg_click_id=spoofed&utm_source=qr');
     expect(new URL(get.headers.get('Location')!).searchParams.get('qg_click_id')).toBe('click-id');
     expect(run.rpc.mock.calls[0][1]?.p_query).toBe('utm_source=qr');
+  });
+  it('records QR source as visitor metadata and removes it from the destination/query', async () => {
+    const run = runtime();
+    const response = await run.invoke('GET', 'qg_qr=1&utm_source=poster');
+    expect(response.headers.get('Location')).not.toContain('qg_qr');
+    expect(run.rpc.mock.calls[0][1]?.p_metadata).toMatchObject({
+      is_qr: true,
+      domain: 'queer.guide',
+    });
+    expect(run.rpc.mock.calls[0][1]?.p_query).toBe('utm_source=poster');
   });
 });

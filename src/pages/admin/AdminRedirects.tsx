@@ -22,6 +22,7 @@ import { RedirectQrDialog } from '@/components/admin/redirects/RedirectQrDialog'
 import { RedirectTrackingDialog } from '@/components/admin/redirects/RedirectTrackingDialog';
 import { RedirectWorkspaceDialog } from '@/components/admin/redirects/RedirectWorkspaceDialog';
 import { RedirectOrganizationDialog } from '@/components/admin/redirects/RedirectOrganizationDialog';
+import { RedirectAnalyticsDialog } from '@/components/admin/redirects/RedirectAnalyticsDialog';
 import { RedirectConversionSetup } from '@/components/admin/redirects/RedirectConversionSetup';
 import { RedirectPolicyDialog } from '@/components/admin/redirects/RedirectPolicyDialog';
 import { useRedirectWorkspace } from '@/hooks/useRedirectWorkspace';
@@ -68,6 +69,8 @@ export default function AdminRedirects() {
   const [linkSeed, setLinkSeed] = useState<{ row: InventoryRedirect | null } | null>(null);
   const [qrUrl, setQrUrl] = useState<string | null>(null);
   const [tracking, setTracking] = useState<InventoryRedirect | null>(null);
+  const [analyticsLink, setAnalyticsLink] = useState<string | undefined>();
+  const [analyticsOpen, setAnalyticsOpen] = useState(false);
   const [conversionOpen, setConversionOpen] = useState(false);
   const [workspaceOpen, setWorkspaceOpen] = useState(false);
   const [organization, setOrganization] = useState<InventoryRedirect | null>(null);
@@ -147,6 +150,16 @@ export default function AdminRedirects() {
               Refresh
             </Button>
             <RedirectToolbarActions />
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setAnalyticsLink(undefined);
+                setAnalyticsOpen(true);
+              }}
+            >
+              Analytics
+            </Button>
             <Button variant="outline" size="sm" onClick={() => setConversionOpen(true)}>
               Conversion setup
             </Button>
@@ -442,6 +455,14 @@ export default function AdminRedirects() {
                         </DropdownMenuItem>
                         {row.manualId ? (
                           <>
+                            <DropdownMenuItem
+                              onSelect={() => {
+                                setAnalyticsLink(row.manualId);
+                                setAnalyticsOpen(true);
+                              }}
+                            >
+                              Detailed analytics
+                            </DropdownMenuItem>
                             <DropdownMenuItem onSelect={() => setTracking(row)}>
                               Visit tracking
                             </DropdownMenuItem>
@@ -516,6 +537,15 @@ export default function AdminRedirects() {
         />
       )}
       {qrUrl && <RedirectQrDialog url={qrUrl} onClose={() => setQrUrl(null)} />}
+      {analyticsOpen && (
+        <RedirectAnalyticsDialog
+          links={rows ?? []}
+          initialLink={analyticsLink}
+          initialFolder={folderFilter || undefined}
+          initialTag={tagFilter || undefined}
+          onClose={() => setAnalyticsOpen(false)}
+        />
+      )}
       {tracking && <RedirectTrackingDialog row={tracking} onClose={() => setTracking(null)} />}
       {conversionOpen && (
         <RedirectConversionSetup links={rows ?? []} onClose={() => setConversionOpen(false)} />

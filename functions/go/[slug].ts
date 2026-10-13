@@ -35,6 +35,11 @@ export const onRequest: PagesFunction<Env> = async ({ request, params, env }) =>
       ? request.cf.country
       : request.headers.get('cf-ipcountry');
   if (country) forwarded.set('x-qg-visitor-country', country);
+  for (const field of ['city', 'region', 'continent'] as const) {
+    const value = request.cf?.[field];
+    if (typeof value === 'string') forwarded.set('x-qg-visitor-' + field, value);
+  }
+  forwarded.set('x-qg-visitor-domain', new URL(request.url).hostname);
   if (request.method === 'POST')
     forwarded.set('Content-Type', request.headers.get('Content-Type') ?? '');
   try {

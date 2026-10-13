@@ -27,7 +27,12 @@ export function useRedirectCredentials() {
       })) as unknown as RedirectCredential[],
   });
   const create = useMutation({
-    mutationFn: async (body: { name: string; expiresAt: string; redirectIds?: string[] }) => {
+    mutationFn: async (body: {
+      name: string;
+      expiresAt: string;
+      redirectIds?: string[];
+      scopes?: string[];
+    }) => {
       const { data, error } = await supabase.functions.invoke('redirect-api/tokens', { body });
       if (error || data?.error) throw new Error(data?.error ?? error?.message);
       return data as RedirectCredential & { secret: string };

@@ -1,5 +1,11 @@
 import { useState } from 'react';
-import { DEFAULT_QR_STYLE, qrStyleError, generateQr, type QrStyle } from '@/lib/redirects/qr';
+import {
+  DEFAULT_QR_STYLE,
+  qrStyleError,
+  generateQr,
+  qrTrackingUrl,
+  type QrStyle,
+} from '@/lib/redirects/qr';
 import { Input } from '@/components/ui/input';
 import { useQuery } from '@tanstack/react-query';
 import { toast } from 'sonner';
@@ -33,7 +39,7 @@ export function QrExport({ url }: { url: string }) {
     retry: false,
     enabled: !error,
     queryFn: async () => {
-      return generateQr(url, style);
+      return generateQr(qrTrackingUrl(url), style);
     },
   });
   const loadLogo = async (file?: File) => {

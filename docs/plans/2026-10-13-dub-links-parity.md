@@ -31,14 +31,14 @@ exist. Existing local tools are a foundation, not proof of parity or deployment.
 | Link cloaking | Explicit iframe mode with accurate iframe limitations, standard redirect fallback | Missing |
 | Branded QR | Dots square/circle/joined; marker center square/circle; border square/rounded/circle; colors | Candidate: all dot/marker/color controls; scan verification before export |
 | QR logos/export | Workspace/domain/logo precedence and hide; SVG/PNG/JPG; clipboard image and image URL | Partial: per-export logo, PNG/JPG/SVG, image/data URL copy; workspace/domain precedence pending |
-| Click analytics | Real-time totals/time series, custom date/filter/export, countries/cities/devices/browsers/OS/referrers | Partial: visits/date/country/host |
+| Click analytics | Real-time totals/time series, custom date/filter/export, countries/cities/devices/browsers/OS/referrers | Candidate: SQL totals/time series, date/dimension filters, export and bounded live refresh; release pending |
 | Conversion tracking | Click attribution, leads/signup/sale/revenue, trusted conversion ingestion and application hooks | Candidate: scoped ingestion, consented signup and verified Stripe hooks implemented locally |
 | Customer insights | Customer journey across click→lead→sale with private event timeline | Partial: private ID-based cross-link paginated journeys; identity enrichment missing |
-| Live events | Paginated live click/lead/sale stream, real events rather than demo data | Partial: recent clicks |
+| Live events | Paginated live click/lead/sale stream, real events rather than demo data | Candidate: private click/lead/sale activity with keyset pages and five-second refresh |
 | Shared dashboards | Revocable scoped sharing, sanitized aggregate-only default | Missing |
-| Custom reports | Custom dates, granular link/folder/tag/domain/geo/device/event filters | Missing |
+| Custom reports | Custom dates, granular link/folder/tag/domain/geo/device/event filters | Partial: date/dimension report UI and API; saved definitions and sharing missing |
 | Integrations | Segment and GTM adapters; native configured integrations and provider callbacks | Missing |
-| REST API | Authenticated/scoped link CRUD/upsert/count/list, analytics/events, folders/tags, bulk operations | Partial: conversion endpoints and scoped credential management; other resources missing |
+| REST API | Authenticated/scoped link CRUD/upsert/count/list, analytics/events, folders/tags, bulk operations | Partial: conversion and read analytics/events endpoints, scoped credentials; management resources missing |
 | SDKs | TypeScript, Python, Go, Ruby, PHP wrappers and runnable examples covering management/tracking | Missing |
 | Webhooks | Signed click/lead/sale events, retries, delivery history, replay and secret rotation | Missing |
 
@@ -179,3 +179,29 @@ not verified. This does not complete the full parity objective: identity
 enrichment, advanced/live/shared reports, full API/SDK/webhooks/integrations,
 domains/deep links/previews/cloaking, folder RBAC/bulk tools and persistent QR
 branding still require implementation and release evidence.
+
+## Checkpoint: detailed analytics and event activity
+
+Implemented locally: bounded visitor family classification and Cloudflare city/
+region/continent relay; QR visit markers; invoker/RLS analytics views and SQL
+aggregation; UTC zero-filled time series; link/folder/tag/date/event/location/
+device/browser/OS/domain/referrer/variant/QR filters; exact per-currency revenue;
+receipt-time keyset event pages; complete matching-event CSV export; optional
+five-second live polling; read-only or combined scoped credentials and read API.
+
+The dashboard opens on results, with expandable filters, usable mobile layout,
+and chart patterns/point tooltips. Reports expose normalized dimensions without
+raw queries, agents, IP hashes or password fields. Earlier metadata is honestly
+Unknown. Scoped read restrictions intersect user filters.
+
+Evidence: analytics SQL tests passed in isolated PostgreSQL, including real
+report calls, UTC zero buckets, folder/tag intersections, scope boundaries,
+paging, exact revenue, referrer redaction and ordinary-user RLS. 25 focused tests
+passed across seven files; UI filter tests also passed after the responsive
+change. Native signed-Stripe regression, frontend/proxy builds, migration gates,
+targeted lint and typecheck (no new errors) passed. Screenshots under
+`outputs/redirect-dub-parity/analytics-*.jpg` use labelled fixtures.
+
+`docs/guides/redirect-analytics.md` documents endpoints, filters, UTC semantics,
+heuristics, limits and remaining scope. No production schema was mutated. This
+is another candidate checkpoint, not completion of the full parity objective.

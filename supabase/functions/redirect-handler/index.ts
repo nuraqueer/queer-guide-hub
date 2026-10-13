@@ -1,3 +1,4 @@
+import { visitorMetadata } from "../_shared/redirect-visitor.ts";
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2.50.5";
 import { chooseLinkTarget, deviceFromAgent, policyErrors, validPublicTarget, verifyLinkPassword, type LinkPolicy, type PasswordHash } from "../_shared/link-policy.ts";
@@ -37,7 +38,8 @@ Deno.serve(async (req: Request) => {
   if (!/^[a-z0-9][a-z0-9-]{1,62}[a-z0-9]$/.test(slug)) return page(404,"Link not found","This short link does not exist.",false,head);
   const incoming=new URLSearchParams(url.searchParams.get("q") ?? "");
   let password=url.searchParams.get("pw") ?? incoming.get("pw") ?? "";
-  incoming.delete("pw");incoming.delete("password");incoming.delete("qg_click_id");
+  const isQr=incoming.get("qg_qr") === "1";
+  incoming.delete("qg_qr");incoming.delete("pw");incoming.delete("password");incoming.delete("qg_click_id");
   if (incoming.toString().length>8192) return page(400,"Invalid link","The query string is too long.",false,head);
   try {
     if (req.method === "POST") password=await postedPassword(req);
@@ -68,7 +70,7 @@ Deno.serve(async (req: Request) => {
     if (!head && !selected.expired) {
       const ip=req.headers.get("cf-connecting-ip") ?? req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
       const hash=new Uint8Array(await crypto.subtle.digest("SHA-256",new TextEncoder().encode(ip+(Deno.env.get("REDIRECT_IP_HASH_SALT") ?? "qg-redirect-salt-2026"))));
-      const {data:clickId,error}=await db.rpc("record_redirect_visit",{p_redirect_id:link.id,p_path:"/go/"+slug,p_query:incoming.toString() || null,p_referer:cleanReferrer(req.headers.get("referer")),p_user_agent:req.headers.get("user-agent"),p_country:country,p_ip_hash:Array.from(hash,(value)=>value.toString(16).padStart(2,"0")).join(""),p_status:link.status_code,p_variant_id:selected.variantId,p_destination:destination});
+      const {data:clickId,error}=await db.rpc("record_redirect_visit",{p_redirect_id:link.id,p_path:"/go/"+slug,p_query:incoming.toString() || null,p_referer:cleanReferrer(req.headers.get("referer")),p_user_agent:req.headers.get("user-agent"),p_country:country,p_ip_hash:Array.from(hash,(value)=>value.toString(16).padStart(2,"0")).join(""),p_status:link.status_code,p_variant_id:selected.variantId,p_destination:destination,p_metadata:visitorMetadata(req,isQr)});
       if(error)return page(503,"Link unavailable","Please try again shortly.",false,head);
       if(!clickId)return page(410,"Link unavailable","This link has expired or reached its visit limit.",false,head);
       if(policy.track_conversions){targetUrl.searchParams.set("qg_click_id",clickId);destination=targetUrl.href;}

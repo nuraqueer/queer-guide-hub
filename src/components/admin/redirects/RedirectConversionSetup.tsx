@@ -29,6 +29,8 @@ export function RedirectConversionSetup({
   const [ids, setIds] = useState<string[]>([]),
     [search, setSearch] = useState(''),
     [secret, setSecret] = useState('');
+  const [writeEvents, setWriteEvents] = useState(true),
+    [readEvents, setReadEvents] = useState(false);
   const [openedAt] = useState(() => Date.now());
   const [confirm, setConfirm] = useState<string | null>(null);
   const managed = links.filter(
@@ -40,6 +42,10 @@ export function RedirectConversionSetup({
   const create = async () => {
     const result = await credentials.create.mutateAsync({
       name,
+      scopes: [
+        ...(writeEvents ? ['conversions:write'] : []),
+        ...(readEvents ? ['events:read'] : []),
+      ],
       expiresAt: new Date(Date.now() + Number(days) * 86400000).toISOString(),
       ...(limited ? { redirectIds: ids } : {}),
     });
@@ -129,6 +135,24 @@ export function RedirectConversionSetup({
                 </select>
               </div>
             </div>
+            <div className="flex flex-wrap gap-4">
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={writeEvents}
+                  onChange={(event) => setWriteEvents(event.target.checked)}
+                />
+                Write conversions
+              </label>
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={readEvents}
+                  onChange={(event) => setReadEvents(event.target.checked)}
+                />
+                Read analytics and private event activity
+              </label>
+            </div>
             <label className="flex items-center gap-2 text-sm">
               <input
                 type="checkbox"
@@ -172,7 +196,9 @@ export function RedirectConversionSetup({
               </div>
             )}
             <p className="text-sm text-muted-foreground">
-              Permission: write conversion events
+              Permission: {writeEvents ? 'write conversions' : ''}
+              {writeEvents && readEvents ? ' and ' : ''}
+              {readEvents ? 'read private analytics/events' : ''}
               {limited ? ' for selected links' : ' for all managed links'}. This credential cannot
               manage links or credentials.
             </p>
@@ -183,7 +209,12 @@ export function RedirectConversionSetup({
             )}
             <Button
               type="submit"
-              disabled={credentials.create.isPending || !name.trim() || (limited && !ids.length)}
+              disabled={
+                credentials.create.isPending ||
+                !name.trim() ||
+                (!writeEvents && !readEvents) ||
+                (limited && !ids.length)
+              }
             >
               {credentials.create.isPending ? 'Creating…' : 'Create server credential'}
             </Button>

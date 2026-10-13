@@ -12,7 +12,13 @@ function runtime() {
     new URL(root + 'redirect-api/index.ts', import.meta.url),
     'utf8',
   ).replace(/^import .*;\s*$/gm, '');
-  const code = ts.transpileModule(shared + '\n' + source, {
+  const analytics = readFileSync(
+    new URL(root + '_shared/redirect-analytics.ts', import.meta.url),
+    'utf8',
+  )
+    .replace(/^import .*;\s*$/gm, '')
+    .replace(/^export\s+/gm, '');
+  const code = ts.transpileModule(shared + '\n' + analytics + '\n' + source, {
     compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext },
   }).outputText;
   let handler: (req: Request) => Promise<Response>;
@@ -20,6 +26,7 @@ function runtime() {
     admin: true,
     validIdentity: true,
     validToken: true,
+    allowedIds: ['00000000-0000-4000-8000-000000000002'],
     confirmed: true,
     conversionError: null as { code: string; message: string } | null,
   };
@@ -32,7 +39,10 @@ function runtime() {
   };
   const rpc = vi.fn(async (name: string, _args?: Record<string, unknown>) =>
     name === 'authenticate_redirect_api_token'
-      ? { data: state.validToken ? { id: 'token-id' } : null, error: null }
+      ? {
+          data: state.validToken ? { id: 'token-id', redirect_ids: state.allowedIds } : null,
+          error: null,
+        }
       : {
           data: state.conversionError ? null : { id: 'conversion', duplicate: false },
           error: state.conversionError,
@@ -45,7 +55,7 @@ function runtime() {
       range: () => ({ data: [], count: 0, error: null }),
       eq: () => query,
       in: () => query,
-      is: () => ({ data: [{ id: 'token-id' }], error: null }),
+      is: () => ({ data: [{ id: 'token-id', redirect_ids: state.allowedIds }], error: null }),
       insert: vi.fn((values: Record<string, unknown>) => ({
         select: () => ({
           single: async () => ({ data: { id: 'token-id', prefix: values.prefix }, error: null }),
@@ -188,5 +198,25 @@ describe('actual Redirects API handler', () => {
       (await run.invoke('/track/lead', { ...lead, metadata: { value: 'x'.repeat(70000) } })).status,
     ).toBe(400);
     expect(run.rpc).not.toHaveBeenCalled();
+  });
+  it('applies read scope and credential link boundaries to analytics and paginated activity', async () => {
+    const run = runtime(),
+      token = 'qg_redirect_' + 'a'.repeat(64);
+    expect((await run.invoke('/analytics', undefined, token, 'GET')).status).toBe(200);
+    expect(run.rpc.mock.calls[0][1]).toMatchObject({ p_scope: 'events:read' });
+    expect(run.rpc.mock.calls[1]).toMatchObject([
+      'redirect_analytics_report',
+      { p_allowed_ids: run.state.allowedIds, p_filters: {} },
+    ]);
+    expect((await run.invoke('/events?limit=101', undefined, token, 'GET')).status).toBe(400);
+    expect((await run.invoke('/events?limit=50', undefined, token, 'GET')).status).toBe(200);
+    expect(run.rpc.mock.calls.at(-1)).toMatchObject([
+      'redirect_analytics_page',
+      { p_allowed_ids: run.state.allowedIds, p_limit: 50 },
+    ]);
+    run.state.validToken = false;
+    expect((await run.invoke('/analytics', undefined, token, 'GET')).status).toBe(403);
+    run.state.admin = false;
+    expect((await run.invoke('/analytics', undefined, 'signed-user', 'GET')).status).toBe(403);
   });
 });

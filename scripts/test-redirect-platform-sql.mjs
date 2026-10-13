@@ -7,8 +7,9 @@ try {
   await db.exec(readFileSync('supabase/tests/redirect_link_workspace.sql', 'utf8'));
   await db.exec(readFileSync('supabase/tests/redirect_link_policies.sql', 'utf8'));
   await db.exec(readFileSync('supabase/tests/redirect_conversion_attribution.sql', 'utf8'));
+  await db.exec(readFileSync('supabase/tests/redirect_analytics_reports.sql', 'utf8'));
   console.log(
-    'Redirect platform SQL: policies, atomic creation, quotas, expiry, variant metrics and conversion attribution passed.',
+    'Redirect platform SQL: policies, atomic creation, quotas, expiry, variant metrics and conversion attribution and analytics passed.',
   );
 } finally {
   await db.close();

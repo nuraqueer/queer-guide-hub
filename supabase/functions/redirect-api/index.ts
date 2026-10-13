@@ -1,3 +1,4 @@
+import { analyticsFilters } from "../_shared/redirect-analytics.ts";
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2.50.5";
 import { boundedJson, conversionInput, createRedirectToken, tokenDigest, UUID } from "../_shared/redirect-api.ts";
@@ -22,6 +23,22 @@ Deno.serve(async (req: Request) => {
   user=data.user;
  }
  try {
+  if((path==='/analytics'||path==='/events')&&req.method==='GET') {
+   const query=new URL(req.url).searchParams;
+   if(new URL(req.url).search.length>16384)return json({error:'Filters are too large'},400);
+   let ids:string[]|null=null;
+   if(tokenCredential){const {data,error}=await db.rpc('authenticate_redirect_api_token',{p_hash:await tokenDigest(credential),p_scope:'events:read'});if(error)return json({error:'Credential verification unavailable'},503);if(!data)return json({error:'Read scope is required'},403);ids=data.redirect_ids;}
+   else{const {data,error}=await identityClient!.rpc('has_role_jwt',{required_role:'admin'});if(error)return json({error:'Authorization unavailable'},503);if(!data)return json({error:'Forbidden'},403);}
+   const filters=analyticsFilters(JSON.parse(query.get('filters')??'{}'));
+   let name='redirect_analytics_report',args:Record<string,unknown>={p_filters:filters,p_allowed_ids:ids};
+   if(path==='/events'){
+    const limit=Number(query.get('limit')??50),snapshot=query.get('snapshot');
+    const cursor=query.has('cursor')?JSON.parse(query.get('cursor')!):null;
+    if(!Number.isInteger(limit)||limit<1||limit>100||snapshot&&!Number.isFinite(Date.parse(snapshot))||cursor&&(!Number.isFinite(Date.parse(cursor.at))||typeof cursor.id!=='string'||cursor.id.length>100))return json({error:'Invalid event page'},400);
+    name='redirect_analytics_page';args={...args,p_limit:limit,p_snapshot:snapshot,p_before_at:cursor?.at??null,p_before_id:cursor?.id??null};
+   }
+   const {data,error}=await db.rpc(name,args);if(error)return rpcError(error);return json(data);
+  }
   if(path==='/native/signup' && req.method==='POST') {
    if(!user || user.is_anonymous || !(user.email_confirmed_at || user.confirmed_at)) return json({error:'A verified account is required'},403);
    const body=await boundedJson(req);
@@ -61,14 +78,16 @@ Deno.serve(async (req: Request) => {
    }
    if(path==='/tokens' && req.method==='POST') {
     const body=await boundedJson(req);
-    if(!body || typeof body!=='object' || Object.keys(body).some(key=>!['name','expiresAt','redirectIds'].includes(key)) || typeof body.name!=='string' || !body.name.trim() || body.name.length>100)return json({error:'Provide a credential name (1–100 characters)'},400);
+    if(!body || typeof body!=='object' || Object.keys(body).some(key=>!['name','expiresAt','redirectIds','scopes'].includes(key)) || typeof body.name!=='string' || !body.name.trim() || body.name.length>100)return json({error:'Provide a credential name (1–100 characters)'},400);
     const end=typeof body.expiresAt==='string'?Date.parse(body.expiresAt):NaN;
     if(!Number.isFinite(end) || end<=Date.now() || end>Date.now()+366*86400000)return json({error:'Credentials must expire within one year'},400);
     if(body.redirectIds!==undefined && (!Array.isArray(body.redirectIds) || body.redirectIds.length<1 || body.redirectIds.length>100 || body.redirectIds.some((id:unknown)=>typeof id!=='string' || !UUID.test(id))))return json({error:'Invalid link scope'},400);
+    const scopes=body.scopes??['conversions:write'];
+    if(!Array.isArray(scopes)||scopes.length<1||scopes.some(scope=>!['conversions:write','events:read'].includes(scope)))return json({error:'Invalid credential permissions'},400);
     const ids=body.redirectIds? [...new Set(body.redirectIds)] : null;
     if(ids){const {data,error}=await db.from('redirects').select('id').in('id',ids).eq('type','SHORT');if(error || data?.length!==ids.length)return json({error:'One or more managed links were not found'},400);}
     const secret=createRedirectToken();
-    const {data,error}=await db.from('redirect_api_tokens').insert({name:body.name.trim(),token_hash:await tokenDigest(secret),prefix:secret.slice(0,20),scopes:['conversions:write'],redirect_ids:ids,created_by:user!.id,expires_at:new Date(end).toISOString()}).select(select).single();
+    const {data,error}=await db.from('redirect_api_tokens').insert({name:body.name.trim(),token_hash:await tokenDigest(secret),prefix:secret.slice(0,20),scopes:[...new Set(scopes)],redirect_ids:ids,created_by:user!.id,expires_at:new Date(end).toISOString()}).select(select).single();
     if(error)return json({error:'Could not create credential'},503);
     return json({...data,secret},201);
    }
