@@ -2743,6 +2743,15 @@ label a:hover {
    `:not([class*='rounded-'])` was measured and rejected for this job too: it
    also matches VARIANT utilities such as `focus:rounded-element`, which do not
    apply at rest, and stripped the fallback off a skip link (12px -> 0px).
+
+   AND IF THE OTHER TWO RANKS ARE EVER LAYERED, `base` IS THE WRONG RUNG --
+   measured independently and recorded here so it is not re-derived. Tailwind's
+   preflight lives in `base` and carries
+   `button, input, select, optgroup, textarea { border-radius: 0 }` at (0,0,1),
+   which beats these `:where()`-built selectors at (0,0,0) inside the same layer;
+   it took /personalities' segmented control to 0px. `components` is the only
+   viable rung, since it sorts after `base` and before `utilities` -- so the
+   fallback would still lose to an explicit utility, which is the point.
    `[class~=]` matches the whole class token, so it cannot do that. */
 :where(
     button,

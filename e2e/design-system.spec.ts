@@ -246,6 +246,19 @@ test.describe('design system: panel rank', () => {
 });
 
 test.describe('design system: dialog', () => {
+  // SIGNED OUT ON PURPOSE, because the skip below is otherwise unconditional on
+  // CI: `playwright.config.ts` gives the chromium project an admin `storageState`
+  // whenever E2E_ADMIN_* are set, which is every CI run, and an authenticated
+  // /trips renders no "Sign in" trigger at all. An empty storageState overrides
+  // the project's, so the one auth state that can reach a dialog is the one used.
+  //
+  // That is read off the config and the component, not measured here — what is
+  // measured is that this test PASSES signed-out against a local preview build
+  // (position 8 of 24, 1.5s), so the dialog is genuinely reachable in this state.
+  // The skip stays for a run authenticated some other way; see the wait below for
+  // why it is a wait and not a count.
+  test.use({ storageState: { cookies: [], origins: [] } });
+
   test('dialog uses --radius-panel', async ({ page }) => {
     await page.goto('/trips');
     // Wait for the app to paint, not for the network to fall idle. These guards
@@ -254,15 +267,31 @@ test.describe('design system: dialog', () => {
     // all four timed out against production.
     await page.waitForSelector('#root *', { state: 'attached', timeout: 15_000 });
     await dismissCookieBanner(page);
-    await page.waitForTimeout(300);
     const signInBtn = page.getByRole('button', { name: /sign in/i }).first();
-    // An authenticated run has no sign-in trigger. SKIP WITH A REASON rather
-    // than falling through to a silent pass: the report then says the dialog was
-    // not reached, and the panel-rank test above still covers the contract.
+    // WAIT for the trigger, do not COUNT it once. A `count()` taken after a fixed
+    // 300ms sleep cannot tell "not mounted yet" from "not there", and it fails
+    // toward the SILENT PASS — /trips lazy-mounts, so a slow chunk reads as an
+    // authenticated run and the dialog contract goes unasserted with a reassuring
+    // skip reason. Waiting resolves that ambiguity in the safe direction: a real
+    // authenticated run still skips after the window, a slow one now asserts.
+    //
+    // Scope honestly: this is a robustness fix, not a repair of an observed
+    // failure. It is NOT backed by a reproduced local skip — a first draft of this
+    // comment claimed one, from a grep that juxtaposed a progress line with the
+    // run summary; the test that actually skips in a full local run is
+    // "interactive cards lift", on its own unrelated condition.
+    const reachable = await signInBtn
+      .waitFor({ state: 'visible', timeout: 10_000 })
+      .then(() => true)
+      .catch(() => false);
+    // Only a genuinely authenticated run has no trigger after that window. SKIP
+    // WITH A REASON rather than falling through to a silent pass: the report then
+    // says the dialog was not reached, and the panel-rank test above still covers
+    // the contract.
     test.skip(
-      (await signInBtn.count()) === 0,
-      'no sign-in trigger on /trips (authenticated run) — panel rank is covered by the ' +
-        '"design system: panel rank" test, which needs no dialog',
+      !reachable,
+      'no sign-in trigger on /trips after 10s (authenticated run) — panel rank is covered ' +
+        'by the "design system: panel rank" test, which needs no dialog',
     );
     await signInBtn.click();
     // No `if` from here down. A trigger that opens no dialog is a failure, not a
