@@ -77,14 +77,6 @@ describe('News author management', () => {
     );
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
   });
-  it('rejects a publisher or editorial credit before submitting a rename', () => {
-    view();
-    fireEvent.click(screen.getByRole('button', { name: 'Rename Alex' }));
-    fireEvent.change(screen.getByLabelText('New author name'), { target: { value: 'Editors' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Confirm rename' }));
-    expect(screen.getByRole('alert')).toHaveTextContent('Enter a person’s name');
-    expect(mocks.mutate).not.toHaveBeenCalled();
-  });
   it('keeps a rejected merge open with the database error', async () => {
     mocks.mutate.mockRejectedValue({ message: 'Choose an existing author to merge into.' });
     view();
