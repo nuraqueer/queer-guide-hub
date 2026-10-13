@@ -103,7 +103,7 @@ begin
     '           OR c.last_verified_at IS NULL\n'
     '           OR c.updated_at > c.last_verified_at\n'
     '           OR c.last_verified_at < now() - interval ''30 days''\n'
-    '           -- FILLABLE-GAP ARM (99991791910834). Losing the last venue or event never writes\n'
+    '           -- FILLABLE-GAP ARM (99991791920004). Losing the last venue or event never writes\n'
     '           -- the city row, so the two arms above cannot see it and the row stays published\n'
     '           -- and empty until the 30-day refresh. Re-open it only while the classifier can\n'
     '           -- close the very condition that selected it (is_empty -> ghost + deindexed), so\n'
