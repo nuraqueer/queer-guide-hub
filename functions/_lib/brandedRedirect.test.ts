@@ -48,7 +48,7 @@ describe('branded tracked URL', () => {
     );
   });
   it('rejects invalid slugs and writes, and fails clearly on missing/upstream errors', async () => {
-    expect((await invoke('POST')).status).toBe(405);
+    expect((await invoke('PUT')).status).toBe(405);
     expect((await invoke('GET', 'xx')).status).toBe(404);
     vi.stubGlobal(
       'fetch',

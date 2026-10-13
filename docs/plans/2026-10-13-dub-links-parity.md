@@ -9,12 +9,12 @@ exist. Existing local tools are a foundation, not proof of parity or deployment.
 
 | Requirement | Required behavior / evidence | Current state |
 | --- | --- | --- |
-| Branded links | Custom slug, random slug, editable destination; shorten arbitrary public HTTP(S) URLs | Partial: own-site links only |
-| UTM builder | Source/medium/campaign/term/content/referral; preserve queries/fragments | Partial: referral absent |
-| Shared UTM templates | Named workspace templates, apply/save/edit/delete in builder/settings | In progress |
-| Folders | Create/rename/delete/move links, folder-filtered list and analytics | In progress |
-| Tags | Multiple colored tags, create/rename/delete, shareable filtered list and analytics | In progress |
-| Comments | Team-visible comment on link card, clickable hyperlinks | In progress |
+| Branded links | Custom slug, random slug, editable destination; shorten arbitrary public HTTP(S) URLs | Candidate: public HTTP(S) destinations; private/local targets rejected; custom domains missing |
+| UTM builder | Source/medium/campaign/term/content/referral; preserve queries/fragments | Candidate: six campaign fields including referral; query/fragment preservation tested |
+| Shared UTM templates | Named workspace templates, apply/save/edit/delete in builder/settings | Candidate: implemented locally; pending release |
+| Folders | Create/rename/delete/move links, folder-filtered list and analytics | Candidate: implemented locally; pending release |
+| Tags | Multiple colored tags, create/rename/delete, shareable filtered list and analytics | Candidate: implemented locally; pending release |
+| Comments | Team-visible comment on link card, clickable hyperlinks | Candidate: implemented locally; pending release |
 | Folder permissions | Explicit view/edit permissions for team members, enforced in database/API | Missing |
 | Bulk actions | Create/update/upsert/delete, folder/tag assignment, archive, import/export, QR export | Partial: CSV import and basic export |
 | Custom previews | Uploaded OG image (1200×630, ≤1.5 MB), title≤120, description≤240, video API, crawler unfurl | Missing |
@@ -22,12 +22,12 @@ exist. Existing local tools are a foundation, not proof of parity or deployment.
 | Custom domains | Verify ownership/DNS, multiple domains, primary domain, redirects on branded hostname | Missing |
 | Domain defaults | Root/not-found redirects, default expiration URL, workspace/domain QR logos | Missing |
 | Deep links | iOS/Android association files, app page routes, fallback and deferred attribution | Missing |
-| Geo targeting | Country-specific destinations and default fallback | Missing |
-| Device targeting | iOS/Android destinations, evaluated before geo | Missing |
-| A/B testing | 2–5 destinations, weighted traffic≥10%, end date≤6 weeks, manual winner/end | Missing |
-| A/B completion | Device→geo→experiment priority; choose winner by sales/conversions, rates, clicks; leads fallback | Missing |
-| Password links | Password challenge, hashed secret, no disclosure/bypass, scoped access | Missing |
-| Expiration | Date and expired destination URL, live enforcement without stale cached rules | Partial: date and 404 only |
+| Geo targeting | Country-specific destinations and default fallback | Candidate: country rules and fallback tested |
+| Device targeting | iOS/Android destinations, evaluated before geo | Candidate: iOS/Android priority tested |
+| A/B testing | 2–5 destinations, weighted traffic≥10%, end date≤6 weeks, manual winner/end | Candidate: editor/resolver implemented locally |
+| A/B completion | Device→geo→experiment priority; choose winner by sales/conversions, rates, clicks; leads fallback | Partial: selection/metrics tested; conversion ingestion missing |
+| Password links | Password challenge, hashed secret, no disclosure/bypass, scoped access | Partial: hashed protection and bypass tests; rate limiting/logo pending |
+| Expiration | Date and expired destination URL, live enforcement without stale cached rules | Candidate: date/phrase parser, custom fallback and live enforcement tested |
 | Link cloaking | Explicit iframe mode with accurate iframe limitations, standard redirect fallback | Missing |
 | Branded QR | Dots square/circle/joined; marker center square/circle; border square/rounded/circle; colors | Partial: square monochrome |
 | QR logos/export | Workspace/domain/logo precedence and hide; SVG/PNG/JPG; clipboard image and image URL | Partial: PNG/SVG and link copy |
@@ -93,3 +93,31 @@ analytics, bulk operations and all other missing ledger requirements remain.
 Next: link policy schema/resolver and UI for public destinations, targeting,
 experiments, password/expiry, previews, domains and deep links; then analytics,
 conversion ingestion, API/SDK/webhooks and release verification.
+
+## Checkpoint: targeting and access policies
+
+Implemented locally: arbitrary public HTTP(S) destination validation; live iOS/Android
+and country routing; weighted 2–5 variant experiments with six-week deadlines,
+manual winner/end and automatic conversion/click-based selection; password
+challenge with salted PBKDF2-SHA256 hashes; natural-language expiration entry
+and optional expired destination. HEAD requests do not count. Password query
+values are stripped before destination/event storage. Protected destinations
+are no longer exposed by the legacy public Data API policy or resolver RPC.
+
+A service-only atomic visit RPC checks active windows and quotas before increment
+and event insertion. Variant metrics avoid click inflation when multiple
+conversions join one click. Conversion storage is a foundation; no conversion
+ingestion or customer-journey feature is claimed yet.
+
+Evidence: 60 policy/resolver/editor/validation/proxy/expiration/authorization
+tests passed. The actual admin edge handler denies absent/invalid identity and
+non-admin roles, and sends hashes rather than passwords to privileged storage.
+`npm run test:redirect-sql` runs the workspace/policy migrations and RLS, atomic
+creation, quota, expiry and metrics SQL tests in isolated PGlite PostgreSQL.
+Frontend and Cloudflare proxy builds passed; typecheck reported no new errors;
+migration-version validation passed against the integration base. Desktop/mobile
+policy screenshots use fixtures, not a production account.
+
+No production schema was changed. These are release candidates, not live parity.
+Password attempt throttling, branded password pages, custom previews/cloaking,
+custom domains/deep links and all other unimplemented ledger items remain.

@@ -43,7 +43,8 @@
     "i18n:sync": "tsx scripts/sync-public-locales.ts --write",
     "verify:gh-sync": "tsx scripts/verify-github-sync.ts",
     "prepare": "husky",
-    "test:merchant-sync": "vitest run --config tests/merchant-sync/vitest.config.ts"
+    "test:merchant-sync": "vitest run --config tests/merchant-sync/vitest.config.ts",
+    "test:redirect-sql": "node scripts/test-redirect-platform-sql.mjs"
   },
   "lint-staged": {
     "src/**/*.{ts,tsx}": [
@@ -112,6 +113,7 @@
     "@zxcvbn-ts/language-en": "^4.1.1",
     "boneyard-js": "^1.10.0",
     "brace-expansion": "^5.0.12",
+    "chrono-node": "2.10.3",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
@@ -147,6 +149,7 @@
   "devDependencies": {
     "@axe-core/playwright": "^4.13.0",
     "@cloudflare/workers-types": "^5.20261008.1",
+    "@electric-sql/pglite": "0.5.9",
     "@eslint/js": "^10.0.1",
     "@playwright/test": "^1.64.0",
     "@testing-library/dom": "^10.4.2",

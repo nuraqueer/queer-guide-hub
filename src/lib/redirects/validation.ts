@@ -1,3 +1,5 @@
+import { validPublicTarget } from '../../../supabase/functions/_shared/link-policy';
+const SITE_HOSTS = new Set(['queer.guide', 'www.queer.guide', 'queer-guide.pages.dev']);
 /**
  * Redirect validation utilities.
  * Shared between frontend admin UI and tests.
@@ -68,9 +70,6 @@ export function validateSlug(slug: string): ValidationResult {
 
 // ── Target validation ───────────────────────────────────────────────────────
 
-/** Domains allowed for external redirects. Add more as needed. */
-const ALLOWED_EXTERNAL_HOSTS = new Set(['queer.guide', 'www.queer.guide', 'queer-guide.pages.dev']);
-
 const DANGEROUS_PROTOCOLS = new Set(['javascript:', 'data:', 'vbscript:', 'blob:', 'file:']);
 
 export function validateTarget(target: string): ValidationResult {
@@ -88,37 +87,13 @@ export function validateTarget(target: string): ValidationResult {
     }
   }
 
-  // Relative paths are always allowed
-  if (t.startsWith('/')) {
-    // Block path traversal
-    if (t.includes('..') || t.includes('//')) {
-      return { valid: false, error: 'Target path contains invalid sequences' };
-    }
-    return { valid: true };
-  }
-
-  // Absolute URLs must match allowlist
-  try {
-    const url = new URL(t);
-
-    if (!ALLOWED_EXTERNAL_HOSTS.has(url.hostname)) {
-      return {
+  return validPublicTarget(t)
+    ? { valid: true }
+    : {
         valid: false,
-        error: `External host "${url.hostname}" is not in the allowlist. Only relative paths or allowlisted domains are permitted.`,
+        error:
+          'Choose a public HTTP(S) destination or a valid site path; credentials and private network addresses are not supported',
       };
-    }
-
-    if (DANGEROUS_PROTOCOLS.has(url.protocol)) {
-      return { valid: false, error: `Protocol "${url.protocol}" is not allowed` };
-    }
-
-    return { valid: true };
-  } catch {
-    return {
-      valid: false,
-      error: 'Target must be a valid relative path (starting with /) or absolute URL',
-    };
-  }
 }
 
 // ── Query parameter merging ─────────────────────────────────────────────────
@@ -208,7 +183,7 @@ export function detectLoop(
       try {
         const u = new URL(url);
         // Only compare path for same-origin URLs
-        if (ALLOWED_EXTERNAL_HOSTS.has(u.hostname)) {
+        if (SITE_HOSTS.has(u.hostname)) {
           return u.pathname;
         }
         return url;

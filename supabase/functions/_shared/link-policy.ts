@@ -1,0 +1,126 @@
+/** Shared policy contract for the admin editor and the public resolver. */
+export interface LinkVariant { id: string; url: string; weight: number }
+export interface LinkExperiment { starts_at: string; ends_at: string; variants: LinkVariant[]; completed_target?: string }
+export interface LinkPolicy {
+  device_targets?: Partial<Record<'ios' | 'android', string>>;
+  geo_targets?: Record<string, string>;
+  experiment?: LinkExperiment;
+  expires_at?: string;
+  expired_target?: string;
+}
+export interface VariantPerformance { id: string; clicks: number; leads: number; sales: number }
+
+export function validPublicTarget(target: string): boolean {
+  if (typeof target !== 'string' || !target.trim() || target.length > 8192 || /[\r\n\\]/.test(target)) return false;
+  const raw = target.trim();
+  if (raw.startsWith('/')) return !raw.startsWith('//') && !raw.split(/[?#]/)[0].includes('..');
+  try {
+    const url = new URL(raw);
+    if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password) return false;
+    const host = url.hostname.toLowerCase().replace(/\.$/, '');
+    if (!host.includes('.') || /(?:^|\.)(localhost|local|internal|home|test|invalid|example)$/.test(host)) return false;
+    if (host.startsWith('[')) return false;
+    if (/^\d+\.\d+\.\d+\.\d+$/.test(host)) {
+      const ip = host.split('.').map(Number), [a,b] = ip;
+      if (ip.some((part) => part < 0 || part > 255) || a === 0 || a === 10 || a === 127 || a >= 224 ||
+        a === 169 && b === 254 || a === 172 && b >= 16 && b <= 31 || a === 192 && b === 168 || a === 100 && b >= 64 && b <= 127) return false;
+    }
+    return true;
+  } catch { return false; }
+}
+
+export function policyErrors(policy: LinkPolicy): string[] {
+  const errors: string[] = [];
+  if (!policy || typeof policy !== 'object' || Array.isArray(policy)) return ['Policy must be an object'];
+  const allowed = ['device_targets','geo_targets','experiment','expires_at','expired_target'];
+  if (Object.keys(policy).some((key) => !allowed.includes(key))) errors.push('Unknown policy setting');
+  for (const [kind, targets] of [['device',policy.device_targets], ['country',policy.geo_targets]] as const) {
+    if (!targets) continue;
+    if (typeof targets !== 'object' || Array.isArray(targets)) { errors.push('Invalid ' + kind + ' rules'); continue; }
+    for (const [key, target] of Object.entries(targets)) {
+      if (kind === 'device' ? !['ios','android'].includes(key) : !/^[A-Z]{2}$/.test(key)) errors.push('Invalid ' + kind + ' ' + key);
+      if (!validPublicTarget(target)) errors.push('Invalid destination for ' + key);
+    }
+  }
+  if (policy.expires_at && !Number.isFinite(Date.parse(policy.expires_at))) errors.push('Invalid expiration date');
+  if (policy.expired_target && !validPublicTarget(policy.expired_target)) errors.push('Invalid expiration destination');
+  const experiment = policy.experiment;
+  if (experiment) {
+    if (!Array.isArray(experiment.variants) || experiment.variants.length < 2 || experiment.variants.length > 5) errors.push('An A/B test needs 2–5 destinations');
+    else {
+      if (new Set(experiment.variants.map((variant) => variant.id)).size !== experiment.variants.length) errors.push('Variant IDs must be unique');
+      if (experiment.variants.reduce((sum, variant) => sum + variant.weight, 0) !== 100) errors.push('Traffic weights must total 100%');
+      for (const variant of experiment.variants) {
+        if (typeof variant.id !== 'string' || !/^[a-zA-Z0-9_-]{1,64}$/.test(variant.id) || !validPublicTarget(variant.url)) errors.push('Invalid A/B destination');
+        if (!Number.isInteger(variant.weight) || variant.weight < 10 || variant.weight > 90) errors.push('Each A/B destination must receive at least 10%');
+      }
+    }
+    const duration = Date.parse(experiment.ends_at) - Date.parse(experiment.starts_at);
+    if (!Number.isFinite(duration) || duration <= 0 || duration > 42 * 86400000) errors.push('A/B tests must end within 6 weeks of their start');
+    if (experiment.completed_target && !validPublicTarget(experiment.completed_target)) errors.push('Invalid A/B winner destination');
+  }
+  return errors;
+}
+
+export function deviceFromAgent(agent: string): 'ios' | 'android' | 'desktop' {
+  if (/iPhone|iPad|iPod/.test(agent) || /Macintosh/.test(agent) && /Mobile/.test(agent)) return 'ios';
+  return /Android/i.test(agent) ? 'android' : 'desktop';
+}
+
+export function experimentWinner(variants: LinkVariant[], stats: VariantPerformance[]): string {
+  const byId = new Map(stats.map((stat) => [stat.id, stat]));
+  const hasSales = stats.some((stat) => stat.sales > 0);
+  return [...variants].sort((a,b) => {
+    const left = byId.get(a.id) ?? {clicks:0,leads:0,sales:0};
+    const right = byId.get(b.id) ?? {clicks:0,leads:0,sales:0};
+    const l = hasSales ? left.sales : left.leads, r = hasSales ? right.sales : right.leads;
+    return r-l || (right.clicks ? r/right.clicks : 0) - (left.clicks ? l/left.clicks : 0) || right.clicks-left.clicks;
+  })[0].url;
+}
+
+export function chooseLinkTarget(fallback: string, policy: LinkPolicy, context: { device: string; country?: string | null; bucket: number; now?: number }, stats: VariantPerformance[] = []) {
+  const now = context.now ?? Date.now();
+  if (policy.expires_at && Date.parse(policy.expires_at) <= now) return { target: policy.expired_target ?? null, expired: true, variantId: null };
+  const deviceTarget = policy.device_targets?.[context.device as 'ios'|'android'];
+  if (deviceTarget) return {target:deviceTarget,expired:false,variantId:null};
+  const countryTarget = context.country ? policy.geo_targets?.[context.country.toUpperCase()] : null;
+  if (countryTarget) return {target:countryTarget,expired:false,variantId:null};
+  const experiment = policy.experiment;
+  if (experiment) {
+    if (experiment.completed_target) return {target:experiment.completed_target,expired:false,variantId:null};
+    if (now >= Date.parse(experiment.ends_at)) return {target:experimentWinner(experiment.variants, stats),expired:false,variantId:null};
+    if (now >= Date.parse(experiment.starts_at)) {
+      let threshold = 0;
+      for (const variant of experiment.variants) {
+        threshold += variant.weight;
+        if (context.bucket < threshold) return {target:variant.url,expired:false,variantId:variant.id};
+      }
+    }
+  }
+  return {target:fallback,expired:false,variantId:null};
+}
+
+export interface PasswordHash { algorithm: 'PBKDF2-SHA256'; iterations: number; salt: string; hash: string }
+const PASSWORD_ITERATIONS = 600000;
+const encode = (bytes: Uint8Array) => btoa(String.fromCharCode(...bytes));
+const decode = (value: string) => Uint8Array.from(atob(value), (letter) => letter.charCodeAt(0));
+async function passwordBits(password: string, salt: Uint8Array) {
+  const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(password), 'PBKDF2', false, ['deriveBits']);
+  return new Uint8Array(await crypto.subtle.deriveBits({name:'PBKDF2',salt: salt as BufferSource,iterations:PASSWORD_ITERATIONS,hash:'SHA-256'}, key, 256));
+}
+export async function hashLinkPassword(password: string): Promise<PasswordHash> {
+  if (password.length < 1 || password.length > 256) throw new Error('Password must be 1–256 characters');
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  return {algorithm:'PBKDF2-SHA256',iterations:PASSWORD_ITERATIONS,salt:encode(salt),hash:encode(await passwordBits(password,salt))};
+}
+export async function verifyLinkPassword(password: string, stored: PasswordHash): Promise<boolean> {
+  if (!password || password.length > 256 || stored.algorithm !== 'PBKDF2-SHA256' || stored.iterations !== PASSWORD_ITERATIONS) return false;
+  try {
+    const salt=decode(stored.salt), expected=decode(stored.hash);
+    if (salt.length !== 16 || expected.length !== 32) return false;
+    const actual = await passwordBits(password,salt);
+    let difference = 0;
+    for (let index=0; index<expected.length; index++) difference |= actual[index] ^ expected[index];
+    return difference === 0;
+  } catch { return false; }
+}
