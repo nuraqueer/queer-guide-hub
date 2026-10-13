@@ -203,7 +203,7 @@ export default function AdminNewsAuthors() {
       {selected && (
         <section aria-label={`Articles by ${selected}`} className="space-y-4 border-t pt-6">
           <div className="flex items-center justify-between gap-4">
-            <h2 className="text-lg font-semibold break-words">Articles by {selected}</h2>
+            <h2 className="text-subtitle font-semibold break-words">Articles by {selected}</h2>
             <Button variant="ghost" onClick={() => setSelected(null)}>
               Close articles
             </Button>
