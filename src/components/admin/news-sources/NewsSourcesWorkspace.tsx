@@ -40,7 +40,7 @@ export function SourcePager({
       className="flex flex-wrap items-center justify-end gap-4 py-4"
     >
       <span className="text-13 tabular-nums">
-        {total.toLocaleString()} records · Page {page + 1}
+        {total.toLocaleString()} {total === 1 ? 'record' : 'records'} · Page {page + 1}
       </span>
       <Button
         type="button"
@@ -269,7 +269,7 @@ export function NewsSourcesWorkspace({
                     >
                       {s.name}
                     </Button>
-                    <span className="text-xs2 text-muted-foreground">
+                    <span className="block text-xs2 text-muted-foreground">
                       {s.source_type} · {s.feed_type} · every {s.fetch_frequency} min
                     </span>
                   </div>
