@@ -103,8 +103,9 @@ function mergeQuery(
   overrides: Record<string, string> | null,
   utmDefaults: Record<string, string> | null,
 ): string {
-  const parsed = new URL(targetUrl, "https://queer.guide");
-  const basePath = targetUrl.startsWith("http") ? parsed.origin + parsed.pathname : parsed.pathname;
+  const relative = targetUrl.trim().startsWith("/");
+  const parsed = relative ? new URL(targetUrl, "https://queer.guide") : new URL(targetUrl);
+  const basePath = relative ? parsed.pathname : parsed.origin + parsed.pathname;
   const targetParams = parsed.searchParams;
   const fragment = parsed.hash;
 

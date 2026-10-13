@@ -185,6 +185,66 @@ test.describe('design system: buttons', () => {
   });
 });
 
+test.describe('design system: panel rank', () => {
+  // THIS TEST EXISTS BECAUSE THE DIALOG ONE BELOW COULD NOT SEE A REAL DEFECT.
+  //
+  // `dialog uses --radius-panel` was nested in two `if`s — one for a "Sign in"
+  // trigger, one for the dialog itself — so it passed having asserted nothing
+  // whenever either was absent. On CI that is always: the chromium project loads
+  // an admin `storageState` when E2E_ADMIN_* are set, so /trips has no sign-in
+  // button at all and the assertion never ran. Meanwhile every Radix dialog,
+  // sheet and alert-dialog was painting at 18px (`--radius-container`) instead
+  // of 26px, because the unlayered fallback block in index.css outranks
+  // Tailwind's layered `rounded-panel` utility regardless of specificity.
+  //
+  // So the contract is asserted here on something that is present in BOTH auth
+  // states and needs nothing opened, with a positive control: "every panel
+  // resolves correctly" is equally true of a page containing no panels, which is
+  // precisely how the defect survived.
+  test('an element that asks for rounded-panel gets --radius-panel', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 900 });
+    let checked = 0;
+    let panel = '';
+    for (const route of ['/', '/about', '/venues']) {
+      await page.goto(route);
+      await page.waitForSelector('#root *', { state: 'attached', timeout: 15_000 });
+      await dismissCookieBanner(page);
+      await page.waitForTimeout(250);
+      if (!panel) panel = await resolveRadius(page, '--radius-panel');
+      // ONE evaluate per route, not one per element. Walking them with
+      // `locator.nth(i).evaluate()` re-resolves the locator every iteration and
+      // blew the 30s test budget on the homepage alone.
+      //
+      // Elements smaller than twice the radius are skipped: a border radius is
+      // clamped to half the short side, so a 24px-tall chip carrying
+      // `rounded-panel` legitimately computes 12px and is not a defect. That
+      // clamp is also why the dialog's 18px needed corroborating from pixels
+      // before it was believed.
+      const measured = await page.evaluate(() => {
+        const out: { radius: string; cls: string }[] = [];
+        for (const el of document.querySelectorAll('[class~="rounded-panel"]')) {
+          const b = el.getBoundingClientRect();
+          if (Math.min(b.width, b.height) < 64) continue;
+          out.push({
+            radius: getComputedStyle(el).borderRadius,
+            cls: String(el.className || '').slice(0, 70),
+          });
+        }
+        return out;
+      });
+      for (const m of measured) {
+        expect(m.radius, `rounded-panel on ${route} resolved to ${m.radius} (${m.cls})`).toBe(panel);
+        checked += 1;
+      }
+    }
+    expect(
+      checked,
+      'no element carrying rounded-panel was found on any probed route, so this contract was ' +
+        'not checked — the assertions above are vacuous, not passing',
+    ).toBeGreaterThan(0);
+  });
+});
+
 test.describe('design system: dialog', () => {
   // Forced ANONYMOUS, and that is the whole reason this test ever ran at all.
   // playwright.config.ts attaches `storageState` whenever E2E_ADMIN_* is set,

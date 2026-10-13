@@ -142,6 +142,12 @@ export const ADMIN_ARCHETYPES: AdminArchetypeEntry[] = [
   { path: 'content/milestones', archetype: 'A', title: 'Milestones', adopted: true },
   { path: 'users', archetype: 'A', title: 'Users', adopted: true },
   {
+    path: 'news-sources',
+    archetype: 'A',
+    title: 'News Sources',
+    caveat: 'Feed index with publisher linking and ingestion diagnostics.',
+  },
+  {
     path: 'news-authors/articles',
     archetype: 'A',
     title: 'Author articles',
