@@ -1,5 +1,4 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
 import { untypedRpc } from '@/integrations/supabase/untyped';
 
 export interface NewsAuthorRow {
@@ -23,20 +22,29 @@ export function useNewsAuthorsAdmin(search: string, page: number, enabled = true
   });
 }
 
+export interface AuthorArticlePage {
+  rows: Array<{
+    id: string;
+    title: string;
+    published_at: string | null;
+    quality_status: string | null;
+    publisher_name: string | null;
+    archived_at: string | null;
+    duplicate_of_id: string | null;
+  }>;
+  total: number;
+}
 export function useNewsAuthorArticles(author: string | null, page: number) {
   return useQuery({
     queryKey: ['admin-news-author-articles', author, page],
     enabled: author !== null,
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('news_articles')
-        .select('id, title, published_at, quality_status, publisher_name')
-        .eq('author', author!)
-        .order('published_at', { ascending: false, nullsFirst: false })
-        .order('id')
-        .range(page * AUTHOR_PAGE_SIZE, (page + 1) * AUTHOR_PAGE_SIZE);
+      const { data, error } = await untypedRpc<AuthorArticlePage>('admin_news_author_articles', {
+        p_author: author,
+        p_offset: page * AUTHOR_PAGE_SIZE,
+      });
       if (error) throw error;
-      return data ?? [];
+      return data ?? { rows: [], total: 0 };
     },
   });
 }

@@ -47,16 +47,19 @@ beforeEach(() => {
   mocks.mutate.mockResolvedValue(3);
 });
 describe('News author management', () => {
-  it('searches and opens articles linked to the CMS editor', () => {
+  it('searches and links to the dedicated author article page', () => {
     view();
     fireEvent.change(screen.getByLabelText('Search authors'), { target: { value: 'Alex' } });
     expect(mocks.authorQuery).toHaveBeenLastCalledWith('Alex', 0);
-    fireEvent.click(screen.getByRole('button', { name: 'Articles by Alex' }));
-    expect(mocks.articleQuery).toHaveBeenLastCalledWith('Alex', 0);
-    expect(screen.getByRole('link', { name: 'An article' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'Articles by Alex' })).toHaveAttribute(
       'href',
-      '/admin/content/news_articles?edit=article-1',
+      '/admin/news-authors/articles?author=Alex',
     );
+    expect(screen.getByRole('link', { name: '3 articles by Alex' })).toHaveAttribute(
+      'href',
+      '/admin/news-authors/articles?author=Alex',
+    );
+    expect(screen.queryByRole('link', { name: 'An article' })).toBeNull();
   });
   it('confirms rename using the source count and resets the list', async () => {
     view();

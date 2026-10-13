@@ -15,3 +15,9 @@ Implemented in AdminNewsAuthors and useNewsAuthorsAdmin, with navigation and rou
 The isolated PostgreSQL regression covers rename, merge, collisions, stale previews, invalid names, pagination, singleton authors and authorization. UI/navigation tests: 39 passed. Typecheck: no new errors against the existing baseline. Lint and production Vite build passed. Desktop/mobile browser fixtures verified rendering, CMS links, the merge dialog, and no page overflow at 390 px. Frontend source is ready; a frontend production release was not requested.
 
 Interface follows the existing admin header, tonal table, inputs, buttons and confirmation-dialog components. The table owns horizontal overflow; page controls wrap on small screens.
+
+## Author article navigation correction
+
+The user requested a dedicated article page on 2026-10-13. The Articles action and article-count link now navigate to /admin/news-authors/articles?author=<exact byline>, with page number in the URL. A guarded admin_news_author_articles RPC returns all matching records, including undated articles excluded by the ordinary table read policy. The page provides total counts, pagination, CMS editor links, back navigation and loading/error/empty states. Public article visibility policies are unchanged.
+
+Validation: 64 focused navigation, UI, registry and typography tests; lint and typecheck without new errors; production build; isolated SQL checks for exact names, undated/archived/merged inclusion, pagination and access control. Live rollback queries confirm article totals match author management and staff/nonstaff authorization. Applied RPC history version: 20261013184137.
