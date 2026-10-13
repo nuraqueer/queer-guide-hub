@@ -8,6 +8,7 @@ vi.mock('qrcode', () => ({
   toString: vi.fn(async () => '<svg xmlns="http://www.w3.org/2000/svg"></svg>'),
 }));
 afterEach(() => {
+  vi.useRealTimers();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
 });
@@ -34,6 +35,7 @@ describe('QR exports', () => {
       </QueryClientProvider>,
     );
     expect(await screen.findByRole('img')).toHaveAttribute('src', 'data:image/png;base64,cXI=');
+    vi.useFakeTimers();
     fireEvent.click(screen.getByRole('button', { name: 'Download PNG' }));
     fireEvent.click(screen.getByRole('button', { name: 'Download SVG' }));
     expect(downloads).toEqual([
@@ -42,5 +44,6 @@ describe('QR exports', () => {
     ]);
     expect(createObjectURL.mock.calls[0][0]).toBeInstanceOf(Blob);
     expect((createObjectURL.mock.calls[0][0] as Blob).type).toBe('image/svg+xml');
+    vi.runAllTimers();
   });
 });
