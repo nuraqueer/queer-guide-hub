@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
-// Guards `99991791910834`, which gives `run_city_trust_recompute`'s scope a fillable-gap arm so a
+// Guards `99991791920004`, which gives `run_city_trust_recompute`'s scope a fillable-gap arm so a
 // city that LOSES its last venue is deindexed on the next nightly pass instead of staying
 // published and empty for up to 30 days.
 //

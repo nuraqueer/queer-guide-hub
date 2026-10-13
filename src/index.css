@@ -2710,42 +2710,74 @@ label a:hover {
 
    This does not round pure layout wrappers, scrims, progress bars, track
    geometry, maps or charts. A straight line may still encode data or focus;
-   it may not frame a product surface. Explicit semantic radius utilities can
-   still choose a larger rank. */
+   it may not frame a product surface.
+
+   THE PANEL RANK IS EXCLUDED FROM ALL FIVE, and until 2026-10-13 it was not --
+   which made the promise this comment used to end on ("Explicit semantic radius
+   utilities can still choose a larger rank") false for the one rank larger than
+   the fallback. These rules are UNLAYERED, and unlayered author CSS beats
+   anything inside a cascade layer regardless of specificity; Tailwind's own
+   `rounded-panel` utility lives in a layer. So every Radix dialog, sheet and
+   alert-dialog declared `rounded-panel` and painted at 18px instead of 26px,
+   along with the ink bands on /about and three homepage sections. Confirmed at
+   the PIXEL level from a screenshot of a dialog corner (~17px, then ~25px after
+   the fix), because on that node neither an injected stylesheet nor an inline
+   `!important` had any observable effect and the computed read needed
+   independent corroboration before it was trusted.
+
+   IT IS AN EXCLUSION RATHER THAN AN OVERRIDE, and that is the whole reason it
+   works. An extra unlayered rule cannot reliably outrank these: `:where()`
+   contributes nothing, but `:not(.fixed):not(.absolute)` contributes two
+   classes, so the last two sit at (0,2,0) while the first three sit at (0,0,0).
+   A single override at (0,1,0) therefore fixed dialogs (which carry `.fixed`,
+   so only the (0,0,0) rules match them) and silently left the /about bands
+   alone -- measured, not reasoned. Removing the competing declaration instead
+   lets the layered utility apply because nothing unlayered contests it.
+
+   SCOPED TO THE PANEL RANK ONLY, deliberately. The same inversion affects the
+   element and container ranks: measured by simulation, moving all five
+   fallbacks into a layer changes 440 elements across 15 routes (12px -> 18px
+   where a surface asked for `rounded-container`, 9px -> 9999px where it asked
+   for `rounded-full`). That is a site-wide silhouette change -- a visual-design
+   decision rather than a bug fix -- so it is reported and left alone. A blanket
+   `:not([class*='rounded-'])` was measured and rejected for this job too: it
+   also matches VARIANT utilities such as `focus:rounded-element`, which do not
+   apply at rest, and stripped the fallback off a skip link (12px -> 0px).
+   `[class~=]` matches the whole class token, so it cannot do that. */
 :where(
-  button,
-  input,
-  textarea,
-  select,
-  article,
-  aside,
-  section,
-  nav,
-  form,
-  fieldset,
-  [role='button'],
-  [role='tab'],
-  [role='dialog'],
-  [role='alert'],
-  [role='menu'],
-  [data-slot='card']
-):where([class*='bg-'], [class*='shadow-']) {
+    button,
+    input,
+    textarea,
+    select,
+    article,
+    aside,
+    section,
+    nav,
+    form,
+    fieldset,
+    [role='button'],
+    [role='tab'],
+    [role='dialog'],
+    [role='alert'],
+    [role='menu'],
+    [data-slot='card']
+  ):where([class*='bg-'], [class*='shadow-']):not([class~='rounded-panel']) {
   border-radius: var(--radius-container);
 }
 
 :where(a, button, input, textarea, select, [role='button'], [role='tab']):where(
-  [class*='bg-'],
-  [class*='shadow-'],
-  [class*='card-lift']
-) {
+    [class*='bg-'],
+    [class*='shadow-'],
+    [class*='card-lift']
+  ):not([class~='rounded-panel']) {
   border-radius: var(--radius-element);
 }
 
 :where(div, li):where(
-  [class*='aspect-'][class*='bg-'],
-  [class*='card-lift'],
-  [class*='shadow-soft']
-) {
+    [class*='aspect-'][class*='bg-'],
+    [class*='card-lift'],
+    [class*='shadow-soft']
+  ):not([class~='rounded-panel']) {
   border-radius: var(--radius-container);
 }
 
@@ -2755,11 +2787,13 @@ label a:hover {
     [class*='bg-surface-container'],
     [class*='bg-popover'],
     [class*='bg-destructive']
-  ):not(.fixed):not(.absolute) {
+  ):not(.fixed):not(.absolute):not([class~='rounded-panel']) {
   border-radius: var(--radius-container);
 }
 
-:where(div, li):where([class*='bg-foreground']):not(.fixed):not(.absolute) {
+:where(div, li):where([class*='bg-foreground']):not(.fixed):not(.absolute):not(
+    [class~='rounded-panel']
+  ) {
   border-radius: var(--radius-container);
 }
 
@@ -2819,7 +2853,11 @@ footer.bg-foreground {
 
 /* Supporting record actions recede for a mouse, and remain visible for touch and keyboard. */
 @media (hover: hover) and (pointer: fine) {
-  .admin-row-secondary { opacity: 0; }
+  .admin-row-secondary {
+    opacity: 0;
+  }
   [data-admin-row]:hover .admin-row-secondary,
-  [data-admin-row]:focus-within .admin-row-secondary { opacity: 1; }
+  [data-admin-row]:focus-within .admin-row-secondary {
+    opacity: 1;
+  }
 }
