@@ -276,23 +276,27 @@ describe('the reader surfaces', () => {
 });
 
 /**
- * The sidebar summary and the page default must request the SAME scope.
- *
- * The query key is ['admin-review', user, filters], so the two share one request only while their
- * scopes agree. When they disagreed, /admin fired two 335k-row union aggregations concurrently and
- * the second exceeded the 8s PostgREST statement timeout -- which is how a correct counter change
- * turned three admin e2e specs red. Asserted on the SOURCE because no unit test here mounts the
- * router and the shell together, so nothing else can see that the two call sites agree.
+ * Sidebar badges must not issue a second full-queue request.
+ * The former shared-scope optimization still duplicated requests when a filter changed.
+ * Badges now use an unscoped summary RPC outside the queue workspace and consume the
+ * page's cached totals inside it. useAdminReviewRequests.test.tsx verifies the actual
+ * request count, shared totals and navigation cancellation; this guards the call boundary.
  */
-describe('the admin review summary shares the page scope', () => {
+describe('the admin review summary avoids a duplicate queue request', () => {
   const hook = readFileSync(join(process.cwd(), 'src/hooks/useAdminReview.ts'), 'utf8');
   const page = readFileSync(join(process.cwd(), 'src/pages/admin/AdminReviewQueue.tsx'), 'utf8');
 
-  it('declares one shared constant and both sides use it', () => {
+  it('keeps the page default shared and uses the summary RPC for badges', () => {
     expect(hook).toMatch(/export const DEFAULT_REVIEW_SCOPE[^=]*=\s*'decisions'/);
-    // The summary must pass the constant, never a literal of its own.
+    const fetchSummary = hook.slice(
+      hook.indexOf('async function fetchReviewSummary'),
+      hook.indexOf('export function useAdminReviewSummary'),
+    );
+    expect(fetchSummary).toContain(".rpc('get_admin_review_summary')");
+    expect(fetchSummary).not.toContain('get_admin_review_queue');
     const summary = hook.slice(hook.indexOf('export function useAdminReviewSummary'));
-    expect(summary).toContain('scope: DEFAULT_REVIEW_SCOPE');
+    expect(summary).toContain('queryFn: fetchReviewSummary');
+    expect(summary).not.toContain('useAdminReview(');
     expect(summary).not.toMatch(/scope:\s*'(all|decisions|safety|overdue|public)'/);
     // The page default must be the same constant.
     expect(page).toContain(': DEFAULT_REVIEW_SCOPE,');
