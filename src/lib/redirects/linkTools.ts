@@ -41,6 +41,7 @@ export function buildCampaignDestination(
     if (keys.has(key)) throw new Error(`Parameter ${key} appears more than once.`);
     if (CAMPAIGN_FIELDS.includes(key as (typeof CAMPAIGN_FIELDS)[number]))
       throw new Error('Set campaign tags in the campaign fields.');
+    if (['qg_click_id', 'pw', 'password'].includes(key)) throw new Error('This parameter is reserved for link access or attribution.');
     keys.add(key);
     url.searchParams.set(key, value);
   }

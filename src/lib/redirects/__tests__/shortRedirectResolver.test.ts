@@ -142,4 +142,13 @@ describe('live short-link resolver', () => {
     run.state.quota = false;
     expect((await run.invoke()).status).toBe(410);
   });
+  it('adds only the recorded click ID when conversion tracking is enabled, and never annotates HEAD', async () => {
+    const run = runtime();
+    run.state.settings.policy = { track_conversions: true };
+    const head = await run.invoke('HEAD', 'qg_click_id=spoofed&utm_source=qr');
+    expect(head.headers.get('Location')).not.toContain('qg_click_id');
+    const get = await run.invoke('GET', 'qg_click_id=spoofed&utm_source=qr');
+    expect(new URL(get.headers.get('Location')!).searchParams.get('qg_click_id')).toBe('click-id');
+    expect(run.rpc.mock.calls[0][1]?.p_query).toBe('utm_source=qr');
+  });
 });

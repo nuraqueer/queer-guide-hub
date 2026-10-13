@@ -2,6 +2,7 @@
 export interface LinkVariant { id: string; url: string; weight: number }
 export interface LinkExperiment { starts_at: string; ends_at: string; variants: LinkVariant[]; completed_target?: string }
 export interface LinkPolicy {
+  track_conversions?: boolean;
   device_targets?: Partial<Record<'ios' | 'android', string>>;
   geo_targets?: Record<string, string>;
   experiment?: LinkExperiment;
@@ -32,8 +33,9 @@ export function validPublicTarget(target: string): boolean {
 export function policyErrors(policy: LinkPolicy): string[] {
   const errors: string[] = [];
   if (!policy || typeof policy !== 'object' || Array.isArray(policy)) return ['Policy must be an object'];
-  const allowed = ['device_targets','geo_targets','experiment','expires_at','expired_target'];
+  const allowed = ['track_conversions','device_targets','geo_targets','experiment','expires_at','expired_target'];
   if (Object.keys(policy).some((key) => !allowed.includes(key))) errors.push('Unknown policy setting');
+  if (policy.track_conversions !== undefined && typeof policy.track_conversions !== 'boolean') errors.push('Conversion tracking must be enabled or disabled');
   for (const [kind, targets] of [['device',policy.device_targets], ['country',policy.geo_targets]] as const) {
     if (!targets) continue;
     if (typeof targets !== 'object' || Array.isArray(targets)) { errors.push('Invalid ' + kind + ' rules'); continue; }

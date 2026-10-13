@@ -26,3 +26,6 @@ GRANT ALL ON public.redirect_events TO service_role;
 GRANT USAGE ON SEQUENCE public.redirect_events_id_seq TO service_role;
 CREATE FUNCTION public.resolve_short_redirect(p_slug text) RETURNS SETOF public.redirects LANGUAGE sql SECURITY DEFINER AS $$ SELECT * FROM public.redirects WHERE slug=p_slug $$;
 CREATE FUNCTION public.record_redirect_click(uuid,text,text,text,text,text,text,integer) RETURNS void LANGUAGE sql AS $$SELECT$$;
+
+-- Existing payment table needed by the native attribution FK migration.
+CREATE TABLE public.donations(id uuid PRIMARY KEY DEFAULT gen_random_uuid());

@@ -1,21 +1,14 @@
-import { readFileSync, readdirSync } from 'node:fs';
-import { PGlite } from '@electric-sql/pglite';
+import { readFileSync } from 'node:fs';
+import { createRedirectTestDb } from './lib/redirect-test-db.mjs';
 
-// Isolated PostgreSQL, never the production project. auth.* models signed JWT
-// claims so policy tests cover authorization without inventing user sessions.
-const db = new PGlite();
+// Isolated PostgreSQL only; never the production project.
+const db = await createRedirectTestDb();
 try {
-  await db.exec(readFileSync('supabase/tests/fixtures/redirect-platform-bootstrap.sql', 'utf8'));
-  const files = readdirSync('supabase/migrations');
-  for (const suffix of ['redirect_link_workspace.sql', 'redirect_link_policies.sql']) {
-    const file = files.find((name) => name.endsWith(suffix));
-    if (!file) throw new Error('Missing migration ' + suffix);
-    await db.exec(readFileSync('supabase/migrations/' + file, 'utf8'));
-  }
   await db.exec(readFileSync('supabase/tests/redirect_link_workspace.sql', 'utf8'));
   await db.exec(readFileSync('supabase/tests/redirect_link_policies.sql', 'utf8'));
+  await db.exec(readFileSync('supabase/tests/redirect_conversion_attribution.sql', 'utf8'));
   console.log(
-    'Redirect platform SQL: policies, atomic creation, quotas, expiry and variant metrics passed.',
+    'Redirect platform SQL: policies, atomic creation, quotas, expiry, variant metrics and conversion attribution passed.',
   );
 } finally {
   await db.close();

@@ -22,6 +22,7 @@ import { RedirectQrDialog } from '@/components/admin/redirects/RedirectQrDialog'
 import { RedirectTrackingDialog } from '@/components/admin/redirects/RedirectTrackingDialog';
 import { RedirectWorkspaceDialog } from '@/components/admin/redirects/RedirectWorkspaceDialog';
 import { RedirectOrganizationDialog } from '@/components/admin/redirects/RedirectOrganizationDialog';
+import { RedirectConversionSetup } from '@/components/admin/redirects/RedirectConversionSetup';
 import { RedirectPolicyDialog } from '@/components/admin/redirects/RedirectPolicyDialog';
 import { useRedirectWorkspace } from '@/hooks/useRedirectWorkspace';
 import { commentSegments, filterWorkspaceLinks } from '@/lib/redirects/workspace';
@@ -67,6 +68,7 @@ export default function AdminRedirects() {
   const [linkSeed, setLinkSeed] = useState<{ row: InventoryRedirect | null } | null>(null);
   const [qrUrl, setQrUrl] = useState<string | null>(null);
   const [tracking, setTracking] = useState<InventoryRedirect | null>(null);
+  const [conversionOpen, setConversionOpen] = useState(false);
   const [workspaceOpen, setWorkspaceOpen] = useState(false);
   const [organization, setOrganization] = useState<InventoryRedirect | null>(null);
   const [policyLink, setPolicyLink] = useState<InventoryRedirect | null>(null);
@@ -145,6 +147,9 @@ export default function AdminRedirects() {
               Refresh
             </Button>
             <RedirectToolbarActions />
+            <Button variant="outline" size="sm" onClick={() => setConversionOpen(true)}>
+              Conversion setup
+            </Button>
             <Button variant="outline" size="sm" onClick={() => setWorkspaceOpen(true)}>
               Folders, tags &amp; templates
             </Button>
@@ -417,7 +422,7 @@ export default function AdminRedirects() {
                       <DropdownMenuContent align="end">
                         {row.manualId && row.source.startsWith('/go/') && (
                           <DropdownMenuItem onSelect={() => setPolicyLink(row)}>
-                            Targeting, A/B &amp; access
+                            Link settings
                           </DropdownMenuItem>
                         )}
                         <DropdownMenuItem
@@ -512,6 +517,9 @@ export default function AdminRedirects() {
       )}
       {qrUrl && <RedirectQrDialog url={qrUrl} onClose={() => setQrUrl(null)} />}
       {tracking && <RedirectTrackingDialog row={tracking} onClose={() => setTracking(null)} />}
+      {conversionOpen && (
+        <RedirectConversionSetup links={rows ?? []} onClose={() => setConversionOpen(false)} />
+      )}
       {workspaceOpen && <RedirectWorkspaceDialog onClose={() => setWorkspaceOpen(false)} />}
       {policyLink && <RedirectPolicyDialog row={policyLink} onClose={() => setPolicyLink(null)} />}
       {organization && (

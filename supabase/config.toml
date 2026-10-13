@@ -652,3 +652,8 @@ verify_jwt = true
 
 [functions.complete-entity-location]
 verify_jwt = false
+
+# Accepts scoped Redirects credentials or verified user JWTs. The handler owns
+# both checks; scoped tokens are not Supabase JWTs and must reach that check.
+[functions.redirect-api]
+verify_jwt = false

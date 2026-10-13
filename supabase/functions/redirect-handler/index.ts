@@ -37,7 +37,7 @@ Deno.serve(async (req: Request) => {
   if (!/^[a-z0-9][a-z0-9-]{1,62}[a-z0-9]$/.test(slug)) return page(404,"Link not found","This short link does not exist.",false,head);
   const incoming=new URLSearchParams(url.searchParams.get("q") ?? "");
   let password=url.searchParams.get("pw") ?? incoming.get("pw") ?? "";
-  incoming.delete("pw");incoming.delete("password");
+  incoming.delete("pw");incoming.delete("password");incoming.delete("qg_click_id");
   if (incoming.toString().length>8192) return page(400,"Invalid link","The query string is too long.",false,head);
   try {
     if (req.method === "POST") password=await postedPassword(req);
@@ -61,8 +61,9 @@ Deno.serve(async (req: Request) => {
     const selected=chooseLinkTarget(link.target,policy,{device:deviceFromAgent(req.headers.get("user-agent") ?? ""),country,bucket:words[0]/4294967296*100},stats);
     if (selected.expired && !selected.target) return page(410,"Link expired","This link is no longer available.",false,head);
     if (!selected.target || !validPublicTarget(selected.target)) return page(503,"Link unavailable","The destination settings need attention.",false,head);
-    const destination=mergeQuery(selected.target,link.query_mode,incoming,link.query_override,link.utm_defaults);
+    let destination=mergeQuery(selected.target,link.query_mode,incoming,link.query_override,link.utm_defaults);
     const targetUrl=new URL(destination);
+    targetUrl.searchParams.delete("qg_click_id"); destination=targetUrl.href;
     if (["queer.guide","www.queer.guide"].includes(targetUrl.hostname) && targetUrl.pathname.startsWith("/go/")) return page(508,"Link loop","This link points to another short link.",false,head);
     if (!head && !selected.expired) {
       const ip=req.headers.get("cf-connecting-ip") ?? req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
@@ -70,6 +71,7 @@ Deno.serve(async (req: Request) => {
       const {data:clickId,error}=await db.rpc("record_redirect_visit",{p_redirect_id:link.id,p_path:"/go/"+slug,p_query:incoming.toString() || null,p_referer:cleanReferrer(req.headers.get("referer")),p_user_agent:req.headers.get("user-agent"),p_country:country,p_ip_hash:Array.from(hash,(value)=>value.toString(16).padStart(2,"0")).join(""),p_status:link.status_code,p_variant_id:selected.variantId,p_destination:destination});
       if(error)return page(503,"Link unavailable","Please try again shortly.",false,head);
       if(!clickId)return page(410,"Link unavailable","This link has expired or reached its visit limit.",false,head);
+      if(policy.track_conversions){targetUrl.searchParams.set("qg_click_id",clickId);destination=targetUrl.href;}
     }
     return new Response(null,{status:selected.expired ? 302 : link.status_code,headers:{...responseHeaders,Location:destination}});
   } catch {return page(503,"Link unavailable","Please try again shortly.",false,head);}

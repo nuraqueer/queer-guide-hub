@@ -86,6 +86,21 @@ function PolicyForm({
       }}
     >
       <fieldset className="space-y-2">
+        <legend className="font-medium">Conversion tracking</legend>
+        <label className="flex items-center gap-2">
+          <input
+            type="checkbox"
+            checked={policy.track_conversions === true}
+            onChange={(event) => setPolicy({ ...policy, track_conversions: event.target.checked })}
+          />
+          Attribute leads and sales
+        </label>
+        <p className="text-sm text-muted-foreground">
+          Include a click ID in the destination URL for your connected signup or checkout. Visit
+          counts work independently.
+        </p>
+      </fieldset>
+      <fieldset className="space-y-2">
         <legend className="font-medium">Device destinations</legend>
         {(['ios', 'android'] as const).map((device) => (
           <div key={device} className="space-y-2">

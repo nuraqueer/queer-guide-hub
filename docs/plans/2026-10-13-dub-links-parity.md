@@ -25,20 +25,20 @@ exist. Existing local tools are a foundation, not proof of parity or deployment.
 | Geo targeting | Country-specific destinations and default fallback | Candidate: country rules and fallback tested |
 | Device targeting | iOS/Android destinations, evaluated before geo | Candidate: iOS/Android priority tested |
 | A/B testing | 2–5 destinations, weighted traffic≥10%, end date≤6 weeks, manual winner/end | Candidate: editor/resolver implemented locally |
-| A/B completion | Device→geo→experiment priority; choose winner by sales/conversions, rates, clicks; leads fallback | Partial: selection/metrics tested; conversion ingestion missing |
+| A/B completion | Device→geo→experiment priority; choose winner by sales/conversions, rates, clicks; leads fallback | Candidate: selection/metrics now fed by verified native and scoped server conversion ingestion |
 | Password links | Password challenge, hashed secret, no disclosure/bypass, scoped access | Partial: hashed protection and bypass tests; rate limiting/logo pending |
 | Expiration | Date and expired destination URL, live enforcement without stale cached rules | Candidate: date/phrase parser, custom fallback and live enforcement tested |
 | Link cloaking | Explicit iframe mode with accurate iframe limitations, standard redirect fallback | Missing |
 | Branded QR | Dots square/circle/joined; marker center square/circle; border square/rounded/circle; colors | Candidate: all dot/marker/color controls; scan verification before export |
 | QR logos/export | Workspace/domain/logo precedence and hide; SVG/PNG/JPG; clipboard image and image URL | Partial: per-export logo, PNG/JPG/SVG, image/data URL copy; workspace/domain precedence pending |
 | Click analytics | Real-time totals/time series, custom date/filter/export, countries/cities/devices/browsers/OS/referrers | Partial: visits/date/country/host |
-| Conversion tracking | Click attribution, leads/signup/sale/revenue, trusted conversion ingestion and application hooks | Missing |
-| Customer insights | Customer journey across click→lead→sale with private event timeline | Missing |
+| Conversion tracking | Click attribution, leads/signup/sale/revenue, trusted conversion ingestion and application hooks | Candidate: scoped ingestion, consented signup and verified Stripe hooks implemented locally |
+| Customer insights | Customer journey across click→lead→sale with private event timeline | Partial: private ID-based cross-link paginated journeys; identity enrichment missing |
 | Live events | Paginated live click/lead/sale stream, real events rather than demo data | Partial: recent clicks |
 | Shared dashboards | Revocable scoped sharing, sanitized aggregate-only default | Missing |
 | Custom reports | Custom dates, granular link/folder/tag/domain/geo/device/event filters | Missing |
 | Integrations | Segment and GTM adapters; native configured integrations and provider callbacks | Missing |
-| REST API | Authenticated/scoped link CRUD/upsert/count/list, analytics/events, folders/tags, bulk operations | Missing |
+| REST API | Authenticated/scoped link CRUD/upsert/count/list, analytics/events, folders/tags, bulk operations | Partial: conversion endpoints and scoped credential management; other resources missing |
 | SDKs | TypeScript, Python, Go, Ruby, PHP wrappers and runnable examples covering management/tracking | Missing |
 | Webhooks | Signed click/lead/sale events, retries, delivery history, replay and secret rotation | Missing |
 
@@ -147,3 +147,35 @@ is not observable in this browser; export handlers/formats are tested.
 Workspace/domain defaults, persistent per-link QR branding and hosted image
 URLs remain outstanding. This is still local development, not deployment or
 completion of the broader parity objective.
+
+## Checkpoint: conversion ingestion and native application hooks
+
+Implemented locally: optional recorded click IDs on destination URLs; scoped,
+expiring/revocable server credentials with private hashes; trusted lead/sale
+ingestion, stable event-ID retries/conflicts, direct sale and customer-anchor
+attribution; native confirmed signup validation and existing analytics-consent
+gating; native Stripe paid checkout/async completion/renewal attribution using
+verified signatures and stable purchase IDs. The donation FK preserves the
+financial ledger when a campaign is deleted.
+
+Private cohort reports now show lead/sale/customer totals and per-currency
+revenue, using exact PostgreSQL decimal strings and integer accumulation.
+Customer journeys are cross-link, chronological and keyset-paginated; historical
+paths survive slug edits. Conversion data feeds the existing experiment metrics.
+Admin setup supports one-time secret copying and selected-link scope/revocation.
+
+Evidence: 42 focused tests across 13 files passed; the SQL suite passed against
+isolated PGlite. `test:redirect-stripe` executes the actual webhook source with
+genuine Stripe signature verification and WebCrypto, then writes into the
+isolated database, proving paid-only revenue, retry deduplication, renewal
+attribution and A/B metrics. It creates no payments or provider requests.
+Typecheck has no new errors. Frontend/proxy builds and targeted lint passed;
+final checks are recorded in `tmp/conversion-*`. Fixture screenshots are in
+`outputs/redirect-dub-parity/conversion-*.jpg`.
+
+See `docs/guides/redirect-conversions.md` for setup, contracts, units, retry rules
+and remaining limitations. Production migration/provider/browser delivery is
+not verified. This does not complete the full parity objective: identity
+enrichment, advanced/live/shared reports, full API/SDK/webhooks/integrations,
+domains/deep links/previews/cloaking, folder RBAC/bulk tools and persistent QR
+branding still require implementation and release evidence.
