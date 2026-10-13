@@ -1,3 +1,4 @@
+import { bulkLinkInput, linkInput, linkListInput, LINK_SCOPES } from "../_shared/redirect-links.ts";
 import { analyticsFilters } from "../_shared/redirect-analytics.ts";
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2.50.5";
@@ -5,9 +6,9 @@ import { boundedJson, conversionInput, createRedirectToken, tokenDigest, UUID } 
 
 Deno.serve(async (req: Request) => {
  const origin=req.headers.get('origin') ?? '';
- const cors={ 'Access-Control-Allow-Origin':['https://queer.guide','https://www.queer.guide','http://localhost:5173','http://localhost:4178'].includes(origin)?origin:'', 'Access-Control-Allow-Headers':'authorization, apikey, x-client-info, content-type', 'Access-Control-Allow-Methods':'GET, POST, DELETE, OPTIONS', Vary:'Origin' };
+ const cors={ 'Access-Control-Allow-Origin':['https://queer.guide','https://www.queer.guide','http://localhost:5173','http://localhost:4178'].includes(origin)?origin:'', 'Access-Control-Allow-Headers':'authorization, apikey, x-client-info, content-type', 'Access-Control-Allow-Methods':'GET, POST, PUT, PATCH, DELETE, OPTIONS', Vary:'Origin' };
  const json=(body:unknown,status=200)=>new Response(JSON.stringify(body),{status,headers:{...cors,'Content-Type':'application/json','Cache-Control':'no-store'}});
- const rpcError=(error:{code?:string;message:string})=>{const status=error.code==='23505'?409:error.code==='42501'?403:error.code==='P0002'?404:error.code?.startsWith('22')?400:503;return json({error:status===503?'Conversion recording unavailable':error.message},status);};
+ const rpcError=(error:{code?:string;message:string})=>{const status=error.code==='23505'?409:error.code==='42501'?403:error.code==='P0002'?404:(error.code?.startsWith('22')||['23503','23514'].includes(error.code??''))?400:503;return json({error:status===503?'Redirect API temporarily unavailable':error.message},status);};
  if(req.method==='OPTIONS') return new Response(null,{headers:cors});
  const path=new URL(req.url).pathname.split('/redirect-api')[1]?.replace(/\/$/,'') ?? '';
  const credential=req.headers.get('Authorization')?.replace(/^Bearer\s+/i,'') ?? '';
@@ -23,6 +24,36 @@ Deno.serve(async (req: Request) => {
   user=data.user;
  }
  try {
+  if(path==='/links'||path.startsWith('/links/')) {
+   const read=req.method==='GET', scope=read?'links:read':'links:write';
+   let tokenId:string|null=null;
+   if(tokenCredential){const {data,error}=await db.rpc('authenticate_redirect_api_token',{p_hash:await tokenDigest(credential),p_scope:scope});if(error)return json({error:'Credential verification unavailable'},503);if(!data)return json({error:'Required link scope is missing'},403);tokenId=data.id;}
+   else{const {data,error}=await identityClient!.rpc('has_role_jwt',{required_role:'admin'});if(error)return json({error:'Authorization unavailable'},503);if(!data)return json({error:'Forbidden'},403);}
+   const query=new URL(req.url).searchParams;
+   if(new URL(req.url).search.length>16384)return json({error:'Filters are too large'},400);
+   const id=path.slice('/links/'.length), byId=UUID.test(id);
+   if(read&&(path==='/links'||path==='/links/count'||byId)) {
+    if([...query.keys()].some(key=>!['filters','limit','cursor'].includes(key)))return json({error:'Unknown page parameter'},400);
+    const filters=byId?{ids:[id]}:linkListInput(JSON.parse(query.get('filters')??'{}'));
+    const count=path==='/links/count',limit=count?0:byId?1:Number(query.get('limit')??50),cursor=query.get('cursor');
+    if(!Number.isInteger(limit)||limit<0||limit>100||!count&&limit===0||cursor&&!UUID.test(cursor))return json({error:'Invalid link page'},400);
+    const {data,error}=await db.rpc('redirect_management_list',{p_filters:filters,p_limit:limit,p_after:byId?null:cursor,p_token_id:tokenId});
+    if(error)return rpcError(error);
+    if(byId)return data.data.length?json(data.data[0]):json({error:'Link not found'},404);
+    return json(count?{count:data.count}:data);
+   }
+   let operations:unknown[];
+   if(path==='/links/bulk'&&req.method==='POST')operations=bulkLinkInput(await boundedJson(req));
+   else if(path==='/links'&&req.method==='POST')operations=[{operation:'create',data:linkInput(await boundedJson(req),'create')}];
+   else if(path==='/links/upsert'&&req.method==='PUT')operations=[{operation:'upsert',data:linkInput(await boundedJson(req),'upsert')}];
+   else if(byId&&req.method==='PATCH')operations=[{operation:'update',id,data:linkInput(await boundedJson(req),'update')}];
+   else if(byId&&req.method==='DELETE')operations=[{operation:'delete',id}];
+   else return json({error:'Method or endpoint not supported'},405);
+   const {data,error}=await db.rpc('redirect_management_mutate',{p_operations:operations,p_token_id:tokenId,p_actor_id:user?.id??null});
+   if(error)return rpcError(error);
+   if(path==='/links/bulk')return json({data});
+   return json(data[0],data[0]?.created?201:200);
+  }
   if((path==='/analytics'||path==='/events')&&req.method==='GET') {
    const query=new URL(req.url).searchParams;
    if(new URL(req.url).search.length>16384)return json({error:'Filters are too large'},400);
@@ -83,7 +114,7 @@ Deno.serve(async (req: Request) => {
     if(!Number.isFinite(end) || end<=Date.now() || end>Date.now()+366*86400000)return json({error:'Credentials must expire within one year'},400);
     if(body.redirectIds!==undefined && (!Array.isArray(body.redirectIds) || body.redirectIds.length<1 || body.redirectIds.length>100 || body.redirectIds.some((id:unknown)=>typeof id!=='string' || !UUID.test(id))))return json({error:'Invalid link scope'},400);
     const scopes=body.scopes??['conversions:write'];
-    if(!Array.isArray(scopes)||scopes.length<1||scopes.some(scope=>!['conversions:write','events:read'].includes(scope)))return json({error:'Invalid credential permissions'},400);
+    if(!Array.isArray(scopes)||scopes.length<1||scopes.some(scope=>!LINK_SCOPES.includes(scope)))return json({error:'Invalid credential permissions'},400);
     const ids=body.redirectIds? [...new Set(body.redirectIds)] : null;
     if(ids){const {data,error}=await db.from('redirects').select('id').in('id',ids).eq('type','SHORT');if(error || data?.length!==ids.length)return json({error:'One or more managed links were not found'},400);}
     const secret=createRedirectToken();

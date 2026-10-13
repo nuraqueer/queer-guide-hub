@@ -64,6 +64,15 @@ describe('tracked link creation', () => {
       await screen.findByText('Saved QR URL: https://queer.guide/go/zurich-campaign'),
     ).toBeVisible();
   });
+  it('generates a random slug while preserving destination and campaign fields', () => {
+    show();
+    fireEvent.click(screen.getByRole('button', { name: 'Generate random slug' }));
+    expect((screen.getByLabelText('Short-link slug') as HTMLInputElement).value).toMatch(
+      /^[a-f0-9]{12}$/,
+    );
+    expect(screen.getByLabelText('Destination')).toHaveValue('/city/zurich?view=map#places');
+    expect(screen.getByLabelText('Source')).toHaveValue('poster');
+  });
   it('keeps entered fields and reports a failed save without displaying an unsaved QR link', async () => {
     mocks.create.mockResolvedValue(null);
     show();

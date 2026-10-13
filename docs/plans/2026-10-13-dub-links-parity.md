@@ -9,14 +9,14 @@ exist. Existing local tools are a foundation, not proof of parity or deployment.
 
 | Requirement | Required behavior / evidence | Current state |
 | --- | --- | --- |
-| Branded links | Custom slug, random slug, editable destination; shorten arbitrary public HTTP(S) URLs | Candidate: public HTTP(S) destinations; private/local targets rejected; custom domains missing |
+| Branded links | Custom slug, random slug, editable destination; shorten arbitrary public HTTP(S) URLs | Candidate: public HTTP(S) destinations, random slug UI and server allocation; private/local targets rejected; custom domains missing |
 | UTM builder | Source/medium/campaign/term/content/referral; preserve queries/fragments | Candidate: six campaign fields including referral; query/fragment preservation tested |
 | Shared UTM templates | Named workspace templates, apply/save/edit/delete in builder/settings | Candidate: implemented locally; pending release |
 | Folders | Create/rename/delete/move links, folder-filtered list and analytics | Candidate: implemented locally; pending release |
 | Tags | Multiple colored tags, create/rename/delete, shareable filtered list and analytics | Candidate: implemented locally; pending release |
 | Comments | Team-visible comment on link card, clickable hyperlinks | Candidate: implemented locally; pending release |
 | Folder permissions | Explicit view/edit permissions for team members, enforced in database/API | Missing |
-| Bulk actions | Create/update/upsert/delete, folder/tag assignment, archive, import/export, QR export | Partial: CSV import and basic export |
+| Bulk actions | Create/update/upsert/delete, folder/tag assignment, archive, import/export, QR export | Partial: CSV import/basic export plus scoped atomic API batches and folder/tag assignment; archive and bulk UI/QR exports pending |
 | Custom previews | Uploaded OG image (1200×630, ≤1.5 MB), title≤120, description≤240, video API, crawler unfurl | Missing |
 | AI previews | Generate title/description from destination content using configured AI provider | Missing |
 | Custom domains | Verify ownership/DNS, multiple domains, primary domain, redirects on branded hostname | Missing |
@@ -38,7 +38,7 @@ exist. Existing local tools are a foundation, not proof of parity or deployment.
 | Shared dashboards | Revocable scoped sharing, sanitized aggregate-only default | Missing |
 | Custom reports | Custom dates, granular link/folder/tag/domain/geo/device/event filters | Partial: date/dimension report UI and API; saved definitions and sharing missing |
 | Integrations | Segment and GTM adapters; native configured integrations and provider callbacks | Missing |
-| REST API | Authenticated/scoped link CRUD/upsert/count/list, analytics/events, folders/tags, bulk operations | Partial: conversion and read analytics/events endpoints, scoped credentials; management resources missing |
+| REST API | Authenticated/scoped link CRUD/upsert/count/list, analytics/events, folders/tags, bulk operations | Partial: scoped link CRUD/upsert/count/list/mixed bulk, conversions and analytics/events; folder/tag resources and full policy fields pending |
 | SDKs | TypeScript, Python, Go, Ruby, PHP wrappers and runnable examples covering management/tracking | Missing |
 | Webhooks | Signed click/lead/sale events, retries, delivery history, replay and secret rotation | Missing |
 
@@ -227,3 +227,31 @@ regression, proxy compilation, targeted lint and migration-version validation
 passed; typecheck reports no new errors (704 inherited). Production
 migration and matching relay-secret setup remain pending. Password-page logo
 customization and the other remaining parity requirements are still outstanding.
+
+## Checkpoint: scoped link management API
+
+Implemented locally: managed short-link create/get/update/delete/upsert/list/count,
+atomic mixed bulk operations, random slug allocation and generator UI, partial
+organization/query/expiry updates, and separate link read/write credential scopes.
+Selected-link scope is rechecked in SQL with expiry/revocation; creating new links
+requires unrestricted scope. Verified admin sessions supply actor identity; API
+keys use the verified credential owner. New destinations use the existing public
+URL validation and deny short-link loops. Read projections exclude secret fields.
+
+Actual SQL tests cover scopes, revocation, invalid-assignment and denied-late-batch
+rollback, stable upserts, preserved metadata, expiry clearing, deletion cascades,
+preserved donation ledger, and keyset pagination/count across 1,101 links. Typed
+query/type fixture enums match the production baseline for these operations.
+`docs/guides/redirect-link-management-api.md` records the API contract and limits.
+
+This remains a candidate checkpoint. Resource folder/tag REST, policy/password/
+preview/domain/deep-link API fields, SDK wrappers, archive/bulk UI/QR exports,
+webhooks, integrations and production release evidence remain in the full scope.
+
+Checkpoint validation: 34 focused tests passed across five files. Isolated SQL
+and genuine signed-Stripe regression passed. Frontend/proxy builds, migration
+versions and targeted lint passed. Browser fixture screenshots of desktop/mobile
+credential setup are under `outputs/redirect-dub-parity/link-management-setup-*.jpg`;
+no credential was created or revoked in that browser check. The setup now shows
+examples matching management-only permissions and collapses the conversion guide.
+Typecheck also passed its no-new-errors gate (704 inherited errors).

@@ -30,7 +30,9 @@ export function RedirectConversionSetup({
     [search, setSearch] = useState(''),
     [secret, setSecret] = useState('');
   const [writeEvents, setWriteEvents] = useState(true),
-    [readEvents, setReadEvents] = useState(false);
+    [readEvents, setReadEvents] = useState(false),
+    [readLinks, setReadLinks] = useState(false),
+    [writeLinks, setWriteLinks] = useState(false);
   const [openedAt] = useState(() => Date.now());
   const [confirm, setConfirm] = useState<string | null>(null);
   const managed = links.filter(
@@ -45,6 +47,8 @@ export function RedirectConversionSetup({
       scopes: [
         ...(writeEvents ? ['conversions:write'] : []),
         ...(readEvents ? ['events:read'] : []),
+        ...(readLinks ? ['links:read'] : []),
+        ...(writeLinks ? ['links:write'] : []),
       ],
       expiresAt: new Date(Date.now() + Number(days) * 86400000).toISOString(),
       ...(limited ? { redirectIds: ids } : {}),
@@ -58,7 +62,13 @@ export function RedirectConversionSetup({
       .writeText(value)
       .then(() => toast.success('Copied'))
       .catch(() => toast.error('Could not copy'));
-  const sample = `POST https://queer.guide/api/redirects/track/lead\nAuthorization: Bearer YOUR_SERVER_CREDENTIAL\nContent-Type: application/json\n\n${JSON.stringify({ clickId: 'CLICK_ID_FROM_DESTINATION', customerExternalId: 'CUSTOMER_ID', eventId: 'signup:CUSTOMER_ID', eventName: 'Sign up' }, null, 2)}`;
+  const conversionSample = `POST https://queer.guide/api/redirects/track/lead\nAuthorization: Bearer YOUR_SERVER_CREDENTIAL\nContent-Type: application/json\n\n${JSON.stringify({ clickId: 'CLICK_ID_FROM_DESTINATION', customerExternalId: 'CUSTOMER_ID', eventId: 'signup:CUSTOMER_ID', eventName: 'Sign up' }, null, 2)}`;
+  const managementExample = (readLinks || writeLinks) && !writeEvents && !readEvents;
+  const sample = managementExample
+    ? writeLinks
+      ? 'POST https://queer.guide/api/redirects/links\nAuthorization: Bearer YOUR_SERVER_CREDENTIAL\nContent-Type: application/json\n\n{"target":"https://example.com/register","utmDefaults":{"utm_source":"poster"}}'
+      : 'GET https://queer.guide/api/redirects/links?limit=100\nAuthorization: Bearer YOUR_SERVER_CREDENTIAL'
+    : conversionSample;
   return (
     <Dialog
       open
@@ -68,25 +78,28 @@ export function RedirectConversionSetup({
     >
       <DialogContent className="max-h-[90dvh] max-w-3xl grid-cols-1 overflow-y-auto [&>*]:min-w-0">
         <DialogHeader>
-          <DialogTitle>Conversion setup</DialogTitle>
+          <DialogTitle>API and conversion setup</DialogTitle>
           <DialogDescription>
-            Connect managed links to signups and purchases using server tracking credentials.
+            Connect server tools to link management, analytics, signups and purchases.
           </DialogDescription>
         </DialogHeader>
-        <ol className="list-decimal space-y-2 pl-6 text-sm">
-          <li>
-            Enable “Attribute leads and sales” in the managed link’s settings. The destination
-            receives a unique <code>qg_click_id</code>.
-          </li>
-          <li>
-            Save that click ID in your destination’s attribution session. On queer.guide, confirmed
-            signups are connected automatically when analytics consent permits it.
-          </li>
-          <li>
-            Send lead or sale events from your server. Use a stable event ID for retries. Later
-            sales can use the same customer ID without resending the click ID.
-          </li>
-        </ol>
+        <details className="text-sm">
+          <summary className="cursor-pointer font-medium">Set up conversion attribution</summary>
+          <ol className="mt-4 list-decimal space-y-2 pl-6 text-sm">
+            <li>
+              Enable “Attribute leads and sales” in the managed link’s settings. The destination
+              receives a unique <code>qg_click_id</code>.
+            </li>
+            <li>
+              Save that click ID in your destination’s attribution session. On queer.guide,
+              confirmed signups are connected automatically when analytics consent permits it.
+            </li>
+            <li>
+              Send lead or sale events from your server. Use a stable event ID for retries. Later
+              sales can use the same customer ID without resending the click ID.
+            </li>
+          </ol>
+        </details>
         {secret ? (
           <section className="space-y-2" aria-label="New server credential">
             <p className="font-medium">Copy your credential now</p>
@@ -153,6 +166,30 @@ export function RedirectConversionSetup({
                 Read analytics and private event activity
               </label>
             </div>
+            <div className="flex flex-wrap gap-4">
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={readLinks}
+                  onChange={(event) => setReadLinks(event.target.checked)}
+                />
+                Read link destinations and settings
+              </label>
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={writeLinks}
+                  onChange={(event) => setWriteLinks(event.target.checked)}
+                />
+                Create, edit and delete links
+              </label>
+            </div>
+            {writeLinks && (
+              <p className="text-sm text-muted-foreground">
+                Selected-link credentials can edit or delete those links. Creating new links
+                requires workspace-wide permission.
+              </p>
+            )}
             <label className="flex items-center gap-2 text-sm">
               <input
                 type="checkbox"
@@ -196,11 +233,17 @@ export function RedirectConversionSetup({
               </div>
             )}
             <p className="text-sm text-muted-foreground">
-              Permission: {writeEvents ? 'write conversions' : ''}
-              {writeEvents && readEvents ? ' and ' : ''}
-              {readEvents ? 'read private analytics/events' : ''}
-              {limited ? ' for selected links' : ' for all managed links'}. This credential cannot
-              manage links or credentials.
+              Permissions:{' '}
+              {[
+                writeEvents && 'write conversions',
+                readEvents && 'read private analytics/events',
+                readLinks && 'read link destinations/settings',
+                writeLinks && 'create, edit and delete links',
+              ]
+                .filter(Boolean)
+                .join(', ') || 'none selected'}
+              {limited ? ' for selected links' : ' for all managed links'}. Credentials cannot
+              create or revoke other credentials.
             </p>
             {credentials.create.isError && (
               <p role="alert" className="text-destructive">
@@ -212,7 +255,7 @@ export function RedirectConversionSetup({
               disabled={
                 credentials.create.isPending ||
                 !name.trim() ||
-                (!writeEvents && !readEvents) ||
+                (!writeEvents && !readEvents && !readLinks && !writeLinks) ||
                 (limited && !ids.length)
               }
             >
@@ -227,9 +270,15 @@ export function RedirectConversionSetup({
             Copy request example
           </Button>
           <p className="text-sm text-muted-foreground">
-            Use <code>/track/sale</code> for purchases, with <code>amount</code> in major currency
-            units (49.90 means CHF 49.90) and an uppercase three-letter <code>currency</code>. Never
-            combine currencies in a revenue total.
+            {managementExample ? (
+              'Follow nextCursor when listing links. Creating links requires workspace-wide permission. PATCH updates supplied fields; DELETE permanently removes a link and its tracking history.'
+            ) : (
+              <>
+                Use <code>/track/sale</code> for purchases, with <code>amount</code> in major
+                currency units (49.90 means CHF 49.90) and an uppercase three-letter{' '}
+                <code>currency</code>. Never combine currencies in a revenue total.
+              </>
+            )}
           </p>
         </section>
         <section className="space-y-2">

@@ -9,7 +9,7 @@ export const onRequest: PagesFunction<Env> = async ({ request, params, env }) =>
   };
   const error = (message: string, status: number) =>
     new Response(JSON.stringify({ error: message }), { status, headers });
-  if (!['GET', 'POST', 'DELETE', 'OPTIONS'].includes(request.method))
+  if (!['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'].includes(request.method))
     return error('Method not allowed', 405);
   if (!env.SUPABASE_URL) return error('Redirect API unavailable', 503);
   const segments = Array.isArray(params.path) ? params.path : [];
@@ -27,7 +27,7 @@ export const onRequest: PagesFunction<Env> = async ({ request, params, env }) =>
     const response = await fetch(upstream, {
       method: request.method,
       headers: forwarded,
-      body: request.method === 'POST' ? request.body : undefined,
+      body: ['POST', 'PUT', 'PATCH'].includes(request.method) ? request.body : undefined,
       redirect: 'manual',
       signal: AbortSignal.timeout(15000),
     });

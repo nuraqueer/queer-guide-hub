@@ -6,7 +6,7 @@ const invoke = (method = 'POST') =>
     request: new Request('https://queer.guide/api/redirects/track/sale', {
       method,
       headers: { Authorization: 'Bearer server-fixture', 'Content-Type': 'application/json' },
-      ...(method === 'POST' ? { body: '{"eventId":"fixture"}' } : {}),
+      ...(['POST', 'PUT', 'PATCH'].includes(method) ? { body: '{"eventId":"fixture"}' } : {}),
     }),
     params: { path: ['track', 'sale'] },
     env: { SUPABASE_URL: 'https://fixture.supabase.co', SUPABASE_ANON_KEY: 'public-fixture' },
@@ -23,8 +23,16 @@ describe('branded Redirects API proxy', () => {
     expect(new Headers(options.headers).get('Authorization')).toBe('Bearer server-fixture');
     expect(options.redirect).toBe('manual');
   });
+  it.each(['PUT', 'PATCH'])('forwards %s request bodies unchanged', async (method) => {
+    const fetcher = vi.fn(async () => new Response('{}'));
+    vi.stubGlobal('fetch', fetcher);
+    expect((await invoke(method)).status).toBe(200);
+    const options = (fetcher.mock.calls[0] as unknown as [URL, RequestInit])[1];
+    expect(options.method).toBe(method);
+    expect(await new Response(options.body).text()).toBe('{"eventId":"fixture"}');
+  });
   it('rejects unsupported methods and reports upstream failures without following redirects', async () => {
-    expect((await invoke('PUT')).status).toBe(405);
+    expect((await invoke('HEAD')).status).toBe(405);
     vi.stubGlobal(
       'fetch',
       vi.fn(

@@ -18,9 +18,19 @@ function runtime() {
   )
     .replace(/^import .*;\s*$/gm, '')
     .replace(/^export\s+/gm, '');
-  const code = ts.transpileModule(shared + '\n' + analytics + '\n' + source, {
-    compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext },
-  }).outputText;
+  const policy = readFileSync(
+    new URL(root + '_shared/link-policy.ts', import.meta.url),
+    'utf8',
+  ).replace(/^export\s+/gm, '');
+  const links = readFileSync(new URL(root + '_shared/redirect-links.ts', import.meta.url), 'utf8')
+    .replace(/^import .*;\s*$/gm, '')
+    .replace(/^export\s+/gm, '');
+  const code = ts.transpileModule(
+    shared + '\n' + analytics + '\n' + policy + '\n' + links + '\n' + source,
+    {
+      compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext },
+    },
+  ).outputText;
   let handler: (req: Request) => Promise<Response>;
   const state = {
     admin: true,
@@ -44,7 +54,24 @@ function runtime() {
           error: null,
         }
       : {
-          data: state.conversionError ? null : { id: 'conversion', duplicate: false },
+          data: state.conversionError
+            ? null
+            : name === 'redirect_management_list'
+              ? {
+                  data: [{ id: 'link-id', slug: 'pride', target: '/events' }],
+                  count: 1,
+                  nextCursor: null,
+                }
+              : name === 'redirect_management_mutate'
+                ? (_args?.p_operations as Array<{ operation: string }>).map((op) =>
+                    op.operation === 'delete'
+                      ? { deleted: true, id: 'link-id' }
+                      : {
+                          created: ['create', 'upsert'].includes(op.operation),
+                          link: { id: 'link-id', slug: 'pride', target: '/events' },
+                        },
+                  )
+                : { id: 'conversion', duplicate: false },
           error: state.conversionError,
         },
   );
@@ -115,6 +142,79 @@ function runtime() {
 const click = '00000000-0000-4000-8000-000000000002',
   lead = { clickId: click, customerExternalId: 'customer-a', eventId: 'signup:a' };
 describe('actual Redirects API handler', () => {
+  it('requires management scopes, preserves verified actor identity and forwards validated create/upsert/bulk operations', async () => {
+    const run = runtime(),
+      token = 'qg_redirect_' + 'a'.repeat(64);
+    const created = await run.invoke(
+      '/links',
+      { target: '/events', tagIds: [click, click] },
+      token,
+    );
+    expect(created.status).toBe(201);
+    expect(
+      run.rpc.mock.calls.find(([name]) => name === 'authenticate_redirect_api_token')?.[1]?.p_scope,
+    ).toBe('links:write');
+    expect(
+      run.rpc.mock.calls.find(([name]) => name === 'redirect_management_mutate')?.[1],
+    ).toMatchObject({
+      p_token_id: 'token-id',
+      p_actor_id: null,
+      p_operations: [{ operation: 'create', data: { target: '/events', tagIds: [click] } }],
+    });
+    run.rpc.mockClear();
+    expect(
+      (
+        await run.invoke(
+          '/links/upsert',
+          { slug: 'pride', target: '/events' },
+          'signed-user',
+          'PUT',
+        )
+      ).status,
+    ).toBe(201);
+    expect(
+      run.rpc.mock.calls.find(([name]) => name === 'redirect_management_mutate')?.[1]?.p_actor_id,
+    ).toBe('00000000-0000-4000-8000-000000000001');
+    expect(
+      (await run.invoke('/links/' + click, { target: '/updated' }, token, 'PATCH')).status,
+    ).toBe(200);
+    expect(
+      (await run.invoke('/links/bulk', { operations: [{ operation: 'delete', id: click }] }, token))
+        .status,
+    ).toBe(200);
+    run.state.validToken = false;
+    expect((await run.invoke('/links', undefined, token, 'GET')).status).toBe(403);
+    run.state.admin = false;
+    expect((await run.invoke('/links', { target: '/events' })).status).toBe(403);
+  });
+  it('validates closed link inputs and returns count/list/detail reads with read scope', async () => {
+    const run = runtime(),
+      token = 'qg_redirect_' + 'a'.repeat(64);
+    expect((await run.invoke('/links', { target: 'http://127.0.0.1/' })).status).toBe(400);
+    expect((await run.invoke('/links', { target: '/go/another-link' })).status).toBe(400);
+    expect((await run.invoke('/links', { target: '/events', created_by: 'spoofed' })).status).toBe(
+      400,
+    );
+    expect(
+      (await run.invoke('/links/bulk', { operations: [{ operation: 'delete', id: 'invalid' }] }))
+        .status,
+    ).toBe(400);
+    expect(run.rpc).not.toHaveBeenCalled();
+    expect((await run.invoke('/links?limit=101', undefined, token, 'GET')).status).toBe(400);
+    const result = await run.invoke('/links/count', undefined, token, 'GET');
+    expect(await result.json()).toEqual({ count: 1 });
+    expect(
+      run.rpc.mock.calls.find(([name]) => name === 'authenticate_redirect_api_token')?.[1]?.p_scope,
+    ).toBe('links:read');
+    expect(
+      run.rpc.mock.calls.find(([name]) => name === 'redirect_management_list')?.[1]?.p_limit,
+    ).toBe(0);
+    expect((await run.invoke('/links/' + click, undefined, token, 'GET')).status).toBe(200);
+    run.state.conversionError = { code: '23503', message: 'Unknown tag' };
+    expect((await run.invoke('/links', { target: '/events' }, token)).status).toBe(400);
+    run.state.conversionError = { code: '42501', message: 'Outside scope' };
+    expect((await run.invoke('/links/' + click, undefined, token, 'DELETE')).status).toBe(403);
+  });
   it('denies missing/invalid identity and does not use editable user metadata for admin authority', async () => {
     const run = runtime();
     expect((await run.invoke('/track/lead', lead, null)).status).toBe(401);

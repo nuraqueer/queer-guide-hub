@@ -1,3 +1,4 @@
+import { randomLinkSlug } from '../../../../supabase/functions/_shared/redirect-links';
 import { useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
@@ -141,6 +142,14 @@ export function RedirectLinkBuilder({
                 onChange={(e) => setSlug(e.target.value.toLowerCase())}
                 required
               />
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setSlug(randomLinkSlug())}
+              >
+                Generate random slug
+              </Button>
               <p className="break-all text-xs text-muted-foreground">
                 {LINK_ORIGIN}/go/{slug}
               </p>

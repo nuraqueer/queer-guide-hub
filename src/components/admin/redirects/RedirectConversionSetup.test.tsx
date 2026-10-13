@@ -59,6 +59,20 @@ describe('conversion credential setup', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Done' }));
     expect(screen.queryByLabelText('New server credential', { selector: 'input' })).toBeNull();
   });
+  it('creates management-only credentials and explains selected-link creation limits', async () => {
+    render(<RedirectConversionSetup links={links} onClose={vi.fn()} />);
+    fireEvent.change(screen.getByLabelText('Credential name'), {
+      target: { value: 'Link automation' },
+    });
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Write conversions' }));
+    expect(screen.getByRole('button', { name: 'Create server credential' })).toBeDisabled();
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Create, edit and delete links' }));
+    expect(screen.getByRole('button', { name: 'Create server credential' })).toBeEnabled();
+    expect(screen.getByText(/Creating new links requires workspace-wide permission/)).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Create server credential' }));
+    await waitFor(() => expect(mocks.create).toHaveBeenCalled());
+    expect(mocks.create.mock.calls[0][0].scopes).toEqual(['links:write']);
+  });
   it('requires confirmation inside the app before revocation', async () => {
     render(<RedirectConversionSetup links={links} onClose={vi.fn()} />);
     fireEvent.click(screen.getByRole('button', { name: 'Revoke' }));
