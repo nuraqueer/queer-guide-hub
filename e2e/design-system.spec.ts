@@ -185,67 +185,19 @@ test.describe('design system: buttons', () => {
   });
 });
 
-test.describe('design system: panel rank', () => {
-  // THIS TEST EXISTS BECAUSE THE DIALOG ONE BELOW COULD NOT SEE A REAL DEFECT.
-  //
-  // `dialog uses --radius-panel` was nested in two `if`s — one for a "Sign in"
-  // trigger, one for the dialog itself — so it passed having asserted nothing
-  // whenever either was absent. On CI that is always: the chromium project loads
-  // an admin `storageState` when E2E_ADMIN_* are set, so /trips has no sign-in
-  // button at all and the assertion never ran. Meanwhile every Radix dialog,
-  // sheet and alert-dialog was painting at 18px (`--radius-container`) instead
-  // of 26px, because the unlayered fallback block in index.css outranks
-  // Tailwind's layered `rounded-panel` utility regardless of specificity.
-  //
-  // So the contract is asserted here on something that is present in BOTH auth
-  // states and needs nothing opened, with a positive control: "every panel
-  // resolves correctly" is equally true of a page containing no panels, which is
-  // precisely how the defect survived.
-  test('an element that asks for rounded-panel gets --radius-panel', async ({ page }) => {
-    await page.setViewportSize({ width: 1280, height: 900 });
-    let checked = 0;
-    let panel = '';
-    for (const route of ['/', '/about', '/venues']) {
-      await page.goto(route);
-      await page.waitForSelector('#root *', { state: 'attached', timeout: 15_000 });
-      await dismissCookieBanner(page);
-      await page.waitForTimeout(250);
-      if (!panel) panel = await resolveRadius(page, '--radius-panel');
-      // ONE evaluate per route, not one per element. Walking them with
-      // `locator.nth(i).evaluate()` re-resolves the locator every iteration and
-      // blew the 30s test budget on the homepage alone.
-      //
-      // Elements smaller than twice the radius are skipped: a border radius is
-      // clamped to half the short side, so a 24px-tall chip carrying
-      // `rounded-panel` legitimately computes 12px and is not a defect. That
-      // clamp is also why the dialog's 18px needed corroborating from pixels
-      // before it was believed.
-      const measured = await page.evaluate(() => {
-        const out: { radius: string; cls: string }[] = [];
-        for (const el of document.querySelectorAll('[class~="rounded-panel"]')) {
-          const b = el.getBoundingClientRect();
-          if (Math.min(b.width, b.height) < 64) continue;
-          out.push({
-            radius: getComputedStyle(el).borderRadius,
-            cls: String(el.className || '').slice(0, 70),
-          });
-        }
-        return out;
-      });
-      for (const m of measured) {
-        expect(m.radius, `rounded-panel on ${route} resolved to ${m.radius} (${m.cls})`).toBe(panel);
-        checked += 1;
-      }
-    }
-    expect(
-      checked,
-      'no element carrying rounded-panel was found on any probed route, so this contract was ' +
-        'not checked — the assertions above are vacuous, not passing',
-    ).toBeGreaterThan(0);
-  });
-});
-
 test.describe('design system: dialog', () => {
+  // Forced ANONYMOUS, and that is the whole reason this test ever ran at all.
+  // playwright.config.ts attaches `storageState` whenever E2E_ADMIN_* is set,
+  // and e2e-pr.yml sets both — so in CI the run was signed in, `/trips` showed
+  // no "Sign in" button, and the two `if (count > 0)` guards below meant the
+  // test passed having opened no dialog and measured nothing. It reported green
+  // through the entire window in which every dialog on the site rendered at
+  // --radius-container instead of --radius-panel (unlayered :where() fallback
+  // in index.css beating `rounded-panel`, fixed 2026-10-13). Pinning an empty
+  // storageState makes both environments measure the same thing, which is what
+  // lets the assertions below be unconditional.
+  test.use({ storageState: { cookies: [], origins: [] } });
+
   test('dialog uses --radius-panel', async ({ page }) => {
     await page.goto('/trips');
     // Wait for the app to paint, not for the network to fall idle. These guards
@@ -255,26 +207,32 @@ test.describe('design system: dialog', () => {
     await page.waitForSelector('#root *', { state: 'attached', timeout: 15_000 });
     await dismissCookieBanner(page);
     await page.waitForTimeout(300);
+    // Positive controls, not politeness: each of these used to be an `if` that
+    // skipped the assertion, so "no dialog" and "correct dialog" were the same
+    // green. Assert the dialog opened BEFORE trusting anything measured on it.
     const signInBtn = page.getByRole('button', { name: /sign in/i }).first();
-    // An authenticated run has no sign-in trigger. SKIP WITH A REASON rather
-    // than falling through to a silent pass: the report then says the dialog was
-    // not reached, and the panel-rank test above still covers the contract.
-    test.skip(
-      (await signInBtn.count()) === 0,
-      'no sign-in trigger on /trips (authenticated run) — panel rank is covered by the ' +
-        '"design system: panel rank" test, which needs no dialog',
-    );
+    await expect(signInBtn).toBeVisible();
     await signInBtn.click();
-    // No `if` from here down. A trigger that opens no dialog is a failure, not a
-    // reason to assert nothing.
+
     const dialog = page.getByRole('dialog').first();
-    await expect(dialog).toBeVisible({ timeout: 10_000 });
-    // Measured on the dialog itself. The old code looked for a descendant
-    // matching `[class*="DialogContent"]` or `[class*="dialog"]`, which never
-    // matches a production build (the class list is Tailwind utilities) and
-    // could only ever pick up an unrelated node if it did.
-    const radius = await dialog.evaluate((el) => getComputedStyle(el).borderRadius);
-    expect(radius).toBe(await resolveRadius(page, '--radius-panel'));
+    await expect(dialog).toBeVisible();
+
+    const measured = await dialog.evaluate((el) => {
+      // `getByRole('dialog')` IS the styled panel (Radix puts role=dialog on
+      // DialogContent). The old `querySelector('[class*="dialog"]')` child hunt
+      // matched nothing — verified on prod — and only ever fell through to the
+      // element itself, so it was noise hiding the fact that the panel was the
+      // thing being read all along.
+      const style = getComputedStyle(el);
+      return { radius: style.borderRadius, className: String(el.className) };
+    });
+
+    // The panel must declare the shape utility, not merely happen to compute
+    // the right value: with the class present and a fallback rule overriding
+    // it, the px was wrong; with the class absent and the fallback supplying
+    // 26px by luck, the px would be right and the contract still broken.
+    expect(measured.className).toContain('rounded-panel');
+    expect(measured.radius).toBe(await resolveRadius(page, '--radius-panel'));
   });
 });
 

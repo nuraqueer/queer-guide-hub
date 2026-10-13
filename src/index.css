@@ -2710,41 +2710,30 @@ label a:hover {
 
    This does not round pure layout wrappers, scrims, progress bars, track
    geometry, maps or charts. A straight line may still encode data or focus;
-   it may not frame a product surface.
+   it may not frame a product surface. Explicit semantic radius utilities can
+   still choose a larger rank.
 
-   THE PANEL RANK IS EXCLUDED FROM ALL FIVE, and until 2026-10-13 it was not --
-   which made the promise this comment used to end on ("Explicit semantic radius
-   utilities can still choose a larger rank") false for the one rank larger than
-   the fallback. These rules are UNLAYERED, and unlayered author CSS beats
-   anything inside a cascade layer regardless of specificity; Tailwind's own
-   `rounded-panel` utility lives in a layer. So every Radix dialog, sheet and
-   alert-dialog declared `rounded-panel` and painted at 18px instead of 26px,
-   along with the ink bands on /about and three homepage sections. Confirmed at
-   the PIXEL level from a screenshot of a dialog corner (~17px, then ~25px after
-   the fix), because on that node neither an injected stylesheet nor an inline
-   `!important` had any observable effect and the computed read needed
-   independent corroboration before it was trusted.
+   @layer components — load-bearing, and the sentence above was FALSE without
+   it. Unlayered, these :where() rules (specificity 0,0,0) still outranked
+   every rounded-* utility, because Tailwind v4 emits utilities inside @layer
+   utilities and unlayered beats layered regardless of specificity — the same
+   mechanism the border reset at the top of this file records. Measured on
+   prod 2026-10-13: the dialog panel carries `rounded-panel` and computed
+   18px, so EVERY dialog, sheet and alert-dialog rendered one rank too tight
+   and no component change could have fixed it.
 
-   IT IS AN EXCLUSION RATHER THAN AN OVERRIDE, and that is the whole reason it
-   works. An extra unlayered rule cannot reliably outrank these: `:where()`
-   contributes nothing, but `:not(.fixed):not(.absolute)` contributes two
-   classes, so the last two sit at (0,2,0) while the first three sit at (0,0,0).
-   A single override at (0,1,0) therefore fixed dialogs (which carry `.fixed`,
-   so only the (0,0,0) rules match them) and silently left the /about bands
-   alone -- measured, not reasoned. Removing the competing declaration instead
-   lets the layered utility apply because nothing unlayered contests it.
-
-   SCOPED TO THE PANEL RANK ONLY, deliberately. The same inversion affects the
-   element and container ranks: measured by simulation, moving all five
-   fallbacks into a layer changes 440 elements across 15 routes (12px -> 18px
-   where a surface asked for `rounded-container`, 9px -> 9999px where it asked
-   for `rounded-full`). That is a site-wide silhouette change -- a visual-design
-   decision rather than a bug fix -- so it is reported and left alone. A blanket
-   `:not([class*='rounded-'])` was measured and rejected for this job too: it
-   also matches VARIANT utilities such as `focus:rounded-element`, which do not
-   apply at rest, and stripped the fallback off a skip link (12px -> 0px).
-   `[class~=]` matches the whole class token, so it cannot do that. */
-:where(
+   It must be `components`, NOT `base`, and `base` was tried first and broke
+   three pages. Tailwind's preflight lives in base and contains
+   `button, input, select, optgroup, textarea { border-radius: 0 }` at
+   specificity 0,0,1 — which beats a :where() selector once both are in the
+   same layer, so the /personalities segmented control went to 0px and the
+   rounded-surface contract went red. The built bundle declares
+   `properties, theme, base, components, utilities`, so `components` is the
+   one rung that is above preflight and below the utilities. Keep it there:
+   moving it down re-breaks bare buttons, removing the layer re-breaks every
+   dialog. */
+@layer components {
+  :where(
     button,
     input,
     textarea,
@@ -2761,55 +2750,54 @@ label a:hover {
     [role='alert'],
     [role='menu'],
     [data-slot='card']
-  ):where([class*='bg-'], [class*='shadow-']):not([class~='rounded-panel']) {
-  border-radius: var(--radius-container);
-}
+  ):where([class*='bg-'], [class*='shadow-']) {
+    border-radius: var(--radius-container);
+  }
 
-:where(a, button, input, textarea, select, [role='button'], [role='tab']):where(
+  :where(a, button, input, textarea, select, [role='button'], [role='tab']):where(
     [class*='bg-'],
     [class*='shadow-'],
     [class*='card-lift']
-  ):not([class~='rounded-panel']) {
-  border-radius: var(--radius-element);
-}
+  ) {
+    border-radius: var(--radius-element);
+  }
 
-:where(div, li):where(
+  :where(div, li):where(
     [class*='aspect-'][class*='bg-'],
     [class*='card-lift'],
     [class*='shadow-soft']
-  ):not([class~='rounded-panel']) {
-  border-radius: var(--radius-container);
-}
-
-:where(div, li, header, footer):where(
-    [class*='bg-card'],
-    [class*='bg-muted'],
-    [class*='bg-surface-container'],
-    [class*='bg-popover'],
-    [class*='bg-destructive']
-  ):not(.fixed):not(.absolute):not([class~='rounded-panel']) {
-  border-radius: var(--radius-container);
-}
-
-:where(div, li):where([class*='bg-foreground']):not(.fixed):not(.absolute):not(
-    [class~='rounded-panel']
   ) {
-  border-radius: var(--radius-container);
-}
+    border-radius: var(--radius-container);
+  }
 
-footer.bg-foreground {
-  border-radius: var(--radius-panel);
-  overflow: clip;
-}
+  :where(div, li, header, footer):where(
+      [class*='bg-card'],
+      [class*='bg-muted'],
+      [class*='bg-surface-container'],
+      [class*='bg-popover'],
+      [class*='bg-destructive']
+    ):not(.fixed):not(.absolute) {
+    border-radius: var(--radius-container);
+  }
 
-/* Data-cell plates and compact labels must share the same soft silhouette.
-   Explicit endpoint radii still join composite table rows correctly. */
-:where(th, td) {
-  border-radius: var(--radius-badge);
-}
+  :where(div, li):where([class*='bg-foreground']):not(.fixed):not(.absolute) {
+    border-radius: var(--radius-container);
+  }
 
-:where(span):where([class*='bg-foreground'], [class*='bg-track-']) {
-  border-radius: var(--radius-badge);
+  footer.bg-foreground {
+    border-radius: var(--radius-panel);
+    overflow: clip;
+  }
+
+  /* Data-cell plates and compact labels must share the same soft silhouette.
+     Explicit endpoint radii still join composite table rows correctly. */
+  :where(th, td) {
+    border-radius: var(--radius-badge);
+  }
+
+  :where(span):where([class*='bg-foreground'], [class*='bg-track-']) {
+    border-radius: var(--radius-badge);
+  }
 }
 
 /* ── Borderless-surface contract ────────────────────────────────────
