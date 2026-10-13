@@ -21,7 +21,8 @@ export function personAuthorCandidate(
       }
     } catch { /* ordinary byline containing a bracket */ }
   }
-  if (/^https?:\/\//i.test(value) || /^\/(?:u|r)\//i.test(value)) return null;
+  if (/^@/.test(value) || /^https?:\/\//i.test(value) || /^\/(?:u|r)\//i.test(value)) return null;
+  value = value.replace(/\s+@\s+.*$/, '');
   value = value.replace(/^(?:Queer Theology|Sony Music Entertainment)\s*\/\s*/i, '')
     .replace(/\s*(?:& Studio71|\/ TableCakes Productions|\/ Beyond Sunset|\| Gay Men’s Brotherhood)$/i, '')
     .replace(/\s*• Life Architect$/i, '')
