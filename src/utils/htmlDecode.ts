@@ -1,3 +1,4 @@
+import { personAuthorCandidate } from '../../supabase/functions/_shared/news-author';
 // Single shared entity decoder (regex-based, DOM-free) — the former
 // textarea-innerHTML implementation here duplicated it under the same name.
 import { decodeHtmlEntities } from '@/lib/decodeHtmlEntities';
@@ -38,9 +39,7 @@ export function stripHtmlTags(html: string): string {
       out += html[i];
     }
   }
-  return out
-    .replace(/&nbsp;/gi, ' ')
-    .replace(/\u00A0/g, ' ');
+  return out.replace(/&nbsp;/gi, ' ').replace(/\u00A0/g, ' ');
 }
 
 /**
@@ -62,7 +61,11 @@ export function cleanAuthor(raw: string): string {
     try {
       const parsed = JSON.parse(working);
       if (Array.isArray(parsed)) {
-        working = parsed.filter((v) => typeof v === 'string' && v.trim()).join(', ');
+        working = parsed
+          .filter((v) => typeof v === 'string')
+          .map((v) => personAuthorCandidate(stripHtmlTags(decodeHtmlEntities(v))))
+          .filter(Boolean)
+          .join(', ');
       }
     } catch {
       /* not JSON — fall through with the original */
@@ -82,7 +85,7 @@ export function cleanAuthor(raw: string): string {
   if (/^(none|null|undefined|unknown)$/i.test(author.trim())) return '';
   // If nothing useful remains, return empty
   if (!author || author.length < 2) return '';
-  return author;
+  return personAuthorCandidate(author) ?? '';
 }
 
 /**
@@ -155,7 +158,7 @@ export function cleanContent(raw: string): string {
   // Trim whitespace from each line
   text = text
     .split('\n')
-    .map(line => line.trim())
+    .map((line) => line.trim())
     .join('\n');
 
   // Collapse 3+ consecutive newlines into exactly 2 (one blank line between paragraphs)
