@@ -1,4 +1,3 @@
-import { personAuthorCandidate } from '../../../supabase/functions/_shared/news-author';
 import { useState } from 'react';
 import { Link } from 'react-router';
 import { authorArticlesPath } from '@/lib/adminAuthorArticles';
@@ -75,12 +74,6 @@ export default function AdminNewsAuthors() {
     event.preventDefault();
     if (!editing || change.isPending) return;
     setFailure('');
-    if (personAuthorCandidate(target) !== target.trim()) {
-      setFailure(
-        'Enter a person’s name. URLs, editorial teams, publishers and podcast titles belong to sources.',
-      );
-      return;
-    }
     try {
       const count = await change.mutateAsync({
         source: editing.row.author,
