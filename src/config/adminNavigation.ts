@@ -30,6 +30,7 @@ import {
   Building,
   Calendar,
   Newspaper,
+  UserRoundPen,
   Users,
   UserCog,
   Tag,
@@ -214,6 +215,14 @@ export const adminNavSections: AdminNavSection[] = [
         icon: Newspaper,
         route: '/admin/content/news_articles',
         countTable: 'news_articles',
+        group: 'Editorial',
+      },
+      {
+        id: 'news-authors',
+        minRole: 'moderator',
+        label: 'News Authors',
+        icon: UserRoundPen,
+        route: '/admin/news-authors',
         group: 'Editorial',
       },
       {
