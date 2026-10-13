@@ -19,10 +19,12 @@ begin
     end;
   end if;
   if v is null or v ~* '^https?://' or v ~* '^/(u|r)/' then return null; end if;
+  v := regexp_replace(v, '( - The Buckeye Flame|, the 19th)$', '', 'i');
   v := btrim(regexp_replace(regexp_replace(v, 'https?://[^[:space:]]+', '', 'gi'), '^((published|written)[[:space:]]+)?by[[:space:]]*:?[[:space:]]*', '', 'i'));
   v := regexp_replace(v, '[[:space:]]+', ' ', 'g');
   if length(v) < 2 or length(v)>255 or v ~ '^[0-9]+$' or v ~ '[;[:cntrl:]]' or v ~* '^/[a-z0-9_-]+$'
      or v ~* '^(editors?|editorial( team| staff| board)?|staff( writers?| reporters?)?|staff writer|newsroom|news team|redaktion|redaktions(team)?|admin|administrator|the editors|the editorial team|unknown|none|null|undefined|anonymous)$'
+     or v ~* '(\m(editors?|staff|reporter)\M|^redazione\M)'
      or v ~* '\m(podcasts?|pod|network|productions|publishing|news agency|media|radio|studio[0-9]+|collective|church|council|presents)\M'
      or v ~ '^[^[:space:]@]+@[^[:space:]@]+\.[^[:space:]@]+$'
      or lower(v) in ('pn freelancer','lesbian chronicles','sodomarama','your queer story','transadvocate','homestead on the corner | realm','legal - lgbt bar of new york','q 播客製作委員會','podbean development')
@@ -39,6 +41,9 @@ create table public.news_author_credit_audit (
   original_author text not null,
   reason text not null default 'non_person_credit',
   captured_at timestamptz not null default now(),
+  recovered_author text,
+  evidence_url text,
+  recovered_at timestamptz,
   unique(article_id, original_author)
 );
 alter table public.news_author_credit_audit enable row level security;
@@ -46,7 +51,7 @@ revoke all on public.news_author_credit_audit from public, anon, authenticated;
 grant select on public.news_author_credit_audit to authenticated;
 grant all on public.news_author_credit_audit to service_role;
 create policy news_author_credit_audit_staff_read on public.news_author_credit_audit
-for select to authenticated using (public.has_any_role_jwt(array['admin','moderator']::text[]));
+for select to authenticated using (public.has_any_role_jwt(array['admin','moderator']::public.app_role[]));
 
 create or replace function public.sanitize_news_author()
 returns trigger language plpgsql security definer set search_path = public, pg_temp as $$

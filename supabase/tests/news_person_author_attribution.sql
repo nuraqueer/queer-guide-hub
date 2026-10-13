@@ -21,3 +21,12 @@ do $$ begin assert (select count(*) from news_author_credit_audit)>=5,'Staff aud
 reset role;
 do $$ begin assert not has_table_privilege('anon','news_author_credit_audit','select'),'Anonymous audit denied';end $$;
 rollback;
+begin;
+do $$ begin
+ assert public.news_person_author('Ashley Gavin & Studio71')='Ashley Gavin','Mixed credit retains named person';
+ assert public.news_person_author('Sony Music Entertainment / Jonathan Van Ness')='Jonathan Van Ness','Publisher prefix removed';
+ assert public.news_person_author('New York Post') is null,'Known publisher excluded';
+ assert public.news_person_author('foxnews') is null,'Legacy publisher excluded';
+ assert public.news_person_author('Redazione Gay.it') is null,'Editorial team excluded';
+end $$;
+rollback;

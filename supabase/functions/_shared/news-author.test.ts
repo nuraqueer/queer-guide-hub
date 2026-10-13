@@ -14,3 +14,10 @@ Deno.test('preserves international names, mononyms and explicitly credited peopl
   assertEquals(personAuthorCandidate('["Alex Doe", "Editors", "Jane Smith"]'), 'Alex Doe, Jane Smith');
   assertEquals(personAuthorCandidate(['Alex Doe', 'Editors']), 'Alex Doe');
 });
+Deno.test('separates explicitly named contributors from known production companies', () => {
+  assertEquals(personAuthorCandidate('Ashley Gavin & Studio71'), 'Ashley Gavin');
+  assertEquals(personAuthorCandidate('Sony Music Entertainment / Jonathan Van Ness'), 'Jonathan Van Ness');
+  assertEquals(personAuthorCandidate('Queer Theology / Brian G. Murphy & Shannon T.L. Kearns'), 'Brian G. Murphy & Shannon T.L. Kearns');
+  assertEquals(personAuthorCandidate('Chosen Family & Studio71', ['Chosen Family']), null);
+  for (const value of ['Redazione Gay.it', 'Out.com Editors', 'BlazeTV Staff', 'New York Post', 'foxnews', 'MIM', 'headtopics.com']) assertEquals(personAuthorCandidate(value), null);
+});
