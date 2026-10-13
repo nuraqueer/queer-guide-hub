@@ -77,7 +77,8 @@ describe('cleanAuthor', () => {
   // D6 — ingestion stored some authors as JSON-encoded arrays. Make sure the
   // brackets and quotes are stripped before the byline renders.
   it('parses single-element JSON array authors', () => {
-    expect(cleanAuthor('["ruthless podcast staff"]')).toBe('ruthless podcast staff');
+    expect(cleanAuthor('["Alex Doe"]')).toBe('Alex Doe');
+    expect(cleanAuthor('["ruthless podcast staff"]')).toBe('');
   });
 
   it('joins multi-element JSON array authors', () => {
@@ -245,4 +246,14 @@ describe('boundArticleBody', () => {
   it('handles empty input', () => {
     expect(boundArticleBody('')).toEqual({ text: '', truncated: false });
   });
+});
+
+it('does not display collective or podcast credits as person authors', () => {
+  for (const credit of [
+    'Editors',
+    'EDITOR',
+    'Big Money Players Network and iHeartPodcasts',
+    'Dyking Out - a Lesbian and LGBTQ Podcast for Everyone!',
+  ])
+    expect(cleanAuthor(credit)).toBe('');
 });
