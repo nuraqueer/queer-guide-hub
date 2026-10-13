@@ -21,3 +21,6 @@ Deno.test('separates explicitly named contributors from known production compani
   assertEquals(personAuthorCandidate('Chosen Family & Studio71', ['Chosen Family']), null);
   for (const value of ['Redazione Gay.it', 'Out.com Editors', 'BlazeTV Staff', 'New York Post', 'foxnews', 'MIM', 'headtopics.com']) assertEquals(personAuthorCandidate(value), null);
 });
+Deno.test('email addresses with a parenthesized credit are not person names', () => {
+  assertEquals(personAuthorCandidate('editors@example.com (The Week US)'), null);
+});

@@ -29,7 +29,7 @@ export function personAuthorCandidate(
   value = value.replace(/https?:\/\/\S+/gi, '').replace(/^(?:(?:published|written)\s+)?by\s*:?\s+/i, '').replace(/\s+/g, ' ').trim();
   if (value.length < 2 || value.length > 255 || /^\d+$/.test(value) || /[;\u0000-\u001f]/.test(value) || /^\/[a-z0-9_-]+$/i.test(value)) return null;
   if (/^[a-z0-9.-]+\.(?:com|org|net|co\.uk)$/i.test(value)) return null;
-  if (COLLECTIVE.test(value) || GENERIC_CREDIT.test(value) || BRAND.test(value) || KNOWN_COLLECTIVES.has(value.toLowerCase()) || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) return null;
+  if (COLLECTIVE.test(value) || GENERIC_CREDIT.test(value) || BRAND.test(value) || KNOWN_COLLECTIVES.has(value.toLowerCase()) || /[^\s@]+@[^\s@]+\.[^\s@]+/.test(value)) return null;
   if (credits.some((credit) => credit && creditKey(credit) === creditKey(value))) return null;
   return value;
 }
