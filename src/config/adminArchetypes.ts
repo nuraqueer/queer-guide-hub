@@ -139,6 +139,12 @@ export const ADMIN_ARCHETYPES: AdminArchetypeEntry[] = [
   { path: 'content/personalities', archetype: 'A', title: 'Personalities', adopted: true },
   { path: 'content/milestones', archetype: 'A', title: 'Milestones', adopted: true },
   { path: 'users', archetype: 'A', title: 'Users', adopted: true },
+  {
+    path: 'news-authors',
+    archetype: 'A',
+    title: 'News Authors',
+    caveat: 'RPC-backed byline index with an article drilldown and name-management dialogs.',
+  },
   { path: 'content/organizations', archetype: 'A', title: 'Organisations', adopted: true },
   { path: 'business', archetype: 'A', title: 'Organisations', adopted: true },
   { path: 'audit', archetype: 'A', title: 'Audit log', adopted: true },
