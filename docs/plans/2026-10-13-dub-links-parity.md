@@ -29,8 +29,8 @@ exist. Existing local tools are a foundation, not proof of parity or deployment.
 | Password links | Password challenge, hashed secret, no disclosure/bypass, scoped access | Partial: hashed protection and bypass tests; rate limiting/logo pending |
 | Expiration | Date and expired destination URL, live enforcement without stale cached rules | Candidate: date/phrase parser, custom fallback and live enforcement tested |
 | Link cloaking | Explicit iframe mode with accurate iframe limitations, standard redirect fallback | Missing |
-| Branded QR | Dots square/circle/joined; marker center square/circle; border square/rounded/circle; colors | Partial: square monochrome |
-| QR logos/export | Workspace/domain/logo precedence and hide; SVG/PNG/JPG; clipboard image and image URL | Partial: PNG/SVG and link copy |
+| Branded QR | Dots square/circle/joined; marker center square/circle; border square/rounded/circle; colors | Candidate: all dot/marker/color controls; scan verification before export |
+| QR logos/export | Workspace/domain/logo precedence and hide; SVG/PNG/JPG; clipboard image and image URL | Partial: per-export logo, PNG/JPG/SVG, image/data URL copy; workspace/domain precedence pending |
 | Click analytics | Real-time totals/time series, custom date/filter/export, countries/cities/devices/browsers/OS/referrers | Partial: visits/date/country/host |
 | Conversion tracking | Click attribution, leads/signup/sale/revenue, trusted conversion ingestion and application hooks | Missing |
 | Customer insights | Customer journey across click→lead→sale with private event timeline | Missing |
@@ -121,3 +121,29 @@ policy screenshots use fixtures, not a production account.
 No production schema was changed. These are release candidates, not live parity.
 Password attempt throttling, branded password pages, custom previews/cloaking,
 custom domains/deep links and all other unimplemented ledger items remain.
+
+## Checkpoint: branded QR exports
+
+Implemented locally: square/circle/joined dots; square/rounded/circle marker
+borders; square/circle centers; custom dark/light colors; optional PNG/JPG
+logo with size limits/removal; 1024px PNG/JPG and scalable SVG downloads;
+clipboard image and image data URL. Rendering preserves reserved QR positioning
+and timing modules, four-module quiet space and high error correction.
+
+Every export is generated locally. It tries standard QR masks and decodes the
+actual PNG pixels and compressed JPG before enabling exports. Low-contrast,
+inverted, unsafe image markup and unverified outputs expose an error. No stale
+preview/export remains available when a new style is invalid. A data URL is
+labelled accurately; no public hosted image URL is claimed.
+
+Evidence: 25 QR/link-builder tests passed, including all 18 style combinations
+with exact payload recovery from PNG and JPG, logo-bearing codes, invalid
+styles and correct export formats/filenames. Targeted lint passed. Desktop and
+mobile fixture screenshots are in `outputs/redirect-dub-parity/qr-styled-*.jpg`.
+Browser clipboard actions showed success, and the browser-generated styled PNG
+was independently decoded to the exact tracked URL. Native download completion
+is not observable in this browser; export handlers/formats are tested.
+
+Workspace/domain defaults, persistent per-link QR branding and hosted image
+URLs remain outstanding. This is still local development, not deployment or
+completion of the broader parity objective.
