@@ -78,6 +78,7 @@ const AdminDashboard = lazyRetry(() => import('./pages/admin/AdminDashboard'));
 const AdminAnalytics = lazyRetry(() => import('./pages/admin/AdminAnalytics'));
 const AdminUsers = lazyRetry(() => import('./pages/admin/AdminUsers'));
 const AdminTags = lazyRetry(() => import('./pages/admin/AdminTags'));
+const AdminNewsSources = lazyRetry(() => import('./pages/admin/AdminNewsSources'));
 const Cities = lazyRetry(() => import('./pages/Cities'));
 const CitiesCompare = lazyRetry(() => import('./pages/cities/Compare'));
 const CityDetail = lazyRetry(() => import('./pages/CityDetail'));
@@ -651,10 +652,7 @@ export const AppRoutes = () => {
                     path="groups"
                     element={<Navigate to="/admin/content/community_groups" replace />}
                   />
-                  <Route
-                    path="news-sources"
-                    element={<Navigate to="/admin/pipelines?tab=sources" replace />}
-                  />
+                  <Route path="news-sources" element={<AdminNewsSources />} />
                   <Route path="cms" element={<Navigate to="/admin/content" replace />} />
                   <Route path="import-hub" element={<Navigate to="/admin/pipelines" replace />} />
                   <Route path="festivals" element={<Navigate to="/admin/events" replace />} />
