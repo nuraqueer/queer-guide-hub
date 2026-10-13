@@ -204,7 +204,7 @@ test.describe('admin routes stay healthy through the archetype migration', () =>
       const readiness =
         h1Count === 0
           ? await page.evaluate(() => {
-              const text = document.body.innerText;
+              const text = `${document.body.innerText} ${[...document.querySelectorAll('[role="status"]')].map((el) => el.getAttribute('aria-label') ?? el.textContent).join(' ')}`;
               return [
                 'Checking admin access',
                 "You don't have access to this area",
