@@ -98,6 +98,7 @@ const AdminPipelines = lazyRetry(() => import('./pages/admin/AdminPipelines'));
 const AdminSearchIntelligence = lazyRetry(() => import('./pages/admin/AdminSearchIntelligence'));
 const AdminDesignSystem = lazyRetry(() => import('./pages/admin/DesignSystem'));
 const AdminStyleguide = lazyRetry(() => import('./pages/admin/AdminStyleguide'));
+const AdminRedirects = lazyRetry(() => import('./pages/admin/AdminRedirects'));
 
 // New feature pages
 const Hotels = lazyRetry(() => import('./pages/Hotels'));
@@ -444,6 +445,11 @@ export const AppRoutes = () => {
                     action above it; static path wins over content/:type. */}
                   <Route path="content/milestones" element={<MilestonesAdmin />} />
                   <Route path="content/unified_tags" element={<AdminTags />} />
+                  <Route path="content/redirects" element={<AdminRedirects />} />
+                  <Route
+                    path="content/redirects/manual"
+                    element={<ContentListPanel contentTypeId="redirects" />}
+                  />
                   <Route path="content/:type" element={<ContentListPanel />} />
                   {/* /admin/pages duplicated /admin/content/cms_pages (what nav points at);
                     kept as a redirect for old bookmarks. */}
