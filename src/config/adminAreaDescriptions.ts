@@ -19,6 +19,7 @@ export const ADMIN_AREA_DESCRIPTIONS: Record<string, string> = {
   '/admin/duplicates':
     'Exact/fuzzy merge power tool across every content type and taxonomy. Nightly-sweep suggestions are reviewed in the inbox.',
   '/admin/content/events': 'Events and festivals. Edit details, check liveness, set featured.',
+  '/admin/news-sources': 'Manage feeds, publisher links and ingestion health.',
   '/admin/news-authors':
     'News author bylines. Browse articles, rename authors, and merge duplicate names.',
   '/admin/content/news_articles': 'News articles. Edit, tag, and manage geo and source data.',

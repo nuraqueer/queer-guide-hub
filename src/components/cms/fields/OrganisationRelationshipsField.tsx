@@ -1,3 +1,4 @@
+import { NewsSourcesManager } from '@/components/admin/NewsSourcesManager';
 import { useState } from 'react';
 import { Link } from 'react-router';
 import { toast } from 'sonner';
@@ -128,24 +129,22 @@ export function OrganisationRelationshipsField({
           )}
         </section>
       ))}
-      {(data?.news_source ?? []).length > 0 && (
-        <section aria-label="News sources" className="space-y-4 border-t pt-4">
-          <h3 className="font-medium">News sources</h3>
-          {data?.news_source.map((row) => (
-            <div key={row.id} className="flex items-center justify-between gap-2">
-              <span>{row.name}</span>
-              <Button
-                variant="ghost"
-                size="sm"
-                disabled={locked}
-                onClick={() => void unlink('news_source', row.id)}
-              >
-                Unlink
-              </Button>
-            </div>
-          ))}
-        </section>
-      )}
+      <section aria-label="Publisher feeds" className="space-y-4 border-t pt-4">
+        <h3 className="font-medium">News Sources</h3>
+        {(!Array.isArray(allValues?.roles) || !allValues.roles.includes('publisher')) && (
+          <p className="text-13 text-muted-foreground">
+            Add the Publisher role and save this Organisation to manage its feeds.
+          </p>
+        )}
+        <NewsSourcesManager
+          organizationId={orgId}
+          organizationName={String(allValues?.name ?? '')}
+          disabled={
+            locked || !Array.isArray(allValues?.roles) || !allValues.roles.includes('publisher')
+          }
+          onSaved={onPersistedChange}
+        />
+      </section>
       {picker && (
         <OrgEntityPickerDialog
           orgId={orgId}
