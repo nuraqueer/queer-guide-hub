@@ -9,6 +9,12 @@ const mocks = vi.hoisted(() => ({
   refetch: vi.fn(),
   inventory: {} as Record<string, unknown>,
 }));
+vi.mock('@/hooks/useRedirectWorkspace', () => ({
+  useRedirectWorkspace: () => ({
+    data: { folders: [], tags: [], templates: [], metadata: new Map() },
+    isError: false,
+  }),
+}));
 vi.mock('@/hooks/useRedirectInventory', () => ({ useRedirectInventory: () => mocks.inventory }));
 vi.mock('@/components/admin/shell/AdminShell', () => ({
   useAdminShell: () => ({ openEditor: mocks.openEditor }),

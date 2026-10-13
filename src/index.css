@@ -2849,3 +2849,14 @@ label a:hover {
     opacity: 1;
   }
 }
+
+/* User-assigned tag colors are data markers, separate from workspace chrome. */
+.redirect-tag-swatch { background: hsl(var(--muted-foreground)); }
+.redirect-tag-swatch[data-color="gray"] { background: var(--color-slate-500); }
+.redirect-tag-swatch[data-color="red"] { background: var(--color-red-500); }
+.redirect-tag-swatch[data-color="orange"] { background: var(--color-orange-500); }
+.redirect-tag-swatch[data-color="yellow"] { background: var(--color-yellow-500); }
+.redirect-tag-swatch[data-color="green"] { background: var(--color-green-500); }
+.redirect-tag-swatch[data-color="blue"] { background: var(--color-blue-500); }
+.redirect-tag-swatch[data-color="purple"] { background: var(--color-purple-500); }
+.redirect-tag-swatch[data-color="pink"] { background: var(--color-pink-500); }

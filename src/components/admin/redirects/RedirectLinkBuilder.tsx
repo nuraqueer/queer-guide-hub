@@ -16,18 +16,22 @@ import {
   CAMPAIGN_FIELDS,
   LINK_ORIGIN,
   suggestCampaignSlug,
+  targetWithoutCampaign,
   type CampaignFields,
 } from '@/lib/redirects/linkTools';
 import { validateSlug } from '@/lib/redirects/validation';
 import type { InventoryRedirect } from '@/lib/redirects/inventory';
 import { QrExport } from './RedirectQrDialog';
+import { useRedirectWorkspace } from '@/hooks/useRedirectWorkspace';
 
 export function RedirectLinkBuilder({
   seed,
   onClose,
+  defaultFolderId,
 }: {
   seed: InventoryRedirect | null;
   onClose: () => void;
+  defaultFolderId?: string;
 }) {
   const [target, setTarget] = useState(seed?.target ?? '');
   const [slug, setSlug] = useState(suggestCampaignSlug(seed?.target ?? ''));
@@ -38,6 +42,13 @@ export function RedirectLinkBuilder({
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
   const [savedUrl, setSavedUrl] = useState<string | null>(null);
+  const workspace = useRedirectWorkspace();
+  const seedMetadata = seed ? workspace.data?.metadata.get(seed.id) : undefined;
+  const [folderOverride, setFolderOverride] = useState<string | null>(null);
+  const [tagOverride, setTagOverride] = useState<string[] | null>(null);
+  const folderId = folderOverride ?? seedMetadata?.folder_id ?? defaultFolderId ?? '';
+  const tagIds = tagOverride ?? seedMetadata?.tagIds ?? [];
+  const [templateName, setTemplateName] = useState('');
   const { createRedirect } = useRedirects();
   const client = useQueryClient();
   let destination = '';
@@ -57,15 +68,23 @@ export function RedirectLinkBuilder({
     }
     setSaving(true);
     try {
-      const created = await createRedirect({
-        type: 'SHORT',
-        slug: slug.trim(),
-        target: destination,
-        match_kind: 'EXACT',
-        status_code: 302,
-        is_enabled: true,
-        query_mode: 'PRESERVE',
-      });
+      const created =
+        folderId || tagIds.length
+          ? await workspace.createLink.mutateAsync({
+              slug: slug.trim(),
+              target: destination,
+              folderId: folderId || null,
+              tagIds,
+            })
+          : await createRedirect({
+              type: 'SHORT',
+              slug: slug.trim(),
+              target: destination,
+              match_kind: 'EXACT',
+              status_code: 302,
+              is_enabled: true,
+              query_mode: 'PRESERVE',
+            });
       if (!created)
         throw new Error(
           'Could not create the link. Check that the slug is available and try again.',
@@ -128,11 +147,68 @@ export function RedirectLinkBuilder({
             </div>
             <fieldset>
               <legend className="mb-2 font-medium">Campaign tracking</legend>
+              {workspace.data && (
+                <div className="mb-4 flex flex-wrap gap-2">
+                  <select
+                    aria-label="Apply UTM template"
+                    className="max-w-full rounded-element border bg-background p-2 text-sm"
+                    value=""
+                    onChange={(event) => {
+                      const template = workspace.data.templates.find(
+                        (item) => item.id === event.target.value,
+                      );
+                      if (template) {
+                        setTarget(targetWithoutCampaign(target));
+                        setCampaign({ ...template.parameters });
+                      }
+                    }}
+                  >
+                    <option value="">Apply a saved UTM template</option>
+                    {workspace.data.templates.map((template) => (
+                      <option value={template.id} key={template.id}>
+                        {template.name}
+                      </option>
+                    ))}
+                  </select>
+                  <Input
+                    aria-label="New UTM template name"
+                    className="min-w-0 flex-1"
+                    placeholder="Template name"
+                    value={templateName}
+                    onChange={(event) => setTemplateName(event.target.value)}
+                    maxLength={100}
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={!templateName.trim() || workspace.resource.isPending}
+                    onClick={() =>
+                      void workspace.resource
+                        .mutateAsync({
+                          kind: 'templates',
+                          values: { name: templateName.trim(), parameters: campaign },
+                        })
+                        .then(() => setTemplateName(''))
+                        .catch(() => {})
+                    }
+                  >
+                    Save template
+                  </Button>
+                </div>
+              )}
+              {workspace.resource.isError && (
+                <p role="alert" className="text-destructive">
+                  {workspace.resource.error.message}
+                </p>
+              )}
               <div className="grid gap-4 sm:grid-cols-2">
                 {CAMPAIGN_FIELDS.map((key) => (
                   <div className="space-y-2" key={key}>
                     <Label htmlFor={key}>
-                      {key.replace('utm_', '').replace(/^./, (letter) => letter.toUpperCase())}
+                      {key === 'ref'
+                        ? 'Referral'
+                        : key.replace('utm_', '').replace(/^./, (letter) => letter.toUpperCase())}
                     </Label>
                     <Input
                       id={key}
@@ -143,6 +219,42 @@ export function RedirectLinkBuilder({
                 ))}
               </div>
             </fieldset>
+            {workspace.data && (
+              <fieldset className="space-y-2">
+                <legend className="font-medium">Organization</legend>
+                <select
+                  aria-label="New link folder"
+                  className="w-full rounded-element border bg-background p-2 text-sm"
+                  value={folderId}
+                  onChange={(event) => setFolderOverride(event.target.value)}
+                >
+                  <option value="">Unfiled</option>
+                  {workspace.data.folders.map((folder) => (
+                    <option key={folder.id} value={folder.id}>
+                      {folder.name}
+                    </option>
+                  ))}
+                </select>
+                <div className="flex flex-wrap gap-4">
+                  {workspace.data.tags.map((tag) => (
+                    <label key={tag.id} className="flex items-center gap-2 text-sm">
+                      <input
+                        type="checkbox"
+                        checked={tagIds.includes(tag.id)}
+                        onChange={(event) =>
+                          setTagOverride(
+                            event.target.checked
+                              ? [...tagIds, tag.id]
+                              : tagIds.filter((id) => id !== tag.id),
+                          )
+                        }
+                      />
+                      {tag.name}
+                    </label>
+                  ))}
+                </div>
+              </fieldset>
+            )}
             <fieldset className="space-y-2">
               <legend className="font-medium">Destination prefill</legend>
               <p className="text-xs text-muted-foreground">

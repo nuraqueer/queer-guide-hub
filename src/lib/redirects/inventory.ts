@@ -133,7 +133,14 @@ export function manualRedirect(row: Row, now = Date.now()): InventoryRedirect {
   const campaign: Record<string, string> = {};
   try {
     const target = new URL(String(row.target), 'https://queer.guide');
-    for (const key of ['utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content']) {
+    for (const key of [
+      'utm_source',
+      'utm_medium',
+      'utm_campaign',
+      'utm_term',
+      'utm_content',
+      'ref',
+    ]) {
       const value = target.searchParams.get(key);
       if (value) campaign[key] = value;
     }
@@ -152,7 +159,7 @@ export function manualRedirect(row: Row, now = Date.now()): InventoryRedirect {
     for (const [key, value] of Object.entries(row.query_override)) {
       if (
         key in campaign ||
-        ['utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content'].includes(key)
+        ['utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content', 'ref'].includes(key)
       ) {
         if (typeof value === 'string') campaign[key] = value;
       }
@@ -179,9 +186,14 @@ export function manualRedirect(row: Row, now = Date.now()): InventoryRedirect {
             Object.entries(row.query_override).filter(
               (entry): entry is [string, string] =>
                 typeof entry[1] === 'string' &&
-                !['utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content'].includes(
-                  entry[0],
-                ),
+                ![
+                  'utm_source',
+                  'utm_medium',
+                  'utm_campaign',
+                  'utm_term',
+                  'utm_content',
+                  'ref',
+                ].includes(entry[0]),
             ),
           )
         : {},
@@ -305,7 +317,8 @@ export async function loadDatabaseInventory(read: ReadInventoryRows) {
 
 /** Read the deployed rule source directly; 200 SPA rewrites are not redirects. */
 export function parseStaticRedirects(text: string): InventoryRedirect[] {
-  return text.split('\n').flatMap((line, index) => {
+  const occurrences = new Map<string, number>();
+  return text.split('\n').flatMap((line) => {
     const [source, target, code] = line.trim().split(/\s+/);
     const statusCode = Number(code?.replace('!', ''));
     if (
@@ -316,9 +329,12 @@ export function parseStaticRedirects(text: string): InventoryRedirect[] {
       !Number.isFinite(statusCode)
     )
       return [];
+    const key = [source, target, String(statusCode)].map(encodeURIComponent).join(':');
+    const occurrence = occurrences.get(key) ?? 0;
+    occurrences.set(key, occurrence + 1);
     return [
       {
-        id: `static:${index}`,
+        id: `static:${key}:${occurrence}`,
         source,
         target,
         origin: 'public/_redirects',
@@ -333,6 +349,7 @@ export function parseStaticRedirects(text: string): InventoryRedirect[] {
 
 /** Inventory declarative aliases without executing (or importing) the router. */
 export function parseClientRedirects(text: string): InventoryRedirect[] {
+  const occurrences = new Map<string, number>();
   const adminStart = text.indexOf('path="/admin"');
   const publicStart = text.indexOf('path="/:locale?"');
   const pattern =
@@ -364,10 +381,19 @@ export function parseClientRedirects(text: string): InventoryRedirect[] {
       publicStart >= 0 &&
       match.index! > adminStart &&
       match.index! < publicStart;
+    const source = `${admin ? '/admin' : ''}/${path.replace(/^\//, '')}`;
+    const scope = admin
+      ? 'admin'
+      : publicStart >= 0 && match.index! > publicStart
+        ? 'locale'
+        : 'root';
+    const key = [scope, source, target, component].map(encodeURIComponent).join(':');
+    const occurrence = occurrences.get(key) ?? 0;
+    occurrences.set(key, occurrence + 1);
     return [
       {
-        id: `client:${match.index}`,
-        source: `${admin ? '/admin' : ''}/${path.replace(/^\//, '')}`,
+        id: `client:${key}:${occurrence}`,
+        source,
         target,
         origin: 'Client router',
         kind: 'Client' as const,

@@ -7,6 +7,7 @@ export const CAMPAIGN_FIELDS = [
   'utm_campaign',
   'utm_term',
   'utm_content',
+  'ref',
 ] as const;
 export type CampaignFields = Partial<Record<(typeof CAMPAIGN_FIELDS)[number], string>>;
 
@@ -70,6 +71,13 @@ export function publicSourceUrl(source: string) {
   if (!isConcretePath(source)) return null;
   const url = new URL(source, LINK_ORIGIN);
   return url.origin === LINK_ORIGIN ? url.href : null;
+}
+
+export function targetWithoutCampaign(target: string) {
+  if (!validateTarget(target).valid) return target;
+  const url = new URL(target, LINK_ORIGIN);
+  for (const key of CAMPAIGN_FIELDS) url.searchParams.delete(key);
+  return target.startsWith('/') ? url.pathname + url.search + url.hash : url.href;
 }
 
 export interface VisitEvent {

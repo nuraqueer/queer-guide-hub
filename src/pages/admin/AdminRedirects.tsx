@@ -20,6 +20,10 @@ import { publicSourceUrl } from '@/lib/redirects/linkTools';
 import { RedirectLinkBuilder } from '@/components/admin/redirects/RedirectLinkBuilder';
 import { RedirectQrDialog } from '@/components/admin/redirects/RedirectQrDialog';
 import { RedirectTrackingDialog } from '@/components/admin/redirects/RedirectTrackingDialog';
+import { RedirectWorkspaceDialog } from '@/components/admin/redirects/RedirectWorkspaceDialog';
+import { RedirectOrganizationDialog } from '@/components/admin/redirects/RedirectOrganizationDialog';
+import { useRedirectWorkspace } from '@/hooks/useRedirectWorkspace';
+import { commentSegments, filterWorkspaceLinks } from '@/lib/redirects/workspace';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -51,6 +55,7 @@ function exportRows(rows: InventoryRedirect[]) {
 
 export default function AdminRedirects() {
   const inventory = useRedirectInventory();
+  const workspace = useRedirectWorkspace();
   const { openEditor } = useAdminShell();
   const [searchParams, setSearchParams] = useSearchParams();
   const [search, setSearch] = useState('');
@@ -61,6 +66,10 @@ export default function AdminRedirects() {
   const [linkSeed, setLinkSeed] = useState<{ row: InventoryRedirect | null } | null>(null);
   const [qrUrl, setQrUrl] = useState<string | null>(null);
   const [tracking, setTracking] = useState<InventoryRedirect | null>(null);
+  const [workspaceOpen, setWorkspaceOpen] = useState(false);
+  const [organization, setOrganization] = useState<InventoryRedirect | null>(null);
+  const folderFilter = searchParams.get('folder') ?? '';
+  const tagFilter = searchParams.get('tag') ?? '';
 
   useEffect(() => {
     const id = searchParams.get('edit');
@@ -77,7 +86,7 @@ export default function AdminRedirects() {
 
   const rows = inventory.data?.rows;
   const origins = useMemo(() => [...new Set(rows?.map((row) => row.origin) ?? [])].sort(), [rows]);
-  const filtered = useMemo(
+  const baseFiltered = useMemo(
     () =>
       filterInventory(rows ?? [], search, origin, state).sort((a, b) =>
         sort === 'source'
@@ -88,6 +97,24 @@ export default function AdminRedirects() {
       ),
     [rows, search, origin, state, sort],
   );
+  const filtered = useMemo(
+    () =>
+      workspace.data
+        ? filterWorkspaceLinks(baseFiltered, workspace.data.metadata, folderFilter, tagFilter)
+        : baseFiltered,
+    [baseFiltered, workspace.data, folderFilter, tagFilter],
+  );
+  const setOrganizationFilter = (key: 'folder' | 'tag', value: string) => {
+    setPage(0);
+    setSearchParams(
+      (params) => {
+        if (value) params.set(key, value);
+        else params.delete(key);
+        return params;
+      },
+      { replace: true },
+    );
+  };
   const lastPage = Math.max(0, Math.ceil(filtered.length / PAGE_SIZE) - 1);
   const currentPage = Math.min(page, lastPage);
   const visible = filtered.slice(currentPage * PAGE_SIZE, (currentPage + 1) * PAGE_SIZE);
@@ -116,6 +143,9 @@ export default function AdminRedirects() {
               Refresh
             </Button>
             <RedirectToolbarActions />
+            <Button variant="outline" size="sm" onClick={() => setWorkspaceOpen(true)}>
+              Folders, tags &amp; templates
+            </Button>
             <Button variant="outline" size="sm" onClick={() => setLinkSeed({ row: null })}>
               Create tracked link
             </Button>
@@ -208,7 +238,53 @@ export default function AdminRedirects() {
           <Download size={14} aria-hidden className="mr-1" />
           Export
         </Button>
+        <select
+          className={SELECT_CLASS}
+          aria-label="Filter by folder"
+          value={folderFilter}
+          disabled={!workspace.data}
+          onChange={(event) => setOrganizationFilter('folder', event.target.value)}
+        >
+          <option value="">All folders</option>
+          <option value="unfiled">Unfiled</option>
+          {workspace.data?.folders.map((folder) => (
+            <option value={folder.id} key={folder.id}>
+              {folder.name}
+            </option>
+          ))}
+        </select>
+        <select
+          className={SELECT_CLASS}
+          aria-label="Filter by tag"
+          value={tagFilter}
+          disabled={!workspace.data}
+          onChange={(event) => setOrganizationFilter('tag', event.target.value)}
+        >
+          <option value="">All tags</option>
+          {workspace.data?.tags.map((tag) => (
+            <option value={tag.id} key={tag.id}>
+              {tag.name}
+            </option>
+          ))}
+        </select>
+        {(folderFilter || tagFilter) && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => void navigator.clipboard.writeText(window.location.href)}
+          >
+            Copy filtered view
+          </Button>
+        )}
       </div>
+      {workspace.isError && (
+        <div role="alert" className="mb-4 text-sm text-destructive">
+          Could not load folders, tags, and templates. Organization filters are unavailable.{' '}
+          <Button variant="outline" size="sm" onClick={() => void workspace.refetch()}>
+            Retry workspace
+          </Button>
+        </div>
+      )}
       {partial && (
         <div role="alert" className="mb-4 rounded-element border border-destructive p-4 text-13">
           <p className="font-medium">
@@ -249,6 +325,7 @@ export default function AdminRedirects() {
                 <TableHead>HTTP</TableHead>
                 <TableHead>State</TableHead>
                 <TableHead>Origin</TableHead>
+                <TableHead>Organization</TableHead>
                 <TableHead>Visits</TableHead>
                 <TableHead>Actions</TableHead>
               </TableRow>
@@ -274,6 +351,53 @@ export default function AdminRedirects() {
                     <span className="block whitespace-nowrap">{row.kind}</span>
                     <span className="text-xs text-muted-foreground">{row.origin}</span>
                   </TableCell>
+                  <TableCell className="min-w-40 max-w-64">
+                    <p className="text-xs text-muted-foreground">
+                      {workspace.data?.folders.find(
+                        (folder) => folder.id === workspace.data?.metadata.get(row.id)?.folder_id,
+                      )?.name ?? 'Unfiled'}
+                    </p>
+                    <div className="mt-1 flex flex-wrap gap-1">
+                      {workspace.data?.tags
+                        .filter((tag) =>
+                          workspace.data?.metadata.get(row.id)?.tagIds.includes(tag.id),
+                        )
+                        .map((tag) => (
+                          <span
+                            key={tag.id}
+                            className="rounded-badge bg-muted px-2 py-0.5 text-xs"
+                            title={`Tag color: ${tag.color}`}
+                          >
+                            <span
+                              aria-hidden
+                              className="redirect-tag-swatch mr-1 inline-block h-2 w-2 rounded-badge"
+                              data-color={tag.color}
+                            />
+                            {tag.name}
+                          </span>
+                        ))}
+                    </div>
+                    {workspace.data?.metadata.get(row.id)?.comment && (
+                      <p className="mt-1 whitespace-pre-wrap break-words text-xs">
+                        {commentSegments(workspace.data.metadata.get(row.id)!.comment).map(
+                          (segment, index) =>
+                            segment.url ? (
+                              <a
+                                className="underline underline-offset-2"
+                                href={segment.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                key={index}
+                              >
+                                {segment.text}
+                              </a>
+                            ) : (
+                              <span key={index}>{segment.text}</span>
+                            ),
+                        )}
+                      </p>
+                    )}
+                  </TableCell>
                   <TableCell className="tabular-nums">
                     {row.manualId ? (
                       (row.clicks ?? 0).toLocaleString()
@@ -289,6 +413,12 @@ export default function AdminRedirects() {
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
+                        <DropdownMenuItem
+                          disabled={!workspace.data}
+                          onSelect={() => setOrganization(row)}
+                        >
+                          Folder, tags &amp; comment
+                        </DropdownMenuItem>
                         <DropdownMenuItem onSelect={() => setLinkSeed({ row })}>
                           Create tracked link
                         </DropdownMenuItem>
@@ -319,7 +449,7 @@ export default function AdminRedirects() {
               ))}
               {!visible.length && (
                 <TableRow>
-                  <TableCell colSpan={7} className="py-12 text-center text-muted-foreground">
+                  <TableCell colSpan={8} className="py-12 text-center text-muted-foreground">
                     {rows?.length
                       ? 'No redirects match these filters.'
                       : partial
@@ -366,9 +496,23 @@ export default function AdminRedirects() {
           </div>
         </>
       )}
-      {linkSeed && <RedirectLinkBuilder seed={linkSeed.row} onClose={() => setLinkSeed(null)} />}
+      {linkSeed && (
+        <RedirectLinkBuilder
+          seed={linkSeed.row}
+          defaultFolderId={folderFilter === 'unfiled' ? '' : folderFilter}
+          onClose={() => setLinkSeed(null)}
+        />
+      )}
       {qrUrl && <RedirectQrDialog url={qrUrl} onClose={() => setQrUrl(null)} />}
       {tracking && <RedirectTrackingDialog row={tracking} onClose={() => setTracking(null)} />}
+      {workspaceOpen && <RedirectWorkspaceDialog onClose={() => setWorkspaceOpen(false)} />}
+      {organization && (
+        <RedirectOrganizationDialog
+          key={organization.id}
+          row={organization}
+          onClose={() => setOrganization(null)}
+        />
+      )}
     </div>
   );
 }

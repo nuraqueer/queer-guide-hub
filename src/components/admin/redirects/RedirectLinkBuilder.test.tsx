@@ -2,13 +2,25 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { RedirectLinkBuilder } from './RedirectLinkBuilder';
-const mocks = vi.hoisted(() => ({ create: vi.fn() }));
+import type { RedirectWorkspace } from '@/hooks/useRedirectWorkspace';
+const mocks = vi.hoisted(() => ({
+  create: vi.fn(),
+  workspace: {
+    data: undefined as RedirectWorkspace | undefined,
+    resource: { mutateAsync: vi.fn(), isError: false },
+    createLink: { mutateAsync: vi.fn() },
+  },
+}));
+vi.mock('@/hooks/useRedirectWorkspace', () => ({
+  useRedirectWorkspace: () => mocks.workspace,
+}));
 vi.mock('@/hooks/useRedirects', () => ({ useRedirects: () => ({ createRedirect: mocks.create }) }));
 vi.mock('./RedirectQrDialog', () => ({
   QrExport: ({ url }: { url: string }) => <p>Saved QR URL: {url}</p>,
 }));
 beforeEach(() => {
   vi.clearAllMocks();
+  mocks.workspace.data = undefined;
 });
 function show() {
   return render(
@@ -59,5 +71,41 @@ describe('tracked link creation', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('Could not create the link');
     expect(screen.getByLabelText('Destination')).toHaveValue('/city/zurich?view=map#places');
     expect(screen.queryByText(/Saved QR URL/)).toBeNull();
+  });
+});
+
+describe('shared campaign workspace', () => {
+  it('applies shared templates and creates folder/tag assignments through one atomic operation', async () => {
+    mocks.workspace.data = {
+      folders: [{ id: 'folder', name: 'Pride', description: '' }],
+      tags: [{ id: 'tag', name: 'Print', color: 'blue' }],
+      templates: [
+        { id: 'template', name: 'Poster', parameters: { utm_source: 'qr', ref: 'team' } },
+      ],
+      metadata: new Map([
+        ['city', { redirect_key: 'city', folder_id: 'folder', tagIds: ['tag'], comment: '' }],
+      ]),
+    };
+    mocks.workspace.createLink.mutateAsync.mockResolvedValue({
+      id: 'created',
+      slug: 'zurich-campaign',
+    });
+    show();
+    expect(screen.getByRole('combobox', { name: 'New link folder' })).toHaveValue('folder');
+    expect(screen.getByRole('checkbox', { name: 'Print' })).toBeChecked();
+    fireEvent.change(screen.getByRole('combobox', { name: 'Apply UTM template' }), {
+      target: { value: 'template' },
+    });
+    expect(screen.getByLabelText('Source')).toHaveValue('qr');
+    expect(screen.getByLabelText('Referral')).toHaveValue('team');
+    fireEvent.click(screen.getByRole('button', { name: 'Create tracked link' }));
+    await waitFor(() => expect(mocks.workspace.createLink.mutateAsync).toHaveBeenCalledOnce());
+    expect(mocks.create).not.toHaveBeenCalled();
+    expect(mocks.workspace.createLink.mutateAsync).toHaveBeenCalledWith(
+      expect.objectContaining({ folderId: 'folder', tagIds: ['tag'] }),
+    );
+    expect(
+      await screen.findByText('Saved QR URL: https://queer.guide/go/zurich-campaign'),
+    ).toBeVisible();
   });
 });
