@@ -45,7 +45,21 @@ vi.mock('@/components/map/EntityMap', () => ({ EntityMap: () => <div data-testid
 vi.mock('@/components/admin/AdminEditButton', () => ({ AdminEditButton: () => null }));
 vi.mock('@/components/moderation/ReportButton', () => ({ ReportButton: () => null }));
 vi.mock('@/components/trips/PlanTripFromHereButton', () => ({
-  PlanTripFromHereButton: (p: { label: string }) => <button type="button">{p.label}</button>,
+  PlanTripFromHereButton: (p: {
+    label: string;
+    initialGeo?: {
+      cityId: string;
+      cityName: string;
+      countryId: string;
+      countryName: string;
+      countryCode: string | null;
+      timezone: string | null;
+    } | null;
+  }) => (
+    <button type="button" data-trip-seed={p.initialGeo ? JSON.stringify(p.initialGeo) : undefined}>
+      {p.label}
+    </button>
+  ),
 }));
 vi.mock('@/components/trips/TripCoveringBanner', () => ({ TripCoveringBanner: () => null }));
 vi.mock('@/components/discovery/SimilarItems', () => ({ SimilarItems: () => null }));
@@ -175,6 +189,30 @@ describe('CountryDetail', () => {
     state.country = germany;
     renderPage();
     expect(screen.getByRole('heading', { level: 1, name: /Germany/ })).toBeInTheDocument();
+  });
+
+  it('prefills the trip action with the capital city when the country has published cities', () => {
+    state.cities = [
+      { id: 'hamburg', name: 'Hamburg', slug: 'hamburg', timezone: 'Europe/Berlin' },
+      { id: 'berlin', name: 'Berlin', slug: 'berlin', timezone: 'Europe/Berlin' },
+    ];
+    renderPage();
+    const action = screen.getByRole('button', { name: /Plan a trip to/ });
+    expect(JSON.parse(action.getAttribute('data-trip-seed') ?? 'null')).toEqual({
+      cityId: 'berlin',
+      cityName: 'Berlin',
+      countryId: 'co1',
+      countryName: 'Germany',
+      countryCode: 'DE',
+      timezone: 'Europe/Berlin',
+    });
+  });
+
+  it('keeps the neutral travel fallback when the country has no published city', () => {
+    renderPage();
+    expect(screen.getByRole('button', { name: /Plan a trip to/ })).not.toHaveAttribute(
+      'data-trip-seed',
+    );
   });
 
   it('keeps the criminalisation banner INSIDE the page container', () => {
