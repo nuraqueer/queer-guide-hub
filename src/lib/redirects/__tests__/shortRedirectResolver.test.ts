@@ -6,7 +6,11 @@ import { describe, expect, it, vi } from 'vitest';
 
 /** Execute the real Deno handler with its SDK boundary stubbed; no database writes. */
 describe('short-link visit recording', () => {
-  it('records a GET visit but resolves HEAD without incrementing clicks or using quota', async () => {
+  it.each([
+    ['/events/pride?utm_campaign=poster#details', 'https://queer.guide'],
+    ['HTTPS://www.queer.guide/events/pride?utm_campaign=poster#details', 'https://www.queer.guide'],
+    ['HTTPS:/www.queer.guide/events/pride?utm_campaign=poster#details', 'https://www.queer.guide'],
+  ])('preserves target %s and records GET visits only', async (target, origin) => {
     const source = readFileSync(
       join(__dirname, '../../../../supabase/functions/redirect-handler/index.ts'),
       'utf8',
@@ -22,7 +26,7 @@ describe('short-link visit recording', () => {
           ? [
               {
                 id: 'fixture',
-                target: '/events/pride?utm_campaign=poster#details',
+                target,
                 status_code: 302,
                 query_mode: 'PRESERVE',
                 query_override: null,
@@ -49,7 +53,7 @@ describe('short-link visit recording', () => {
     );
     expect(head.status).toBe(302);
     expect(head.headers.get('Location')).toBe(
-      'https://queer.guide/events/pride?utm_campaign=poster&utm_source=qr#details',
+      `${origin}/events/pride?utm_campaign=poster&utm_source=qr#details`,
     );
     expect(rpc.mock.calls.filter(([name]) => name === 'record_redirect_click')).toHaveLength(0);
     const get = await handler!(
