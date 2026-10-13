@@ -55,6 +55,9 @@ begin
  begin perform public.admin_news_source_save(target,s||jsonb_build_object('organization_id','00000000-0000-0000-0000-000000000001'),(s->>'updated_at')::timestamptz); raise exception 'Moderator publisher link accepted'; exception when insufficient_privilege then null; end;
  begin perform public.admin_news_source_publishers(); raise exception 'Moderator publisher access accepted'; exception when insufficient_privilege then null; end;
  begin perform public.admin_news_source_create_publisher('Unauthorized',''); raise exception 'Moderator write accepted'; exception when insufficient_privilege then null; end;
+ begin perform public.admin_news_source_delete(target,(s->>'updated_at')::timestamptz,54); raise exception 'Stale cascade preview accepted'; exception when serialization_failure then null; end;
+ assert public.admin_news_source_delete(target,(s->>'updated_at')::timestamptz,55)=target,'Staff deletion uses the reviewed count';
+
 end $$;
 select set_config('request.jwt.claims','{"role":"authenticated","user_role":"admin"}',true);
 select public.admin_news_sources_browse('Paginated','all',null,false,0)->>'total' as admin_total;

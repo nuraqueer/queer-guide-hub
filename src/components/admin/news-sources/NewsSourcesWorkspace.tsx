@@ -18,6 +18,7 @@ import {
   useNewsSourcesAdmin,
   useSourceArticles,
   useResumeNewsSource,
+  useDeleteNewsSource,
   sourceError,
   type SourceRecord,
 } from '@/hooks/useNewsSourcesAdmin';
@@ -106,6 +107,10 @@ export function NewsSourcesWorkspace({
   const [linkPage, setLinkPage] = useState(0);
   const [resuming, setResuming] = useState<SourceRecord | null>(null);
   const [resumeError, setResumeError] = useState('');
+  const [deleting, setDeleting] = useState<SourceRecord | null>(null);
+  const [deleteName, setDeleteName] = useState('');
+  const [deleteError, setDeleteError] = useState('');
+  const remove = useDeleteNewsSource();
   const list = useNewsSourcesAdmin({ search, state, unlinked, organizationId, page });
   const candidates = useNewsSourcesAdmin(
     { search: linkSearch, state: 'all', unlinked: false, page: linkPage },
@@ -123,6 +128,20 @@ export function NewsSourcesWorkspace({
       setResuming(null);
     } catch (error) {
       setResumeError(sourceError(error));
+    }
+  };
+  const deleteSource = async () => {
+    if (!deleting || disabled || remove.isPending || deleteName !== deleting.name) return;
+    setDeleteError('');
+    try {
+      await remove.mutateAsync(deleting);
+      setPage(0);
+      setSelected(null);
+      await onSaved?.();
+      setDeleting(null);
+      toast.success('Source and its imported articles deleted');
+    } catch (error) {
+      setDeleteError(sourceError(error));
     }
   };
   return (
@@ -325,6 +344,20 @@ export function NewsSourcesWorkspace({
                 header: 'Actions',
                 render: (s) => (
                   <div className="flex flex-wrap gap-2">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      disabled={disabled}
+                      aria-label={`Delete ${s.name}`}
+                      onClick={() => {
+                        setDeleting(s);
+                        setDeleteName('');
+                        setDeleteError('');
+                      }}
+                    >
+                      Delete
+                    </Button>
                     {(s.auto_paused || s.backoff_until) && (
                       <Button
                         type="button"
@@ -524,6 +557,52 @@ export function NewsSourcesWorkspace({
               onClick={() => void resumeSource()}
             >
               {resume.isPending ? 'Resuming…' : 'Confirm resume'}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+      <Dialog
+        open={!!deleting}
+        onOpenChange={(open) => {
+          if (!open && !remove.isPending) setDeleting(null);
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete {deleting?.name}</DialogTitle>
+            <DialogDescription>
+              This permanently deletes the feed and all {deleting?.article_count.toLocaleString()}{' '}
+              of its imported articles. Disable the feed in its editor to retain article history.
+            </DialogDescription>
+          </DialogHeader>
+          <Label htmlFor="delete-source-name">Type the feed name to confirm</Label>
+          <Input
+            id="delete-source-name"
+            value={deleteName}
+            disabled={remove.isPending}
+            onChange={(event) => setDeleteName(event.target.value)}
+          />
+          {deleteError && (
+            <p role="alert" className="text-13 text-destructive">
+              {deleteError}
+            </p>
+          )}
+          <div className="flex justify-end gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              disabled={remove.isPending}
+              onClick={() => setDeleting(null)}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              disabled={disabled || remove.isPending || deleteName !== deleting?.name}
+              onClick={() => void deleteSource()}
+            >
+              {remove.isPending ? 'Deleting…' : 'Confirm delete'}
             </Button>
           </div>
         </DialogContent>

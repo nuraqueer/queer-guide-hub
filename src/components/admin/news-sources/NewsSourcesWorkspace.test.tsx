@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   articles: vi.fn(),
   save: vi.fn(),
   resume: vi.fn(),
+  remove: vi.fn(),
   create: vi.fn(),
   retry: vi.fn(),
   rows: [] as unknown[],
@@ -53,6 +54,7 @@ vi.mock('@/hooks/useNewsSourcesAdmin', async (load) => {
       isError: false,
     }),
     useSaveNewsSource: () => ({ mutateAsync: mocks.save, isPending: mocks.pending }),
+    useDeleteNewsSource: () => ({ mutateAsync: mocks.remove, isPending: false }),
     useResumeNewsSource: () => ({ mutateAsync: mocks.resume, isPending: false }),
     useCreateSourcePublisher: () => ({ mutateAsync: mocks.create, isPending: false }),
   };
@@ -211,6 +213,17 @@ describe('News source workspace', () => {
     );
     expect(screen.getByLabelText('Publisher', { exact: true })).toHaveValue('pub-2');
     expect(mocks.save).not.toHaveBeenCalled();
+  });
+  it('requires the exact name and previews the article cascade before deleting', async () => {
+    mount();
+    fireEvent.click(screen.getByRole('button', { name: 'Delete Feed One' }));
+    expect(screen.getByText(/all 4 of its imported articles/)).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Confirm delete' })).toBeDisabled();
+    fireEvent.change(screen.getByLabelText('Type the feed name to confirm'), {
+      target: { value: 'Feed One' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm delete' }));
+    await waitFor(() => expect(mocks.remove).toHaveBeenCalledWith(source));
   });
   it('shows read errors rather than a misleading empty table and offers retry', () => {
     mocks.error = true;

@@ -122,3 +122,23 @@ begin
     order by published_at desc nulls last,id limit 50 offset greatest(coalesce(p_offset,0),0)
   ) a),'[]'::jsonb),'total',(select count(*) from public.news_articles where source_id=p_source_id));
 end $$;
+
+-- Preserve the existing source delete operation, with an explicit cascade preview.
+create or replace function public.admin_news_source_delete(p_id uuid,p_expected_updated_at timestamptz,p_expected_article_count bigint)
+returns uuid language plpgsql security definer set search_path=public,pg_temp as $$
+declare source_row public.news_sources; article_count bigint;
+begin
+ perform public.assert_admin_or_internal();
+ select * into source_row from public.news_sources where id=p_id for update;
+ if not found or p_expected_updated_at is null or source_row.updated_at is distinct from p_expected_updated_at then
+   raise exception 'Source changed or no longer exists. Refresh before deleting.' using errcode='40001';
+ end if;
+ select count(*) into article_count from public.news_articles where source_id=p_id;
+ if p_expected_article_count is null or article_count is distinct from p_expected_article_count then
+   raise exception 'The imported article count changed. Refresh and review the deletion again.' using errcode='40001';
+ end if;
+ delete from public.news_sources where id=p_id;
+ return p_id;
+end $$;
+revoke all on function public.admin_news_source_delete(uuid,timestamptz,bigint) from public,anon;
+grant execute on function public.admin_news_source_delete(uuid,timestamptz,bigint) to authenticated,service_role;

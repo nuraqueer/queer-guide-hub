@@ -158,3 +158,21 @@ export function sourceError(error: unknown) {
     ? error.message
     : ((error as { message?: string })?.message ?? 'Could not save this source. Try again.');
 }
+
+export function useDeleteNewsSource() {
+  const cache = useQueryClient();
+  return useMutation({
+    mutationFn: (source: SourceRecord) =>
+      rpc<string>('admin_news_source_delete', {
+        p_id: source.id,
+        p_expected_updated_at: source.updated_at,
+        p_expected_article_count: source.article_count,
+      }),
+    onSuccess: async () => {
+      await Promise.all([
+        cache.invalidateQueries({ queryKey: ['admin-news-sources'] }),
+        cache.invalidateQueries({ queryKey: ['admin-news-source-articles'] }),
+      ]);
+    },
+  });
+}
