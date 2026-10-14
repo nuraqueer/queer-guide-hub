@@ -74,4 +74,3 @@ begin
   end if;
   return to_jsonb(saved);
 end $$;
-
