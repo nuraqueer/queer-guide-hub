@@ -81,6 +81,9 @@ export function RedirectWorkspaceDialog({ onClose }: { onClose: () => void }) {
         <Button variant="outline" onClick={() => setShowMembers(!showMembers)}>
           {showMembers ? 'Hide members' : 'Manage members'}
         </Button>
+        <Button variant="outline" asChild>
+          <a href="/links-workspace">Open member workspace</a>
+        </Button>
         {showMembers && <RedirectWorkspaceMembers />}
         {workspace.isError && (
           <div role="alert">

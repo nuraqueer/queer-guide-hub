@@ -534,6 +534,19 @@ describe('actual Redirects API handler', () => {
       p_token_id: 'token-id',
     });
   });
+  it('scopes variant metrics to the verified credential and rejects machine session discovery', async () => {
+    const run = runtime(),
+      id = '00000000-0000-4000-8000-000000000005',
+      token = 'qg_redirect_' + 'a'.repeat(64);
+    expect((await run.invoke('/links/' + id + '/variants', undefined, token, 'GET')).status).toBe(
+      200,
+    );
+    expect(run.rpc).toHaveBeenCalledWith('redirect_scoped_variant_performance', {
+      p_redirect_id: id,
+      p_token_id: 'token-id',
+    });
+    expect((await run.invoke('/session', undefined, token, 'GET')).status).toBe(403);
+  });
   it('applies read scope and credential link boundaries to analytics and paginated activity', async () => {
     const run = runtime(),
       token = 'qg_redirect_' + 'a'.repeat(64);

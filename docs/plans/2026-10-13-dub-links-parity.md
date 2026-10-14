@@ -15,7 +15,7 @@ exist. Existing local tools are a foundation, not proof of parity or deployment.
 | Folders | Create/rename/delete/move links, folder-filtered list and analytics | Candidate: implemented locally; pending release |
 | Tags | Multiple colored tags, create/rename/delete, shareable filtered list and analytics | Candidate: implemented locally; pending release |
 | Comments | Team-visible comment on link card, clickable hyperlinks | Candidate: implemented locally; pending release |
-| Folder permissions | Explicit view/edit permissions for team members, enforced in database/API | Partial: member/machine bindings, folder defaults/overrides, scoped SQL/API and admin editors; member workspace page, access requests/notifications and runtime release pending |
+| Folder permissions | Explicit view/edit permissions for team members, enforced in database/API | Partial: member/machine bindings, folder defaults/overrides, scoped SQL/API, admin editors and member workspace; access requests/notifications, all-source semantics and runtime release pending |
 | Bulk actions | Create/update/upsert/delete, folder/tag assignment, archive, import/export, QR export | Candidate for managed links: atomic create/update/upsert/deletion API and CSV review/import/export UI, archive/restore, folder/tag assignment and verified QR ZIP; production release pending |
 | Custom previews | Uploaded OG image (1200×630, ≤1.5 MB), title≤120, description≤240, video API, crawler unfurl | Candidate: editor, scoped upload/presentation APIs and crawler HTML; native browser/Storage release pending |
 | AI previews | Generate title/description from destination content using configured AI provider | Candidate: scoped draft generator with spend limits; live provider and browser verification pending |
@@ -488,3 +488,39 @@ blocked and simulated changes. Saving folder defaults/overrides and the mobile
 machine form were verified; mobile scrollWidth=clientWidth=390. Temporary viewport
 and tab were cleaned up. See `docs/guides/redirect-folder-access.md` for current
 API semantics and explicit remaining permissions work.
+
+## Checkpoint: authenticated member workspace
+
+Implemented locally: `/links-workspace` uses verified membership, separate from
+the app admin console. Accessible links are searched/paged with exact scoped
+counts. Creation/editing, new-from-existing prefill, six UTM fields/templates,
+folder/tag/comment assignment, folder creation/rename/deletion/access, selected
+bulk moves/archive/restore/confirmed deletion, CSV import/export of loaded or
+selected rows, QR export, behavior settings and analytics use the scoped API.
+Viewers can inspect disabled behavior controls; mutations remain server-denied.
+Existing admin settings and reports keep their established behavior.
+
+New registered-session discovery and scoped variant-performance endpoints support
+the member UI. Folder APIs return effective edit/manage capabilities. Account IDs
+partition member, policy, access and analytics caches; account changes remount
+the workspace before another account's response arrives. Private route is
+noindexed. API/import errors preserve edits and selection for correction/retry.
+
+Ask to edit/owner notifications, invitation/account discovery, all-source
+inventory permission semantics and production multi-account verification remain
+open. The member workspace currently manages short links; other inventory
+sources remain source-managed in the admin inventory. No production schema,
+permissions, memberships or credentials have been changed. All other unfinished
+requirements in the main ledger remain in scope.
+
+Validation: 99 tests across seven API/page/policy/report/import/access/SEO files
+pass. Actual migrated SQL verifies effective folder capabilities (including key
+scopes), permitted/denied variant metrics and prior ACL invariants. Five native
+SDKs and examples pass through loopback HTTP and migrated SQL. Build, functions
+types, targeted lint, formatting and migration version checks pass. App typecheck
+remains 704 inherited errors, none new. Native browser proof uses a local fixture
+with production fetches blocked: prefilled creation, template replacement,
+updated link count, scoped report, and mobile creation dialog. Workspace and
+dialog scrollWidth=clientWidth=390. Screenshots are `member-workspace-*` under
+`outputs/redirect-dub-parity/`. Temporary viewport and tab were cleaned up.
+Production multi-account/provider/release evidence is still outstanding.

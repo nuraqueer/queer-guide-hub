@@ -182,6 +182,10 @@ describe('STATIC_ROUTE_META', () => {
     ).toEqual([]);
   });
 
+  it('keeps the authenticated member link workspace out of search indexes', () => {
+    expect(isIndexable('/links-workspace')).toBe(false);
+    expect(isIndexable('/links-workspace/')).toBe(false);
+  });
   it('keeps /places and /support noindexed as well as meta-less', () => {
     // Named, because deleting the meta entry alone leaves NOTHING watching the
     // noindex half: the gate above only inspects META KEYS, and these two are

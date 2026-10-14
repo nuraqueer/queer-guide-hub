@@ -1,3 +1,4 @@
+import { memberRedirectApi } from '@/lib/redirects/memberApi';
 import { useQuery, useInfiniteQuery } from '@tanstack/react-query';
 import { untypedRpc } from '@/integrations/supabase/untyped';
 import type { AnalyticsFilters, AnalyticsPage, AnalyticsReport } from '@/lib/redirects/analytics';
@@ -6,7 +7,18 @@ export async function readAnalyticsPage(
   snapshot: string | null,
   cursor: AnalyticsPage['nextCursor'] = null,
   limit = 100,
+  principalId?: string,
 ) {
+  if (principalId)
+    return memberRedirectApi<AnalyticsPage>(
+      '/events?' +
+        new URLSearchParams({
+          filters: JSON.stringify(filters),
+          limit: String(limit),
+          ...(snapshot ? { snapshot } : {}),
+          ...(cursor ? { cursor: JSON.stringify(cursor) } : {}),
+        }),
+    );
   const { data, error } = await untypedRpc<AnalyticsPage>('redirect_analytics_page', {
     p_filters: filters,
     p_snapshot: snapshot,
@@ -17,10 +29,18 @@ export async function readAnalyticsPage(
   if (error || !data) throw new Error(error?.message ?? 'Could not load event activity');
   return data;
 }
-export function useRedirectAnalytics(filters: AnalyticsFilters, live: boolean) {
+export function useRedirectAnalytics(
+  filters: AnalyticsFilters,
+  live: boolean,
+  principalId?: string,
+) {
   const report = useQuery({
-    queryKey: ['redirect-analytics-report', filters],
+    queryKey: ['redirect-analytics-report', filters, principalId ?? 'admin'],
     queryFn: async () => {
+      if (principalId)
+        return memberRedirectApi<AnalyticsReport>(
+          '/analytics?' + new URLSearchParams({ filters: JSON.stringify(filters) }),
+        );
       const { data, error } = await untypedRpc<AnalyticsReport>('redirect_analytics_report', {
         p_filters: filters,
       });
@@ -32,10 +52,10 @@ export function useRedirectAnalytics(filters: AnalyticsFilters, live: boolean) {
   });
   const snapshot = report.data?.snapshot ?? null;
   const events = useInfiniteQuery({
-    queryKey: ['redirect-analytics-events', filters, snapshot],
+    queryKey: ['redirect-analytics-events', filters, snapshot, principalId ?? 'admin'],
     enabled: !!snapshot,
     initialPageParam: null as AnalyticsPage['nextCursor'],
-    queryFn: ({ pageParam }) => readAnalyticsPage(filters, snapshot, pageParam, 50),
+    queryFn: ({ pageParam }) => readAnalyticsPage(filters, snapshot, pageParam, 50, principalId),
     getNextPageParam: (page) => page.nextCursor ?? undefined,
   });
   return { report, events };

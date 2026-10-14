@@ -32,13 +32,15 @@ async function request(folderId: string, body?: unknown): Promise<Access> {
 export function RedirectFolderAccess({
   folderId,
   onClose,
+  principalId,
 }: {
+  principalId?: string;
   folderId: string;
   onClose: () => void;
 }) {
   const queryClient = useQueryClient();
   const query = useQuery({
-    queryKey: ['redirect-folder-access', folderId],
+    queryKey: ['redirect-folder-access', folderId, principalId ?? 'admin'],
     queryFn: () => request(folderId),
   });
   const [draft, setDraft] = useState<Record<string, Permission | ''>>({});
@@ -57,7 +59,9 @@ export function RedirectFolderAccess({
     onSuccess: async () => {
       setDraft({});
       setDefaultPermission(null);
-      await queryClient.invalidateQueries({ queryKey: ['redirect-folder-access', folderId] });
+      await queryClient.invalidateQueries({
+        queryKey: ['redirect-folder-access', folderId, principalId ?? 'admin'],
+      });
       await queryClient.invalidateQueries({ queryKey: ['redirect-link-workspace'] });
     },
   });

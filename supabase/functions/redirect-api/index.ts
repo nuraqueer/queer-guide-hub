@@ -28,17 +28,18 @@ Deno.serve(async (req: Request) => {
   if(error || !data.user)return json({error:'Unauthorized'},401);
   user=data.user;
  }
- const sessionPrincipal=async(scope:string):Promise<{id:string|null;failure?:Response}>=>{
+ const sessionPrincipal=async(scope:string):Promise<{id:string|null;role?:string;label?:string;failure?:Response}>=>{
   if(!user||user.is_anonymous)return {id:null,failure:json({error:'A registered account is required'},403)};
   const role=await identityClient!.rpc('has_role_jwt',{required_role:'admin'});
   if(role.error)return {id:null,failure:json({error:'Authorization unavailable'},503)};
-  if(role.data)return {id:null};
+  if(role.data)return {id:null,role:'owner'};
   const membership=await db.rpc('redirect_session_principal',{p_user_id:user.id,p_scope:scope});
   if(membership.error)return {id:null,failure:rpcError(membership.error)};
   if(!membership.data||typeof membership.data.id!=='string'||!UUID.test(membership.data.id))return {id:null,failure:json({error:'Redirects workspace access is required'},403)};
-  return {id:membership.data.id};
+  return {id:membership.data.id,role:membership.data.role,label:membership.data.label};
  };
  try {
+  if(path==='/session'&&req.method==='GET'){if(tokenCredential)return json({error:'Account session required'},403);const principal=await sessionPrincipal('links:read');if(principal.failure)return principal.failure;return json({role:principal.role,label:principal.label??null});}
   const memberMatch=path.match(/^\/members(?:\/([a-f0-9-]{36}))?$/i);
   if(memberMatch){
    if(tokenCredential||!user||user.is_anonymous)return json({error:'Admin session required'},403);
@@ -92,6 +93,8 @@ Deno.serve(async (req: Request) => {
    let tokenId:string|null=null;
    if(tokenCredential){const {data,error}=await db.rpc('authenticate_redirect_api_token',{p_hash:await tokenDigest(credential),p_scope:scope});if(error)return json({error:'Credential verification unavailable'},503);if(!data)return json({error:'Required link scope is missing'},403);tokenId=data.id;}
    else{const principal=await sessionPrincipal(scope);if(principal.failure)return principal.failure;tokenId=principal.id;}
+   const variants=path.match(/^\/links\/([a-f0-9-]{36})\/variants$/i);
+   if(variants){if(req.method!=='GET')return json({error:'Method not supported'},405);if(!UUID.test(variants[1]))return json({error:'Invalid link ID'},400);const {data,error}=await db.rpc('redirect_scoped_variant_performance',{p_redirect_id:variants[1],p_token_id:tokenId});if(error)return rpcError(error);return json(data);}
    const policyMatch=path.match(/^\/links\/([a-f0-9-]{36})\/policy$/i);
    if(policyMatch){
     const linkId=policyMatch[1];if(!UUID.test(linkId))return json({error:'Invalid link ID'},400);

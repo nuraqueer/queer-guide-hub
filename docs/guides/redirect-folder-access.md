@@ -14,8 +14,16 @@ even with an owner override. Unfiled managed links are editable by members and
 readable by viewers. Ordinary authenticated accounts have no implicit access.
 
 The admin access editor, membership controls and API credential binding are
-implemented. A separate member workspace page, edit-access requests and owner
-notifications remain unfinished. Ordinary members cannot enter the admin console.
+implemented. Members use `/links-workspace`, outside the admin console. It offers
+paged/searchable accessible links, create/edit, prefill and shared templates,
+folders, tags/comments, bulk folder moves/archive/restore/confirmed deletion,
+CSV import and export of selected/loaded links, QR export, read-only or editable
+behavior settings, and scoped date-filtered analytics/live activity/CSV export.
+Folder owners can rename/delete folders and edit access; nonempty member-owned
+folders must have their links moved before deletion. Edit-access requests and
+owner notifications remain unfinished. Ordinary members cannot enter the admin
+console. UI query caches include the signed-in account ID; changing accounts
+remounts the workspace and never displays the previous account's cached links.
 
 ## Endpoints
 
@@ -23,6 +31,11 @@ All paths below are relative to `https://queer.guide/api/redirects`. Use a verif
 session bearer token, or an API credential where specified. Responses are private
 and must not be cached.
 
+- `GET /session`: registered account session only. Returns `role` (`owner`,
+  `member`, `viewer`) and label after verifying current membership. Not a bearer
+  credential discovery endpoint.
+- `GET /links/{id}/variants`: `links:read`, current folder and selected-ID
+  scope; returns private A/B performance rows. Missing/inaccessible links fail.
 - `GET /members?offset=0`: administrator session only; `{data,count}`, 100 rows
   per page ordered by ID. Continue until the returned count is reached.
 - `POST /members`: administrator session only; `{label,kind,role?,active?,userId?}`.
@@ -57,7 +70,8 @@ that still requires a scoped server key or the existing trusted native flow.
 Members may create folders (becoming owner), and owners may rename/delete them.
 Member deletion of a nonempty folder is rejected: move its links first. Only
 workspace administrators manage global tags/templates. Folder moves require edit
-access to both source and destination. Readable list rows include `canEdit`.
+access to both source and destination. Readable link rows include `canEdit`. Folder resource rows include `canEdit`
+and `canManage`; the server rechecks these permissions on each mutation.
 
 ACL reads/writes coordinate through a transaction advisory lock. Management
 writers acquire it before link/batch row locks. Private membership tables and

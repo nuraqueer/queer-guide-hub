@@ -19,7 +19,7 @@ BEGIN
   RAISE EXCEPTION 'Viewer wrote link';EXCEPTION WHEN insufficient_privilege THEN NULL;
  END;
  result:=public.redirect_workspace_resource('folders','list',p_token_id=>m);
- IF (result->>'count')::int<>1 THEN RAISE EXCEPTION 'Hidden folder disclosed';END IF;
+ IF (result->>'count')::int<>1 OR (result#>>'{data,0,canEdit}')::boolean OR (result#>>'{data,0,canManage}')::boolean THEN RAISE EXCEPTION 'Folder visibility or capabilities incorrect';END IF;
  BEGIN
   PERFORM public.redirect_workspace_resource('folders','get',hidden,p_token_id=>m);
   RAISE EXCEPTION 'Hidden detail disclosed';EXCEPTION WHEN no_data_found THEN NULL;
@@ -45,11 +45,21 @@ BEGIN
  result:=public.redirect_folder_access(own_folder,jsonb_build_object('defaultPermission','none','overrides',jsonb_build_array(jsonb_build_object('memberId',machine,'permission','view'))),m);
  IF public.redirect_folder_rank(machine,own_folder)<>1 THEN RAISE EXCEPTION 'Override not applied';END IF;
  INSERT INTO public.redirect_api_tokens(name,token_hash,prefix,scopes,member_id,created_by,expires_at) VALUES('Machine',repeat('a',64),'fixture',ARRAY['links:read','links:write','events:read','workspace:read','workspace:write','conversions:write'],machine,u,now()+interval '1 day') RETURNING id INTO token_id;
+ IF (public.redirect_folder_capabilities(f,token_id)->>'canEdit')::boolean IS NOT TRUE THEN RAISE EXCEPTION 'Editor token capability missing';END IF;
+ UPDATE public.redirect_api_tokens SET scopes=ARRAY['workspace:read'] WHERE id=token_id;
+ IF (public.redirect_folder_capabilities(f,token_id)->>'canEdit')::boolean OR (public.redirect_folder_capabilities(f,token_id)->>'canManage')::boolean THEN RAISE EXCEPTION 'Read-only token capability overclaimed';END IF;
+ UPDATE public.redirect_api_tokens SET scopes=ARRAY['links:read','links:write','events:read','workspace:read','workspace:write','conversions:write'] WHERE id=token_id;
  IF NOT(link_id=ANY(public.redirect_management_scope(token_id,'links:write'))) THEN RAISE EXCEPTION 'Bound credential lacked editor access';END IF;
+ result:=public.redirect_scoped_variant_performance(link_id,m);
+ IF jsonb_typeof(result)<>'array' THEN RAISE EXCEPTION 'Variant response not an array';END IF;
  click:=public.record_redirect_visit(link_id,'/go/acl-fixture',NULL,NULL,'fixture','CH','fixture',302,NULL,'/events','{}');
  result:=public.redirect_scoped_analytics('report',p_token_id=>token_id);
  IF (result#>>'{totals,clicks}')::int<>1 THEN RAISE EXCEPTION 'Accessible analytics missing';END IF;
  UPDATE public.redirect_folder_members SET permission='none' WHERE folder_id=f AND member_id=machine;
+ BEGIN
+  PERFORM public.redirect_scoped_variant_performance(link_id,token_id);
+  RAISE EXCEPTION 'Variant metrics disclosed after permission downgrade';EXCEPTION WHEN insufficient_privilege THEN NULL;
+ END;
  BEGIN
   PERFORM public.redirect_policy_resource(link_id,'get',p_token_id=>token_id);
   RAISE EXCEPTION 'Policy disclosed after permission downgrade';EXCEPTION WHEN insufficient_privilege THEN NULL;

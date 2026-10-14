@@ -554,6 +554,7 @@ export function isIndexable(pathname: string): boolean {
   if (CLIENT_REDIRECT_STUBS.has(clean)) return false;
 
   const noindex = [
+    /^\/links-workspace(\/|$)/,
     /^\/auth(\/|$)/,
     /^\/my-/,
     /^\/favorites(\/|$)/,

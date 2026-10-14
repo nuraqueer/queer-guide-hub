@@ -1,3 +1,4 @@
+import { useMemberRedirectResources } from '@/hooks/useMemberRedirectResources';
 import { useMemo, useState } from 'react';
 import {
   Dialog,
@@ -97,20 +98,39 @@ function download(events: AnalyticsEvent[]) {
   anchor.remove();
   setTimeout(() => URL.revokeObjectURL(object), 1000);
 }
-export function RedirectAnalyticsDialog({
-  links,
-  initialLink,
-  initialFolder,
-  initialTag,
-  onClose,
-}: {
+interface AnalyticsDialogProps {
   links: InventoryRedirect[];
   initialLink?: string;
   initialFolder?: string;
   initialTag?: string;
   onClose: () => void;
-}) {
+}
+export function RedirectAnalyticsDialog(props: AnalyticsDialogProps) {
   const workspace = useRedirectWorkspace();
+  return <AnalyticsDialogContent {...props} workspace={workspace} />;
+}
+export function MemberRedirectAnalyticsDialog(
+  props: AnalyticsDialogProps & { principalId: string },
+) {
+  const workspace = useMemberRedirectResources(props.principalId);
+  return <AnalyticsDialogContent {...props} workspace={workspace} />;
+}
+function AnalyticsDialogContent({
+  links,
+  initialLink,
+  initialFolder,
+  initialTag,
+  onClose,
+  workspace,
+  principalId,
+}: AnalyticsDialogProps & {
+  principalId?: string;
+  workspace: {
+    data?: { folders: { id: string; name: string }[]; tags: { id: string; name: string }[] };
+    isError: boolean;
+    error: Error | null;
+  };
+}) {
   const [range, setRange] = useState('30'),
     [start, setStart] = useState(() => day(new Date(Date.now() - 29 * 86400000))),
     [end, setEnd] = useState(() => day(new Date()));
@@ -130,7 +150,7 @@ export function RedirectAnalyticsDialog({
     [formError, setFormError] = useState(''),
     [exporting, setExporting] = useState(false),
     [exportError, setExportError] = useState('');
-  const { report, events } = useRedirectAnalytics(filters, live);
+  const { report, events } = useRedirectAnalytics(filters, live, principalId);
   const rows = events.data?.pages.flatMap((page) => page.data) ?? [];
   const managed = useMemo(
     () =>
@@ -161,7 +181,13 @@ export function RedirectAnalyticsDialog({
       const all: AnalyticsEvent[] = [];
       let cursor = null as { at: string; id: string } | null;
       do {
-        const page = await readAnalyticsPage(filters, report.data!.snapshot, cursor, 100);
+        const page = await readAnalyticsPage(
+          filters,
+          report.data!.snapshot,
+          cursor,
+          100,
+          principalId,
+        );
         all.push(...page.data);
         cursor = page.nextCursor;
       } while (cursor);
@@ -196,7 +222,9 @@ export function RedirectAnalyticsDialog({
             {filters.linkIds
               ? (managed.find((link) => link.manualId === filters.linkIds![0])?.source ??
                 'Selected links')
-              : 'All managed links'}
+              : principalId
+                ? 'All accessible links'
+                : 'All managed links'}
           </p>
           <Button
             variant="outline"
@@ -226,7 +254,9 @@ export function RedirectAnalyticsDialog({
                     set('linkIds', event.target.value ? [event.target.value] : undefined)
                   }
                 >
-                  <option value="">All managed links</option>
+                  <option value="">
+                    {principalId ? 'All accessible links' : 'All managed links'}
+                  </option>
                   {managed.map((link) => (
                     <option key={link.manualId} value={link.manualId!}>
                       {link.source}
@@ -435,7 +465,7 @@ export function RedirectAnalyticsDialog({
           </form>
         )}
         {workspace.isError && (
-          <p role="alert">Folder and tag options could not load. {workspace.error.message}</p>
+          <p role="alert">Folder and tag options could not load. {workspace.error?.message}</p>
         )}
         <div className="flex flex-wrap items-center justify-between gap-4">
           <label className="flex items-center gap-2 text-sm">

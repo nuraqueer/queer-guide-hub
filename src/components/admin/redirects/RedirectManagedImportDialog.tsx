@@ -23,7 +23,7 @@ export function RedirectManagedImportDialog({
   onPathImport,
 }: {
   onClose: () => void;
-  onPathImport: () => void;
+  onPathImport?: () => void;
 }) {
   const client = useQueryClient();
   const [text, setText] = useState(''),
@@ -61,6 +61,7 @@ export function RedirectManagedImportDialog({
         throw new Error('Import response was incomplete. Refresh the list before retrying.');
       setSuccess(review.length);
       await Promise.all([
+        client.invalidateQueries({ queryKey: ['redirect-member'] }),
         client.invalidateQueries({ queryKey: ['cms-content-list'] }),
         client.invalidateQueries({ queryKey: ['redirect-link-workspace'] }),
       ]);
@@ -174,9 +175,11 @@ export function RedirectManagedImportDialog({
             <Button variant="outline" onClick={template}>
               Download CSV template
             </Button>
-            <Button variant="ghost" onClick={onPathImport}>
-              Import path rules instead
-            </Button>
+            {onPathImport && (
+              <Button variant="ghost" onClick={onPathImport}>
+                Import path rules instead
+              </Button>
+            )}
             <Button disabled={!text.trim()} onClick={preview}>
               Review import
             </Button>
