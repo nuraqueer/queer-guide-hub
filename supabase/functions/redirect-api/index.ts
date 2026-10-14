@@ -1,3 +1,4 @@
+import {domainInput,checkRedirectDomainDns} from '../_shared/redirect-domains.ts';
 import {savedReportInput,reportShareInput,publicReportRequest} from '../_shared/redirect-reports.ts';
 import { policyPatchInput } from '../_shared/redirect-policy-api.ts';
 import { generateRedirectPreview } from '../_shared/redirect-preview-generation.ts';
@@ -42,6 +43,27 @@ Deno.serve(async (req: Request) => {
  };
  try {
   if(path==='/session'&&req.method==='GET'){if(tokenCredential)return json({error:'Account session required'},403);const principal=await sessionPrincipal('links:read');if(principal.failure)return principal.failure;return json({role:principal.role,label:principal.label??null});}
+  const domains=path.match(/^\/domains(?:\/([a-f0-9-]{36}))?(?:\/(verify|rotate))?$/i);
+  if(domains){
+   if(tokenCredential)return json({error:'Workspace owner account session required'},403);
+   const principal=await sessionPrincipal('workspace:write');if(principal.failure)return principal.failure;
+   if(principal.id!==null)return json({error:'Workspace owner access required'},403);
+   const [,id,endpoint]=domains;if(id&&!UUID.test(id)||endpoint&&!id)return json({error:'Invalid domain ID'},400);
+   let action:string,values:Record<string,unknown>={},limit=50,after:string|null=null;
+   if(endpoint==='verify'&&req.method==='POST'){
+    values=domainInput(await boundedJson(req,16384),'version');
+    const reserved=await db.rpc('redirect_domain_resource',{p_action:'reserve',p_actor:user!.id,p_id:id,p_values:values});if(reserved.error)return rpcError(reserved.error);
+    if(reserved.data.retryAfter)return new Response(JSON.stringify({error:'Please wait before checking DNS again'}),{status:429,headers:{...cors,'Content-Type':'application/json','Cache-Control':'no-store','Retry-After':String(reserved.data.retryAfter)}});
+    const domain=reserved.data.domain,outcome=await checkRedirectDomainDns(domain.verification);
+    const result=await db.rpc('redirect_domain_check_result',{p_actor:user!.id,p_id:id,p_version:domain.version,p_attempt:reserved.data.attempt,p_outcome:outcome});if(result.error)return rpcError(result.error);return json(result.data);
+   }
+   if(endpoint==='rotate'&&req.method==='POST'){action='rotate';values=domainInput(await boundedJson(req,16384),'version');}
+   else if(!endpoint&&req.method==='GET'){action=id?'get':'list';const q=new URL(req.url).searchParams;if([...q.keys()].some(key=>!['limit','cursor'].includes(key)))return json({error:'Invalid domain page'},400);limit=Number(q.get('limit')??50);after=q.get('cursor');if(!Number.isInteger(limit)||limit<1||limit>100||after&&!UUID.test(after))return json({error:'Invalid domain page'},400);}
+   else if(!id&&req.method==='POST'){action='create';values=domainInput(await boundedJson(req,16384),'create');}
+   else if(id&&!endpoint&&req.method==='PATCH'){action='patch';values=domainInput(await boundedJson(req,16384),'patch');}
+   else if(id&&!endpoint&&req.method==='DELETE'){action='delete';values=domainInput(await boundedJson(req,16384),'version');}else return json({error:'Method not supported'},405);
+   const result=await db.rpc('redirect_domain_resource',{p_action:action,p_actor:user!.id,p_id:id??null,p_values:values,p_limit:limit,p_after:after});if(result.error)return rpcError(result.error);return json(result.data,action==='create'?201:200);
+  }
   const reports=path.match(/^\/reports(?:\/([a-f0-9-]{36}))?(?:\/(run|shares)(?:\/([a-f0-9-]{36}))?)?$/i);
   if(reports){
    if(tokenCredential)return json({error:'Account session required'},403);

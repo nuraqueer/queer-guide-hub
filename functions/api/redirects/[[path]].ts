@@ -48,7 +48,7 @@ export const onRequest: PagesFunction<Env> = async ({ request, params, env }) =>
     const response = await fetch(upstream, {
       method: request.method,
       headers: forwarded,
-      body: ['POST', 'PUT', 'PATCH'].includes(request.method) ? request.body : undefined,
+      body: ['POST', 'PUT', 'PATCH', 'DELETE'].includes(request.method) ? request.body : undefined,
       redirect: 'manual',
       signal: AbortSignal.timeout(15000),
     });

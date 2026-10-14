@@ -8,7 +8,9 @@ const invoke = (method = 'POST') =>
     request: new Request('https://queer.guide/api/redirects/track/sale', {
       method,
       headers: { Authorization: 'Bearer server-fixture', 'Content-Type': 'application/json' },
-      ...(['POST', 'PUT', 'PATCH'].includes(method) ? { body: '{"eventId":"fixture"}' } : {}),
+      ...(['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)
+        ? { body: '{"eventId":"fixture"}' }
+        : {}),
     }),
     params: { path: ['track', 'sale'] },
     env: { SUPABASE_URL: 'https://fixture.supabase.co', SUPABASE_ANON_KEY: 'public-fixture' },
@@ -63,7 +65,7 @@ describe('branded Redirects API proxy', () => {
     expect(response.status).toBe(429);
     expect(response.headers.get('Retry-After')).toBe('600');
   });
-  it.each(['PUT', 'PATCH'])('forwards %s request bodies unchanged', async (method) => {
+  it.each(['PUT', 'PATCH', 'DELETE'])('forwards %s request bodies unchanged', async (method) => {
     const fetcher = vi.fn(async () => new Response('{}'));
     vi.stubGlobal('fetch', fetcher);
     expect((await invoke(method)).status).toBe(200);

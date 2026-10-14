@@ -19,8 +19,8 @@ exist. Existing local tools are a foundation, not proof of parity or deployment.
 | Bulk actions | Create/update/upsert/delete, folder/tag assignment, archive, import/export, QR export | Candidate for managed links: atomic create/update/upsert/deletion API and CSV review/import/export UI, archive/restore, folder/tag assignment and verified QR ZIP; production release pending |
 | Custom previews | Uploaded OG image (1200×630, ≤1.5 MB), title≤120, description≤240, video API, crawler unfurl | Candidate: editor, scoped upload/presentation APIs and crawler HTML; native browser/Storage release pending |
 | AI previews | Generate title/description from destination content using configured AI provider | Candidate: scoped draft generator with spend limits; live provider and browser verification pending |
-| Custom domains | Verify ownership/DNS, multiple domains, primary domain, redirects on branded hostname | Missing |
-| Domain defaults | Root/not-found redirects, default expiration URL, workspace/domain QR logos | Missing |
+| Custom domains | Verify ownership/DNS, multiple domains, primary domain, redirects on branded hostname | Partial: private registry, exact DNS verification, owner UI and stored defaults implemented locally; provider/TLS, hostname namespaces/routing, primary, builder/SDK/inventory and release pending |
+| Domain defaults | Root/not-found redirects, default expiration URL, workspace/domain QR logos | Partial: root/not-found/expiry settings stored and validated; live resolver behavior and QR/logo precedence pending |
 | Deep links | iOS/Android association files, app page routes, fallback and deferred attribution | Missing |
 | Geo targeting | Country-specific destinations and default fallback | Candidate: country rules and fallback tested |
 | Device targeting | iOS/Android destinations, evaluated before geo | Candidate: iOS/Android priority tested |
@@ -701,3 +701,34 @@ primary-domain selection and defaults in resolver, CRUD/bulk/SDK, builder/QR and
 all-source inventory. DNS controls remain explicit; do not alter existing DNS or
 provision paid external resources during local verification. Preserve all phases
 in the parity ledger until native provider and controlled-domain evidence exists.
+
+
+## Checkpoint: private custom-domain registry and ownership checks
+
+The owner workspace now registers multiple domains and presents exact TXT
+instructions. The production verifier uses bounded Cloudflare DNS-over-HTTPS
+reads, exact name/type/token matching, cooldown and owner/global budgets before
+network calls, and single-use/versioned/short-lived result application. Fresh
+proof expires after 24 hours; definite loss clears it and transient errors cannot
+extend it. Domain settings retain root/not-found/expiry defaults and disabled
+state, reject private/looping destinations and prevent orphaning provider records
+on removal. Setup panels stay open when a successful action changes versions.
+The branded proxy now forwards guarded DELETE bodies.
+
+This is the first prerequisite stage, not working custom-domain routing. The UI
+explicitly separates ownership from TLS and serving; it does not emit active
+branded URLs or primary choices. The full phase sequence above remains required.
+Additional domain archive/transfer/subpath, authorized DNS auto-configuration and
+forwardable setup workflows discovered in the current Dub documentation stay in
+scope. See [Custom domain setup](../guides/redirect-custom-domains.md).
+
+Evidence: migrated PostgreSQL verifies owner-only access/private grants, unique
+challenges, defaults, cooldown, version/nonce/observation races, rotation, expiry,
+transient failures, loss/disabled states and provider cleanup guard. Actual HTTP
+through the edge handler into that database verifies the DNS flow with an isolated
+provider response, including a cooldown before a second DNS call, stale edits,
+lost proof, deletion and API-key denial. Five SDKs/examples still pass. Native
+`domain-registry-*` screenshots show pending/verified/rotated states, saved defaults
+and mobile wrapping at 390 pixels with no horizontal overflow. Browser tab and
+viewport were cleaned up. All DNS results/registrations in browser proof are
+labelled fixtures; no production DNS, provider or registry state was changed.

@@ -12,6 +12,7 @@ let handler;
 let policyRuntime;
 const pieces = [
   '_shared/redirect-api.ts',
+  '_shared/redirect-domains.ts',
   '_shared/redirect-presentation.ts',
   '_shared/link-policy.ts',
   '_shared/redirect-policy-api.ts',
@@ -28,7 +29,7 @@ const pieces = [
 const code = ts.transpileModule(pieces.join('\n'), {
   compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext },
 }).outputText;
-const jsonArgs = new Set(['p_event', 'p_filters', 'p_values', 'p_operations','p_patch','p_password_hash']);
+const jsonArgs = new Set(['p_dates', 'p_event', 'p_filters', 'p_values', 'p_operations','p_patch','p_password_hash']);
 const artwork = await sharp({
   create: { width: 1200, height: 630, channels: 3, background: 'white' },
 })
@@ -85,7 +86,9 @@ const reportActor='00000000-0000-4000-8000-000000000099';
 await db.query('INSERT INTO auth.users(id) VALUES($1)',[reportActor]);
 await db.query("INSERT INTO public.user_roles(user_id,role) VALUES($1,'admin')",[reportActor]);
 const identity={auth:{getUser:async(value)=>({data:{user:value==='fixture-account-session'?{id:reportActor,created_at:'2026-10-01T00:00:00Z',is_anonymous:false}:null},error:null})},rpc:async()=>({data:true,error:null})};
-policyRuntime=new Function('Deno', 'createClient', 'crypto', code+'\nreturn {verifyLinkPassword};')(
+let dnsCalls=0,dnsMissing=false;
+const fixtureDnsFetch=async (input)=>{const url=new URL(String(input));if(url.origin!=='https://cloudflare-dns.com'||url.pathname!=='/dns-query')throw new Error('Unexpected external fixture request');dnsCalls++;const hostname=url.searchParams.get('name').replace(/^_qg-redirect\./,'');const row=(await db.query('SELECT verification_token FROM public.redirect_domains WHERE hostname=$1',[hostname])).rows[0];return new Response(JSON.stringify({Status:0,Question:[{name:url.searchParams.get('name'),type:16}],Answer:row&&!dnsMissing?[{name:url.searchParams.get('name'),type:16,data:'\"qg-redirect='+row.verification_token+'\"'}]:[]}),{headers:{'Content-Type':'application/dns-json'}});};
+policyRuntime=new Function('Deno', 'createClient', 'crypto', 'fetch', code+'\nreturn {verifyLinkPassword};')(
   {
     env: { get: (key) => key==='SUPABASE_SERVICE_ROLE_KEY'?'fixture-service':key==='SUPABASE_ANON_KEY'?'fixture-anon':'fixture' },
     serve: (fn) => {
@@ -94,6 +97,7 @@ policyRuntime=new Function('Deno', 'createClient', 'crypto', code+'\nreturn {ver
   },
   (_url,key) => key==='fixture-service'?service:identity,
   webcrypto,
+  fixtureDnsFetch,
 );
 const token = 'qg_redirect_' + 'a'.repeat(64);
 const digest = Buffer.from(
@@ -142,7 +146,7 @@ const server = createServer(async (req, res) => {
         {
           method: req.method,
           headers: req.headers,
-          ...(['POST', 'PATCH', 'PUT'].includes(req.method) ? { body: Buffer.concat(chunks) } : {}),
+          ...(['POST', 'PATCH', 'PUT', 'DELETE'].includes(req.method) ? { body: Buffer.concat(chunks) } : {}),
         },
       ),
     );
@@ -234,6 +238,23 @@ try {
     const response=await fetch(base+path,{method,headers:{Authorization:'Bearer '+credential,...(body?{'Content-Type':'application/json'}:{})},...(body?{body:JSON.stringify(body)}:{})});
     const data=await response.json();if(response.status!==expected)throw new Error('Report HTTP '+path+' expected '+expected+' received '+response.status+': '+JSON.stringify(data));return data;
   }
+  const domain=await reportRequest('/domains','POST',{hostname:'LINKS.Example.com.'},undefined,201);
+  if(domain.hostname!=='links.example.com'||domain.ownershipVerified||domain.providerConnected)throw new Error('Domain creation claimed readiness');
+  await reportRequest('/domains','GET',undefined,token,403);
+  await reportRequest('/domains','POST',{hostname:'https://example.com'},undefined,400);
+  const verifiedDomain=await reportRequest('/domains/'+domain.id+'/verify','POST',{version:domain.version});
+  if(!verifiedDomain.ownershipVerified||verifiedDomain.providerConnected||dnsCalls!==1)throw new Error('Real domain API verification failed or claimed TLS');
+  await reportRequest('/domains/'+domain.id+'/verify','POST',{version:verifiedDomain.version},undefined,429);
+  if(dnsCalls!==1)throw new Error('DNS provider called before cooldown enforcement');
+  await reportRequest('/domains/'+domain.id,'PATCH',{version:domain.version,rootUrl:'https://example.org/'},undefined,409);
+  const defaults=await reportRequest('/domains/'+domain.id,'PATCH',{version:verifiedDomain.version,rootUrl:'https://example.org/home'});
+  await db.query("UPDATE public.redirect_domains SET next_check_at=now()-interval '1 second' WHERE id=$1",[domain.id]);
+  dnsMissing=true;
+  const lost=await reportRequest('/domains/'+domain.id+'/verify','POST',{version:defaults.version});
+  if(lost.ownershipState!=='lost'||lost.ownershipVerified)throw new Error('Missing DNS proof preserved ownership');
+  await reportRequest('/domains/'+domain.id,'DELETE',{version:lost.version});
+  await reportRequest('/domains/'+domain.id,'GET',undefined,undefined,404);
+  console.log('Domain registry: real HTTP handler → migrated SQL → isolated DNS response, fresh ownership, cooldown before DNS, lost proof, versioned defaults/deletion and key rejection passed; no DNS/provider writes.');
   const saved=await reportRequest('/reports','POST',{name:'Native HTTP report',filters:{linkIds:[seed.rows[0].id]}},undefined,201);
   const plain=await reportRequest('/reports/'+saved.id+'/shares','POST',{title:'Clicks only',reportVersion:saved.version,expiresAt:null},undefined,201);
   const published=await reportRequest('/public-report','GET',undefined,'qg_report_'+plain.id);
