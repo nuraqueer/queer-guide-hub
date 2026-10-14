@@ -1312,7 +1312,9 @@ async function processPostalQueueWithLease(
     return await processPostalQueue(supabase, batchSize)
   } finally {
     const { error: releaseError } = await supabase.rpc('release_entity_location_lease', { p_claimed_at: claimedAt })
-    if (releaseError) throw releaseError
+    // The lease has a 150-second expiry if the release fails. Keep the batch's
+    // actual result and let the next scheduled run observe the busy lease.
+    if (releaseError) console.error('postal geocoder lease release failed', releaseError)
   }
 }
 
