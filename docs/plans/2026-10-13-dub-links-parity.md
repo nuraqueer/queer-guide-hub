@@ -19,7 +19,7 @@ exist. Existing local tools are a foundation, not proof of parity or deployment.
 | Bulk actions | Create/update/upsert/delete, folder/tag assignment, archive, import/export, QR export | Candidate for managed links: atomic create/update/upsert/deletion API and CSV review/import/export UI, archive/restore, folder/tag assignment and verified QR ZIP; production release pending |
 | Custom previews | Uploaded OG image (1200×630, ≤1.5 MB), title≤120, description≤240, video API, crawler unfurl | Candidate: editor, scoped upload/presentation APIs and crawler HTML; native browser/Storage release pending |
 | AI previews | Generate title/description from destination content using configured AI provider | Candidate: scoped draft generator with spend limits; live provider and browser verification pending |
-| Custom domains | Verify ownership/DNS, multiple domains, primary domain, redirects on branded hostname | Partial: private registry, exact DNS verification, owner UI and stored defaults implemented locally; provider/TLS, hostname namespaces/routing, primary, builder/SDK/inventory and release pending |
+| Custom domains | Verify ownership/DNS, multiple domains, primary domain, redirects on branded hostname | Partial: private registry, exact DNS verification, owner UI and stored defaults implemented locally; durable Cloudflare lifecycle/TLS checks implemented locally; real provider proof, hostname namespaces/routing, primary, builder/SDK/inventory and release pending |
 | Domain defaults | Root/not-found redirects, default expiration URL, workspace/domain QR logos | Partial: root/not-found/expiry settings stored and validated; live resolver behavior and QR/logo precedence pending |
 | Deep links | iOS/Android association files, app page routes, fallback and deferred attribution | Missing |
 | Geo targeting | Country-specific destinations and default fallback | Candidate: country rules and fallback tested |
@@ -742,7 +742,8 @@ GET/DELETE can retry; uncertain POST outcomes enter owner review instead of bein
 posted again. A late create receipt records the provider object even if the
 request was cancelled meanwhile, then queues cleanup. Lease/intent guards prevent
 stale status results from activating anything. An explicit reviewed adoption can
-reconcile an exact provider candidate after fresh TXT proof; do not depend on
+reconcile an exact provider candidate after fresh TXT proof for connection (or solely
+for cleanup while connection stays disabled after ownership loss); do not depend on
 Cloudflare Custom Metadata, which is not available to every account.
 
 Connect requires fresh proof, enabled domain and current owner permission. A
@@ -756,3 +757,40 @@ internal/admin authorized, configured with dedicated least-privilege provider
 secrets, and remains idle when configuration is absent. No provider/DNS writes
 are performed in local validation. Public hostname routing/namespaces and actual
 controlled-domain deployment remain the following required stage.
+
+
+## Checkpoint: durable Cloudflare hostname/TLS lifecycle
+
+Dedicated provider configuration now enables reviewed connection, status refresh,
+disconnection, existing-object reconciliation and guarded absence confirmation.
+The API queues work; an internal/admin worker consumes private leased jobs. Exact
+preflight, recorded single-use creation intent and late receipt tracking prevent
+blind POST retries and cancellation orphans. A timed-out create enters review.
+Cleanup rechecks the exact stored hostname/zone/ID and handles confirmed absence;
+unknown creations block registration deletion. Candidate adoption is explicit;
+cleanup-only adoption cannot enable readiness. An aged uncertain intent with a
+fresh empty lookup can be cleared only after explicit owner absence attestation.
+Configuration binding can change only after full disconnection.
+
+Provider activation and certificate status are distinct. Readiness requires fresh
+active statuses plus current ownership/enabled/owner/request state, and is closed
+immediately by disconnect, role loss or proof invalidation. Healthy polling,
+backoff/Retry-After, attempt caps and owner-visible validation/error states are
+implemented. Missing config leaves the worker idle. The minute schedule uses the
+existing project-local internal invoke mechanism, but no actual schedule/provider
+execution or live configuration is claimed here. Public Worker routing, DNS target
+and controlled-domain checks, provider validation restart, domain namespaces,
+primary selection and all integration/release requirements remain open.
+
+Evidence: migrated PostgreSQL proves intent/lease/operation guards, late receipt
+cleanup, uncertainty/review/absence, fresh TLS conditions, configuration binding,
+private grants and registry deletion guard. Seventeen focused UI/adapter/real-auth-
+worker tests pass. Actual HTTP → edge handler → migrated queue → actual adapter →
+isolated Cloudflare API proves one POST, pending vs active TLS, polling and queued
+cleanup; all five SDKs/examples retain their tests. Build, functions types, targeted
+lint/formatting and migration validation pass; app types remain 704 inherited
+errors with none new. Native `domain-provider-*` desktop/mobile screenshots show
+review, queued/pending/active certificate states and disconnection. At 390 pixels
+client and scroll widths are both 390. Temporary browser tab/viewport were cleaned
+up. Provider/DNS state in native tests is explicitly simulated and all production
+requests blocked. No production Cloudflare, DNS, registry or deployment writes.

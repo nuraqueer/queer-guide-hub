@@ -661,3 +661,7 @@ verify_jwt = false
 # Scheduled notification consumer validates internal secret or an admin session.
 [functions.redirect-access-notifications]
 verify_jwt = false
+
+# Dedicated hostname lifecycle consumer; validates internal secret or admin session.
+[functions.redirect-domain-provisioner]
+verify_jwt = false

@@ -1,3 +1,4 @@
+import {domainProviderConfig,domainProviderInput} from '../_shared/redirect-domain-provider.ts';
 import {domainInput,checkRedirectDomainDns} from '../_shared/redirect-domains.ts';
 import {savedReportInput,reportShareInput,publicReportRequest} from '../_shared/redirect-reports.ts';
 import { policyPatchInput } from '../_shared/redirect-policy-api.ts';
@@ -43,12 +44,19 @@ Deno.serve(async (req: Request) => {
  };
  try {
   if(path==='/session'&&req.method==='GET'){if(tokenCredential)return json({error:'Account session required'},403);const principal=await sessionPrincipal('links:read');if(principal.failure)return principal.failure;return json({role:principal.role,label:principal.label??null});}
-  const domains=path.match(/^\/domains(?:\/([a-f0-9-]{36}))?(?:\/(verify|rotate))?$/i);
+  const domains=path.match(/^\/domains(?:\/([a-f0-9-]{36}))?(?:\/(verify|rotate|provider)(?:\/(connect|refresh|disconnect|adopt|confirm-absence))?)?$/i);
   if(domains){
    if(tokenCredential)return json({error:'Workspace owner account session required'},403);
    const principal=await sessionPrincipal('workspace:write');if(principal.failure)return principal.failure;
    if(principal.id!==null)return json({error:'Workspace owner access required'},403);
-   const [,id,endpoint]=domains;if(id&&!UUID.test(id)||endpoint&&!id)return json({error:'Invalid domain ID'},400);
+   const [,id,endpoint,providerAction]=domains;if(id&&!UUID.test(id)||endpoint&&!id||providerAction&&endpoint!=='provider')return json({error:'Invalid domain ID'},400);
+   const providerConfig=domainProviderConfig(Deno.env.get('REDIRECT_CF_ZONE_ID')??'',Deno.env.get('REDIRECT_CF_API_TOKEN')??'',Deno.env.get('REDIRECT_CNAME_TARGET')??'');
+   if(endpoint==='provider'){
+    if(req.method!=='POST'||!providerAction)return json({error:'Method not supported'},405);
+    if(!providerConfig)return json({error:'Hostname provider is not configured'},503);
+    const values=domainProviderInput(await boundedJson(req,16384),providerAction);
+    const result=await db.rpc('redirect_domain_provider_action',{p_actor:user!.id,p_id:id,p_version:values.version,p_action:providerAction.replace('-','_'),p_zone:providerConfig.zoneId,p_target:providerConfig.cnameTarget,p_candidate:values.candidateId??null});if(result.error)return rpcError(result.error);return json(result.data);
+   }
    let action:string,values:Record<string,unknown>={},limit=50,after:string|null=null;
    if(endpoint==='verify'&&req.method==='POST'){
     values=domainInput(await boundedJson(req,16384),'version');
@@ -62,7 +70,7 @@ Deno.serve(async (req: Request) => {
    else if(!id&&req.method==='POST'){action='create';values=domainInput(await boundedJson(req,16384),'create');}
    else if(id&&!endpoint&&req.method==='PATCH'){action='patch';values=domainInput(await boundedJson(req,16384),'patch');}
    else if(id&&!endpoint&&req.method==='DELETE'){action='delete';values=domainInput(await boundedJson(req,16384),'version');}else return json({error:'Method not supported'},405);
-   const result=await db.rpc('redirect_domain_resource',{p_action:action,p_actor:user!.id,p_id:id??null,p_values:values,p_limit:limit,p_after:after});if(result.error)return rpcError(result.error);return json(result.data,action==='create'?201:200);
+   const result=await db.rpc('redirect_domain_resource',{p_action:action,p_actor:user!.id,p_id:id??null,p_values:values,p_limit:limit,p_after:after});if(result.error)return rpcError(result.error);return json(action==='list'?{...result.data,providerSetup:{configured:providerConfig!==null,cnameTarget:providerConfig?.cnameTarget??null}}:result.data,action==='create'?201:200);
   }
   const reports=path.match(/^\/reports(?:\/([a-f0-9-]{36}))?(?:\/(run|shares)(?:\/([a-f0-9-]{36}))?)?$/i);
   if(reports){

@@ -1,3 +1,4 @@
+import { RedirectDomainProvider, type DomainProviderStatus } from './RedirectDomainProvider';
 import { useState } from 'react';
 import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/hooks/useAuth';
@@ -15,6 +16,7 @@ interface Domain {
   verifiedUntil: string | null;
   lastCheck: string | null;
   providerConnected: boolean;
+  provider?: DomainProviderStatus;
   rootUrl: string | null;
   notFoundUrl: string | null;
   expiredUrl: string | null;
@@ -34,9 +36,12 @@ function DomainRegistry({ accountId }: { accountId: string }) {
     queryKey: key,
     initialPageParam: null as string | null,
     queryFn: ({ pageParam }) =>
-      memberRedirectApi<{ data: Domain[]; count: number; nextCursor: string | null }>(
-        '/domains?limit=50' + (pageParam ? '&cursor=' + pageParam : ''),
-      ),
+      memberRedirectApi<{
+        data: Domain[];
+        count: number;
+        nextCursor: string | null;
+        providerSetup?: { configured: boolean; cnameTarget: string | null };
+      }>('/domains?limit=50' + (pageParam ? '&cursor=' + pageParam : '')),
     getNextPageParam: (page) => page.nextCursor ?? undefined,
     retry: false,
     refetchOnWindowFocus: false,
@@ -64,7 +69,8 @@ function DomainRegistry({ accountId }: { accountId: string }) {
       <h3 className="text-lg font-semibold">Custom domains</h3>
       <p className="text-sm">
         Register a domain you control and verify its TXT record. Ownership, TLS and branded routing
-        are separate requirements. Provider connection and branded routing are not active yet.
+        are separate requirements. Provider connections run in the background; public branded
+        routing is not available yet.
       </p>
       <form
         className="space-y-2"
@@ -120,6 +126,7 @@ function DomainRegistry({ accountId }: { accountId: string }) {
               key={domain.id + domain.version}
               domain={domain}
               pending={mutation.isPending}
+              setup={query.data?.pages[0].providerSetup}
               expanded={expanded.has(domain.id)}
               onExpand={(open) =>
                 setExpanded((current) => {
@@ -162,8 +169,10 @@ function DomainRow({
   act,
   expanded,
   onExpand,
+  setup,
 }: {
   domain: Domain;
+  setup?: { configured: boolean; cnameTarget: string | null };
   pending: boolean;
   expanded: boolean;
   onExpand: (open: boolean) => void;
@@ -255,6 +264,16 @@ function DomainRow({
             Replace ownership challenge
           </Button>
         </div>
+        <RedirectDomainProvider
+          provider={domain.provider}
+          setup={setup}
+          hostname={domain.hostname}
+          verified={domain.ownershipVerified}
+          disabled={domain.disabled}
+          connected={domain.providerConnected}
+          pending={pending}
+          act={act}
+        />
         <form
           className="space-y-4"
           onSubmit={(event) => {

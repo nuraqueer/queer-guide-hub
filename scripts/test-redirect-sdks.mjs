@@ -13,6 +13,7 @@ let policyRuntime;
 const pieces = [
   '_shared/redirect-api.ts',
   '_shared/redirect-domains.ts',
+  '_shared/redirect-domain-provider.ts',
   '_shared/redirect-presentation.ts',
   '_shared/link-policy.ts',
   '_shared/redirect-policy-api.ts',
@@ -29,7 +30,7 @@ const pieces = [
 const code = ts.transpileModule(pieces.join('\n'), {
   compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext },
 }).outputText;
-const jsonArgs = new Set(['p_dates', 'p_event', 'p_filters', 'p_values', 'p_operations','p_patch','p_password_hash']);
+const jsonArgs = new Set(['p_result', 'p_dates', 'p_event', 'p_filters', 'p_values', 'p_operations','p_patch','p_password_hash']);
 const artwork = await sharp({
   create: { width: 1200, height: 630, channels: 3, background: 'white' },
 })
@@ -87,10 +88,22 @@ await db.query('INSERT INTO auth.users(id) VALUES($1)',[reportActor]);
 await db.query("INSERT INTO public.user_roles(user_id,role) VALUES($1,'admin')",[reportActor]);
 const identity={auth:{getUser:async(value)=>({data:{user:value==='fixture-account-session'?{id:reportActor,created_at:'2026-10-01T00:00:00Z',is_anonymous:false}:null},error:null})},rpc:async()=>({data:true,error:null})};
 let dnsCalls=0,dnsMissing=false;
-const fixtureDnsFetch=async (input)=>{const url=new URL(String(input));if(url.origin!=='https://cloudflare-dns.com'||url.pathname!=='/dns-query')throw new Error('Unexpected external fixture request');dnsCalls++;const hostname=url.searchParams.get('name').replace(/^_qg-redirect\./,'');const row=(await db.query('SELECT verification_token FROM public.redirect_domains WHERE hostname=$1',[hostname])).rows[0];return new Response(JSON.stringify({Status:0,Question:[{name:url.searchParams.get('name'),type:16}],Answer:row&&!dnsMissing?[{name:url.searchParams.get('name'),type:16,data:'\"qg-redirect='+row.verification_token+'\"'}]:[]}),{headers:{'Content-Type':'application/dns-json'}});};
-policyRuntime=new Function('Deno', 'createClient', 'crypto', 'fetch', code+'\nreturn {verifyLinkPassword};')(
+const providerConfig={zoneId:'a'.repeat(32),token:'fixture-provider-token',cnameTarget:'links.queer.guide'};
+const providerObjects=new Map();let providerCreates=0,providerDeletes=0;
+const fixtureDnsFetch=async (input,options)=>{const url=new URL(String(input));
+if(url.origin==='https://api.cloudflare.com'){
+ if(new Headers(options?.headers).get('Authorization')!=='Bearer '+providerConfig.token||!url.pathname.startsWith('/client/v4/zones/'+providerConfig.zoneId+'/custom_hostnames'))throw new Error('Invalid fixture provider credentials/zone');
+ const method=options?.method??'GET',tail=url.pathname.split('/custom_hostnames')[1];
+ if(method==='POST'&&!tail){providerCreates++;const body=JSON.parse(options.body),item={id:webcrypto.randomUUID(),hostname:body.hostname,status:'active',ssl:{status:'pending_validation',validation_records:[{txt_name:'_acme-challenge.'+body.hostname,txt_value:'fixture-validation'}]}};providerObjects.set(item.id,item);return Response.json({success:true,result:item});}
+ if(method==='GET'&&!tail)return Response.json({success:true,result:[...providerObjects.values()].filter(item=>item.hostname===url.searchParams.get('hostname'))});
+ const item=providerObjects.get(tail.slice(1));if(!item)return Response.json({success:false},{status:404});
+ if(method==='DELETE'){providerDeletes++;providerObjects.delete(item.id);return Response.json({success:true,result:{id:item.id}});}
+ return Response.json({success:true,result:item});
+}
+if(url.origin!=='https://cloudflare-dns.com'||url.pathname!=='/dns-query')throw new Error('Unexpected external fixture request');dnsCalls++;const hostname=url.searchParams.get('name').replace(/^_qg-redirect\./,'');const row=(await db.query('SELECT verification_token FROM public.redirect_domains WHERE hostname=$1',[hostname])).rows[0];return new Response(JSON.stringify({Status:0,Question:[{name:url.searchParams.get('name'),type:16}],Answer:row&&!dnsMissing?[{name:url.searchParams.get('name'),type:16,data:'\"qg-redirect='+row.verification_token+'\"'}]:[]}),{headers:{'Content-Type':'application/dns-json'}});};
+policyRuntime=new Function('Deno', 'createClient', 'crypto', 'fetch', code+'\nreturn {verifyLinkPassword,dispatchRedirectDomainJobs};')(
   {
-    env: { get: (key) => key==='SUPABASE_SERVICE_ROLE_KEY'?'fixture-service':key==='SUPABASE_ANON_KEY'?'fixture-anon':'fixture' },
+    env: { get: (key) => key==='SUPABASE_SERVICE_ROLE_KEY'?'fixture-service':key==='SUPABASE_ANON_KEY'?'fixture-anon':key==='REDIRECT_CF_ZONE_ID'?providerConfig.zoneId:key==='REDIRECT_CF_API_TOKEN'?providerConfig.token:key==='REDIRECT_CNAME_TARGET'?providerConfig.cnameTarget:'fixture' },
     serve: (fn) => {
       handler = fn;
     },
@@ -247,7 +260,23 @@ try {
   await reportRequest('/domains/'+domain.id+'/verify','POST',{version:verifiedDomain.version},undefined,429);
   if(dnsCalls!==1)throw new Error('DNS provider called before cooldown enforcement');
   await reportRequest('/domains/'+domain.id,'PATCH',{version:domain.version,rootUrl:'https://example.org/'},undefined,409);
-  const defaults=await reportRequest('/domains/'+domain.id,'PATCH',{version:verifiedDomain.version,rootUrl:'https://example.org/home'});
+  let defaults=await reportRequest('/domains/'+domain.id,'PATCH',{version:verifiedDomain.version,rootUrl:'https://example.org/home'});
+  const connected=await reportRequest('/domains/'+domain.id+'/provider/connect','POST',{version:defaults.version});
+  if(providerCreates!==0||connected.provider.state!=='queued')throw new Error('Provider request performed inline external writes');
+  await policyRuntime.dispatchRedirectDomainJobs(service,providerConfig,fixtureDnsFetch);
+  let providerView=await reportRequest('/domains/'+domain.id);
+  if(providerCreates!==1||providerView.provider.hostnameStatus!=='active'||providerView.provider.certificateReady||providerView.provider.certificateStatus!=='pending_validation')throw new Error('Hostname and TLS states were conflated');
+  for(const item of providerObjects.values())item.ssl.status='active';
+  await reportRequest('/domains/'+domain.id+'/provider/refresh','POST',{version:providerView.version});
+  await policyRuntime.dispatchRedirectDomainJobs(service,providerConfig,fixtureDnsFetch);
+  providerView=await reportRequest('/domains/'+domain.id);
+  if(!providerView.provider.certificateReady||providerCreates!==1)throw new Error('TLS polling recreated the hostname or lost readiness');
+  const disconnect=await reportRequest('/domains/'+domain.id+'/provider/disconnect','POST',{version:providerView.version});
+  if(disconnect.provider.certificateReady||providerObjects.size!==1)throw new Error('Disconnect did not close readiness before cleanup');
+  await policyRuntime.dispatchRedirectDomainJobs(service,providerConfig,fixtureDnsFetch);
+  defaults=await reportRequest('/domains/'+domain.id);
+  if(defaults.providerConnected||providerObjects.size||providerDeletes!==1||defaults.provider.state!=='disconnected')throw new Error('Provider cleanup failed or orphaned an object');
+  console.log('Hostname lifecycle: actual owner HTTP → migrated queue → actual provider adapter → isolated Cloudflare API; pending TLS vs active, one POST, refresh and asynchronous disconnect/delete passed.');
   await db.query("UPDATE public.redirect_domains SET next_check_at=now()-interval '1 second' WHERE id=$1",[domain.id]);
   dnsMissing=true;
   const lost=await reportRequest('/domains/'+domain.id+'/verify','POST',{version:defaults.version});
