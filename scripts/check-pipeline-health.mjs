@@ -5475,6 +5475,96 @@ const DISOWNED_PROSE_CEILING = 380
   }
 }
 
+// ---------------------------------------------------------------------------
+// §  The admin review queue serves its corpus-wide counts from a cache
+//    (2026-10-14, 99991791999590)
+// ---------------------------------------------------------------------------
+// get_admin_review_queue and get_admin_review_summary both used to aggregate a
+// 41-view union over ~327k rows on every /admin page load. Measured in
+// pg_stat_statements before the fix: 546 calls at mean 4856ms and max 7995ms,
+// plus 141 at mean 5059ms / max 7851ms -- a max pinned against PostgREST's 8s
+// statement_timeout, i.e. 500s, which is what reds `Critical paths` via
+// e2e/admin-inbox-renders.spec.ts. The counts now come from
+// admin_review_queue_counts, refreshed by a */2 cron.
+//
+// The thing that can rot is the REFRESH, not the read: a stale cache serves
+// confidently wrong totals and nothing on the page says so.
+{
+  const res = await fetch(`${BASE}/rest/v1/rpc/admin_review_counts_signals`, {
+    method: 'POST',
+    headers: { ...headers, 'Content-Type': 'application/json' },
+    body: '{}',
+  })
+  if (res.status === 404) {
+    // The nightly run checks out `main` and calls the LIVE backend, so a window
+    // where main carries this script and prod has not applied the migration is
+    // not a defect.
+    console.warn('⚠ admin_review_counts_signals() not deployed yet (migration 99991791999590?) — skipping')
+  } else if (!res.ok) {
+    console.error(`✗ admin_review_counts_signals() returned HTTP ${res.status} — measured nothing`)
+    FAILED = true
+  } else {
+    const sig = await res.json()
+    if (sig?.probe_ok !== true) {
+      console.error('✗ admin_review_counts_signals() probe_ok is not true — measured nothing')
+      FAILED = true
+    } else {
+      // DENOMINATORS FIRST. Zero missing sources over an empty cache, a cache
+      // nobody refreshes, and a healthy one all return the same reassuring 0.
+      const rows = Number(sig.rows ?? 0)
+      const active = Number(sig.sources_active ?? 0)
+      console.log(`  review counts cache: ${rows} rows / ${active} active sources`)
+      if (active <= 0) {
+        console.error('✗ admin_review_sources reports 0 active sources — the cache invariant below is vacuous')
+        FAILED = true
+      } else if (rows <= 0) {
+        console.error(
+          '✗ the review counts cache is EMPTY. Every corpus-wide total on /admin reads 0, ' +
+            'which on a ~327k backlog is a confident lie rather than a visible outage. ' +
+            'Run select public.refresh_admin_review_queue_counts();',
+        )
+        FAILED = true
+      } else if (Number(sig.sources_missing ?? 0) !== 0) {
+        console.error(
+          `✗ ${sig.sources_missing} active review sources have no cached counts row, so their ` +
+            'badges read 0. The refresh drives FROM admin_review_sources with a LEFT JOIN ' +
+            'precisely so a zero-item source still gets a row (20 of 41 are empty) — a ' +
+            'non-zero here means that join was narrowed to an inner one.',
+        )
+        FAILED = true
+      } else if (Number(sig.refresh_cron_active ?? 0) !== 1) {
+        console.error(
+          '✗ the admin_review_counts_refresh cron is absent or inactive, so the cache is frozen. ' +
+            'An action->>\'type\'=\'rpc\' row carries no command the reconciler can reschedule ' +
+            'from, so re-enabling the registry row alone leaves it on-but-unscheduled.',
+        )
+        FAILED = true
+      } else {
+        // STALENESS IS THE DEFECT THAT LOOKS LIKE HEALTH, so it gates on AGE and
+        // not on a level. The cron is */2; one missed tick is noise, an hour is a
+        // dead refresher serving numbers nobody can tell are old.
+        const age = Number(sig.oldest_age_seconds ?? 0)
+        if (age > 3600) {
+          console.error(
+            `✗ the oldest cached review count is ${Math.round(age / 60)} minutes old against a */2 ` +
+              'cron. The page is serving stale totals and showing no sign of it; check ' +
+              'cron.job_run_details for admin_review_counts_refresh.',
+          )
+          FAILED = true
+        } else {
+          console.log(`✓ review queue counts cached for all ${active} sources, oldest ${age}s old`)
+          if (age > 600) {
+            console.warn(
+              `⚠ oldest cached review count is ${Math.round(age / 60)} min old — more than a few ` +
+                'missed */2 ticks, but inside the gate.',
+            )
+          }
+        }
+      }
+    }
+  }
+}
+
 if (FAILED) {
   console.error('')
   console.error('✗ Pipeline health check FAILED — every section above ran; each ✗ line is a separate problem')
