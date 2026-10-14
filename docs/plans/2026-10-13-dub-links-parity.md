@@ -2235,13 +2235,23 @@ A read-only authenticated check of the actual live admin page shows **20,354
 redirects** and pagination over 408 pages, confirming the original empty-list
 issue is resolved. Original PR4378 remains merged; later candidates are local.
 
-Publication dependency discovered during the all-source audit: baseline
-`redirects_public_read` still allows enabled rows to anon/authenticated, including
-SHORT destinations. The resolver's password barrier does not by itself protect
-that Data API path. Before publishing the protected-link candidates, replace
-public raw-table access with minimal public PATH resolution and authoritative
-owner/member scope checks. This is a repository-policy finding, not a claim about
-uninspected production policy state. Remaining all-source/account/invite access
-work is next, followed by domain lifecycle/DNS automation, native/deferred app
-configuration and controlled infrastructure/provider/SDK release. The full goal
-remains active; no checkpoint is marked complete.
+### Current-owner credential audit design (2026-10-14)
+
+Correction to the preceding baseline-only finding: ordered migration
+99991791920009_redirect_link_policies.sql already drops redirects_public_read
+and revokes public execution of resolve_short_redirect. Preserve this established
+password-aware routing and add an effective-schema regression check; no redundant
+public routing redesign is required. Production policy state remains uninspected.
+
+The confirmed gap is unbound owner API keys: management_scope returns their IDs
+without checking the creator's current admin role, and authentication validates
+only hash, expiry and declared scopes. Recheck current creator role in the shared
+scope function and invoke scope validation during authentication. Bound member
+keys retain their existing active member, folder and selected-ID checks. Acquire
+the common ACL lock before credential/role rows and role mutation statements;
+role loss then serializes with in-flight authorized database transactions. Scope
+checks remain service-only. Keep trusted internal NULL principals unchanged;
+owner-session actor propagation and all-source discovery are a separate pending
+audit. Test role removal/restoration, no nonexistent owner, current member scope,
+unchanged selected-ID limitations and effective public table/RPC denial. Update
+older fixtures to create real owners instead of impossible random creator IDs.
