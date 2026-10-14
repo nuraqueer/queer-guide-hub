@@ -11,10 +11,17 @@ const mocks = vi.hoisted(() => ({
     refetch: vi.fn(),
   },
   mutate: vi.fn(),
+  sources: vi.fn(),
 }));
 vi.mock('@/hooks/useBusinessSpine', () => ({
   useOrgLinkedEntities: () => mocks.linked,
   useLinkOrgEntity: () => ({ mutateAsync: mocks.mutate, isPending: false }),
+}));
+vi.mock('@/components/admin/NewsSourcesManager', () => ({
+  NewsSourcesManager: (props: Record<string, unknown>) => {
+    mocks.sources(props);
+    return <div>Publisher source workspace</div>;
+  },
 }));
 vi.mock('@/components/admin/affiliate/MerchantsManager', () => ({
   MerchantsManager: () => <div>Merchant settings</div>,
@@ -82,6 +89,23 @@ describe('Organisation business relationships', () => {
     fireEvent.click(screen.getAllByText('Link existing…')[0]);
     fireEvent.click(screen.getByText('Link selected record'));
     expect(refresh).toHaveBeenCalledOnce();
+  });
+  it('shares publisher feeds with the source workspace and disables writes until identity is saved', () => {
+    mount({ id: 'org1', name: 'Publisher One', roles: ['publisher'], _editor_is_dirty: true });
+    expect(mocks.sources).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        organizationId: 'org1',
+        organizationName: 'Publisher One',
+        disabled: true,
+      }),
+    );
+  });
+  it('preserves existing feed visibility for Organisations missing the Publisher role', () => {
+    mount({ id: 'org1', roles: ['venue'] });
+    expect(screen.getByText(/Add the Publisher role/)).toBeVisible();
+    expect(mocks.sources).toHaveBeenLastCalledWith(
+      expect.objectContaining({ organizationId: 'org1', disabled: true }),
+    );
   });
   it('shows failed reads and allows retry', () => {
     mocks.linked.error = new Error('offline');

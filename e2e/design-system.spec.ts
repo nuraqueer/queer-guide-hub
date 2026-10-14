@@ -246,17 +246,16 @@ test.describe('design system: panel rank', () => {
 });
 
 test.describe('design system: dialog', () => {
-  // SIGNED OUT ON PURPOSE, because the skip below is otherwise unconditional on
-  // CI: `playwright.config.ts` gives the chromium project an admin `storageState`
-  // whenever E2E_ADMIN_* are set, which is every CI run, and an authenticated
-  // /trips renders no "Sign in" trigger at all. An empty storageState overrides
-  // the project's, so the one auth state that can reach a dialog is the one used.
-  //
-  // That is read off the config and the component, not measured here — what is
-  // measured is that this test PASSES signed-out against a local preview build
-  // (position 8 of 24, 1.5s), so the dialog is genuinely reachable in this state.
-  // The skip stays for a run authenticated some other way; see the wait below for
-  // why it is a wait and not a count.
+  // Forced ANONYMOUS, and that is the whole reason this test ever ran at all.
+  // playwright.config.ts attaches `storageState` whenever E2E_ADMIN_* is set,
+  // and e2e-pr.yml sets both — so in CI the run was signed in, `/trips` showed
+  // no "Sign in" button, and the two `if (count > 0)` guards below meant the
+  // test passed having opened no dialog and measured nothing. It reported green
+  // through the entire window in which every dialog on the site rendered at
+  // --radius-container instead of --radius-panel (unlayered :where() fallback
+  // in index.css beating `rounded-panel`, fixed 2026-10-13). Pinning an empty
+  // storageState makes both environments measure the same thing, which is what
+  // lets the assertions below be unconditional.
   test.use({ storageState: { cookies: [], origins: [] } });
 
   test('dialog uses --radius-panel', async ({ page }) => {
@@ -267,43 +266,33 @@ test.describe('design system: dialog', () => {
     // all four timed out against production.
     await page.waitForSelector('#root *', { state: 'attached', timeout: 15_000 });
     await dismissCookieBanner(page);
+    await page.waitForTimeout(300);
+    // Positive controls, not politeness: each of these used to be an `if` that
+    // skipped the assertion, so "no dialog" and "correct dialog" were the same
+    // green. Assert the dialog opened BEFORE trusting anything measured on it.
     const signInBtn = page.getByRole('button', { name: /sign in/i }).first();
-    // WAIT for the trigger, do not COUNT it once. A `count()` taken after a fixed
-    // 300ms sleep cannot tell "not mounted yet" from "not there", and it fails
-    // toward the SILENT PASS — /trips lazy-mounts, so a slow chunk reads as an
-    // authenticated run and the dialog contract goes unasserted with a reassuring
-    // skip reason. Waiting resolves that ambiguity in the safe direction: a real
-    // authenticated run still skips after the window, a slow one now asserts.
-    //
-    // Scope honestly: this is a robustness fix, not a repair of an observed
-    // failure. It is NOT backed by a reproduced local skip — a first draft of this
-    // comment claimed one, from a grep that juxtaposed a progress line with the
-    // run summary; the test that actually skips in a full local run is
-    // "interactive cards lift", on its own unrelated condition.
-    const reachable = await signInBtn
-      .waitFor({ state: 'visible', timeout: 10_000 })
-      .then(() => true)
-      .catch(() => false);
-    // Only a genuinely authenticated run has no trigger after that window. SKIP
-    // WITH A REASON rather than falling through to a silent pass: the report then
-    // says the dialog was not reached, and the panel-rank test above still covers
-    // the contract.
-    test.skip(
-      !reachable,
-      'no sign-in trigger on /trips after 10s (authenticated run) — panel rank is covered ' +
-        'by the "design system: panel rank" test, which needs no dialog',
-    );
+    await expect(signInBtn).toBeVisible();
     await signInBtn.click();
-    // No `if` from here down. A trigger that opens no dialog is a failure, not a
-    // reason to assert nothing.
+
     const dialog = page.getByRole('dialog').first();
-    await expect(dialog).toBeVisible({ timeout: 10_000 });
-    // Measured on the dialog itself. The old code looked for a descendant
-    // matching `[class*="DialogContent"]` or `[class*="dialog"]`, which never
-    // matches a production build (the class list is Tailwind utilities) and
-    // could only ever pick up an unrelated node if it did.
-    const radius = await dialog.evaluate((el) => getComputedStyle(el).borderRadius);
-    expect(radius).toBe(await resolveRadius(page, '--radius-panel'));
+    await expect(dialog).toBeVisible();
+
+    const measured = await dialog.evaluate((el) => {
+      // `getByRole('dialog')` IS the styled panel (Radix puts role=dialog on
+      // DialogContent). The old `querySelector('[class*="dialog"]')` child hunt
+      // matched nothing — verified on prod — and only ever fell through to the
+      // element itself, so it was noise hiding the fact that the panel was the
+      // thing being read all along.
+      const style = getComputedStyle(el);
+      return { radius: style.borderRadius, className: String(el.className) };
+    });
+
+    // The panel must declare the shape utility, not merely happen to compute
+    // the right value: with the class present and a fallback rule overriding
+    // it, the px was wrong; with the class absent and the fallback supplying
+    // 26px by luck, the px would be right and the contract still broken.
+    expect(measured.className).toContain('rounded-panel');
+    expect(measured.radius).toBe(await resolveRadius(page, '--radius-panel'));
   });
 });
 

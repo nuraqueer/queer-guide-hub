@@ -436,6 +436,22 @@ export default function CountryDetail() {
     t('country.census.departures', '{{n}} departures', { n: events.length }),
   ];
   const countryName = editorial?.name ?? country.name;
+  const tripSeedCity =
+    cities.find(
+      (city) =>
+        !!country.capital &&
+        city.name.localeCompare(country.capital, undefined, { sensitivity: 'base' }) === 0,
+    ) ?? cities[0];
+  const tripSeedGeo = tripSeedCity
+    ? {
+        cityId: tripSeedCity.id,
+        cityName: tripSeedCity.name,
+        countryId: country.id,
+        countryName,
+        countryCode: country.code,
+        timezone: tripSeedCity.timezone,
+      }
+    : null;
 
   const eyebrowParts = [t('country.eyebrow', 'Country')];
   if (country.continents?.name) eyebrowParts.push(country.continents.name);
@@ -450,7 +466,7 @@ export default function CountryDetail() {
       action={
         <>
           <PlanTripFromHereButton
-            initialGeo={null}
+            initialGeo={tripSeedGeo}
             label={
               hasAnyCriminalizationSignal(country.lgbti_criminalization)
                 ? t('country.planTripHighRisk', {
