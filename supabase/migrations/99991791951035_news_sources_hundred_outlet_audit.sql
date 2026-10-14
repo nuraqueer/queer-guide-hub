@@ -1,15 +1,39 @@
--- Add the 45 verified-live LGBTQ+ news feeds from a 100-outlet audit.
+-- Add the 47 verified-live LGBTQ+ news feeds from a 105-outlet audit.
 --
--- WHAT WAS ASKED: check a list of 100 LGBTQ+ news outlets against news_sources
--- and add the missing ones. The answer is 19 already present, 45 added here,
--- 36 deliberately NOT added — every one of the 36 with a measured reason, listed
--- at the bottom of this header so a later pass does not re-propose them blind.
+-- WHAT WAS ASKED: check two lists of LGBTQ+ news outlets against news_sources
+-- and add the missing ones. 105 distinct outlets across both (the second list's
+-- 31 rows overlapped the first by 25). The answer is 19 already present, 47 added
+-- here, 39 deliberately NOT added — every one of the 39 with a measured reason,
+-- listed at the bottom of this header so a later pass does not re-propose blind.
 --
--- NOTHING HERE IS A GUESSED URL. Every one of the 45 was fetched and its body
+-- The second list contributed 5 outlets the first did not, and its yield is the
+-- argument for diffing before re-auditing: 2 added (NBC Out, HuffPost Queer
+-- Voices), 3 refused. A sixth row, Gay Times at gaytimes.co.uk, is not a new
+-- outlet — it is the one already on the platform at gaytimes.com, which is the
+-- working domain (verified: 15 items, same day). gaytimes.co.uk TLS-handshake
+-- times out from both test egresses, so the list's link is the stale one.
+--
+-- NOTHING HERE IS A GUESSED URL. Every one of the 47 was fetched and its body
 -- parsed: it must be RSS or Atom, carry at least one <item>/<entry>, and carry a
--- date inside the last 365 days. 42 of the 45 were then re-fetched a second time
+-- date inside the last 365 days. 43 of the 47 were then re-fetched a second time
 -- through pg_net, i.e. from Supabase's OWN egress rather than from a laptop, and
 -- the per-row result is recorded beside each row below.
+--
+-- NBC Out took three tries and a control is what settled it: the feed id is
+-- `nbcout`, not the `nbc-out` its URL slug suggests, and `out` and
+-- `nbc-out-news` 404 as well. A control on `nbcnews/public/news` returning 25
+-- items proved the host and the pattern were fine while my first guess was wrong
+-- by a hyphen — without it a 404 reads as "NBC has no Out feed". Verified: 200
+-- text/xml, channel "NBC News NBC OUT", 25 items.
+--
+-- HuffPost Queer Voices is the one row verified from ONE channel only, and it is
+-- in for the same reason the three below it are. www.huffpost.com and the
+-- chaski.huffpost.com endpoint it redirects to BOTH answer 406 to this container
+-- and to pg_net, and a control on HuffPost's own front-page feed 406s identically
+-- — so that is the outlet refusing datacenter traffic, not a wrong path. A third
+-- egress reached it: 200 text/xml, channel "Queer Voices", newest item
+-- 2026-10-12. Its item count came back as 1 and is NOT corroborated by a second
+-- channel, so treat that number as unverified.
 --
 -- THE CONTAINER THIS WAS AUDITED FROM IS ITSELF WIDELY BLOCKED, which is why the
 -- second channel was necessary rather than tidy: 19 of the 100 homepages answered
@@ -57,7 +81,7 @@
 -- ASC NULLS FIRST, so these 45 sort to the FRONT and drain over the first few
 -- hours rather than waiting behind the 265 podcast rows.
 --
--- WHY THE OTHER 36 ARE NOT HERE (measured, not assumed):
+-- WHY THE OTHER 39 ARE NOT HERE (measured, not assumed):
 --   blocked, feed unverifiable from either egress (10): ebar.com (403; /feed
 --     serves the homepage, no feed path found), edgemedianetwork.com (403 here,
 --     /feed+/rss+/feed.xml all 404 from pg_net), qsaltlake.com (declared /feed
@@ -81,6 +105,16 @@
 --     news into the pipeline.
 --   paywalled (1): lotl.com RSS is subscriber-only (/private-rss-feed-instructions)
 --   empty feed (1): queermajority.com -- see trap (1)
+--   From the second list, three more:
+--   no feed (2): sgn.org (Seattle Gay News) and baywindows.com (Bay Windows)
+--     both answer 200 text/html with ZERO items on every path probed -- a
+--     catch-all serving the site's own page for any URL, so /feed "works" and is
+--     not a feed; baywindows.com/rss additionally 500s.
+--   out of scope (1): usatoday.com -- rssfeeds.usatoday.com/usatoday-lgbtq 302s
+--     to the USA Today HOMEPAGE (200 text/html), i.e. that feed id does not
+--     exist. Same trap as ebar.com/feed and qsaltlake.com/feed in (3) above. A
+--     control on usatoday-NewsTopStories 402s from both egresses, so no USA
+--     Today feed verified either way; there is no LGBTQ+ section feed to add.
 --
 -- Already present, so untouched (19): The Advocate, PinkNews, Out Magazine,
 -- LGBTQ Nation, Queerty, them., Xtra Magazine, Washington Blade, Gay Times,
@@ -137,7 +171,13 @@ from (values
   ('Homosensual', 'homosensual', 'https://www.homosensual.com/feed/', 'https://www.homosensual.com', 'news'),
   ('Shangay', 'shangay', 'https://shangay.com/actualidad/feed/', 'https://shangay.com', 'culture'),
   ('SentidoG', 'sentidog', 'https://sentidog.com/feed/', 'https://sentidog.com', 'news'),
-  ('GayIceland', 'gayiceland', 'https://gayiceland.is/feed/', 'https://gayiceland.is', 'news')
+  ('GayIceland', 'gayiceland', 'https://gayiceland.is/feed/', 'https://gayiceland.is', 'news'),
+  -- Mainstream LGBTQ+ SECTION verticals. In scope because the platform already
+  -- carries three and they are productive: Guardian LGBT Rights 9,900 articles,
+  -- Guardian Transgender 6,550, BuzzFeed LGBT 6,270. A whole-outlet feed is still
+  -- out (see standard.co.uk / uol.com.br below); a section feed is not.
+  ('NBC Out', 'nbc-out', 'https://feeds.nbcnews.com/nbcnews/public/nbcout', 'https://www.nbcnews.com/nbc-out', 'news'),
+  ('HuffPost Queer Voices', 'huffpost-queer-voices', 'https://www.huffpost.com/section/queer-voices/feed', 'https://www.huffpost.com/voices/queer-voices', 'news')
 ) as v(name, slug, url, website_url, category)
 where not exists (select 1 from public.news_sources s where s.url = v.url)
   and not exists (select 1 from public.news_sources s where s.slug = v.slug);
@@ -160,7 +200,8 @@ declare
     'the-seattle-lesbian', 'q-voice-news', 'the-pride-la', 'outword-magazine', 'the-gayly',
     'fugues', 'qx-magazine', 'thebuzz-magazine', 'in-magazine', 'pinkplaymags',
     'dna-magazine', 'qnews', 'gay-express', 'queer-de', 'l-mag',
-    'cromosomax', 'homosensual', 'shangay', 'sentidog', 'gayiceland'
+    'cromosomax', 'homosensual', 'shangay', 'sentidog', 'gayiceland',
+    'nbc-out', 'huffpost-queer-voices'
   ];
   v_bad int;
   v_cnt int;
@@ -179,8 +220,8 @@ begin
      and s.fetch_frequency = 60
      and s.url is not null
      and s.website_url is not null;
-  if v_cnt <> 45 then
-    raise exception 'P1 failed: expected 45 audited news sources in the canonical shape, found %', v_cnt;
+  if v_cnt <> 47 then
+    raise exception 'P1 failed: expected 47 audited news sources in the canonical shape, found %', v_cnt;
   end if;
 
   -- P2: no duplicate rows. The table has no unique index on url, so the guard in
@@ -214,6 +255,6 @@ begin
     raise exception 'P4 failed: expected the 3 egress-blocked-but-verified sources active, found %', v_cnt;
   end if;
 
-  raise notice 'news source audit: 45 audited sources present and correctly shaped';
+  raise notice 'news source audit: 47 audited sources present and correctly shaped';
 end
 $verify$;

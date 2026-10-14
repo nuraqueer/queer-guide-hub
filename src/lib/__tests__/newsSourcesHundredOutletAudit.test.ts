@@ -3,13 +3,13 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 /**
- * Guards 99991791921673_news_sources_hundred_outlet_audit.sql, which adds the 45
- * verified-live feeds from a 100-outlet audit of the LGBTQ+ news landscape.
+ * Guards 99991791951035_news_sources_hundred_outlet_audit.sql, which adds the 47
+ * verified-live feeds from a 105-outlet audit of the LGBTQ+ news landscape.
  *
  * Two things here are load-bearing and easy to get wrong.
  *
  * (1) EVERY ASSERTION RUNS OVER COMMENT-STRIPPED SQL. The migration's header
- *     names each of the 36 outlets it REFUSES to add, with the measured reason —
+ *     names each of the 39 outlets it REFUSES to add, with the measured reason —
  *     towleroad.com, standard.co.uk, afterellen.com and the rest. So an
  *     unstripped `not.toContain('towleroad.com')` fails against a correct file,
  *     and the mirror-image form passes while the statement is gone. The
@@ -21,7 +21,7 @@ import path from 'node:path';
  *     false alarm costs one PR, which is the right price.
  */
 
-const MIGRATION = '99991791921673_news_sources_hundred_outlet_audit.sql';
+const MIGRATION = '99991791951035_news_sources_hundred_outlet_audit.sql';
 
 const raw = fs.readFileSync(path.join(process.cwd(), 'supabase/migrations', MIGRATION), 'utf8');
 
@@ -90,6 +90,8 @@ const EXPECTED_FEEDS = [
   'https://shangay.com/actualidad/feed/',
   'https://sentidog.com/feed/',
   'https://gayiceland.is/feed/',
+  'https://feeds.nbcnews.com/nbcnews/public/nbcout',
+  'https://www.huffpost.com/section/queer-voices/feed',
 ];
 
 /**
@@ -107,6 +109,9 @@ const REFUSED_DOMAINS = [
   'lotl.com',
   'hornet.com',
   'queermajority.com',
+  'usatoday.com',
+  'sgn.org',
+  'baywindows.com',
   'siegessaeule.de',
   'schwulissimo.de',
   'sfgn.com',
@@ -136,12 +141,12 @@ const REFUSED_DOMAINS = [
 ];
 
 describe('news source 100-outlet audit migration', () => {
-  it('carries exactly the 45 audited feeds and no others', () => {
+  it('carries exactly the 47 audited feeds and no others', () => {
     // Positive control first: an empty slice would satisfy every toContain below
     // by vacuum, and would satisfy the refusal assertions too.
     expect(insertBlock.length).toBeGreaterThan(2000);
-    expect(EXPECTED_FEEDS).toHaveLength(45);
-    expect(new Set(EXPECTED_FEEDS).size).toBe(45);
+    expect(EXPECTED_FEEDS).toHaveLength(47);
+    expect(new Set(EXPECTED_FEEDS).size).toBe(47);
 
     for (const feed of EXPECTED_FEEDS) {
       expect(insertBlock).toContain(`'${feed}'`);
@@ -150,10 +155,10 @@ describe('news source 100-outlet audit migration', () => {
     // The row count is pinned, so adding a 46th row without updating this list
     // fails rather than riding along unreviewed.
     const valueRows = insertBlock.match(/^\s*\('[^\n]*\),?$/gm) ?? [];
-    expect(valueRows).toHaveLength(45);
+    expect(valueRows).toHaveLength(47);
   });
 
-  it('refuses the 36 measured exclusions', () => {
+  it('refuses the 39 measured exclusions', () => {
     // Each refused domain must be absent from the INSERT. The header names them
     // all, which is exactly why this runs on stripped SQL.
     for (const domain of REFUSED_DOMAINS) {
@@ -197,7 +202,7 @@ describe('news source 100-outlet audit migration', () => {
     const raises = verifyBlock.match(/raise exception/g) ?? [];
     expect(raises.length).toBe(4);
 
-    expect(verifyBlock).toMatch(/if v_cnt <> 45 then\s*raise exception 'P1 failed/);
+    expect(verifyBlock).toMatch(/if v_cnt <> 47 then\s*raise exception 'P1 failed/);
     expect(verifyBlock).toMatch(/if v_bad <> 0 then\s*raise exception 'P2 failed/);
     expect(verifyBlock).toMatch(/if v_bad <> 0 then\s*raise exception 'P3 failed/);
     expect(verifyBlock).toMatch(/if v_cnt <> 3 then\s*raise exception 'P4 failed/);
@@ -220,14 +225,14 @@ describe('news source 100-outlet audit migration', () => {
     expect(verifyBlock).toContain("'los-angeles-blade','lavender-magazine','q-voice-news'");
   });
 
-  it('expects all 45 slugs in the postcondition array', () => {
+  it('expects all 47 slugs in the postcondition array', () => {
     const arrayBlock = verifyBlock.slice(
       verifyBlock.indexOf('v_expected text[] := array['),
       verifyBlock.indexOf('v_bad int;'),
     );
     expect(arrayBlock.length).toBeGreaterThan(500);
     const slugs = arrayBlock.match(/'[a-z0-9-]+'/g) ?? [];
-    expect(slugs).toHaveLength(45);
-    expect(new Set(slugs).size).toBe(45);
+    expect(slugs).toHaveLength(47);
+    expect(new Set(slugs).size).toBe(47);
   });
 });
