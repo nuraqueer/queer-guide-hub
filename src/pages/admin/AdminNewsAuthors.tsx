@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Link } from 'react-router';
+import { authorArticlesPath } from '@/lib/adminAuthorArticles';
 import { toast } from 'sonner';
 import { AdminPageHeader } from '@/components/admin/AdminPageHeader';
 import { AdminSimpleTable } from '@/components/admin/primitives/AdminSimpleTable';
@@ -16,7 +17,6 @@ import {
 import {
   AUTHOR_PAGE_SIZE,
   useNewsAuthorsAdmin,
-  useNewsAuthorArticles,
   useChangeNewsAuthor,
   type NewsAuthorRow,
 } from '@/hooks/useNewsAuthorsAdmin';
@@ -58,17 +58,13 @@ function QueryError({ retry }: { retry: () => void }) {
 export default function AdminNewsAuthors() {
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(0);
-  const [selected, setSelected] = useState<string | null>(null);
-  const [articlePage, setArticlePage] = useState(0);
   const [editing, setEditing] = useState<{ row: NewsAuthorRow; merge: boolean } | null>(null);
   const [target, setTarget] = useState('');
   const [failure, setFailure] = useState('');
   const authors = useNewsAuthorsAdmin(search, page);
-  const articles = useNewsAuthorArticles(selected, articlePage);
   const change = useChangeNewsAuthor();
   const suggestions = useNewsAuthorsAdmin(target, 0, editing?.merge === true);
   const rows = authors.data ?? [];
-  const articleRows = articles.data ?? [];
   const beginChange = (row: NewsAuthorRow, merge: boolean) => {
     setEditing({ row, merge });
     setTarget(merge ? '' : row.author);
@@ -87,7 +83,6 @@ export default function AdminNewsAuthors() {
       });
       toast.success(`${count} articles updated`);
       setEditing(null);
-      setSelected(null);
       setPage(0);
     } catch (error) {
       setFailure(
@@ -152,7 +147,13 @@ export default function AdminNewsAuthors() {
                 header: 'Articles',
                 align: 'right',
                 render: (row) => (
-                  <span className="tabular-nums">{row.article_count.toLocaleString()}</span>
+                  <Link
+                    className="tabular-nums underline underline-offset-4"
+                    aria-label={`${row.article_count} articles by ${row.author}`}
+                    to={authorArticlesPath(row.author)}
+                  >
+                    {row.article_count.toLocaleString()}
+                  </Link>
                 ),
               },
               {
@@ -160,16 +161,13 @@ export default function AdminNewsAuthors() {
                 header: 'Actions',
                 render: (row) => (
                   <div className="flex flex-wrap gap-1">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      aria-label={`Articles by ${row.author}`}
-                      onClick={() => {
-                        setSelected(row.author);
-                        setArticlePage(0);
-                      }}
-                    >
-                      Articles
+                    <Button variant="ghost" size="sm" asChild>
+                      <Link
+                        aria-label={`Articles by ${row.author}`}
+                        to={authorArticlesPath(row.author)}
+                      >
+                        Articles
+                      </Link>
                     </Button>
                     <Button
                       variant="ghost"
@@ -199,59 +197,6 @@ export default function AdminNewsAuthors() {
             onChange={setPage}
           />
         </>
-      )}
-      {selected && (
-        <section aria-label={`Articles by ${selected}`} className="space-y-4 border-t pt-6">
-          <div className="flex items-center justify-between gap-4">
-            <h2 className="text-title font-sans font-bold break-words">Articles by {selected}</h2>
-            <Button variant="ghost" onClick={() => setSelected(null)}>
-              Close articles
-            </Button>
-          </div>
-          {articles.isError ? (
-            <QueryError
-              retry={() => {
-                void articles.refetch();
-              }}
-            />
-          ) : (
-            <>
-              <AdminSimpleTable
-                caption={`Articles by ${selected}`}
-                emptyNoun="articles"
-                isLoading={articles.isLoading}
-                rows={articleRows.slice(0, AUTHOR_PAGE_SIZE)}
-                rowKey={(row) => row.id}
-                columns={[
-                  {
-                    key: 'title',
-                    header: 'Article',
-                    render: (row) => (
-                      <Link
-                        className="underline underline-offset-4 break-words"
-                        to={`/admin/content/news_articles?edit=${encodeURIComponent(row.id)}`}
-                      >
-                        {row.title}
-                      </Link>
-                    ),
-                  },
-                  {
-                    key: 'publisher',
-                    header: 'Medium',
-                    render: (row) => row.publisher_name || '—',
-                  },
-                  { key: 'status', header: 'Quality', render: (row) => row.quality_status || '—' },
-                ]}
-              />
-              <Pager
-                page={articlePage}
-                more={articleRows.length > AUTHOR_PAGE_SIZE}
-                busy={articles.isFetching}
-                onChange={setArticlePage}
-              />
-            </>
-          )}
-        </section>
       )}
       <Dialog
         open={editing !== null}

@@ -10,7 +10,7 @@ import { chooseLinkTarget, deviceFromAgent, policyErrors, validPublicTarget, ver
 const responseHeaders = {"Cache-Control":"no-cache, no-store","X-Robots-Tag":"noindex","Referrer-Policy":"no-referrer"};
 const page = redirectPasswordPage;
 function mergeQuery(target: string, mode: string, incoming: URLSearchParams, overrides: Record<string,string> | null, defaults: Record<string,string> | null) {
-  const parsed=new URL(target,"https://queer.guide");
+  const parsed=target.trim().startsWith("/") ? new URL(target,"https://queer.guide") : new URL(target);
   if (mode !== "DROP") {
     if (mode === "OVERRIDE") for (const [key,value] of Object.entries(overrides ?? {})) parsed.searchParams.set(key,value);
     for (const [key,value] of incoming) if (!parsed.searchParams.has(key)) parsed.searchParams.set(key,value);
@@ -65,7 +65,7 @@ Deno.serve(async (req: Request) => {
     }
     const fallback=async(target:string|null|undefined) => {
       if(!target || !validPublicTarget(target))return null;
-      const parsed=new URL(target,"https://queer.guide");
+      const parsed=target.trim().startsWith("/") ? new URL(target,"https://queer.guide") : new URL(target);
       const {data:managed,error}=await db.from("redirect_domains").select("id").eq("hostname",parsed.hostname).maybeSingle();
       if(error || managed?.id || ["queer.guide","www.queer.guide"].includes(parsed.hostname)&&parsed.pathname.startsWith("/go/"))return null;
       return new Response(null,{status:302,headers:{...responseHeaders,Location:parsed.href}});

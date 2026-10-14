@@ -1,28 +1,33 @@
-/**
- * @vitest-environment jsdom
- */
-import { describe, it, expect, vi } from 'vitest';
-import { render } from '@testing-library/react';
-
-vi.mock('sonner', () => ({ toast: Object.assign(vi.fn(), { success: vi.fn(), error: vi.fn() }) }));
-vi.mock('@/integrations/supabase/client', () => ({
-  supabase: {
-    functions: { invoke: vi.fn().mockResolvedValue({ data: null, error: null }) },
-    from: () => ({ select: () => ({ order: () => Promise.resolve({ data: [], error: null }) }) }),
-  },
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { render, screen } from '@testing-library/react';
+const roles = vi.hoisted(() => ({ isAdmin: true, isModerator: false, loading: false }));
+vi.mock('@/hooks/useAdminRoles', () => ({ useAdminRoles: () => roles }));
+vi.mock('@/components/admin/news-sources/NewsSourcesWorkspace', () => ({
+  NewsSourcesWorkspace: ({ canManagePublishers }: { canManagePublishers: boolean }) => (
+    <div>Source workspace {canManagePublishers ? 'publisher tools' : 'feed controls'}</div>
+  ),
 }));
-vi.mock('@/hooks/usePageFetchers', () => ({
-  insertInto: vi.fn().mockResolvedValue({ id: '1' }),
-  updateRow: vi.fn().mockResolvedValue({}),
-  deleteRow: vi.fn().mockResolvedValue({}),
-  useNewsSources: vi.fn().mockReturnValue({ data: [], isLoading: false, refetch: vi.fn() }),
-}));
-
 import { NewsSourcesManager } from '../NewsSourcesManager';
-
-describe('NewsSourcesManager', () => {
-  it('renders without crashing', () => {
-    const { container } = render(<NewsSourcesManager />);
-    expect(container).toBeTruthy();
+beforeEach(() => {
+  roles.isAdmin = true;
+  roles.isModerator = false;
+  roles.loading = false;
+});
+describe('Shared NewsSourcesManager entry point', () => {
+  it('opens the shared workspace for administrators', () => {
+    render(<NewsSourcesManager />);
+    expect(screen.getByText(/Source workspace/)).toBeVisible();
+  });
+  it('keeps moderator feed controls while restricting publisher tools', () => {
+    roles.isAdmin = false;
+    roles.isModerator = true;
+    render(<NewsSourcesManager />);
+    expect(screen.getByText('Source workspace feed controls')).toBeVisible();
+  });
+  it('hides privileged publisher management from other pipeline users', () => {
+    roles.isAdmin = false;
+    render(<NewsSourcesManager />);
+    expect(screen.getByText(/Staff access is required/)).toBeVisible();
+    expect(screen.queryByText(/Source workspace/)).toBeNull();
   });
 });

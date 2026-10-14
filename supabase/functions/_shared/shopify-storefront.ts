@@ -79,22 +79,40 @@ export async function storefrontPage(
         variables: { n: STOREFRONT_PER_PAGE, c: cursor, country },
       }),
     }
-    let res = await fetch(url, init)
-    for (let redirects = 0; [301, 302, 303, 307, 308].includes(res.status); redirects++) {
-      const location = res.headers.get('location')
-      if (!location || redirects >= 3) throw new Error('storefront redirect limit or missing destination')
-      const next = assertPublicHttpUrl(new URL(location, url).toString())
-      if (token && next.hostname !== url.hostname) throw new Error('storefront token redirect: configure storefront_domain explicitly')
-      await res.body?.cancel()
-      url = next
-      // Ordinary fetch changes a POST into GET on 301/302, dropping the query.
-      res = await fetch(url, init)
+    for (let attempt = 0; attempt < 2; attempt++) {
+      let res = await fetch(url, init)
+      for (let redirects = 0; [301, 302, 303, 307, 308].includes(res.status); redirects++) {
+        const location = res.headers.get('location')
+        if (!location || redirects >= 3) throw new Error('storefront redirect limit or missing destination')
+        const next = assertPublicHttpUrl(new URL(location, url).toString())
+        if (token && next.hostname !== url.hostname) throw new Error('storefront token redirect: configure storefront_domain explicitly')
+        await res.body?.cancel()
+        url = next
+        res = await fetch(url, init)
+      }
+      if (!res.ok) {
+        const message = `storefront ${res.status}: ${(await res.text()).slice(0, 200)}`
+        if (attempt === 0 && [429, 500, 502, 503, 504].includes(res.status)) {
+          await new Promise(resolve => setTimeout(resolve, 1000))
+          continue
+        }
+        throw new Error(message)
+      }
+      const json = await res.json() as { data?: { products?: { pageInfo: { hasNextPage: boolean; endCursor: string | null }; nodes: StorefrontProduct[] } }; errors?: Array<{ message?: string; extensions?: { code?: string } }> }
+      if (json.errors?.length) {
+        const transient = json.errors.every(error =>
+          ['INTERNAL_SERVER_ERROR', 'THROTTLED'].includes(error.extensions?.code ?? '') ||
+          /^(Internal error|Throttled)/i.test(error.message ?? ''))
+        if (attempt === 0 && transient) {
+          await new Promise(resolve => setTimeout(resolve, 1000))
+          continue
+        }
+        throw new Error(`storefront graphql: ${JSON.stringify(json.errors).slice(0, 250)}`)
+      }
+      const p = json.data?.products
+      if (!p) throw new Error('storefront: no products in response')
+      return { nodes: p.nodes ?? [], hasNext: p.pageInfo.hasNextPage, endCursor: p.pageInfo.endCursor }
     }
-    if (!res.ok) throw new Error(`storefront ${res.status}: ${(await res.text()).slice(0, 200)}`)
-    const json = await res.json() as { data?: { products?: { pageInfo: { hasNextPage: boolean; endCursor: string | null }; nodes: StorefrontProduct[] } }; errors?: unknown[] }
-    if (json.errors?.length) throw new Error(`storefront graphql: ${JSON.stringify(json.errors).slice(0, 250)}`)
-    const p = json.data?.products
-    if (!p) throw new Error('storefront: no products in response')
-    return { nodes: p.nodes ?? [], hasNext: p.pageInfo.hasNextPage, endCursor: p.pageInfo.endCursor }
+    throw new Error('storefront retry exhausted')
   } finally { clearTimeout(timer) }
 }

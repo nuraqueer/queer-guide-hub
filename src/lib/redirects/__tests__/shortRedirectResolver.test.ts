@@ -183,6 +183,23 @@ function runtime() {
   };
 }
 describe('live short-link resolver', () => {
+  it.each([
+    ['/events/pride?utm_campaign=poster#details', 'https://queer.guide'],
+    ['HTTPS://www.queer.guide/events/pride?utm_campaign=poster#details', 'https://www.queer.guide'],
+    ['HTTPS:/www.queer.guide/events/pride?utm_campaign=poster#details', 'https://www.queer.guide'],
+  ])('preserves normalized target %s with HEAD and GET', async (target, origin) => {
+    const run = runtime();
+    run.state.link.target = target;
+    const head = await run.invoke('HEAD');
+    expect(head.status).toBe(302);
+    expect(head.headers.get('Location')).toBe(
+      `${origin}/events/pride?utm_campaign=poster&utm_source=qr#details`,
+    );
+    expect(run.rpc).not.toHaveBeenCalled();
+    const get = await run.invoke();
+    expect(get.headers.get('Location')).toBe(head.headers.get('Location'));
+    expect(run.rpc.mock.calls.filter(([name]) => name === 'record_redirect_visit')).toHaveLength(1);
+  });
   it('records GET and visitor context, but HEAD does not count or consume quota', async () => {
     const run = runtime();
     const head = await run.invoke('HEAD');

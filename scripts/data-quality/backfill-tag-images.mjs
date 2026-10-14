@@ -116,7 +116,6 @@ async function remaining() {
 console.log(`tag-imagery · tier=${TIER} batch=${BATCH} dry_run=${DRY_RUN}`)
 console.log(`${await remaining()} candidate tags remain for this tier`)
 
-let published = 0
 let queued = 0
 let refused = 0
 let errors = 0
@@ -142,7 +141,6 @@ for (let b = 0; b < MAX_BATCHES; b++) {
     break
   }
 
-  published += out.published ?? 0
   queued += out.queued ?? 0
   refused += out.refused ?? 0
   errors += out.errors ?? 0
@@ -153,7 +151,7 @@ for (let b = 0; b < MAX_BATCHES; b++) {
 
   console.log(
     `batch ${b + 1}: considered=${out.considered} eligible=${out.eligible} ` +
-      `published=${out.published} queued=${out.queued} refused=${out.refused} errors=${out.errors}`,
+      `queued=${out.queued} refused=${out.refused} errors=${out.errors}`,
   )
 
   // A dry run writes nothing, so the work list never shrinks and the loop would
@@ -172,7 +170,7 @@ for (let b = 0; b < MAX_BATCHES; b++) {
 }
 
 console.log('')
-console.log(`total: published=${published} queued=${queued} refused=${refused} errors=${errors}`)
+console.log(`total: queued=${queued} refused=${refused} errors=${errors}`)
 console.log('outcome breakdown:')
 for (const [k, n] of [...whyCounts.entries()].sort((a, b) => b[1] - a[1])) {
   console.log(`  ${String(n).padStart(4)}  ${k}`)

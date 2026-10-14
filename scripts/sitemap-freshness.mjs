@@ -54,7 +54,19 @@ const SITEMAPS = [
   { path: '/sitemap-places.xml', minEntries: 1500, kind: 'urlset' },
   { path: '/sitemap-hotels.xml', minEntries: 200, kind: 'urlset' },
   { path: '/sitemap-villages.xml', minEntries: 90, kind: 'urlset' },
-  { path: '/sitemap-tags.xml', minEntries: 1500, kind: 'urlset' },
+  // Re-derived 2026-10-14: live 1,211, down from the 2,604 measured 2026-09-10,
+  // and this gate had failed on EVERY run since ~09-25 against that stale floor.
+  // The drop is DELIBERATE, not a generator collapse — the sitemap matches the
+  // database exactly (1,211 = active AND seo_indexable), and every one of the
+  // 7,220 active-but-deindexed tags carries an attributed reason: 6,601
+  // `publication_role:utility`, 170 `publication_role:entity_redirect`, 385
+  // across the kinktionary prose/overlap retraction migrations. The count is
+  // also RISING (1,196 → 1,195 → 1,211 over three weeks), so this was a floor
+  // that outlived its corpus rather than a corpus that fell through its floor.
+  // 1000 is deliberately tighter than the ~60% convention above (≈730): this
+  // number is stable and slowly growing, so a 17% fall really is a collapse,
+  // whereas a 60% floor would no longer detect one.
+  { path: '/sitemap-tags.xml', minEntries: 1000, kind: 'urlset' },
   { path: '/sitemap-landings.xml', minEntries: 5, kind: 'urlset', maxAgeDays: 14 },
   // Previously absent from this list entirely, so nothing checked them at all.
   // Landmarks is content-limited rather than broken: only 6 landmark rows exist

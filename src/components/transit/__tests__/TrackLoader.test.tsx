@@ -25,6 +25,19 @@ describe('TrackLoader', () => {
     expect(screen.getByRole('status')).toHaveAccessibleName('Saving place');
   });
 
+  it('uses neutral ink by default on public and admin surfaces', () => {
+    const { container } = render(<TrackLoader />);
+    expect(container.querySelector('path')).toHaveAttribute('stroke', 'currentColor');
+  });
+
+  it('stops the indefinite loop after eight seconds', () => {
+    vi.useFakeTimers();
+    const { container } = render(<TrackLoader />);
+    act(() => void vi.advanceTimersByTime(LOADER_SLOW_MS));
+    expect(container.querySelector('svg')).toHaveClass('track-loader--slow');
+    vi.useRealTimers();
+  });
+
   it('takes its colour from a track token, not a literal', () => {
     const { container } = render(<TrackLoader track="blue" />);
     expect(container.querySelector('path')).toHaveAttribute('stroke', 'hsl(var(--track-blue))');
