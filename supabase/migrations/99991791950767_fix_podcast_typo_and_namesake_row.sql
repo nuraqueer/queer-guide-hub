@@ -63,8 +63,9 @@
 --                   `trg_search_documents_news` enqueues on UPDATE, and
 --                   `search_reindex_drain` DELETEs from search_documents before
 --                   re-indexing, while the indexer declines to re-insert an
---                   archived row. Removal waits for the drain; P4 verifies
---                   that the archive writes enqueue all seven episodes.
+--                   archived row. The delete is also done inline so the end
+--                   state is immediate and assertable rather than waiting on
+--                   the next drain tick.
 --   (c) episode_count -> 0, which is exactly what
 --                   `run_news_source_episode_count` already computes (it
 --                   excludes archived rows), so that nightly job stays a no-op
