@@ -32,7 +32,9 @@ export function RedirectConversionSetup({
   const [writeEvents, setWriteEvents] = useState(true),
     [readEvents, setReadEvents] = useState(false),
     [readLinks, setReadLinks] = useState(false),
-    [writeLinks, setWriteLinks] = useState(false);
+    [writeLinks, setWriteLinks] = useState(false),
+    [readWorkspace, setReadWorkspace] = useState(false),
+    [writeWorkspace, setWriteWorkspace] = useState(false);
   const [openedAt] = useState(() => Date.now());
   const [confirm, setConfirm] = useState<string | null>(null);
   const managed = links.filter(
@@ -49,6 +51,8 @@ export function RedirectConversionSetup({
         ...(readEvents ? ['events:read'] : []),
         ...(readLinks ? ['links:read'] : []),
         ...(writeLinks ? ['links:write'] : []),
+        ...(readWorkspace ? ['workspace:read'] : []),
+        ...(writeWorkspace ? ['workspace:write'] : []),
       ],
       expiresAt: new Date(Date.now() + Number(days) * 86400000).toISOString(),
       ...(limited ? { redirectIds: ids } : {}),
@@ -64,11 +68,17 @@ export function RedirectConversionSetup({
       .catch(() => toast.error('Could not copy'));
   const conversionSample = `POST https://queer.guide/api/redirects/track/lead\nAuthorization: Bearer YOUR_SERVER_CREDENTIAL\nContent-Type: application/json\n\n${JSON.stringify({ clickId: 'CLICK_ID_FROM_DESTINATION', customerExternalId: 'CUSTOMER_ID', eventId: 'signup:CUSTOMER_ID', eventName: 'Sign up' }, null, 2)}`;
   const managementExample = (readLinks || writeLinks) && !writeEvents && !readEvents;
-  const sample = managementExample
-    ? writeLinks
-      ? 'POST https://queer.guide/api/redirects/links\nAuthorization: Bearer YOUR_SERVER_CREDENTIAL\nContent-Type: application/json\n\n{"target":"https://example.com/register","utmDefaults":{"utm_source":"poster"}}'
-      : 'GET https://queer.guide/api/redirects/links?limit=100\nAuthorization: Bearer YOUR_SERVER_CREDENTIAL'
-    : conversionSample;
+  const workspaceExample =
+    (readWorkspace || writeWorkspace) && !writeEvents && !readEvents && !readLinks && !writeLinks;
+  const sample = workspaceExample
+    ? writeWorkspace
+      ? 'POST https://queer.guide/api/redirects/folders\nAuthorization: Bearer YOUR_SERVER_CREDENTIAL\nContent-Type: application/json\n\n{"name":"Campaigns"}'
+      : 'GET https://queer.guide/api/redirects/folders?limit=100\nAuthorization: Bearer YOUR_SERVER_CREDENTIAL'
+    : managementExample
+      ? writeLinks
+        ? 'POST https://queer.guide/api/redirects/links\nAuthorization: Bearer YOUR_SERVER_CREDENTIAL\nContent-Type: application/json\n\n{"target":"https://example.com/register","utmDefaults":{"utm_source":"poster"}}'
+        : 'GET https://queer.guide/api/redirects/links?limit=100\nAuthorization: Bearer YOUR_SERVER_CREDENTIAL'
+      : conversionSample;
   return (
     <Dialog
       open
@@ -184,6 +194,30 @@ export function RedirectConversionSetup({
                 Create, edit and delete links
               </label>
             </div>
+            <div className="flex flex-wrap gap-4">
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={readWorkspace}
+                  onChange={(event) => setReadWorkspace(event.target.checked)}
+                />
+                Read shared folders, tags and templates
+              </label>
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={writeWorkspace}
+                  onChange={(event) => setWriteWorkspace(event.target.checked)}
+                />
+                Create, edit and delete shared folders, tags and templates
+              </label>
+            </div>
+            {limited && (readWorkspace || writeWorkspace) && (
+              <p role="alert" className="text-destructive">
+                Workspace permissions require all managed links. Disable selected-link scope or
+                workspace permissions.
+              </p>
+            )}
             {writeLinks && (
               <p className="text-sm text-muted-foreground">
                 Selected-link credentials can edit or delete those links. Creating new links
@@ -239,6 +273,8 @@ export function RedirectConversionSetup({
                 readEvents && 'read private analytics/events',
                 readLinks && 'read link destinations/settings',
                 writeLinks && 'create, edit and delete links',
+                readWorkspace && 'read shared workspace organization',
+                writeWorkspace && 'edit shared workspace organization',
               ]
                 .filter(Boolean)
                 .join(', ') || 'none selected'}
@@ -255,8 +291,13 @@ export function RedirectConversionSetup({
               disabled={
                 credentials.create.isPending ||
                 !name.trim() ||
-                (!writeEvents && !readEvents && !readLinks && !writeLinks) ||
-                (limited && !ids.length)
+                (!writeEvents &&
+                  !readEvents &&
+                  !readLinks &&
+                  !writeLinks &&
+                  !readWorkspace &&
+                  !writeWorkspace) ||
+                (limited && (!ids.length || readWorkspace || writeWorkspace))
               }
             >
               {credentials.create.isPending ? 'Creating…' : 'Create server credential'}
@@ -270,7 +311,9 @@ export function RedirectConversionSetup({
             Copy request example
           </Button>
           <p className="text-sm text-muted-foreground">
-            {managementExample ? (
+            {workspaceExample ? (
+              'Shared folders, tags and UTM templates require workspace-wide permissions. Follow nextCursor when listing resources.'
+            ) : managementExample ? (
               'Follow nextCursor when listing links. Creating links requires workspace-wide permission. PATCH updates supplied fields; DELETE permanently removes a link and its tracking history.'
             ) : (
               <>

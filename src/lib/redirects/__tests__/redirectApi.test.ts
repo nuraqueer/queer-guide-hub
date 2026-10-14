@@ -56,22 +56,24 @@ function runtime() {
       : {
           data: state.conversionError
             ? null
-            : name === 'redirect_management_list'
-              ? {
-                  data: [{ id: 'link-id', slug: 'pride', target: '/events' }],
-                  count: 1,
-                  nextCursor: null,
-                }
-              : name === 'redirect_management_mutate'
-                ? (_args?.p_operations as Array<{ operation: string }>).map((op) =>
-                    op.operation === 'delete'
-                      ? { deleted: true, id: 'link-id' }
-                      : {
-                          created: ['create', 'upsert'].includes(op.operation),
-                          link: { id: 'link-id', slug: 'pride', target: '/events' },
-                        },
-                  )
-                : { id: 'conversion', duplicate: false },
+            : name === 'redirect_workspace_resource'
+              ? { id: 'resource', name: 'API folder', data: [], count: 0, nextCursor: null }
+              : name === 'redirect_management_list'
+                ? {
+                    data: [{ id: 'link-id', slug: 'pride', target: '/events' }],
+                    count: 1,
+                    nextCursor: null,
+                  }
+                : name === 'redirect_management_mutate'
+                  ? (_args?.p_operations as Array<{ operation: string }>).map((op) =>
+                      op.operation === 'delete'
+                        ? { deleted: true, id: 'link-id' }
+                        : {
+                            created: ['create', 'upsert'].includes(op.operation),
+                            link: { id: 'link-id', slug: 'pride', target: '/events' },
+                          },
+                    )
+                  : { id: 'conversion', duplicate: false },
           error: state.conversionError,
         },
   );
@@ -142,6 +144,27 @@ function runtime() {
 const click = '00000000-0000-4000-8000-000000000002',
   lead = { clickId: click, customerExternalId: 'customer-a', eventId: 'signup:a' };
 describe('actual Redirects API handler', () => {
+  it('enforces independent workspace permissions and denies selected-link workspace credentials', async () => {
+    const run = runtime(),
+      token = 'qg_redirect_' + 'a'.repeat(64);
+    expect((await run.invoke('/folders', { name: 'Campaigns' }, token)).status).toBe(403);
+    run.state.allowedIds = null as unknown as string[];
+    expect((await run.invoke('/folders', { name: 'Campaigns' }, token)).status).toBe(201);
+    expect(
+      run.rpc.mock.calls.find(([name]) => name === 'authenticate_redirect_api_token')?.[1]?.p_scope,
+    ).toBe('workspace:write');
+    expect((await run.invoke('/tags', { name: 'Bad', color: 'neon' }, token)).status).toBe(400);
+    expect(
+      (await run.invoke('/templates', { name: 'Bad', parameters: { pw: 'secret' } }, token)).status,
+    ).toBe(400);
+    expect((await run.invoke('/folders?limit=101', undefined, token, 'GET')).status).toBe(400);
+    expect((await run.invoke('/folders', undefined, token, 'GET')).status).toBe(200);
+    expect(
+      (await run.invoke('/folders/' + click, { description: 'Edited' }, token, 'PATCH')).status,
+    ).toBe(200);
+    expect((await run.invoke('/folders/' + click, undefined, token, 'GET')).status).toBe(200);
+    expect((await run.invoke('/folders/' + click, undefined, token, 'DELETE')).status).toBe(200);
+  });
   it('requires management scopes, preserves verified actor identity and forwards validated create/upsert/bulk operations', async () => {
     const run = runtime(),
       token = 'qg_redirect_' + 'a'.repeat(64);
@@ -207,7 +230,11 @@ describe('actual Redirects API handler', () => {
       run.rpc.mock.calls.find(([name]) => name === 'authenticate_redirect_api_token')?.[1]?.p_scope,
     ).toBe('links:read');
     expect(
-      run.rpc.mock.calls.find(([name]) => name === 'redirect_management_list')?.[1]?.p_limit,
+      run.rpc.mock.calls.find(([name]) =>
+        name === 'redirect_workspace_resource'
+          ? { id: 'resource', name: 'API folder', data: [], count: 0, nextCursor: null }
+          : name === 'redirect_management_list',
+      )?.[1]?.p_limit,
     ).toBe(0);
     expect((await run.invoke('/links/' + click, undefined, token, 'GET')).status).toBe(200);
     run.state.conversionError = { code: '23503', message: 'Unknown tag' };

@@ -38,8 +38,8 @@ exist. Existing local tools are a foundation, not proof of parity or deployment.
 | Shared dashboards | Revocable scoped sharing, sanitized aggregate-only default | Missing |
 | Custom reports | Custom dates, granular link/folder/tag/domain/geo/device/event filters | Partial: date/dimension report UI and API; saved definitions and sharing missing |
 | Integrations | Segment and GTM adapters; native configured integrations and provider callbacks | Missing |
-| REST API | Authenticated/scoped link CRUD/upsert/count/list, analytics/events, folders/tags, bulk operations | Partial: scoped link CRUD/upsert/count/list/mixed bulk, conversions and analytics/events; folder/tag resources and full policy fields pending |
-| SDKs | TypeScript, Python, Go, Ruby, PHP wrappers and runnable examples covering management/tracking | Missing |
+| REST API | Authenticated/scoped link CRUD/upsert/count/list, analytics/events, folders/tags, bulk operations | Partial: scoped link CRUD/upsert/count/list/mixed bulk, conversions and analytics/events; folder/tag/template resource CRUD with workspace scopes; full policy fields pending |
+| SDKs | TypeScript, Python, Go, Ruby, PHP wrappers and runnable examples covering management/tracking | Candidate: five native clients verified through actual HTTP handler and isolated DB; publication/release pending |
 | Webhooks | Signed click/lead/sale events, retries, delivery history, replay and secret rotation | Missing |
 
 ## Primary references
@@ -255,3 +255,33 @@ credential setup are under `outputs/redirect-dub-parity/link-management-setup-*.
 no credential was created or revoked in that browser check. The setup now shows
 examples matching management-only permissions and collapses the conversion guide.
 Typecheck also passed its no-new-errors gate (704 inherited errors).
+
+## Checkpoint: workspace API and five server SDKs
+
+Implemented locally: folder/tag/template create/detail/list/patch/delete,
+independent workspace read/write scopes, unrestricted-key enforcement at issuance
+and SQL execution, and scope-specific request examples. Selected-link credentials
+cannot edit/read shared organization. Existing link metadata survives resource
+edits; deleting resources clears assignments without deleting managed links.
+
+Five SDK sources and runnable examples cover management, shared resources,
+tracking, analytics and event pages. Clients use timeouts, bounded responses,
+redirect refusal, exact string revenue and explicit HTTP errors. No automatic
+mutation retry occurs. `test:redirect-sdks` exercises each language through native
+HTTP into the actual edge handler and migrated isolated PostgreSQL, not a mock
+request recorder. The suite includes deduplicated conversions, 101-row keyset
+iteration, shared resource round trips, partial edits, upserts and deletion.
+
+Docs: `sdk/redirects/README.md` and `docs/guides/redirect-workspace-api.md`.
+Package publication, production migration/deployment, remaining API policy fields,
+folder-member permissions and all outstanding full-parity features remain pending.
+
+Verification: all five native SDK tests and all five runnable examples passed
+against the actual handler/database over loopback HTTP. Exact SDK revenue and
+example revenue SQL totals passed. The resource SQL suite also verifies two-page
+lists/counts, scope/revocation denial, partial updates and assignment cleanup.
+28 focused API/input/UI tests passed; standalone SDK TypeScript declarations,
+frontend/proxy builds, targeted lint and migration-version validation passed.
+App typecheck has no new errors (704 inherited). The attempted native-browser
+preview timed out, so browser verification of the new workspace permission
+controls remains unproven; component tests and builds are the available evidence.

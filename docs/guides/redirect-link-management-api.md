@@ -85,8 +85,9 @@ Atomic batch:
 
 Bulk folder/tag assignment uses update operations with folderId/tagIds. This endpoint
 is not a compatibility alias for Dub's API; SDK wrappers will target this contract.
-Folder/tag resource management, policy fields, archive/import/QR bulk UI, custom
-domains and SDKs remain in the full parity ledger.
+Folder/tag/template resource APIs and SDK wrappers are now available locally;
+policy fields, archive/import/QR bulk UI, custom
+domains remain in the full parity ledger.
 
 ## Verification status
 

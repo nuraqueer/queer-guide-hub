@@ -73,6 +73,21 @@ describe('conversion credential setup', () => {
     await waitFor(() => expect(mocks.create).toHaveBeenCalled());
     expect(mocks.create.mock.calls[0][0].scopes).toEqual(['links:write']);
   });
+  it('requires unrestricted scope for workspace permissions', () => {
+    render(<RedirectConversionSetup links={links} onClose={vi.fn()} />);
+    fireEvent.change(screen.getByLabelText('Credential name'), { target: { value: 'Workspace' } });
+    fireEvent.click(
+      screen.getByRole('checkbox', { name: 'Read shared folders, tags and templates' }),
+    );
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Limit to selected managed links' }));
+    fireEvent.click(screen.getByRole('checkbox', { name: '/go/pride' }));
+    expect(screen.getByRole('button', { name: 'Create server credential' })).toBeDisabled();
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'Workspace permissions require all managed links',
+    );
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Limit to selected managed links' }));
+    expect(screen.getByRole('button', { name: 'Create server credential' })).toBeEnabled();
+  });
   it('requires confirmation inside the app before revocation', async () => {
     render(<RedirectConversionSetup links={links} onClose={vi.fn()} />);
     fireEvent.click(screen.getByRole('button', { name: 'Revoke' }));

@@ -2,7 +2,7 @@ import { UUID } from './redirect-api.ts';
 import { validPublicTarget } from './link-policy.ts';
 
 const reservedLinkSlugs = new Set(['admin','api','go','auth','login','signup','sitemap','robots','favicon','manifest','sw','index','health','status','null','undefined','test','www','mail','ftp','cdn','assets','static','public']);
-export const LINK_SCOPES = ['conversions:write', 'events:read', 'links:read', 'links:write'];
+export const LINK_SCOPES = ['conversions:write', 'events:read', 'links:read', 'links:write', 'workspace:read', 'workspace:write'];
 export function randomLinkSlug() {
   return Array.from(crypto.getRandomValues(new Uint8Array(6)), byte => byte.toString(16).padStart(2, '0')).join('');
 }
@@ -70,4 +70,16 @@ export function linkListInput(value: unknown) {
   for (const key of ['folderId','tagId']) if (filters[key] !== undefined && !uuid(filters[key])) throw new Error('Invalid organization filter');
   if (filters.isEnabled !== undefined && typeof filters.isEnabled !== 'boolean') throw new Error('Invalid enabled filter');
   return filters;
+}
+
+export function workspaceInput(kind: string, value: unknown, create: boolean) {
+ const data=object(value);
+ const allowed=kind==='folders'?['name','description']:kind==='tags'?['name','color']:['name','parameters'];
+ if(Object.keys(data).some(key=>!allowed.includes(key))||!Object.keys(data).length)throw new Error('Invalid workspace fields');
+ if(create&&data.name===undefined)throw new Error('A resource name is required');
+ if(data.name!==undefined&&(typeof data.name!=='string'||!data.name.trim()||data.name.trim().length>100))throw new Error('Name must be 1–100 characters');
+ if(data.description!==undefined&&(typeof data.description!=='string'||data.description.length>2000))throw new Error('Description exceeds 2,000 characters');
+ if(data.color!==undefined&&!['gray','red','orange','yellow','green','blue','purple','pink'].includes(data.color as string))throw new Error('Invalid tag color');
+ if(data.parameters!==undefined){const map=stringMap(data.parameters);if(Object.keys(map).some(key=>!['utm_source','utm_medium','utm_campaign','utm_term','utm_content','ref'].includes(key)))throw new Error('Invalid campaign template');}
+ return {...data,...(typeof data.name==='string'?{name:data.name.trim()}:{})};
 }

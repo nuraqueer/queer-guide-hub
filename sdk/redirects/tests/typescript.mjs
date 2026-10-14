@@ -1,0 +1,26 @@
+import assert from 'node:assert/strict';
+import {RedirectsClient,RedirectApiError} from '../../../tmp/sdk-tests/typescript.mjs';
+const api=new RedirectsClient(process.env.REDIRECT_TEST_TOKEN,{baseUrl:process.env.REDIRECT_TEST_BASE});
+const folder=await api.createResource('folders',{name:'Héllo & + TS'}),tag=await api.createResource('tags',{name:'TS tag',color:'pink'});
+const template=await api.createResource('templates',{name:'TS template',parameters:{utm_campaign:'Launch & +'}});
+assert.equal((await api.updateResource('folders',folder.id,{description:'Changed'})).description,'Changed');
+assert.equal((await api.updateResource('tags',tag.id,{color:'blue'})).color,'blue');
+assert.equal((await api.listResources('templates')).data.length,1);
+assert.equal((await api.getResource('folders',folder.id)).name,'Héllo & + TS');
+const created=await api.createLink({target:'https://example.com/?q=a%26b#detail',slug:'sdk-typescript',folderId:folder.id,tagIds:[tag.id]});
+const id=created.link.id;
+await api.updateLink(id,{comment:'SDK update',isEnabled:false});
+assert.equal((await api.getLink(id)).folderId,folder.id);
+assert.equal((await api.upsertLink({slug:'sdk-typescript',target:'/updated'})).created,false);
+assert.equal((await api.countLinks({ids:[id]})).count,1);
+let count=0;for await(const row of api.iterateLinks({search:'sdk-page-'})){assert.match(row.slug,/^sdk-page-/);count++;}assert.equal(count,101);
+const batch=await api.bulk([{operation:'update',id,data:{comment:'Batch'}},{operation:'create',data:{target:'/events'}}]);
+await api.deleteLink(batch.data[1].link.id);
+const lead={clickId:process.env.REDIRECT_TEST_CLICK,customerExternalId:'typescript',eventId:'sdk-lead:typescript'};
+await api.trackLead(lead);assert.equal((await api.trackLead(lead)).duplicate,true);
+await api.trackSale({...lead,eventId:'sdk-sale:typescript',amount:'49.900001',currency:'CHF'});
+assert.ok((await api.analytics({country:'CH'})).totals);
+assert.ok((await api.events({}, {limit:1})).data.length);
+await api.deleteLink(id);for(const [kind,item] of [['folders',folder],['tags',tag],['templates',template]])await api.deleteResource(kind,item.id);
+for(const [path,status] of [['/redirect-probe',302],['/limited-probe',429]]){await assert.rejects(api.request('GET',path),error=>error instanceof RedirectApiError&&error.status===status&&(status!==429||error.retryAfter==='17'));}
+assert.throws(()=>new RedirectsClient('token',{baseUrl:'http://example.com/api'}));

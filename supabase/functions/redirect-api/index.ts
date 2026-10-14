@@ -1,4 +1,4 @@
-import { bulkLinkInput, linkInput, linkListInput, LINK_SCOPES } from "../_shared/redirect-links.ts";
+import { bulkLinkInput, linkInput, linkListInput, workspaceInput, LINK_SCOPES } from "../_shared/redirect-links.ts";
 import { analyticsFilters } from "../_shared/redirect-analytics.ts";
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2.50.5";
@@ -24,6 +24,21 @@ Deno.serve(async (req: Request) => {
   user=data.user;
  }
  try {
+  const resourceMatch=path.match(/^\/(folders|tags|templates)(?:\/([a-f0-9-]+))?$/i);
+  if(resourceMatch){
+   const [,kind,id]=resourceMatch, read=req.method==='GET';let tokenId:string|null=null;
+   if(tokenCredential){const {data,error}=await db.rpc('authenticate_redirect_api_token',{p_hash:await tokenDigest(credential),p_scope:read?'workspace:read':'workspace:write'});if(error)return json({error:'Credential verification unavailable'},503);if(!data)return json({error:'Workspace scope is required'},403);if(data.redirect_ids!==null)return json({error:'Workspace permissions require an unrestricted credential'},403);tokenId=data.id;}
+   else{const {data,error}=await identityClient!.rpc('has_role_jwt',{required_role:'admin'});if(error)return json({error:'Authorization unavailable'},503);if(!data)return json({error:'Forbidden'},403);}
+   if(id&&!UUID.test(id))return json({error:'Invalid resource ID'},400);
+   let action:string,values:Record<string,unknown>={},limit=50,after:string|null=null;
+   if(read&&!id){const query=new URL(req.url).searchParams;if([...query.keys()].some(key=>!['limit','cursor'].includes(key)))return json({error:'Unknown resource page parameter'},400);limit=Number(query.get('limit')??50);after=query.get('cursor');if(!Number.isInteger(limit)||limit<1||limit>100||after&&!UUID.test(after))return json({error:'Invalid resource page'},400);action='list';}
+   else if(read&&id)action='get';
+   else if(req.method==='POST'&&!id){action='create';values=workspaceInput(kind,await boundedJson(req),true);}
+   else if(req.method==='PATCH'&&id){action='update';values=workspaceInput(kind,await boundedJson(req),false);}
+   else if(req.method==='DELETE'&&id)action='delete';
+   else return json({error:'Method not supported'},405);
+   const {data,error}=await db.rpc('redirect_workspace_resource',{p_kind:kind,p_action:action,p_id:id??null,p_values:values,p_limit:limit,p_after:after,p_token_id:tokenId});if(error)return rpcError(error);return json(data,action==='create'?201:200);
+  }
   if(path==='/links'||path.startsWith('/links/')) {
    const read=req.method==='GET', scope=read?'links:read':'links:write';
    let tokenId:string|null=null;
@@ -116,6 +131,7 @@ Deno.serve(async (req: Request) => {
     const scopes=body.scopes??['conversions:write'];
     if(!Array.isArray(scopes)||scopes.length<1||scopes.some(scope=>!LINK_SCOPES.includes(scope)))return json({error:'Invalid credential permissions'},400);
     const ids=body.redirectIds? [...new Set(body.redirectIds)] : null;
+    if(ids&&scopes.some(scope=>scope.startsWith('workspace:')))return json({error:'Workspace permissions require an unrestricted credential'},400);
     if(ids){const {data,error}=await db.from('redirects').select('id').in('id',ids).eq('type','SHORT');if(error || data?.length!==ids.length)return json({error:'One or more managed links were not found'},400);}
     const secret=createRedirectToken();
     const {data,error}=await db.from('redirect_api_tokens').insert({name:body.name.trim(),token_hash:await tokenDigest(secret),prefix:secret.slice(0,20),scopes:[...new Set(scopes)],redirect_ids:ids,created_by:user!.id,expires_at:new Date(end).toISOString()}).select(select).single();
