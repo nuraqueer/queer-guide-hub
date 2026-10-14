@@ -30,6 +30,7 @@ import {
   EventMasthead,
   EventActions,
   type EventWithRelations,
+  resolveEventCountry,
 } from '../EventDetail.parts';
 
 const event = {
@@ -284,5 +285,40 @@ describe('Date-only event calendar days', () => {
     expect(dates).toContain('Aug 16, 2026');
     expect(dates).toContain('Aug 24, 2026');
     expect(dates).not.toContain('Aug 15');
+  });
+});
+
+describe('event country resolution', () => {
+  it('keeps France for a Paris event even when a namesake city is linked to Réunion', () => {
+    const france = {
+      id: 'fr',
+      name: 'France',
+      slug: 'france',
+      equality_score: 90,
+      lgbti_criminalization: null,
+    };
+    const reunion = {
+      id: 're',
+      name: 'Réunion',
+      slug: 'reunion',
+      equality_score: 90,
+      lgbti_criminalization: null,
+    };
+    expect(
+      resolveEventCountry({
+        countries: france,
+        cities: { id: 'saint-denis-re', name: 'Saint-Denis', country_id: 're', countries: reunion },
+      }),
+    ).toBe(france);
+  });
+  it('uses the city country only when the event has no explicit country', () => {
+    const france = { id: 'fr', name: 'France', equality_score: 90, lgbti_criminalization: null };
+    expect(
+      resolveEventCountry({
+        countries: null,
+        cities: { id: 'saint-denis-fr', name: 'Saint-Denis', countries: france },
+      }),
+    ).toBe(france);
+    expect(resolveEventCountry(null)).toBeNull();
   });
 });

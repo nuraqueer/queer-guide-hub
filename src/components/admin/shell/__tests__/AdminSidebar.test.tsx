@@ -13,6 +13,9 @@ vi.mock('@/hooks/useAuth', () => ({ useAuth: () => ({ user: { email: 'a@b' } }) 
 vi.mock('@/hooks/useGranularRoles', () => ({
   useGranularRoles: () => ({ effectiveRole: 'admin' }),
 }));
+vi.mock('@/hooks/useAdminReview', () => ({
+  useAdminReviewSummary: () => ({ data: { decisions_total: 12, overdue_total: 2 } }),
+}));
 vi.mock('@/hooks/useAdminCounts', () => ({
   useAdminCounts: () => ({ data: {}, isLoading: false }),
   readCount: () => ({ count: undefined, overdue: 0 }),
@@ -34,7 +37,15 @@ vi.mock('@/config/adminNavigation', () => ({
       minRole: 'editor',
       items: [
         { id: 'i1', label: 'Item', route: '/admin/x', icon: Box },
-        { id: 'i2', label: 'Deep', route: '/admin/x/deep', icon: Layers },
+        {
+          id: 'i2',
+          label: 'Deep',
+          route: '/admin/x/deep',
+          icon: Layers,
+          group: 'Content',
+          keywords: ['countries'],
+        },
+        { id: 'i3', label: 'Trash', route: '/admin/trash', icon: Box },
       ],
     },
   ],
@@ -69,6 +80,32 @@ describe('AdminSidebar', () => {
     expect(container.querySelector('a[href="/admin/x/deep"]')).not.toBeNull();
     expect(container.querySelector('a[href="/admin/x"]')).toBeNull();
   });
+  it('searches aliases and section names', () => {
+    at('/admin/x/deep');
+    fireEvent.change(screen.getByRole('textbox', { name: 'Search navigation' }), {
+      target: { value: 'countries' },
+    });
+    expect(screen.getByRole('link', { name: 'Deep' })).toBeVisible();
+    expect(screen.queryByRole('link', { name: 'Item' })).not.toBeInTheDocument();
+    fireEvent.change(screen.getByRole('textbox', { name: 'Search navigation' }), {
+      target: { value: 'section' },
+    });
+    expect(screen.getByRole('link', { name: 'Item' })).toBeVisible();
+  });
+
+  it('keeps ungrouped destinations after the preceding content group', () => {
+    const { container } = at('/admin/x/deep');
+    const routes = [...container.querySelectorAll('a[href^="/admin"]')].map((link) =>
+      link.getAttribute('href'),
+    );
+    expect(routes).toEqual(['/admin/x', '/admin/x/deep', '/admin/trash']);
+  });
+
+  it('does not mark a partial path segment as current', () => {
+    const { container } = at('/admin/x-extra');
+    expect(container.querySelector('[aria-current="page"]')).toBeNull();
+  });
+
   it('renders sections + items', () => {
     const { container } = at('/admin');
     expect(container).toBeTruthy();

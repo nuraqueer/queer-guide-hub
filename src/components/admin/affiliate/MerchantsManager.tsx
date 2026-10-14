@@ -1,3 +1,5 @@
+import { ContentListPanel } from '@/components/cms/ContentListPanel';
+import { merchantListConfig } from '@/components/admin/business/organisationListConfigs';
 /**
  * Merchants manager — every marketplace vendor with its sync state, listing
  * stats, link health, clicks/commission and affiliate configuration in one
@@ -12,26 +14,16 @@
  */
 
 import { useMemo, useState } from 'react';
-import { TrackLoader } from '@/components/transit/TrackLoader';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Plus, Edit2, Trash2, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 import { untypedSupabase } from '@/integrations/supabase/untyped';
 import { useAffiliateLinks } from '@/hooks/useAffiliateLinks';
 import { useMarketplaceMerchants, useOrganizationOptions } from '@/hooks/useMarketplaceMerchants';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
+
 import {
   Dialog,
   DialogContent,
@@ -46,10 +38,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Stat } from './Stat';
 import { MerchantDrawer } from './MerchantDrawer';
 import type { MerchantOverviewRow } from './merchantTypes';
-import { AdminEmpty } from '@/components/admin/primitives/AdminEmpty';
 import { StructuredValueEditor } from '@/components/cms/fields/structured/StructuredValueEditor';
 
 // Whitelist enforced by admin_upsert_marketplace_merchant.
@@ -80,7 +70,14 @@ export function MerchantsManager({
 }) {
   const queryClient = useQueryClient();
   const { partners } = useAffiliateLinks();
-  const { data: merchantRows, upsert, remove, sync } = useMarketplaceMerchants();
+  const {
+    data: merchantRows,
+    isLoading: registryLoading,
+    error: registryError,
+    upsert,
+    remove,
+    sync,
+  } = useMarketplaceMerchants();
   const { data: orgOptions } = useOrganizationOptions();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
@@ -219,180 +216,59 @@ export function MerchantsManager({
     }
   };
 
-  if (isLoading) {
-    return (
-      <div className="flex justify-center py-16">
-        <TrackLoader size={24} label="Loading" />
-      </div>
-    );
-  }
-  if (error) {
-    return (
-      <p className="text-13 text-destructive">
-        Failed to load merchants: {(error as Error).message}
-      </p>
-    );
-  }
-
-  const merchants = organizationId
-    ? (rows ?? []).filter((m) => orgByMerchant.get(m.merchant_id) === organizationId)
-    : (rows ?? []);
-  const totals = merchants.reduce(
-    (acc, m) => ({
-      merchants: acc.merchants + 1,
-      enabled: acc.enabled + (m.is_enabled ? 1 : 0),
-      listings: acc.listings + Number(m.listings_active),
-      clicks: acc.clicks + Number(m.clicks),
-      commission: acc.commission + Number(m.commission_usd),
-    }),
-    { merchants: 0, enabled: 0, listings: 0, clicks: 0, commission: 0 },
+  const listRows = useMemo(
+    () =>
+      (rows ?? [])
+        .filter((m) => !organizationId || orgByMerchant.get(m.merchant_id) === organizationId)
+        .map((m) => ({
+          ...m,
+          id: m.merchant_id,
+          listings_active: Number(m.listings_active),
+          broken_active_links: Number(m.link_broken) + Number(m.link_timeout),
+          clicks: Number(m.clicks),
+          commission_usd: Number(m.commission_usd),
+          status: m.is_enabled ? 'active' : 'disabled',
+          updated_at: m.last_sync_at,
+        })),
+    [rows, organizationId, orgByMerchant],
   );
-
   return (
     <div>
-      <div className="mb-8 grid grid-cols-4 gap-4">
-        <Stat
-          label="Merchants"
-          value={`${totals.enabled}/${totals.merchants}`}
-          hint="enabled / total"
-        />
-        <Stat label="Active listings" value={totals.listings.toLocaleString()} />
-        <Stat label="Clicks" value={totals.clicks.toLocaleString()} hint={`last ${days} days`} />
-        <Stat
-          label="Commission"
-          value={`$${totals.commission.toFixed(2)}`}
-          hint={`last ${days} days`}
-        />
-      </div>
-
-      <div className="mb-4 flex items-center justify-between">
-        <h2 className="text-15 font-semibold">{organizationId ? 'Merchants' : 'All vendors'}</h2>
-        <Button onClick={openCreate}>
-          <Plus className="w-4 h-4 mr-1" /> Add merchant
-        </Button>
-      </div>
-
-      {merchants.length === 0 ? (
-        <AdminEmpty
-          variant="inline"
-          noun={organizationId ? 'merchants linked to this business' : 'merchants registered'}
-        />
-      ) : (
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Merchant</TableHead>
-              <TableHead>Provider</TableHead>
-              <TableHead className="text-right">Listings</TableHead>
-              <TableHead className="text-right">Broken links</TableHead>
-              <TableHead className="text-right">Clicks</TableHead>
-              <TableHead className="text-right">Commission</TableHead>
-              <TableHead>Last sync</TableHead>
-              <TableHead>Partner</TableHead>
-              <TableHead className="text-right">Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {merchants.map((m) => (
-              <TableRow
-                key={m.merchant_id}
-                className="cursor-pointer"
-                onClick={() => setDrawerMerchant(m)}
-              >
-                <TableCell>
-                  <span className="font-medium">{m.display_name}</span>
-                  <span className="ml-2 text-xs text-muted-foreground">
-                    {m.shop_domain ?? m.slug}
-                  </span>
-                </TableCell>
-                <TableCell className="text-muted-foreground">{m.provider}</TableCell>
-                <TableCell className="text-right tabular-nums">
-                  {Number(m.listings_active).toLocaleString()}
-                  <span className="text-muted-foreground">
-                    /{Number(m.listings_total).toLocaleString()}
-                  </span>
-                </TableCell>
-                <TableCell className="text-right tabular-nums">
-                  {Number(m.link_broken) + Number(m.link_timeout) > 0 ? (
-                    <Badge variant="outline">
-                      {Number(m.link_broken) + Number(m.link_timeout)}
-                    </Badge>
-                  ) : (
-                    <span className="text-muted-foreground">0</span>
-                  )}
-                </TableCell>
-                <TableCell className="text-right tabular-nums">
-                  {Number(m.clicks).toLocaleString()}
-                </TableCell>
-                <TableCell className="text-right tabular-nums">
-                  {Number(m.commission_usd) > 0 ? `$${Number(m.commission_usd).toFixed(2)}` : '—'}
-                </TableCell>
-                <TableCell>
-                  {m.last_sync_at ? (
-                    <span className="text-xs">
-                      <Badge
-                        variant="outline"
-                        className={m.last_sync_status === 'ok' ? '' : 'text-destructive'}
-                      >
-                        {m.last_sync_status === 'ok' ? `ok · ${m.last_sync_items ?? 0}` : 'error'}
-                      </Badge>{' '}
-                      <span className="text-muted-foreground">
-                        {new Date(m.last_sync_at).toLocaleDateString()}
-                      </span>
-                    </span>
-                  ) : (
-                    <span className="text-xs text-muted-foreground">never</span>
-                  )}
-                </TableCell>
-                <TableCell className="text-xs text-muted-foreground">
-                  {m.partner_name ?? (m.awin_advertiser_id ? `awin:${m.awin_advertiser_id}` : '—')}
-                </TableCell>
-                <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
-                  <div className="flex items-center justify-end gap-1">
-                    <Switch
-                      checked={m.is_enabled}
-                      onCheckedChange={(v) => handleToggle(m, v)}
-                      aria-label={`${m.display_name} enabled`}
-                    />
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => handleSync(m)}
-                      disabled={syncing === m.merchant_id}
-                      aria-label="Sync now"
-                    >
-                      {syncing === m.merchant_id ? (
-                        <TrackLoader size={16} delayMs={0} label="Sync in progress" />
-                      ) : (
-                        <RefreshCw className="h-4 w-4" />
-                      )}
-                    </Button>
-                    <Button size="sm" variant="ghost" onClick={() => openEdit(m)} aria-label="Edit">
-                      <Edit2 className="w-4 h-4" />
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => handleDelete(m)}
-                      disabled={m.listings_total > 0}
-                      aria-label="Delete"
-                    >
-                      <Trash2 className="w-4 h-4 text-destructive" />
-                    </Button>
-                  </div>
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      )}
-
+      <ContentListPanel
+        contentTypeId={merchantListConfig.id}
+        configOverride={merchantListConfig}
+        workspace
+        operational
+        hideHeader
+        source={{
+          rows: listRows,
+          loading: isLoading || Boolean(organizationId && registryLoading),
+          error:
+            error || (organizationId && registryError)
+              ? String((error || (registryError as Error))?.message)
+              : null,
+          refresh: invalidate,
+        }}
+        onCreate={openCreate}
+        onEditRow={(row) => setDrawerMerchant(row as unknown as MerchantOverviewRow)}
+        rowActions={(row) => {
+          const m = row as unknown as MerchantOverviewRow;
+          return [
+            { label: 'Edit configuration', run: () => openEdit(m) },
+            {
+              label: m.is_enabled ? 'Disable' : 'Enable',
+              run: () => handleToggle(m, !m.is_enabled),
+            },
+            { label: 'Sync now', run: () => handleSync(m), disabled: syncing === m.merchant_id },
+            { label: 'Delete…', run: () => handleDelete(m), destructive: true },
+          ];
+        }}
+      />
       <MerchantDrawer
         merchant={drawerMerchant}
         days={days}
         onClose={() => setDrawerMerchant(null)}
       />
-
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
           <DialogHeader>
@@ -516,7 +392,10 @@ export function MerchantsManager({
                 onChange={(v) =>
                   setForm((f) => ({
                     ...f,
-                    config: v && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : {},
+                    config:
+                      v && typeof v === 'object' && !Array.isArray(v)
+                        ? (v as Record<string, unknown>)
+                        : {},
                   }))
                 }
                 label="Config"

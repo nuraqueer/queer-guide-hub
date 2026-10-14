@@ -2,12 +2,21 @@
  * @vitest-environment jsdom
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { renderWithProviders, screen, fireEvent } from '@/test/test-utils';
 
 const { useAffiliateMock } = vi.hoisted(() => ({ useAffiliateMock: vi.fn() }));
 
 vi.mock('sonner', () => ({ toast: Object.assign(vi.fn(), { success: vi.fn(), error: vi.fn() }) }));
 vi.mock('@/hooks/useAffiliateLinks', () => ({ useAffiliateLinks: useAffiliateMock }));
+vi.mock('@/hooks/useContentViews', () => ({
+  useContentViews: () => ({
+    views: [],
+    loading: false,
+    create: vi.fn(),
+    update: vi.fn(),
+    remove: vi.fn(),
+  }),
+}));
 
 import { AffiliatePartnersManager } from '../AffiliatePartnersManager';
 
@@ -23,14 +32,15 @@ beforeEach(() => {
 });
 
 describe('AffiliatePartnersManager', () => {
-  it('renders partner rows', () => {
-    render(<AffiliatePartnersManager />);
-    expect(screen.getByText('Booking.com')).toBeInTheDocument();
+  it('renders partner rows', async () => {
+    renderWithProviders(<AffiliatePartnersManager />);
+    expect(await screen.findByText('Booking.com')).toBeInTheDocument();
   });
 
   it('opens dialog on Add', () => {
-    render(<AffiliatePartnersManager />);
-    const buttons = screen.getAllByRole('button');
-    fireEvent.click(buttons[0]);
+    renderWithProviders(<AffiliatePartnersManager />);
+    fireEvent.click(screen.getByRole('button', { name: 'Add Partner' }));
+    expect(screen.getByRole('dialog', { name: 'Add Affiliate Partner' })).toBeInTheDocument();
+    expect(screen.getByLabelText('Partner Name *')).toHaveValue('');
   });
 });

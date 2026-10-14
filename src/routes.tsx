@@ -1,3 +1,4 @@
+import { GovernanceRedirect } from '@/components/admin/GovernanceRedirect';
 import React, { Suspense } from 'react';
 import { Routes, Route, Navigate, useLocation, useParams } from 'react-router';
 import { useTranslation } from 'react-i18next';
@@ -13,6 +14,7 @@ import { lazyRetry } from '@/utils/lazyRetry';
 import { submissionRegistry } from '@/config/submissionRegistry';
 import { DEFAULT_LOCALE, isSupportedLocale } from '@/i18n/languages';
 import { useAuth } from '@/hooks/useAuth';
+import { legacySettingsDestination } from '@/lib/profileEditing';
 
 const Index = lazyRetry(() => import('./pages/Index'));
 const Venues = lazyRetry(() => import('./pages/Venues'));
@@ -74,9 +76,11 @@ const AdminShell = lazyRetry(() =>
 // Admin page components (rendered inside AdminShell via Outlet)
 const AdminDashboard = lazyRetry(() => import('./pages/admin/AdminDashboard'));
 const AdminAnalytics = lazyRetry(() => import('./pages/admin/AdminAnalytics'));
-const AdminMaps = lazyRetry(() => import('./pages/admin/AdminMaps'));
 const AdminUsers = lazyRetry(() => import('./pages/admin/AdminUsers'));
 const AdminTags = lazyRetry(() => import('./pages/admin/AdminTags'));
+const AdminNewsSources = lazyRetry(() => import('./pages/admin/AdminNewsSources'));
+const AdminNewsAuthors = lazyRetry(() => import('./pages/admin/AdminNewsAuthors'));
+const AdminNewsAuthorArticles = lazyRetry(() => import('./pages/admin/AdminNewsAuthorArticles'));
 const Cities = lazyRetry(() => import('./pages/Cities'));
 const CitiesCompare = lazyRetry(() => import('./pages/cities/Compare'));
 const CityDetail = lazyRetry(() => import('./pages/CityDetail'));
@@ -88,19 +92,16 @@ const PersonalityDataSheet = lazyRetry(() => import('./pages/admin/PersonalityDa
 const PersonalitiesAdmin = lazyRetry(() => import('./pages/admin/PersonalitiesAdmin'));
 const MilestonesAdmin = lazyRetry(() => import('./pages/admin/MilestonesAdmin'));
 const AdminMailbox = lazyRetry(() => import('./pages/admin/AdminMailbox'));
-const AdminLiveness = lazyRetry(() => import('./pages/admin/AdminLiveness'));
+const AdminDiagnostics = lazyRetry(() => import('./pages/admin/QualityHub'));
 const AdminTrash = lazyRetry(() => import('./pages/admin/AdminTrash'));
 const ContentGraph = lazyRetry(() => import('./pages/admin/ContentGraph'));
 const EmailTemplates = lazyRetry(() => import('./pages/admin/EmailTemplates'));
-const AdminPlacesEditorial = lazyRetry(() => import('./pages/admin/AdminPlacesEditorial'));
 const AdminPipelines = lazyRetry(() => import('./pages/admin/AdminPipelines'));
-const AdminEmailIngestions = lazyRetry(() => import('./pages/admin/AdminEmailIngestions'));
-const AdminImports = lazyRetry(() => import('./pages/admin/AdminImports'));
-const AdminEventQuality = lazyRetry(() => import('./pages/admin/AdminEventQuality'));
-const AdminGroupRequests = lazyRetry(() => import('./pages/admin/AdminGroupRequests'));
+
 const AdminSearchIntelligence = lazyRetry(() => import('./pages/admin/AdminSearchIntelligence'));
 const AdminDesignSystem = lazyRetry(() => import('./pages/admin/DesignSystem'));
 const AdminStyleguide = lazyRetry(() => import('./pages/admin/AdminStyleguide'));
+const AdminRedirects = lazyRetry(() => import('./pages/admin/AdminRedirects'));
 
 // New feature pages
 const Hotels = lazyRetry(() => import('./pages/Hotels'));
@@ -111,13 +112,14 @@ const PlaceDetail = lazyRetry(() => import('./pages/PlaceDetail'));
 
 // New admin pages
 const AdminGeography = lazyRetry(() => import('./pages/admin/AdminGeography'));
+const AdminPlacesEditorial = lazyRetry(() => import('./pages/admin/AdminPlacesEditorial'));
 const AdminGovernance = lazyRetry(() => import('./pages/admin/AdminGovernance'));
 const AdminAutomation = lazyRetry(() => import('./pages/admin/AdminAutomation'));
 const AdminFeedback = lazyRetry(() => import('./pages/admin/feedback'));
 const AdminNotFound = lazyRetry(() => import('./pages/admin/AdminNotFound'));
 const AdminAffiliate = lazyRetry(() => import('./pages/admin/AdminAffiliate'));
 const AdminBusiness = lazyRetry(() => import('./pages/admin/AdminBusiness'));
-const AdminBusinessDetail = lazyRetry(() => import('./pages/admin/AdminBusinessDetail'));
+const OrganisationsWorkspace = lazyRetry(() => import('./pages/admin/OrganisationsWorkspace'));
 
 // CMS components rendered as admin views
 const ContentListPanel = lazyRetry(() =>
@@ -157,7 +159,6 @@ const PodcastShow = lazyRetry(() => import('./pages/PodcastShow'));
 const NewsDetail = lazyRetry(() => import('./pages/NewsDetail'));
 const NewsStoryDetail = lazyRetry(() => import('./pages/NewsStoryDetail'));
 
-const Settings = lazyRetry(() => import('./pages/Settings'));
 const IntimateOnboard = lazyRetry(() => import('./pages/intimate/IntimateOnboard'));
 const Cruising = lazyRetry(() => import('./pages/Cruising'));
 const IntimateUserDetail = lazyRetry(() => import('./pages/intimate/IntimateUserDetail'));
@@ -187,10 +188,27 @@ const CMSPage = lazyRetry(() => import('./pages/Page'));
 const ShareTarget = lazyRetry(() => import('./pages/ShareTarget'));
 const PridePage = lazyRetry(() => import('./pages/Pride'));
 
-/** Preserves ?tab=/?section= deep links when /profile/settings moves to /settings. */
-function SettingsRedirect() {
+/** Old settings links now open the authenticated owner's contextual profile editor. */
+function SettingsRedirect({ privacy = false }: { privacy?: boolean }) {
+  const { locale } = useParams<{ locale?: string }>();
   const location = useLocation();
-  return <Navigate to={`/settings${location.search}`} replace />;
+  const { user, loading } = useAuth();
+  const prefix =
+    locale && isSupportedLocale(locale) && locale !== DEFAULT_LOCALE ? `/${locale}` : '';
+  if (loading) return <PageLoadingState variant="list" count={2} />;
+  if (!user)
+    return (
+      <Navigate
+        to={`${prefix}/auth?redirect=${encodeURIComponent(location.pathname + location.search + location.hash)}`}
+        replace
+      />
+    );
+  return (
+    <Navigate
+      to={`${prefix}${legacySettingsDestination(user.id, location.search, privacy)}${location.hash}`}
+      replace
+    />
+  );
 }
 
 /** /admin/review merged into governance triage — preserve ?tab=/?queue= deep links. */
@@ -199,26 +217,6 @@ function ReviewRedirect() {
   return (
     <Navigate to={`/admin/governance?mode=triage&${location.search.replace(/^\?/, '')}`} replace />
   );
-}
-
-/**
- * The three governance surfaces collapsed onto one route (`?mode=`), with the
- * old paths kept as search-preserving shims.
- *
- * SHIMS RATHER THAN A SWEEP. ~60 places name these URLs — 12 `duplicatesRoute`
- * and 5 `qualityRoute` literals across `src/config/contentTypes/*`, 3 nav
- * entries, 8 hardcoded component links, and 16 `?queue=` builders. Redirecting
- * keeps every one of them working on the day this lands, so the sweep is
- * opportunistic instead of a 60-file change that has to be right all at once.
- *
- * `useLocation().search` is carried through because `?queue=` is orthogonal to
- * `?mode=`: `/admin/inbox?queue=quality-city` must survive as
- * `/admin/governance?mode=triage&queue=quality-city`, not lose its filter.
- */
-function GovernanceRedirect({ mode }: { mode: 'triage' | 'engines' | 'merge' }) {
-  const location = useLocation();
-  const rest = location.search.replace(/^\?/, '');
-  return <Navigate to={`/admin/governance?mode=${mode}${rest ? `&${rest}` : ''}`} replace />;
 }
 
 /** Maps the legacy /profile/footprint/:userId/public URL to the unified profile Travel tab. */
@@ -428,26 +426,33 @@ export const AppRoutes = () => {
                   {/* Vendors and brands were absorbed by the Business console. */}
                   <Route
                     path="vendors"
-                    element={<Navigate to="/admin/business?tab=merchants" replace />}
+                    element={<Navigate to="/admin/content/organizations?tab=merchants" replace />}
                   />
                   <Route
                     path="brands"
-                    element={<Navigate to="/admin/business?tab=brands" replace />}
+                    element={<Navigate to="/admin/content/organizations?tab=brands" replace />}
                   />
                   <Route path="business" element={<AdminBusiness />} />
-                  <Route path="business/:id" element={<AdminBusinessDetail />} />
-                  <Route path="maps" element={<AdminMaps />} />
+                  <Route path="business/:id" element={<AdminBusiness />} />
+                  <Route path="maps" element={<Navigate to="/admin" replace />} />
                   <Route path="security" element={<SecurityMonitoringDashboard />} />
                   <Route path="cloudflare" element={<CloudflareDashboard />} />
 
                   {/* Content section -- unified list + per-type views */}
                   <Route path="content" element={<ContentListPanel />} />
+                  <Route path="content/organizations" element={<OrganisationsWorkspace />} />
                   {/* Personalities gets a Personencheck dashboard header above the
                     generic list; static path wins over content/:type. */}
                   <Route path="content/personalities" element={<PersonalitiesAdmin />} />
                   {/* Milestones reuse the generic list but add an "AI suggestions"
                     action above it; static path wins over content/:type. */}
                   <Route path="content/milestones" element={<MilestonesAdmin />} />
+                  <Route path="content/unified_tags" element={<AdminTags />} />
+                  <Route path="content/redirects" element={<AdminRedirects />} />
+                  <Route
+                    path="content/redirects/manual"
+                    element={<ContentListPanel contentTypeId="redirects" />}
+                  />
                   <Route path="content/:type" element={<ContentListPanel />} />
                   {/* /admin/pages duplicated /admin/content/cms_pages (what nav points at);
                     kept as a redirect for old bookmarks. */}
@@ -458,19 +463,22 @@ export const AppRoutes = () => {
                   <Route path="media" element={<MediaLibrary />} />
                   <Route path="media/:id" element={<MediaDetailPage />} />
 
-                  {/* Imports & Data section — admin-internal aliases for the old
-                    /admin/imports/* surfaces were pruned 2026-07 (migration to
-                    /admin/pipelines completed 2026-04); a catch-all keeps deep
-                    bookmarks landing on the pipelines hub. */}
-                  <Route path="imports/email-ingestions" element={<AdminEmailIngestions />} />
-                  <Route path="imports/data" element={<AdminImports />} />
+                  {/* Legacy import URLs retain bookmarks while Sources owns the tools. */}
+                  <Route
+                    path="imports/email-ingestions"
+                    element={<Navigate to="/admin/pipelines?tab=sources&sub=email" replace />}
+                  />
+                  <Route
+                    path="imports/data"
+                    element={<Navigate to="/admin/pipelines?tab=sources&sub=imports" replace />}
+                  />
                   <Route path="imports/*" element={<Navigate to="/admin/pipelines" replace />} />
                   <Route path="imports" element={<Navigate to="/admin/pipelines" replace />} />
                   <Route path="workflows" element={<Navigate to="/admin/pipelines" replace />} />
                   <Route path="pipelines" element={<AdminPipelines />} />
                   <Route
                     path="ingestion-rules"
-                    element={<Navigate to="/admin/imports/data" replace />}
+                    element={<Navigate to="/admin/pipelines?tab=sources&sub=imports" replace />}
                   />
                   <Route
                     path="pipelines/dashboard"
@@ -484,6 +492,8 @@ export const AppRoutes = () => {
                   {/* Review & Workflow section -- unified dashboard */}
                   <Route path="review" element={<ReviewRedirect />} />
                   <Route path="governance" element={<AdminGovernance />} />
+                  <Route path="diagnostics" element={<AdminDiagnostics />} />
+                  <Route path="editorial-tools" element={<AdminPlacesEditorial />} />
                   <Route path="inbox" element={<GovernanceRedirect mode="triage" />} />
                   <Route path="automation" element={<AdminAutomation />} />
                   <Route path="feedback" element={<AdminFeedback />} />
@@ -514,8 +524,14 @@ export const AppRoutes = () => {
                   <Route path="quality" element={<GovernanceRedirect mode="engines" />} />
                   <Route path="trash" element={<AdminTrash />} />
                   <Route path="graph" element={<ContentGraph />} />
-                  <Route path="content/liveness" element={<AdminLiveness />} />
-                  <Route path="content/event-quality" element={<AdminEventQuality />} />
+                  <Route
+                    path="content/liveness"
+                    element={<Navigate to="/admin?queue=liveness" replace />}
+                  />
+                  <Route
+                    path="content/event-quality"
+                    element={<Navigate to="/admin?queue=event-quality" replace />}
+                  />
                   <Route
                     path="content/city-quality"
                     element={<Navigate to="/admin/quality" replace />}
@@ -542,11 +558,18 @@ export const AppRoutes = () => {
                     path="content/village-quality"
                     element={<Navigate to="/admin/quality" replace />}
                   />
-                  <Route path="content/group-requests" element={<AdminGroupRequests />} />
+                  <Route
+                    path="content/community_groups/requests"
+                    element={<Navigate to="/admin?queue=group-requests" replace />}
+                  />
+                  <Route
+                    path="content/group-requests"
+                    element={<Navigate to="/admin/content/community_groups/requests" replace />}
+                  />
                   {/* Hotel CRUD now lives in the Business console's Hotels tab. */}
                   <Route
                     path="hotels"
-                    element={<Navigate to="/admin/business?tab=hotels" replace />}
+                    element={<Navigate to="/admin/content/organizations?tab=hotels" replace />}
                   />
                   <Route
                     path="villages"
@@ -563,7 +586,10 @@ export const AppRoutes = () => {
                   <Route path="email-templates" element={<EmailTemplates />} />
 
                   {/* Settings -- taxonomy management pages */}
-                  <Route path="settings" element={<AdminTags />} />
+                  <Route
+                    path="settings"
+                    element={<Navigate to="/admin/content/unified_tags" replace />}
+                  />
                   <Route
                     path="settings/venue-services"
                     element={<Navigate to="/admin/content/venue_services" replace />}
@@ -594,7 +620,10 @@ export const AppRoutes = () => {
                   />
 
                   {/* Legacy routes -- redirect to new paths */}
-                  <Route path="venues" element={<Navigate to="/admin/content/organizations" replace />} />
+                  <Route
+                    path="venues"
+                    element={<Navigate to="/admin/content/organizations" replace />}
+                  />
                   <Route path="duplicates" element={<GovernanceRedirect mode="merge" />} />
                   <Route path="events" element={<Navigate to="/admin/content/events" replace />} />
                   <Route
@@ -611,7 +640,10 @@ export const AppRoutes = () => {
                     element={<Navigate to="/admin/content/personalities" replace />}
                   />
                   <Route path="quests" element={<Navigate to="/admin/content/guides" replace />} />
-                  <Route path="places-editorial" element={<AdminPlacesEditorial />} />
+                  <Route
+                    path="places-editorial"
+                    element={<GovernanceRedirect mode="editorial" />}
+                  />
                   <Route
                     path="marketplace"
                     element={<Navigate to="/admin/content/marketplace_listings" replace />}
@@ -628,10 +660,9 @@ export const AppRoutes = () => {
                     path="groups"
                     element={<Navigate to="/admin/content/community_groups" replace />}
                   />
-                  <Route
-                    path="news-sources"
-                    element={<Navigate to="/admin/pipelines?tab=sources" replace />}
-                  />
+                  <Route path="news-authors" element={<AdminNewsAuthors />} />
+                  <Route path="news-authors/articles" element={<AdminNewsAuthorArticles />} />
+                  <Route path="news-sources" element={<AdminNewsSources />} />
                   <Route path="cms" element={<Navigate to="/admin/content" replace />} />
                   <Route path="import-hub" element={<Navigate to="/admin/pipelines" replace />} />
                   <Route path="festivals" element={<Navigate to="/admin/events" replace />} />
@@ -1029,6 +1060,7 @@ export const AppRoutes = () => {
                   <Route path="hub/messages" element={<HubPage module="messages" />} />
                   <Route path="hub/plans" element={<HubPage module="plans" />} />
                   <Route path="hub/saved" element={<HubPage module="saved" />} />
+                  <Route path="hub/settings" element={<SettingsRedirect />} />
                   {/* Retired module paths → their consolidated home. LocalizedRedirect
                   preserves the query string (e.g. ?conversation=). */}
                   <Route path="hub/calendar" element={<LocalizedRedirect to="/hub/plans" />} />
@@ -1049,13 +1081,11 @@ export const AppRoutes = () => {
                   <Route path="me/passport" element={<MeRedirect tab="progress" />} />
                   <Route path="me/missions" element={<MeRedirect tab="progress" />} />
                   <Route path="me/leaderboard" element={<MeRedirect tab="progress" />} />
-                  <Route path="me/settings" element={<Navigate to="/settings" replace />} />
+                  <Route path="me/settings" element={<SettingsRedirect />} />
+                  <Route path="me/account" element={<MeRedirect tab="account" />} />
                   <Route path="me/tiers" element={<MeRedirect tab="progress" />} />
-                  <Route path="settings" element={<Settings />} />
-                  <Route
-                    path="settings/privacy"
-                    element={<Navigate to="/settings?section=privacy" replace />}
-                  />
+                  <Route path="settings" element={<SettingsRedirect />} />
+                  <Route path="settings/privacy" element={<SettingsRedirect privacy />} />
                   <Route path="profile/settings" element={<SettingsRedirect />} />
                   {/* Legacy People routes preserve inbound links while Hub remains
                   the single canonical shell. */}

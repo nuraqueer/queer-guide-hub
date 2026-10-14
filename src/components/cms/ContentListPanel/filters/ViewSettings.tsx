@@ -2,7 +2,6 @@ import type { ReactNode } from 'react';
 import { CalendarDays, Columns, GanttChart, LayoutGrid, Settings2, Table2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import {
   Select,
   SelectContent,
@@ -37,6 +36,7 @@ const LAYOUTS = [
 const NONE = '__none__';
 
 interface Props {
+  tableOnly?: boolean;
   lifecycleControls?: ReactNode;
   config: ContentTypeConfig;
   view: ContentView;
@@ -50,6 +50,7 @@ interface Props {
 }
 
 export function ViewSettings({
+  tableOnly,
   lifecycleControls,
   config,
   view,
@@ -82,7 +83,7 @@ export function ViewSettings({
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-[380px] max-w-[calc(100vw-2rem)] p-4" align="end">
-        <ScrollArea className="max-h-[70vh] pr-2">
+        <div className="max-h-[min(70vh,calc(var(--radix-popover-content-available-height)_-_2rem))] overflow-y-auto overscroll-contain pr-2">
           {lifecycleControls && (
             <section className="mb-4">
               <p className="mb-2 text-sm font-semibold">Record visibility</p>
@@ -94,20 +95,22 @@ export function ViewSettings({
               Layout
             </h6>
             <div role="radiogroup" aria-label="Layout" className="grid grid-cols-2 gap-1">
-              {LAYOUTS.map(({ id, label, Icon }) => (
-                <Button
-                  key={id}
-                  role="radio"
-                  aria-checked={view === id}
-                  size="sm"
-                  variant={view === id ? 'secondary' : 'ghost'}
-                  className="h-8 justify-start"
-                  onClick={() => onViewChange(id)}
-                >
-                  <Icon size={14} className="mr-1.5" />
-                  {label}
-                </Button>
-              ))}
+              {LAYOUTS.filter((layout) => !tableOnly || layout.id === 'table').map(
+                ({ id, label, Icon }) => (
+                  <Button
+                    key={id}
+                    role="radio"
+                    aria-checked={view === id}
+                    size="sm"
+                    variant={view === id ? 'secondary' : 'ghost'}
+                    className="h-8 justify-start"
+                    onClick={() => onViewChange(id)}
+                  >
+                    <Icon size={14} className="mr-1.5" />
+                    {label}
+                  </Button>
+                ),
+              )}
             </div>
           </section>
 
@@ -179,7 +182,7 @@ export function ViewSettings({
               </Select>
             </section>
           )}
-        </ScrollArea>
+        </div>
       </PopoverContent>
     </Popover>
   );

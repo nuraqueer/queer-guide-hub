@@ -1,6 +1,6 @@
-import { useState } from 'react';
-import { TrackLoader } from '@/components/transit/TrackLoader';
-import { Plus, Edit2, Trash2, Handshake, Globe, AlertCircle, RefreshCw } from 'lucide-react';
+import { ContentListPanel } from '@/components/cms/ContentListPanel';
+import { partnerListConfig } from '@/components/admin/business/organisationListConfigs';
+import { useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -13,8 +13,6 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
-import { Badge } from '@/components/ui/badge';
-import { AdminEmpty } from '@/components/admin/primitives/AdminEmpty';
 import { useAffiliateLinks } from '@/hooks/useAffiliateLinks';
 import { toast } from 'sonner';
 import { StructuredValueEditor } from '@/components/cms/fields/structured/StructuredValueEditor';
@@ -56,11 +54,6 @@ export function AffiliatePartnersManager({
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
 
-  const partners = organizationId
-    ? allPartners.filter(
-        (p) => (p as unknown as Record<string, unknown>).organization_id === organizationId,
-      )
-    : allPartners;
   const shell = embedded ? '' : 'p-6 max-w-[1000px] mx-auto';
 
   const openCreate = () => {
@@ -69,7 +62,7 @@ export function AffiliatePartnersManager({
     setDialogOpen(true);
   };
 
-  const openEdit = (p: (typeof partners)[0]) => {
+  const openEdit = (p: (typeof allPartners)[0]) => {
     setEditId(p.id);
     setForm({
       partner_name: p.partner_name,
@@ -121,7 +114,10 @@ export function AffiliatePartnersManager({
         await updatePartner(editId, payload);
         toast.success('Partner updated');
       } else {
-        await createPartner(payload);
+        await createPartner({
+          ...payload,
+          ...(organizationId ? { organization_id: organizationId } : {}),
+        });
         toast.success('Partner created');
       }
       setDialogOpen(false);
@@ -144,104 +140,43 @@ export function AffiliatePartnersManager({
     }
   };
 
-  if (loading) {
-    return (
-      <div className="flex justify-center py-16">
-        <TrackLoader size={24} label="Loading" />
-      </div>
-    );
-  }
-
-  if (fetchError) {
-    return (
-      <div className={shell}>
-        <div className="rounded-element bg-card shadow-soft p-8 text-center">
-          <AlertCircle size={32} style={{ margin: '0 auto 12px' }} className="text-destructive" />
-          <h6 className="text-lg font-medium mb-1">Failed to load affiliate partners</h6>
-          <p className="text-muted-foreground mb-4">{fetchError}</p>
-          <Button onClick={fetchPartners} variant="outline">
-            <RefreshCw size={16} className="mr-2" />
-            Retry
-          </Button>
-        </div>
-      </div>
-    );
-  }
-
+  const listRows = useMemo(
+    () =>
+      allPartners
+        .filter(
+          (p) =>
+            !organizationId ||
+            (p as unknown as Record<string, unknown>).organization_id === organizationId,
+        )
+        .map((p) => ({ ...p, status: p.enabled ? 'active' : 'disabled' })),
+    [allPartners, organizationId],
+  );
   return (
     <div className={shell}>
-      <div className="flex justify-between items-center mb-6">
-        <h5 className="text-xl font-medium flex items-center gap-2">
-          <Handshake size={24} />
-          Affiliate Partners
-        </h5>
-        <Button onClick={openCreate}>
-          <Plus className="w-4 h-4 mr-1" /> Add Partner
-        </Button>
-      </div>
-
-      {partners.length === 0 ? (
-        <div className="rounded-element bg-card shadow-soft">
-          <AdminEmpty
-            noun={organizationId ? 'affiliate partners for this business' : 'affiliate partners'}
-            icon={Handshake}
-          />
-        </div>
-      ) : (
-        <div className="flex flex-col gap-4">
-          {partners.map((p) => (
-            <div
-              key={p.id}
-              className="rounded-element bg-card shadow-soft p-6 flex items-center gap-4"
-            >
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 mb-1">
-                  <span className="text-base font-semibold">{p.partner_name}</span>
-                  <Badge
-                    variant="outline"
-                    className={p.enabled ? 'border border-foreground/40 text-foreground' : ''}
-                  >
-                    {p.enabled ? 'Active' : 'Disabled'}
-                  </Badge>
-                </div>
-                <div className="flex flex-wrap gap-1 mb-1">
-                  {p.domains.map((d) => (
-                    <Badge key={d} variant="outline" className="gap-1">
-                      <Globe size={12} />
-                      {d}
-                    </Badge>
-                  ))}
-                </div>
-                {Object.keys(p.parameters).length > 0 && (
-                  <p className="text-xs text-muted-foreground">
-                    Params:{' '}
-                    {Object.entries(p.parameters)
-                      .map(([k, v]) => `${k}=${v}`)
-                      .join(', ')}
-                  </p>
-                )}
-              </div>
-              <Button
-                size="sm"
-                variant="ghost"
-                aria-label="Edit partner"
-                onClick={() => openEdit(p)}
-              >
-                <Edit2 className="w-4 h-4" />
-              </Button>
-              <Button
-                size="sm"
-                variant="ghost"
-                aria-label="Delete partner"
-                onClick={() => handleDelete(p.id, p.partner_name)}
-              >
-                <Trash2 className="w-4 h-4 text-destructive" />
-              </Button>
-            </div>
-          ))}
-        </div>
-      )}
-
+      <ContentListPanel
+        contentTypeId={partnerListConfig.id}
+        configOverride={partnerListConfig}
+        workspace
+        operational
+        hideHeader
+        source={{ rows: listRows, loading, error: fetchError, refresh: fetchPartners }}
+        onCreate={openCreate}
+        onEditRow={(row) => openEdit(row as unknown as (typeof allPartners)[number])}
+        rowActions={(row) => [
+          {
+            label: row.enabled ? 'Disable' : 'Enable',
+            run: async () => {
+              await updatePartner(String(row.id), { enabled: !row.enabled });
+              fetchPartners();
+            },
+          },
+          {
+            label: 'Delete…',
+            destructive: true,
+            run: () => handleDelete(String(row.id), String(row.partner_name)),
+          },
+        ]}
+      />
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
@@ -283,7 +218,10 @@ export function AffiliatePartnersManager({
                 onChange={(v) =>
                   setForm((f) => ({
                     ...f,
-                    parameters: v && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : {},
+                    parameters:
+                      v && typeof v === 'object' && !Array.isArray(v)
+                        ? (v as Record<string, unknown>)
+                        : {},
                   }))
                 }
                 label="Parameters"

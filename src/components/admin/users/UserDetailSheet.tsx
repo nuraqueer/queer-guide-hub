@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { listFromWhere } from '@/hooks/usePageFetchers';
+import { fetchAdminUserDetail } from '@/lib/adminUsers';
 import { useAdminRoles } from '@/hooks/useAdminRoles';
 import { useSecureRoleManagement } from '@/hooks/useSecureRoleManagement';
 
@@ -58,7 +59,7 @@ interface UserDetailSheetProps {
 
 const ROLE_COLORS: Record<string, string> = {
   admin: 'hsl(var(--destructive))',
-  moderator: 'hsl(var(--foreground) / 0.55)',
+  moderator: 'hsl(var(--foreground))',
   editor: 'hsl(var(--muted-foreground))',
   contributor: 'hsl(var(--foreground))',
 };
@@ -73,7 +74,16 @@ export function UserDetailSheet({ user, open, onOpenChange, onUserUpdated }: Use
   const [rolesLoading, setRolesLoading] = useState(false);
   const [confirmAdminRole, setConfirmAdminRole] = useState(false);
   const [_selectedRole, setSelectedRole] = useState<string>('');
-  const [fullProfile, setFullProfile] = useState<Record<string, unknown> | null>(null);
+  const {
+    data: fullProfile,
+    isLoading: profileLoading,
+    isError: profileError,
+    refetch: refetchProfile,
+  } = useQuery({
+    queryKey: ['admin-user-detail', user?.user_id],
+    enabled: !!user && open,
+    queryFn: () => fetchAdminUserDetail(user!.user_id),
+  });
 
   const displayName = user?.display_name || user?.first_name || 'Anonymous';
 
@@ -81,10 +91,8 @@ export function UserDetailSheet({ user, open, onOpenChange, onUserUpdated }: Use
     if (user && open) {
       // eslint-disable-next-line react-hooks/immutability -- function declared below; effect/callback fires after render so the binding is initialized when called.
       fetchUserRoles();
-      // eslint-disable-next-line react-hooks/immutability -- function declared below; effect/callback fires after render so the binding is initialized when called.
-      fetchFullProfile();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- fetchUserRoles/fetchFullProfile/user are stable, re-run on user_id/open change
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- re-run role fetch on user_id/open change
   }, [user?.user_id, open]);
 
   const fetchUserRoles = async () => {
@@ -98,21 +106,6 @@ export function UserDetailSheet({ user, open, onOpenChange, onUserUpdated }: Use
     } finally {
       setRolesLoading(false);
     }
-  };
-
-  const fetchFullProfile = async () => {
-    if (!user) return;
-    const rows = await listFromWhere<{
-      bio: string | null;
-      gender_identity: string | null;
-      pronouns: string | null;
-      sexual_orientation: string | null;
-      location: string | null;
-      date_of_birth: string | null;
-    }>('profiles', 'bio, gender_identity, pronouns, sexual_orientation, location, date_of_birth', [
-      { col: 'user_id', val: user.user_id },
-    ]);
-    setFullProfile(rows[0] ?? null);
   };
 
   const handleAssignRole = async (role: AppRole) => {
@@ -228,6 +221,15 @@ export function UserDetailSheet({ user, open, onOpenChange, onUserUpdated }: Use
             {/* Overview Tab */}
             <TabsContent value="overview">
               <div className="flex flex-col gap-4 mt-2">
+                {profileLoading && <Skeleton className="w-full h-10" />}
+                {profileError && (
+                  <div role="alert" className="space-y-2 text-sm">
+                    <p>Could not load user details.</p>
+                    <Button variant="outline" size="sm" onClick={() => void refetchProfile()}>
+                      Retry details
+                    </Button>
+                  </div>
+                )}
                 {fullProfile?.bio !== undefined && fullProfile?.bio !== null && (
                   <div>
                     <span className="text-xs text-muted-foreground">Bio</span>
@@ -370,7 +372,9 @@ export function UserDetailSheet({ user, open, onOpenChange, onUserUpdated }: Use
                 {isAdmin && (
                   <UserDangerZone
                     userId={user.user_id}
-                    confirmationHandle={user.username ?? user.email ?? null}
+                    confirmationHandle={
+                      fullProfile?.username ?? user.username ?? user.email ?? null
+                    }
                     displayName={displayName}
                     onDone={handleDestroyed}
                   />

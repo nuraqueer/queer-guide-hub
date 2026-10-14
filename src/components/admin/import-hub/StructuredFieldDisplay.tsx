@@ -1,3 +1,8 @@
+import { StructuredValueView } from '@/components/cms/fields/structured/StructuredValueView';
+import {
+  contentKind,
+  summarizeStructured,
+} from '@/components/cms/fields/structured/structuredValue';
 import React from 'react';
 import { Badge } from '@/components/ui/badge';
 import { ExternalLink, Check, X } from 'lucide-react';
@@ -116,6 +121,8 @@ function formatValue(value: unknown, type: FieldDef['type']): React.ReactNode {
     return <span className="text-sm italic text-muted-foreground">—</span>;
   }
 
+  if (contentKind(value) !== 'text') return <StructuredValueView value={value} />;
+
   switch (type) {
     case 'boolean':
       return value ? (
@@ -208,7 +215,7 @@ export function StructuredFieldDisplay({
           return (
             <div key={field.key} className="flex items-center gap-1">
               <span className="text-xs font-medium text-muted-foreground">{field.label}:</span>
-              <span className="text-xs">{String(val).slice(0, 60)}</span>
+              <span className="text-xs">{summarizeStructured(val).slice(0, 60)}</span>
             </div>
           );
         })}

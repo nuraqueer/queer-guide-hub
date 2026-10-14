@@ -21,6 +21,13 @@ export const pageFields: FieldConfig[] = [
     helpText: 'Short summary for listings',
   },
   {
+    name: 'body_html',
+    label: 'Main Text',
+    type: 'richtext',
+    group: 'basic',
+    colSpan: 2,
+  },
+  {
     name: 'page_type',
     label: 'Page Type',
     type: 'select',
@@ -66,7 +73,14 @@ export const cmsPagesContentType: ContentTypeConfig = {
   hasRichText: true,
   defaults: { page_type: 'blog_post', workflow_state: 'draft', visibility_level: 'private' },
   fieldGroupOrder: ['basic', 'seo', 'media'],
-  translatableFields: ['title', 'subtitle', 'excerpt', 'body_html', 'meta_title', 'meta_description'],
+  translatableFields: [
+    'title',
+    'subtitle',
+    'excerpt',
+    'body_html',
+    'meta_title',
+    'meta_description',
+  ],
   commentable: true,
   aiAssist: {
     ops: ['summarize', 'seo_draft', 'auto_tag'],

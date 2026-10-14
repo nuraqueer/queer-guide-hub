@@ -1,3 +1,4 @@
+import { personAuthorCandidate } from '../_shared/news-author.ts'
 // Pure RSS/podcast parsing helpers — no I/O, unit-testable.
 // Used by source-rss-news/index.ts; kept out of index.ts so tests can import
 // without triggering its Deno.serve() entrypoint.
@@ -32,7 +33,12 @@ export function parseRssItems(
   const items: Record<string, unknown>[] = []
   if (maxItems <= 0) return items
   // Computed ONCE, outside the loop — it is a property of the feed, not the item.
-  const channelImage = isPodcast ? extractChannelImage(xml) : null
+  // One extractChannelMeta call rather than extractChannelImage (which calls it
+  // anyway) plus a second pass for the link: strictly less work than before.
+  const channelMeta = isPodcast ? extractChannelMeta(xml) : null
+  const channelImage = channelMeta?.image ?? null
+  const channelLink = channelMeta?.link ?? null
+  const channelTitle = extractTag(xml.slice(0, xml.search(/<item>/i)), 'title')
   const itemRegex = /<item>([\s\S]*?)<\/item>/gi
   let textBytes = 0
   let match
@@ -67,8 +73,11 @@ export function parseRssItems(
     // Sanitized like the other text fields — `author` never went through
     // cleanText, so it was the one raw string in the payload. Kept null-preserving:
     // extractTag returns string | null and the metadata shape distinguishes them.
-    const authorRaw = extractTag(block, 'dc:creator') || extractTag(block, 'itunes:author') || extractTag(block, 'author')
-    const author = authorRaw ? stripLoneSurrogates(authorRaw) : authorRaw
+    const authorCandidates = [extractTag(block, 'dc:creator'), extractTag(block, 'itunes:author'), extractTag(block, 'author')]
+    const original_author = authorCandidates.find(Boolean) ?? null
+    const author = authorCandidates
+      .map((candidate) => personAuthorCandidate(candidate ? cleanText(stripLoneSurrogates(candidate)) : null, [channelTitle]))
+      .find(Boolean) ?? null
 
     if (!title) continue
     if (!isPodcast && !rawLink) continue
@@ -81,7 +90,28 @@ export function parseRssItems(
       // canonical resource IS its audio. It is never null here (the guard
       // above returned), so a podcast item can no longer be dropped for
       // lacking a `<link>` — which is the normal shape of a podcast feed.
-      const link = webLink ?? audioUrl
+      //
+      // A `<link>` identical to the CHANNEL's own link is the show homepage,
+      // not the episode, and it is a VALID http URL — so firstHttpUrl accepts
+      // it and every episode in the feed comes out with the same url. That is
+      // not cosmetic: index.ts keys the staging row on `article.url`
+      // (`sourceId`), so one such feed collapses its whole archive into a
+      // single row, and two of them collide with each other. Measured on
+      // 2026-10-14: `The Bald and the Beautiful with Trixie and Katya` and
+      // `Vibe Check` both publish `<link>https://www.siriusxm.com</link>` on
+      // every item — 40 items, 1 distinct url, 40 distinct enclosures — and
+      // both sat at 0 episodes while every source-health field read green
+      // (last_error null, consecutive_empty_fetches 0, last_successful_fetch
+      // set), because the fetch and the parse both genuinely succeeded. Same
+      // class as the `<guid>`-as-link defect above, one column over: there the
+      // link was invalid and loudly rejected, here it is valid and silently
+      // non-unique.
+      //
+      // Falling back to the enclosure is safe in the degenerate direction too:
+      // a genuine single-episode feed whose item link really is the channel
+      // link still gets a correct, unique url from its own audio.
+      const episodeLink = isShowHomepage(webLink, channelLink) ? null : webLink
+      const link = episodeLink ?? audioUrl
       // Per-episode art first, then a typed image enclosure, then the show's own
       // artwork. Most shows declare artwork at CHANNEL level only, so before the
       // channel fallback existed the vast majority of episodes reached
@@ -95,7 +125,7 @@ export function parseRssItems(
       textBytes += (desc || '').length
       items.push({
         title: cleanText(title), content: cleaned,
-        url: link.trim(), image_url: image, author,
+        url: link.trim(), image_url: image, author, original_author,
         published_at: pubDate, excerpt: excerptOf(cleaned),
         media_type: 'podcast', audio_url: audioUrl,
         duration_seconds: parseItunesDuration(extractTag(block, 'itunes:duration')),
@@ -105,12 +135,33 @@ export function parseRssItems(
       textBytes += (desc || '').length
       items.push({
         title: cleanText(title), content: cleaned,
-        url: (webLink ?? rawLink!).trim(), image_url: extractMediaUrl(block), author,
+        url: (webLink ?? rawLink!).trim(), image_url: extractMediaUrl(block), author, original_author,
         published_at: pubDate, excerpt: excerptOf(cleaned),
       })
     }
   }
   return items
+}
+
+/**
+ * Is this item `<link>` just the show's own homepage?
+ *
+ * Compared on a normalised form (trimmed, lower-cased, one trailing slash
+ * dropped) because `https://www.siriusxm.com` and `https://www.siriusxm.com/`
+ * are the same page and a feed is free to spell either.
+ *
+ * Deliberately NARROW: it asks only whether the item link equals the CHANNEL
+ * link. A feed that stamps one constant non-channel URL on every item has the
+ * same defect and is NOT caught here — detecting that needs every item in hand,
+ * and parseRssItems streams with an early exit precisely so an 8.5 MB archive
+ * cannot be fully materialised (see the maxItems header). Under-reaching is the
+ * correct error: a missed feed stays as it is today, while a false positive
+ * would only swap a usable url for the episode's own audio url.
+ */
+export function isShowHomepage(itemLink: string | null, channelLink: string | null): boolean {
+  if (!itemLink || !channelLink) return false
+  const norm = (u: string) => u.trim().toLowerCase().replace(/\/+$/, '')
+  return norm(itemLink) === norm(channelLink)
 }
 
 // Decode the XML entities that appear inside URL attributes (feeds encode

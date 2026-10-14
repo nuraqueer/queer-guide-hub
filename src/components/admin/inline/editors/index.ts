@@ -1,3 +1,4 @@
+import { contentKind } from '@/components/cms/fields/structured/structuredValue';
 import type { ComponentType } from 'react';
 import type { FieldType } from '@/types/cms';
 import { TextEditor } from './TextEditor';
@@ -31,7 +32,15 @@ const REGISTRY: Partial<Record<FieldType, ComponentType<EditorProps>>> = {
   link_list: LinkListEditor,
 };
 
-export function getEditorForFieldType(type: FieldType): ComponentType<EditorProps> | null {
+export function getEditorForFieldType(
+  type: FieldType,
+  value?: unknown,
+): ComponentType<EditorProps> | null {
+  if (['text', 'textarea', 'richtext', 'json'].includes(type)) {
+    const kind = contentKind(value);
+    if (kind === 'structured' || kind === 'unreadable') return StructuredEditor;
+    if (kind === 'richtext') return RichTextInlineEditor;
+  }
   return REGISTRY[type] ?? null;
 }
 

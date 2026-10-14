@@ -17,6 +17,19 @@ describe('adminNavSections shape', () => {
     expect(adminNavSections.map((s) => s.id)).toEqual(['cockpit', 'content', 'data', 'system']);
   });
 
+  it('retires settings navigation while preserving vocabulary role floors', () => {
+    expect(getNavItemByRoute('/admin/settings')).toBeUndefined();
+    expect(getRouteMinRole('/admin/content/unified_tags')).toBe('editor');
+    expect(getRouteMinRole('/admin/settings')).toBe('moderator');
+    expect(getRouteMinRole('/admin/governance')).toBe('moderator');
+  });
+
+  it('places editorial is reached through Governance rather than a separate sidebar destination', () => {
+    const items = adminNavSections.flatMap((section) => section.items);
+    expect(items.filter((item) => item.route === '/admin')).toHaveLength(1);
+    expect(items.some((item) => item.route === '/admin/places-editorial')).toBe(false);
+  });
+
   it('every item has unique id within its section', () => {
     for (const section of adminNavSections) {
       const ids = section.items.map((i) => i.id);
@@ -98,16 +111,24 @@ describe('getBreadcrumbsForRoute', () => {
   it("omits section crumb for cockpit's /admin overview", () => {
     const crumbs = getBreadcrumbsForRoute('/admin');
     // Cockpit's section crumb is suppressed; only Admin Console + Overview.
-    expect(crumbs.map((c) => c.label)).toEqual(['Admin Console', 'Overview']);
+    expect(crumbs.map((c) => c.label)).toEqual(['Admin Console', 'Review queue']);
   });
 
-  it('falls back to prefix match — first matching item wins', () => {
-    // /admin/content/venues/123 startsWith '/admin' (Overview), which is
-    // checked first and short-circuits. This is acceptable behaviour for
-    // the current loop order; the breadcrumb still includes Admin Console.
-    const crumbs = getBreadcrumbsForRoute('/admin/content/venues/123');
-    expect(crumbs[0].label).toBe('Admin Console');
-    expect(crumbs.length).toBeGreaterThan(1);
+  it('uses the most specific item for nested content pages', () => {
+    expect(getBreadcrumbsForRoute('/admin/content/events/123').map((c) => c.label)).toEqual([
+      'Admin Console',
+      'Content',
+      'Events',
+    ]);
+    expect(getBreadcrumbsForRoute('/admin/content/community_groups/requests').at(-1)?.label).toBe(
+      'Groups',
+    );
+  });
+
+  it('does not match a destination that only shares a text prefix', () => {
+    expect(getBreadcrumbsForRoute('/admin/users-extra')).toEqual([
+      { label: 'Admin Console', route: '/admin' },
+    ]);
   });
 
   // The reachability property, swept over the whole tree rather than the two
@@ -249,6 +270,16 @@ describe('getRouteMinRole', () => {
 });
 
 describe('nav and queue role agreement', () => {
+  it('keeps join decisions moderator-only while editors can manage the groups list', () => {
+    expect(getRouteMinRole('/admin/content/community_groups')).toBe('editor');
+    expect(getRouteMinRole('/admin/content/community_groups/requests')).toBe('moderator');
+    expect(getRouteMinRole('/admin/content/group-requests')).toBe('moderator');
+    expect(
+      adminNavSections
+        .flatMap((section) => section.items)
+        .some((item) => item.id === 'group-requests'),
+    ).toBe(false);
+  });
   /**
    * A queue you cannot see must not be a page you can open.
    *
@@ -260,22 +291,17 @@ describe('nav and queue role agreement', () => {
    */
   it('no queue is stricter than the route it points at', () => {
     const mismatches = ADMIN_QUEUES.filter((q) => {
-      // Every triage queue shares the /admin/governance route; only distinct
-      // pages can disagree with their own gate. (Was /admin/inbox until the
-      // three governance surfaces collapsed onto one route.)
-      if (q.route.startsWith('/admin/governance')) return false;
-      return !roleAtLeast(getRouteMinRole(q.route), q.minRole);
+      // Every inbox queue shares the /admin/inbox route; only distinct pages can
+      // disagree with their own gate.
+      if (q.route.startsWith('/admin/inbox')) return false;
+      return !roleAtLeast(getRouteMinRole(q.route.split(/[?#]/)[0]), q.minRole);
     }).map((q) => `${q.route}: queue=${q.minRole} route=${getRouteMinRole(q.route)}`);
 
     expect(mismatches).toEqual([]);
   });
 
   it('checks a non-trivial number of queues (guards a vacuous filter)', () => {
-    const checked = ADMIN_QUEUES.filter((q) => !q.route.startsWith('/admin/governance'));
-    // 4 -> 3: org-link-review used to be a distinct page (/admin/quality) and is
-    // now a mode of the shared route, so it joins the excluded set. Lowered
-    // deliberately rather than left to fail — but it is still a floor, because a
-    // filter that matches nothing satisfies the assertion above trivially.
-    expect(checked.length).toBeGreaterThanOrEqual(3);
+    const checked = ADMIN_QUEUES.filter((q) => !q.route.startsWith('/admin/inbox'));
+    expect(checked.length).toBeGreaterThanOrEqual(4);
   });
 });

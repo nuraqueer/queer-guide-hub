@@ -19,6 +19,9 @@ export const ADMIN_AREA_DESCRIPTIONS: Record<string, string> = {
   '/admin/duplicates':
     'Exact/fuzzy merge power tool across every content type and taxonomy. Nightly-sweep suggestions are reviewed in the inbox.',
   '/admin/content/events': 'Events and festivals. Edit details, check liveness, set featured.',
+  '/admin/news-sources': 'Manage feeds, publisher links and ingestion health.',
+  '/admin/news-authors':
+    'News author bylines. Browse articles, rename authors, and merge duplicate names.',
   '/admin/content/news_articles': 'News articles. Edit, tag, and manage geo and source data.',
   '/admin/content/personalities':
     'LGBTQ+ personalities. Edit profiles, professions, and connections. Freigabe = Visum-Prinzip (5 Stempel) — Info-Karte oben.',
@@ -27,24 +30,25 @@ export const ADMIN_AREA_DESCRIPTIONS: Record<string, string> = {
   '/admin/content/cities': 'Cities. Edit details and merge name-variant duplicates.',
   '/admin/content/countries': 'Countries. Edit metadata, safety, and equality data.',
   '/admin/content/hotels': 'Hotels and BnBs. Edit listings and amenities.',
-  '/admin/business':
-    'Every business on the platform on one spine — directory plus hotels, merchants, brands and partners. Adoption link review lives on /admin/quality.',
+  '/admin/content/organizations':
+    'Manage Organisation identities, locations and relationships, plus hotels, merchants, brands and partners. Link review lives in Quality.',
   '/admin/content/queer_villages':
     'Queer villages and neighborhoods. Edit listings, scores, and venue links.',
   '/admin/content/marketplace_listings':
     'Marketplace products. Edit listings, prices, and affiliate links.',
   '/admin/content/guides': 'Guides. Curate editorial guides, lists, and community quests.',
-  '/admin/content/community_groups': 'Community groups. Edit listings and details.',
+  '/admin/content/community_groups': 'Community groups. Edit listings and review join requests.',
+  '/admin/content/community_groups/requests':
+    'Group join requests. Approve or reject pending members.',
   '/admin/content/group-requests': 'Group join requests. Approve or reject pending members.',
-  '/admin/places-editorial':
-    'Editorial drafts. Review LLM-written hooks and covers before publish.',
+  '/admin/governance':
+    'Review incoming changes, quality engines, tags, places editorial, and duplicates.',
   '/admin/content/unified_tags': 'Tags. Manage the taxonomy, merge duplicates, prune orphans.',
   '/admin/content/cms_pages': 'CMS pages. Edit static and editorial pages.',
   '/admin/media': 'Media & brand assets. Upload, tag, govern access, and version.',
 
   // Review & Data
   '/admin/feedback': 'Community feedback and API error reports. Triage and resolve.',
-  '/admin/imports/email-ingestions': 'Email-based ingestion. Track inbound source subscriptions.',
 
   // Automation
   '/admin/automation': 'Automated workflow rules and triggers.',
@@ -54,7 +58,6 @@ export const ADMIN_AREA_DESCRIPTIONS: Record<string, string> = {
   // System
   '/admin/users': 'Users and roles. Assign admin, moderator, and editor access.',
   '/admin/analytics': 'Platform-wide usage statistics.',
-  '/admin/maps': 'Map tile server status.',
   '/admin/security': 'Security monitoring. RLS, auth, and anomaly detection.',
   '/admin/cloudflare': 'Cloudflare analytics and rules.',
   '/admin/affiliates': 'Affiliate partners. Manage merchant links and payouts.',

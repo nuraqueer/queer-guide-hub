@@ -36,7 +36,8 @@ export function AwinImportDialog() {
         },
       });
       if (error) throw error;
-      if (data?.skipped) {
+      if (data?.error || data?.success === false) throw new Error(data?.error ?? 'Import failed');
+      if (data?.skipped === true) {
         toast.error(`Import skipped: ${data.reason ?? 'feed unavailable'}`);
         return;
       }

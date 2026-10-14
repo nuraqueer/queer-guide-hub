@@ -19,14 +19,18 @@ import {
  * public ownership badges until an admin approves here via the trust-gated
  * approve_marketplace_brand RPC.
  */
-export function BrandReviewQueue() {
+export function BrandReviewQueue({
+  selectedBrand,
+  onReviewed,
+}: { selectedBrand?: BrandReviewRow; onReviewed?: () => void } = {}) {
   const queryClient = useQueryClient();
   // Per-row working state: checked tags + optional note.
   const [drafts, setDrafts] = useState<Record<string, { tags: string[]; note: string }>>({});
 
   const { data: rows, isLoading } = useQuery({
-    queryKey: ['brand-review-queue'],
+    queryKey: ['brand-review-queue', selectedBrand?.id ?? 'pending'],
     queryFn: async (): Promise<BrandReviewRow[]> => {
+      if (selectedBrand) return [selectedBrand];
       const { data, error } = await untypedSupabase.rpc('marketplace_brands_pending', {
         p_limit: 50,
       });
@@ -75,6 +79,7 @@ export function BrandReviewQueue() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['brand-review-queue'] });
       queryClient.invalidateQueries({ queryKey: ['admin-counts'] });
+      onReviewed?.();
     },
   });
 

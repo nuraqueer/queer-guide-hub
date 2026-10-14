@@ -1,3 +1,8 @@
+import { StructuredValueView } from '@/components/cms/fields/structured/StructuredValueView';
+import {
+  contentKind,
+  normalizeStructured,
+} from '@/components/cms/fields/structured/structuredValue';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import { Image as ImageExt } from '@tiptap/extension-image';
@@ -62,9 +67,14 @@ export function RichTextEditor({
   className,
   minHeight = '200px',
 }: RichTextEditorProps) {
+  const normalized = normalizeStructured(value);
+  const kind = contentKind(normalized);
   const editor = useEditor({
     editable,
-    content: value ?? undefined,
+    content:
+      kind === 'structured' || kind === 'unreadable'
+        ? undefined
+        : ((normalized as string | Record<string, unknown> | null) ?? undefined),
     extensions: [
       StarterKit.configure({
         // Disable the built-in codeBlock in favour of CodeBlockLowlight
@@ -99,6 +109,9 @@ export function RichTextEditor({
       onChange?.(ed.getJSON() as Record<string, unknown>, ed.getHTML());
     },
   });
+
+  if (kind === 'structured' || kind === 'unreadable')
+    return <StructuredValueView value={normalized} />;
 
   return (
     <div

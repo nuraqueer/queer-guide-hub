@@ -1,12 +1,13 @@
+import { DataTableBulkEditDialog } from '@/components/admin/data-table/DataTableBulkEditDialog';
+import { ContentListPanel } from '@/components/cms/ContentListPanel';
+import { hotelListConfig } from './organisationListConfigs';
+import { FieldRenderer } from '@/components/cms/fields/FieldRenderer';
 /**
- * Hotels & BnBs manager — the former /admin/hotels page, now a tab of the
- * Business console (that route redirects here). Brings its own AdminEntityTable
- * page shell including padding, so the console mounts it full-bleed.
+ * Hotels registry in the Organisation workspace. The shared CMS list owns
+ * presentation; existing hotel hooks and dialogs own protected mutations.
  */
-import { useState, useMemo } from 'react';
-import { Link } from 'react-router';
+import { useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
@@ -38,12 +39,8 @@ import {
   type ExportColumnDef,
 } from '@/utils/excelExport';
 import { formatDateTime } from '@/lib/format';
-import { AdminEntityTable } from '@/components/admin/data-table';
-import type { AdminTableConfig, AdminColumnMeta } from '@/components/admin/data-table/types';
-import { createColumnHelper } from '@tanstack/react-table';
-import type { AdminTableFeatures } from '@/components/admin/data-table/features';
 import { useQueryClient } from '@tanstack/react-query';
-import { Edit, Trash2, Star, Plus, RefreshCw, Briefcase } from 'lucide-react';
+import { RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router';
 import { usePromoteToOrg } from '@/hooks/useBusinessSpine';
@@ -81,8 +78,6 @@ interface HotelRow {
   created_at: string;
 }
 
-const columnHelper = createColumnHelper<AdminTableFeatures, HotelRow>();
-
 const emptyForm = {
   name: '',
   description: '',
@@ -106,13 +101,15 @@ const emptyForm = {
 
 export function HotelsManager() {
   const { user } = useAuth();
-  const { createHotel, updateHotel, deleteHotel, regenerateSafetyNote } = useHotels();
+  const { createHotel, updateHotel, deleteHotel, regenerateSafetyNote } = useHotels(false);
   const { resolveAddress } = useAddressResolver();
   const queryClient = useQueryClient();
 
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingHotel, setEditingHotel] = useState<HotelRow | null>(null);
   const [formData, setFormData] = useState(emptyForm);
+  const [bulkRows, setBulkRows] = useState<Record<string, unknown>[]>([]);
+  const [listVersion, setListVersion] = useState(0);
   const [regenBusy, setRegenBusy] = useState(false);
   const navigate = useNavigate();
   const promote = usePromoteToOrg();
@@ -122,7 +119,7 @@ export function HotelsManager() {
     try {
       const orgId = await promote.mutateAsync({ entityType: 'hotel', entityId: hotel.id });
       toast.success(`${hotel.name} linked to business`);
-      navigate(`/admin/business/${orgId}`);
+      navigate(`/admin/content/organizations?edit=${orgId}`);
     } catch (e) {
       toast.error(`Error: ${(e as Error).message}`);
     }
@@ -181,6 +178,7 @@ export function HotelsManager() {
     try {
       await deleteHotel(hotel.id);
       toast.success('Hotel deleted');
+      setListVersion((v) => v + 1);
       invalidateTable();
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : 'Failed to delete');
@@ -230,6 +228,7 @@ export function HotelsManager() {
       }
       resetForm();
       setIsDialogOpen(false);
+      setListVersion((v) => v + 1);
       invalidateTable();
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : 'Failed to save');
@@ -253,393 +252,286 @@ export function HotelsManager() {
     await exportToExcel(allData, columns, generateFilename('hotels'));
   };
 
-  const columns = useMemo(
-    () => [
-      columnHelper.accessor('name', {
-        header: 'Name',
-        cell: (info) => (
-          <div>
-            <span className="font-medium">{info.getValue()}</span>
-            <p className="text-sm text-muted-foreground">
-              {HOTEL_TYPES.find((t) => t.value === info.row.original.hotel_type)?.label ||
-                info.row.original.hotel_type}
-              {info.row.original.star_rating && ` · ${info.row.original.star_rating}★`}
-            </p>
-          </div>
-        ),
-        meta: { serverSortable: true, hideable: false } satisfies AdminColumnMeta,
-      }),
-      columnHelper.accessor('city', {
-        header: 'City',
-        cell: (info) => {
-          const h = info.row.original;
-          return [h.city, h.country].filter(Boolean).join(', ') || '-';
-        },
-        meta: { serverSortable: true, hideable: true } satisfies AdminColumnMeta,
-      }),
-      columnHelper.accessor('hotel_type', {
-        header: 'Type',
-        cell: (info) => (
-          <Badge variant="outline">
-            {HOTEL_TYPES.find((t) => t.value === info.getValue())?.label || info.getValue()}
-          </Badge>
-        ),
-        meta: {
-          serverSortable: true,
-          serverFilterable: true,
-          hideable: true,
-        } satisfies AdminColumnMeta,
-      }),
-      columnHelper.accessor('lgbtq_friendly', {
-        header: 'LGBTQ+',
-        cell: (info) =>
-          info.getValue() ? (
-            <Badge
-              style={{ backgroundColor: 'hsl(var(--muted))' }}
-              className="text-muted-foreground"
-            >
-              LGBTQ+
-            </Badge>
-          ) : null,
-        meta: { serverSortable: true, hideable: true } satisfies AdminColumnMeta,
-      }),
-      columnHelper.accessor('featured', {
-        header: 'Featured',
-        cell: (info) =>
-          info.getValue() ? (
-            <Badge
-              style={{
-                backgroundColor: 'hsl(var(--muted))',
-                color: 'hsl(var(--muted-foreground))',
-              }}
-            >
-              <Star size={12} className="mr-1" />
-              Featured
-            </Badge>
-          ) : null,
-        meta: { serverSortable: true, hideable: true } satisfies AdminColumnMeta,
-      }),
-      columnHelper.accessor('verified', {
-        header: 'Verified',
-        cell: (info) => (info.getValue() ? <Badge variant="outline">Verified</Badge> : null),
-        meta: { serverSortable: true, hideable: true } satisfies AdminColumnMeta,
-      }),
-      columnHelper.accessor('created_at', {
-        header: 'Created',
-        cell: (info) => new Date(info.getValue()).toLocaleDateString(),
-        meta: {
-          serverSortable: true,
-          defaultVisible: false,
-          hideable: true,
-        } satisfies AdminColumnMeta,
-      }),
-    ],
-    [],
-  );
-
-  const tableConfig: AdminTableConfig<HotelRow> = useMemo(
-    () => ({
-      tableName: 'hotels',
-      select:
-        'id,name,description,hotel_type,address,city,country,latitude,longitude,website,phone,email,booking_url,price_range,star_rating,queer_safety_notes,lgbtq_friendly,featured,verified,created_at',
-      columns,
-      defaultSort: { column: 'name', direction: 'asc' },
-      defaultPageSize: 50,
-      enableSelection: true,
-      enableSearch: true,
-      searchColumns: ['name', 'city', 'country'],
-      entityFilters: [
-        {
-          key: 'hotel_type',
-          label: 'Type',
-          type: 'select',
-          column: 'hotel_type',
-          options: HOTEL_TYPES,
-        },
-        { key: 'featured', label: 'Featured', type: 'boolean', column: 'featured' },
-        { key: 'verified', label: 'Verified', type: 'boolean', column: 'verified' },
-        { key: 'lgbtq_friendly', label: 'LGBTQ+', type: 'boolean', column: 'lgbtq_friendly' },
-      ],
-      bulkEditFields: [
-        {
-          key: 'hotel_type',
-          label: 'Hotel Type',
-          type: 'select',
-          column: 'hotel_type',
-          options: HOTEL_TYPES,
-        },
-        { key: 'featured', label: 'Featured', type: 'boolean', column: 'featured' },
-        { key: 'verified', label: 'Verified', type: 'boolean', column: 'verified' },
-        {
-          key: 'lgbtq_friendly',
-          label: 'LGBTQ+ Friendly',
-          type: 'boolean',
-          column: 'lgbtq_friendly',
-        },
-      ],
-      rowActions: [
-        { key: 'edit', label: 'Edit', icon: Edit, onClick: handleEdit },
-        { key: 'promote', label: 'Promote to business', icon: Briefcase, onClick: handlePromote },
-        {
-          key: 'delete',
-          label: 'Delete',
-          icon: Trash2,
-          variant: 'destructive',
-          onClick: handleDelete,
-        },
-      ],
-      toolbarActions: (
-        <div className="flex gap-1">
-          <ExportExcelButton onExport={handleExportExcel} />
-          <Button
-            size="sm"
-            onClick={() => {
-              resetForm();
-              setIsDialogOpen(true);
-            }}
-          >
-            <Plus size={16} className="mr-1.5" />
-            Add Hotel
-          </Button>
-        </div>
-      ),
-    }),
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- handleDelete is stable in practice, adding would defeat memoization
-    [columns],
-  );
-
   return (
-    <AdminEntityTable
-      /* Embedded in AdminBusiness, which owns the page title. */
-      hideHeader
-      title="Hotels & BnBs"
-      subtitle="Manage LGBTQ+ friendly accommodations"
-      backHref={null}
-      headerActions={
-        <Button variant="outline" size="sm" asChild>
-          <Link to="/admin/content/hotels">Raw content list</Link>
-        </Button>
-      }
-      config={tableConfig}
-      afterTable={
-        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-          <DialogContent style={{ maxWidth: 600, maxHeight: '90vh' }} className="overflow-auto">
-            <DialogHeader>
-              <DialogTitle>{editingHotel ? 'Edit Hotel' : 'Add New Hotel'}</DialogTitle>
-            </DialogHeader>
-            <form onSubmit={handleSubmit} className="flex flex-col gap-4 mt-4">
-              <div className="flex flex-col gap-2">
-                <Label htmlFor="hotel-name">Name *</Label>
-                <Input
-                  id="hotel-name"
-                  value={formData.name}
-                  onChange={(e) => setFormData((p) => ({ ...p, name: e.target.value }))}
-                  required
-                />
-              </div>
-              <div className="flex flex-col gap-2">
-                <Label htmlFor="hotel-desc">Description</Label>
-                <Textarea
-                  id="hotel-desc"
-                  value={formData.description}
-                  onChange={(e) => setFormData((p) => ({ ...p, description: e.target.value }))}
-                  rows={3}
-                />
-              </div>
-              <div className="flex flex-col gap-2">
-                <Label>Type</Label>
-                <Select
-                  value={formData.hotel_type}
-                  onValueChange={(v) => setFormData((p) => ({ ...p, hotel_type: v }))}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {HOTEL_TYPES.map((t) => (
-                      <SelectItem key={t.value} value={t.value}>
-                        {t.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <LocationAutocomplete
-                value={formData.address}
-                onChange={async (address, coordinates, components) => {
-                  setFormData((p) => ({
-                    ...p,
-                    address,
-                    latitude: coordinates ? String(coordinates.lat) : p.latitude,
-                    longitude: coordinates ? String(coordinates.lng) : p.longitude,
-                    ...(components?.city ? { city: components.city } : {}),
-                    ...(components?.country ? { country: components.country } : {}),
-                  }));
-                  if (components?.country) {
-                    const resolved = await resolveAddress(
-                      components.city,
-                      components.country,
-                      coordinates?.lat,
-                      coordinates?.lng,
-                    );
-                    if (resolved) {
-                      setFormData((p) => ({
-                        ...p,
-                        ...(resolved.city_name ? { city: resolved.city_name } : {}),
-                        ...(resolved.country_name ? { country: resolved.country_name } : {}),
-                        city_id: resolved.city_id || '',
-                        country_id: resolved.country_id || '',
-                      }));
-                    }
-                  }
-                }}
-                placeholder="Search for hotel address..."
-                label="Address"
+    <>
+      <DataTableBulkEditDialog
+        open={bulkRows.length > 0}
+        onOpenChange={(open) => {
+          if (!open) setBulkRows([]);
+        }}
+        selectedIds={new Set(bulkRows.map((row) => String(row.id)))}
+        tableName="hotels"
+        onSuccess={() => {
+          setBulkRows([]);
+          setListVersion((v) => v + 1);
+        }}
+        fields={[
+          {
+            key: 'hotel_type',
+            label: 'Hotel type',
+            type: 'select',
+            column: 'hotel_type',
+            options: HOTEL_TYPES,
+          },
+          { key: 'featured', label: 'Featured', type: 'boolean', column: 'featured' },
+          { key: 'verified', label: 'Verified', type: 'boolean', column: 'verified' },
+          {
+            key: 'lgbtq_friendly',
+            label: 'LGBTQ+ friendly',
+            type: 'boolean',
+            column: 'lgbtq_friendly',
+          },
+        ]}
+      />
+      <ContentListPanel
+        contentTypeId={hotelListConfig.id}
+        configOverride={hotelListConfig}
+        workspace
+        operational
+        hideHeader
+        refreshKey={listVersion}
+        selectionTools={(rows) => (
+          <Button variant="outline" size="sm" onClick={() => setBulkRows(rows)}>
+            Edit selected hotels
+          </Button>
+        )}
+        onCreate={() => {
+          resetForm();
+          setIsDialogOpen(true);
+        }}
+        onEditRow={(row) => handleEdit(row as unknown as HotelRow)}
+        rowActions={(row, refresh) => [
+          { label: 'Link to Organisation', run: () => handlePromote(row as unknown as HotelRow) },
+          {
+            label: 'Delete…',
+            destructive: true,
+            run: async () => {
+              await handleDelete(row as unknown as HotelRow);
+              refresh();
+            },
+          },
+        ]}
+        tools={<ExportExcelButton onExport={handleExportExcel} />}
+      />
+      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+        <DialogContent style={{ maxWidth: 600, maxHeight: '90vh' }} className="overflow-auto">
+          <DialogHeader>
+            <DialogTitle>{editingHotel ? 'Edit Hotel' : 'Add New Hotel'}</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleSubmit} className="flex flex-col gap-4 mt-4">
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="hotel-name">Name *</Label>
+              <Input
+                id="hotel-name"
+                value={formData.name}
+                onChange={(e) => setFormData((p) => ({ ...p, name: e.target.value }))}
+                required
               />
-              <div className="flex gap-4">
-                <div className="flex flex-col gap-2 flex-1">
-                  <Label htmlFor="hotel-city">City</Label>
-                  <Input
-                    id="hotel-city"
-                    value={formData.city}
-                    onChange={(e) => setFormData((p) => ({ ...p, city: e.target.value }))}
-                  />
-                </div>
-                <div className="flex flex-col gap-2 flex-1">
-                  <Label htmlFor="hotel-country">Country</Label>
-                  <Input
-                    id="hotel-country"
-                    value={formData.country}
-                    onChange={(e) => setFormData((p) => ({ ...p, country: e.target.value }))}
-                  />
-                </div>
-              </div>
-              <div className="flex flex-col gap-2">
-                <Label htmlFor="hotel-website">Website</Label>
-                <Input
-                  id="hotel-website"
-                  value={formData.website}
-                  onChange={(e) => setFormData((p) => ({ ...p, website: e.target.value }))}
-                />
-              </div>
-              <div className="flex flex-col gap-2">
-                <Label htmlFor="hotel-booking">Booking URL</Label>
-                <Input
-                  id="hotel-booking"
-                  value={formData.booking_url}
-                  onChange={(e) => setFormData((p) => ({ ...p, booking_url: e.target.value }))}
-                />
-              </div>
-              <div className="flex gap-4">
-                <div className="flex flex-col gap-2 flex-1">
-                  <Label htmlFor="hotel-phone">Phone</Label>
-                  <Input
-                    id="hotel-phone"
-                    value={formData.phone}
-                    onChange={(e) => setFormData((p) => ({ ...p, phone: e.target.value }))}
-                  />
-                </div>
-                <div className="flex flex-col gap-2 flex-1">
-                  <Label htmlFor="hotel-email">Email</Label>
-                  <Input
-                    id="hotel-email"
-                    value={formData.email}
-                    onChange={(e) => setFormData((p) => ({ ...p, email: e.target.value }))}
-                  />
-                </div>
-              </div>
-              <div className="flex gap-4">
-                <div className="flex flex-col gap-2 flex-1">
-                  <Label htmlFor="hotel-stars">Star Rating</Label>
-                  <Input
-                    id="hotel-stars"
-                    type="number"
-                    min={1}
-                    max={5}
-                    step={0.5}
-                    value={formData.star_rating}
-                    onChange={(e) => setFormData((p) => ({ ...p, star_rating: e.target.value }))}
-                  />
-                </div>
-                <div className="flex flex-col gap-2 flex-1">
-                  <Label htmlFor="hotel-price">Price Range (1-4)</Label>
-                  <Input
-                    id="hotel-price"
-                    type="number"
-                    min={1}
-                    max={4}
-                    value={formData.price_range}
-                    onChange={(e) => setFormData((p) => ({ ...p, price_range: e.target.value }))}
-                  />
-                </div>
-              </div>
-              <div className="flex flex-col gap-2">
-                <div className="flex items-center justify-between gap-2">
-                  <Label htmlFor="hotel-safety">Queer Safety Notes</Label>
-                  {editingHotel && (
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      disabled={regenBusy}
-                      onClick={handleRegenerateSafety}
-                    >
-                      <RefreshCw size={13} className="mr-1" /> Regenerate from signals
-                    </Button>
-                  )}
-                </div>
-                <Textarea
-                  id="hotel-safety"
-                  value={formData.queer_safety_notes}
-                  onChange={(e) =>
-                    setFormData((p) => ({ ...p, queer_safety_notes: e.target.value }))
+            </div>
+            <div className="flex flex-col gap-2">
+              <FieldRenderer
+                field={{
+                  name: 'hotel-desc',
+                  label: 'Description',
+                  type: 'textarea',
+                  group: 'basic',
+                }}
+                value={formData.description}
+                onChange={(next) => setFormData((p) => ({ ...p, description: String(next ?? '') }))}
+              />
+            </div>
+            <div className="flex flex-col gap-2">
+              <Label>Type</Label>
+              <Select
+                value={formData.hotel_type}
+                onValueChange={(v) => setFormData((p) => ({ ...p, hotel_type: v }))}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {HOTEL_TYPES.map((t) => (
+                    <SelectItem key={t.value} value={t.value}>
+                      {t.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <LocationAutocomplete
+              value={formData.address}
+              onChange={async (address, coordinates, components) => {
+                setFormData((p) => ({
+                  ...p,
+                  address,
+                  latitude: coordinates ? String(coordinates.lat) : p.latitude,
+                  longitude: coordinates ? String(coordinates.lng) : p.longitude,
+                  ...(components?.city ? { city: components.city } : {}),
+                  ...(components?.country ? { country: components.country } : {}),
+                }));
+                if (components?.country) {
+                  const resolved = await resolveAddress(
+                    components.city,
+                    components.country,
+                    coordinates?.lat,
+                    coordinates?.lng,
+                  );
+                  if (resolved) {
+                    setFormData((p) => ({
+                      ...p,
+                      ...(resolved.city_name ? { city: resolved.city_name } : {}),
+                      ...(resolved.country_name ? { country: resolved.country_name } : {}),
+                      city_id: resolved.city_id || '',
+                      country_id: resolved.country_id || '',
+                    }));
                   }
-                  rows={2}
+                }
+              }}
+              placeholder="Search for hotel address..."
+              label="Address"
+            />
+            <div className="flex gap-4">
+              <div className="flex flex-col gap-2 flex-1">
+                <Label htmlFor="hotel-city">City</Label>
+                <Input
+                  id="hotel-city"
+                  value={formData.city}
+                  onChange={(e) => setFormData((p) => ({ ...p, city: e.target.value }))}
                 />
               </div>
-              <div className="flex gap-4 flex-wrap">
-                <div className="flex items-center gap-2">
-                  <Switch
-                    id="hotel-lgbtq"
-                    checked={formData.lgbtq_friendly}
-                    onCheckedChange={(c) => setFormData((p) => ({ ...p, lgbtq_friendly: c }))}
-                  />
-                  <Label htmlFor="hotel-lgbtq">LGBTQ+ Friendly</Label>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Switch
-                    id="hotel-featured"
-                    checked={formData.featured}
-                    onCheckedChange={(c) => setFormData((p) => ({ ...p, featured: c }))}
-                  />
-                  <Label htmlFor="hotel-featured">Featured</Label>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Switch
-                    id="hotel-verified"
-                    checked={formData.verified}
-                    onCheckedChange={(c) => setFormData((p) => ({ ...p, verified: c }))}
-                  />
-                  <Label htmlFor="hotel-verified">Verified</Label>
-                </div>
+              <div className="flex flex-col gap-2 flex-1">
+                <Label htmlFor="hotel-country">Country</Label>
+                <Input
+                  id="hotel-country"
+                  value={formData.country}
+                  onChange={(e) => setFormData((p) => ({ ...p, country: e.target.value }))}
+                />
               </div>
-              <DialogFooter>
-                <Button
-                  variant="outline"
-                  type="button"
-                  onClick={() => {
-                    resetForm();
-                    setIsDialogOpen(false);
-                  }}
-                >
-                  Cancel
-                </Button>
-                <Button type="submit">{editingHotel ? 'Update Hotel' : 'Add Hotel'}</Button>
-              </DialogFooter>
-            </form>
-          </DialogContent>
-        </Dialog>
-      }
-    />
+            </div>
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="hotel-website">Website</Label>
+              <Input
+                id="hotel-website"
+                value={formData.website}
+                onChange={(e) => setFormData((p) => ({ ...p, website: e.target.value }))}
+              />
+            </div>
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="hotel-booking">Booking URL</Label>
+              <Input
+                id="hotel-booking"
+                value={formData.booking_url}
+                onChange={(e) => setFormData((p) => ({ ...p, booking_url: e.target.value }))}
+              />
+            </div>
+            <div className="flex gap-4">
+              <div className="flex flex-col gap-2 flex-1">
+                <Label htmlFor="hotel-phone">Phone</Label>
+                <Input
+                  id="hotel-phone"
+                  value={formData.phone}
+                  onChange={(e) => setFormData((p) => ({ ...p, phone: e.target.value }))}
+                />
+              </div>
+              <div className="flex flex-col gap-2 flex-1">
+                <Label htmlFor="hotel-email">Email</Label>
+                <Input
+                  id="hotel-email"
+                  value={formData.email}
+                  onChange={(e) => setFormData((p) => ({ ...p, email: e.target.value }))}
+                />
+              </div>
+            </div>
+            <div className="flex gap-4">
+              <div className="flex flex-col gap-2 flex-1">
+                <Label htmlFor="hotel-stars">Star Rating</Label>
+                <Input
+                  id="hotel-stars"
+                  type="number"
+                  min={1}
+                  max={5}
+                  step={0.5}
+                  value={formData.star_rating}
+                  onChange={(e) => setFormData((p) => ({ ...p, star_rating: e.target.value }))}
+                />
+              </div>
+              <div className="flex flex-col gap-2 flex-1">
+                <Label htmlFor="hotel-price">Price Range (1-4)</Label>
+                <Input
+                  id="hotel-price"
+                  type="number"
+                  min={1}
+                  max={4}
+                  value={formData.price_range}
+                  onChange={(e) => setFormData((p) => ({ ...p, price_range: e.target.value }))}
+                />
+              </div>
+            </div>
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center justify-between gap-2">
+                <Label htmlFor="hotel-safety">Queer Safety Notes</Label>
+                {editingHotel && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    disabled={regenBusy}
+                    onClick={handleRegenerateSafety}
+                  >
+                    <RefreshCw size={13} className="mr-1" /> Regenerate from signals
+                  </Button>
+                )}
+              </div>
+              <Textarea
+                id="hotel-safety"
+                value={formData.queer_safety_notes}
+                onChange={(e) => setFormData((p) => ({ ...p, queer_safety_notes: e.target.value }))}
+                rows={2}
+              />
+            </div>
+            <div className="flex gap-4 flex-wrap">
+              <div className="flex items-center gap-2">
+                <Switch
+                  id="hotel-lgbtq"
+                  checked={formData.lgbtq_friendly}
+                  onCheckedChange={(c) => setFormData((p) => ({ ...p, lgbtq_friendly: c }))}
+                />
+                <Label htmlFor="hotel-lgbtq">LGBTQ+ Friendly</Label>
+              </div>
+              <div className="flex items-center gap-2">
+                <Switch
+                  id="hotel-featured"
+                  checked={formData.featured}
+                  onCheckedChange={(c) => setFormData((p) => ({ ...p, featured: c }))}
+                />
+                <Label htmlFor="hotel-featured">Featured</Label>
+              </div>
+              <div className="flex items-center gap-2">
+                <Switch
+                  id="hotel-verified"
+                  checked={formData.verified}
+                  onCheckedChange={(c) => setFormData((p) => ({ ...p, verified: c }))}
+                />
+                <Label htmlFor="hotel-verified">Verified</Label>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button
+                variant="outline"
+                type="button"
+                onClick={() => {
+                  resetForm();
+                  setIsDialogOpen(false);
+                  setListVersion((v) => v + 1);
+                }}
+              >
+                Cancel
+              </Button>
+              <Button type="submit">{editingHotel ? 'Update Hotel' : 'Add Hotel'}</Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
