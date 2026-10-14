@@ -261,3 +261,42 @@ func (c *Client) UpdateResource(ctx context.Context, kind, id string, data Objec
 func (c *Client) DeleteResource(ctx context.Context, kind, id string) (Object, error) {
 	return c.Request(ctx, "DELETE", "/"+kind+"/"+id, nil, nil)
 }
+
+func (c *Client) CreateReport(ctx context.Context, data Object) (Object, error) {
+	return c.Request(ctx, "POST", "/reports", data, nil)
+}
+func (c *Client) GetReport(ctx context.Context, id string) (Object, error) {
+	return c.Request(ctx, "GET", "/reports/"+url.PathEscape(id), nil, nil)
+}
+func (c *Client) ListReports(ctx context.Context, limit int, cursor string) (Object, error) {
+	query := Object{"limit": limit}
+	if cursor != "" {
+		query["cursor"] = cursor
+	}
+	return c.Request(ctx, "GET", "/reports", nil, query)
+}
+func (c *Client) UpdateReport(ctx context.Context, id string, data Object) (Object, error) {
+	return c.Request(ctx, "PATCH", "/reports/"+url.PathEscape(id), data, nil)
+}
+func (c *Client) DeleteReport(ctx context.Context, id string) (Object, error) {
+	return c.Request(ctx, "DELETE", "/reports/"+url.PathEscape(id), nil, nil)
+}
+func (c *Client) RunReport(ctx context.Context, id string) (Object, error) {
+	return c.Request(ctx, "GET", "/reports/"+url.PathEscape(id)+"/run", nil, nil)
+}
+func (c *Client) CreateReportShare(ctx context.Context, id string, data Object) (Object, error) {
+	return c.Request(ctx, "POST", "/reports/"+url.PathEscape(id)+"/shares", data, nil)
+}
+func (c *Client) ListReportShares(ctx context.Context, id string) (Object, error) {
+	return c.Request(ctx, "GET", "/reports/"+url.PathEscape(id)+"/shares", nil, nil)
+}
+func (c *Client) RevokeReportShare(ctx context.Context, id, shareID string) (Object, error) {
+	return c.Request(ctx, "DELETE", "/reports/"+url.PathEscape(id)+"/shares/"+url.PathEscape(shareID), nil, nil)
+}
+func (c *Client) ReadPublicReport(ctx context.Context, data Object) (Object, error) {
+	method := "GET"
+	if data != nil {
+		method = "POST"
+	}
+	return c.Request(ctx, method, "/public-report", data, nil)
+}

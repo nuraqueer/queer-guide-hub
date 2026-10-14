@@ -61,6 +61,16 @@ final class RedirectsClient {
     public function trackSale(array $data): array {return $this->request('POST','/track/sale',$data);}
     public function analytics(array $filters=[]): array {return $this->request('GET','/analytics',null,['filters'=>(object)$filters]);}
     public function events(array $filters=[],array $options=[]): array {return $this->request('GET','/events',null,array_merge($options,['filters'=>(object)$filters]));}
+    public function createReport(array $data): array {if (isset($data['filters']) && is_array($data['filters'])) $data['filters']=(object)$data['filters'];return $this->request('POST','/reports',$data);}
+    public function getReport(string $id): array {return $this->request('GET','/reports/'.rawurlencode($id));}
+    public function listReports(int $limit=50,?string $cursor=null): array {return $this->request('GET','/reports',null,['limit'=>$limit,'cursor'=>$cursor]);}
+    public function updateReport(string $id,array $data): array {if (isset($data['filters']) && is_array($data['filters'])) $data['filters']=(object)$data['filters'];return $this->request('PATCH','/reports/'.rawurlencode($id),$data);}
+    public function deleteReport(string $id): array {return $this->request('DELETE','/reports/'.rawurlencode($id));}
+    public function runReport(string $id): array {return $this->request('GET','/reports/'.rawurlencode($id).'/run');}
+    public function createReportShare(string $id,array $data): array {return $this->request('POST','/reports/'.rawurlencode($id).'/shares',$data);}
+    public function listReportShares(string $id): array {return $this->request('GET','/reports/'.rawurlencode($id).'/shares');}
+    public function revokeReportShare(string $id,string $shareId): array {return $this->request('DELETE','/reports/'.rawurlencode($id).'/shares/'.rawurlencode($shareId));}
+    public function readPublicReport(?array $data=null): array {if (isset($data['dates']) && is_array($data['dates'])) $data['dates']=(object)$data['dates'];return $this->request($data===null?'GET':'POST','/public-report',$data===[]?(object)[]:$data);}
     public function getResource(string $kind,string $id): array {return $this->request('GET','/'.$kind.'/'.$id);}
     public function listResources(string $kind,int $limit=100,?string $cursor=null): array {return $this->request('GET','/'.$kind,null,['limit'=>$limit,'cursor'=>$cursor]);}
     public function createResource(string $kind,array $data): array {return $this->request('POST','/'.$kind,$data);}

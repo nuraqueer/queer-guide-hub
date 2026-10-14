@@ -1,4 +1,83 @@
 export type JsonObject = Record<string, unknown>;
+export interface ReportFilters {
+  linkIds?: string[];
+  folderId?: string;
+  tagId?: string;
+  start?: string;
+  end?: string;
+  event?: 'all' | 'click' | 'lead' | 'sale';
+  country?: string;
+  city?: string;
+  device?: string;
+  browser?: string;
+  os?: string;
+  domain?: string;
+  referrer?: string;
+  variant?: string;
+  excludeBots?: boolean;
+  qr?: boolean;
+  interval?: 'hour' | 'day' | 'week' | 'month';
+}
+export interface SavedReport {
+  id: string;
+  owner_user_id: string;
+  name: string;
+  filters: ReportFilters;
+  version: string;
+  created_at: string;
+  updated_at: string;
+}
+export interface ReportAggregate {
+  snapshot: string;
+  interval: 'hour' | 'day' | 'week' | 'month';
+  totals: { clicks: number; leads: number; sales: number; customers: number };
+  revenue: { currency: string; amount: string }[];
+  series: { at: string; clicks: number; leads: number; sales: number }[];
+  breakdowns: Record<string, { label: string; count: number }[]>;
+}
+export interface ReportShareInput {
+  title: string;
+  reportVersion: string;
+  includeConversions?: boolean;
+  scopeMode?: 'snapshot' | 'folder';
+  expiresAt?: string | null;
+  password?: string;
+  allowIndexing?: boolean;
+}
+export interface ReportShare {
+  id: string;
+  title: string;
+  linkCount: number;
+  scopeMode: 'snapshot' | 'folder';
+  includeConversions: boolean;
+  hasPassword: boolean;
+  allowIndexing: boolean;
+  expiresAt: string | null;
+  createdAt?: string;
+  revokedAt?: string | null;
+}
+export interface PublicReportInput {
+  password?: string;
+  dates?: { start?: string; end?: string };
+}
+export interface PublicReport {
+  title: string;
+  linkCount: number;
+  scopeMode: 'snapshot' | 'folder';
+  includeConversions: boolean;
+  allowIndexing: boolean;
+  expiresAt: string | null;
+  dateRange?: {
+    start: string | null;
+    end: string | null;
+    earliest: string | null;
+    latest: string | null;
+  };
+  report: Omit<ReportAggregate, 'totals' | 'series'> & {
+    totals: { clicks: number; leads?: number; sales?: number; customers?: number };
+    series: { at: string; clicks: number; leads?: number; sales?: number }[];
+  };
+}
 export interface QrImageOptions {
   label?: string;
   expiresAt?: string | null;
@@ -311,6 +390,53 @@ export class RedirectsClient {
   }
   events(filters: JsonObject = {}, options: JsonObject = {}) {
     return this.request<JsonObject>('GET', '/events', undefined, { ...options, filters });
+  }
+  createReport(data: { name: string; filters: ReportFilters }) {
+    return this.request<SavedReport>('POST', '/reports', data);
+  }
+  getReport(id: string) {
+    return this.request<SavedReport>('GET', '/reports/' + encodeURIComponent(id));
+  }
+  listReports(limit = 50, cursor?: string) {
+    return this.request<Page<SavedReport>>('GET', '/reports', undefined, { limit, cursor });
+  }
+  updateReport(id: string, data: { version: string; name?: string; filters?: ReportFilters }) {
+    return this.request<SavedReport>('PATCH', '/reports/' + encodeURIComponent(id), data);
+  }
+  deleteReport(id: string) {
+    return this.request<{ id: string; deleted: boolean }>(
+      'DELETE',
+      '/reports/' + encodeURIComponent(id),
+    );
+  }
+  runReport(id: string) {
+    return this.request<ReportAggregate>('GET', '/reports/' + encodeURIComponent(id) + '/run');
+  }
+  createReportShare(id: string, data: ReportShareInput) {
+    return this.request<ReportShare>(
+      'POST',
+      '/reports/' + encodeURIComponent(id) + '/shares',
+      data,
+    );
+  }
+  listReportShares(id: string) {
+    return this.request<{ data: ReportShare[] }>(
+      'GET',
+      '/reports/' + encodeURIComponent(id) + '/shares',
+    );
+  }
+  revokeReportShare(id: string, shareId: string) {
+    return this.request<{ id: string; revoked: boolean }>(
+      'DELETE',
+      '/reports/' + encodeURIComponent(id) + '/shares/' + encodeURIComponent(shareId),
+    );
+  }
+  readPublicReport(data?: PublicReportInput) {
+    return this.request<PublicReport>(
+      data === undefined ? 'GET' : 'POST',
+      '/public-report',
+      data,
+    );
   }
   getResource(kind: ResourceKind, id: string) {
     return this.request<JsonObject>('GET', '/' + kind + '/' + id);

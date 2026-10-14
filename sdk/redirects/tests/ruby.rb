@@ -39,3 +39,27 @@ api.delete_link(id);[['folders',folder],['tags',tag],['templates',template]].eac
  rescue QueerGuide::RedirectApiError => error;check(error.status==status);check(error.retry_after=='17') if status==429;end
 end
 begin;QueerGuide::RedirectsClient.new('token',base_url:'http://example.com/api');raise 'Insecure base accepted';rescue ArgumentError;end
+account=QueerGuide::RedirectsClient.new(ENV.fetch('REDIRECT_TEST_SESSION'),base_url:ENV.fetch('REDIRECT_TEST_BASE'))
+other=QueerGuide::RedirectsClient.new(ENV.fetch('REDIRECT_TEST_OTHER_SESSION'),base_url:ENV.fetch('REDIRECT_TEST_BASE'))
+def report_error(status);begin;yield;raise 'Expected report error';rescue QueerGuide::RedirectApiError=>error;check(error.status==status);end;end
+report_error(403){api.list_reports}
+report=account.create_report({name:'SDK Ruby report',filters:{linkIds:[ENV.fetch('REDIRECT_TEST_REPORT_LINK')]}})
+second=account.create_report({name:'SDK Ruby second',filters:{linkIds:[ENV.fetch('REDIRECT_TEST_REPORT_LINK')]}})
+check(account.get_report(report['id'])['name']==report['name'])
+page=account.list_reports(limit:1);check(page['data'].length==1&&page['nextCursor']);check(account.list_reports(limit:1,cursor:page['nextCursor'])['data'].length==1)
+report_error(404){other.get_report(report['id'])};check(other.list_reports['count']==0)
+old_version=report['version'];report=account.update_report(report['id'],{version:old_version,name:'Reviewed Ruby report'})
+report_error(409){account.update_report(report['id'],{version:old_version,name:'Stale'})}
+aggregate=account.run_report(report['id']);check(aggregate['totals']['clicks']==1&&aggregate['revenue'][0]['amount'].is_a?(String))
+share=account.create_report_share(report['id'],{title:'Ruby shared',reportVersion:report['version'],expiresAt:nil})
+check(account.list_report_shares(report['id'])['data'][0]['id']==share['id'])
+reader=QueerGuide::RedirectsClient.new('qg_report_'+share['id'],base_url:ENV.fetch('REDIRECT_TEST_BASE'))
+check(reader.read_public_report['report']['totals']['clicks']==1)
+check(reader.read_public_report({dates:{start:'2020-01-01T00:00:00Z',end:'2020-01-02T00:00:00Z'}})['report']['totals']['clicks']==0)
+check(account.revoke_report_share(report['id'],share['id'])['revoked']);report_error(404){reader.read_public_report}
+guarded=account.create_report_share(report['id'],{title:'Ruby protected',reportVersion:report['version'],password:'sdk-report-password',includeConversions:true,expiresAt:nil})
+protected=QueerGuide::RedirectsClient.new('qg_report_'+guarded['id'],base_url:ENV.fetch('REDIRECT_TEST_BASE'))
+report_error(401){protected.read_public_report}
+check(protected.read_public_report({password:'sdk-report-password'})['report']['revenue'][0]['amount'].is_a?(String))
+check(account.delete_report(report['id'])['deleted']);report_error(404){protected.read_public_report({password:'sdk-report-password'})}
+account.delete_report(second['id'])

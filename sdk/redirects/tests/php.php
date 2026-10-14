@@ -35,3 +35,34 @@ check($api->analytics(['country'=>'CH'])['totals']);check(count($api->events([],
 $api->deleteLink($id);foreach ([['folders',$folder],['tags',$tag],['templates',$template]] as [$kind,$item]) $api->deleteResource($kind,$item['id']);
 foreach ([['/redirect-probe',302],['/limited-probe',429]] as [$path,$status]) {try {$api->request('GET',$path);throw new RuntimeException('Expected API error');} catch (QueerGuide\RedirectApiError $error) {check($error->status===$status);if ($status===429) check($error->retryAfter==='17');}}
 try {new QueerGuide\RedirectsClient('token','http://example.com/api');throw new RuntimeException('Insecure base accepted');} catch (InvalidArgumentException) {}
+$account=new QueerGuide\RedirectsClient(getenv('REDIRECT_TEST_SESSION'),getenv('REDIRECT_TEST_BASE'));
+$other=new QueerGuide\RedirectsClient(getenv('REDIRECT_TEST_OTHER_SESSION'),getenv('REDIRECT_TEST_BASE'));
+function reportError(callable $action,int $status): void {try {$action();throw new RuntimeException('Expected report error');}catch(QueerGuide\RedirectApiError $error){check($error->status===$status);}}
+reportError(fn()=>$api->listReports(),403);
+$report=$account->createReport(['name'=>'SDK PHP report','filters'=>['linkIds'=>[getenv('REDIRECT_TEST_REPORT_LINK')]]]);
+$second=$account->createReport(['name'=>'SDK PHP second','filters'=>['linkIds'=>[getenv('REDIRECT_TEST_REPORT_LINK')]]]);
+check($account->getReport($report['id'])['name']===$report['name']);
+$page=$account->listReports(1);check(count($page['data'])===1&&$page['nextCursor']);check(count($account->listReports(1,$page['nextCursor'])['data'])===1);
+reportError(fn()=>$other->getReport($report['id']),404);check($other->listReports()['count']===0);
+$oldVersion=$report['version'];$report=$account->updateReport($report['id'],['version'=>$oldVersion,'name'=>'Reviewed PHP report']);
+reportError(fn()=>$account->updateReport($report['id'],['version'=>$oldVersion,'name'=>'Stale']),409);
+$aggregate=$account->runReport($report['id']);check($aggregate['totals']['clicks']===1&&is_string($aggregate['revenue'][0]['amount']));
+$share=$account->createReportShare($report['id'],['title'=>'PHP shared','reportVersion'=>$report['version'],'expiresAt'=>null]);
+check($account->listReportShares($report['id'])['data'][0]['id']===$share['id']);
+$reader=new QueerGuide\RedirectsClient('qg_report_'.$share['id'],getenv('REDIRECT_TEST_BASE'));
+check($reader->readPublicReport()['report']['totals']['clicks']===1);
+check($reader->readPublicReport([])['report']['totals']['clicks']===1);
+check($reader->readPublicReport(['dates'=>[]])['report']['totals']['clicks']===1);
+check($reader->readPublicReport(['dates'=>['start'=>'2020-01-01T00:00:00Z','end'=>'2020-01-02T00:00:00Z']])['report']['totals']['clicks']===0);
+check($account->revokeReportShare($report['id'],$share['id'])['revoked']);reportError(fn()=>$reader->readPublicReport(),404);
+$guarded=$account->createReportShare($report['id'],['title'=>'PHP protected','reportVersion'=>$report['version'],'password'=>'sdk-report-password','includeConversions'=>true,'expiresAt'=>null]);
+$protected=new QueerGuide\RedirectsClient('qg_report_'.$guarded['id'],getenv('REDIRECT_TEST_BASE'));
+reportError(fn()=>$protected->readPublicReport(),401);
+check(is_string($protected->readPublicReport(['password'=>'sdk-report-password'])['report']['revenue'][0]['amount']));
+check($account->deleteReport($report['id'])['deleted']);reportError(fn()=>$protected->readPublicReport(['password'=>'sdk-report-password']),404);
+$account->deleteReport($second['id']);
+
+$emptyReport=$account->createReport(['name'=>'PHP all-link filters','filters'=>[]]);
+$emptyReport=$account->updateReport($emptyReport['id'],['version'=>$emptyReport['version'],'filters'=>[]]);
+check(is_array($account->runReport($emptyReport['id'])['totals']));
+$account->deleteReport($emptyReport['id']);

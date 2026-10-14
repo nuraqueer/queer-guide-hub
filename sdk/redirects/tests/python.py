@@ -50,3 +50,30 @@ for path,status in [('/redirect-probe',302),('/limited-probe',429)]:
         if status==429: assert error.retry_after=='17'
 try: RedirectsClient('token','http://example.com/api'); raise AssertionError('Insecure base accepted')
 except ValueError: pass
+account=RedirectsClient(os.environ['REDIRECT_TEST_SESSION'],os.environ['REDIRECT_TEST_BASE'])
+other=RedirectsClient(os.environ['REDIRECT_TEST_OTHER_SESSION'],os.environ['REDIRECT_TEST_BASE'])
+def report_error(action,status):
+    try: action(); raise AssertionError('Expected report error')
+    except RedirectApiError as error: assert error.status==status
+report_error(lambda:api.list_reports(),403)
+report=account.create_report({'name':'SDK Python report','filters':{'linkIds':[os.environ['REDIRECT_TEST_REPORT_LINK']]}})
+second=account.create_report({'name':'SDK Python second','filters':{'linkIds':[os.environ['REDIRECT_TEST_REPORT_LINK']]}})
+assert account.get_report(report['id'])['name']==report['name']
+page=account.list_reports(limit=1); assert len(page['data'])==1 and page['nextCursor']
+assert len(account.list_reports(limit=1,cursor=page['nextCursor'])['data'])==1
+report_error(lambda:other.get_report(report['id']),404); assert other.list_reports()['count']==0
+old_version=report['version']; report=account.update_report(report['id'],{'version':old_version,'name':'Reviewed Python report'})
+report_error(lambda:account.update_report(report['id'],{'version':old_version,'name':'Stale'}),409)
+aggregate=account.run_report(report['id']); assert aggregate['totals']['clicks']==1 and isinstance(aggregate['revenue'][0]['amount'],str)
+share=account.create_report_share(report['id'],{'title':'Python shared','reportVersion':report['version'],'expiresAt':None})
+assert account.list_report_shares(report['id'])['data'][0]['id']==share['id']
+reader=RedirectsClient('qg_report_'+share['id'],os.environ['REDIRECT_TEST_BASE'])
+assert reader.read_public_report()['report']['totals']['clicks']==1
+assert reader.read_public_report({'dates':{'start':'2020-01-01T00:00:00Z','end':'2020-01-02T00:00:00Z'}})['report']['totals']['clicks']==0
+assert account.revoke_report_share(report['id'],share['id'])['revoked']; report_error(lambda:reader.read_public_report(),404)
+guarded=account.create_report_share(report['id'],{'title':'Python protected','reportVersion':report['version'],'password':'sdk-report-password','includeConversions':True,'expiresAt':None})
+protected=RedirectsClient('qg_report_'+guarded['id'],os.environ['REDIRECT_TEST_BASE'])
+report_error(lambda:protected.read_public_report(),401)
+assert isinstance(protected.read_public_report({'password':'sdk-report-password'})['report']['revenue'][0]['amount'],str)
+assert account.delete_report(report['id'])['deleted']; report_error(lambda:protected.read_public_report({'password':'sdk-report-password'}),404)
+account.delete_report(second['id'])

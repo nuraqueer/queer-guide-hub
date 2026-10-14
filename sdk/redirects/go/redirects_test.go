@@ -150,4 +150,86 @@ func TestSDKIntegration(t *testing.T) {
 	if _, err := New("token", "http://example.com/api"); err == nil {
 		t.Fatal("Insecure base accepted")
 	}
+	account, err := New(os.Getenv("REDIRECT_TEST_SESSION"), os.Getenv("REDIRECT_TEST_BASE"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	other, err := New(os.Getenv("REDIRECT_TEST_OTHER_SESSION"), os.Getenv("REDIRECT_TEST_BASE"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	expectStatus := func(err error, status int) {
+		t.Helper()
+		var apiError *APIError
+		if !errors.As(err, &apiError) || apiError.Status != status {
+			t.Fatalf("Expected report status %d, got %v", status, err)
+		}
+	}
+	_, err = api.ListReports(ctx, 50, "")
+	expectStatus(err, 403)
+	report := must(account.CreateReport(ctx, Object{"name": "SDK Go report", "filters": Object{"linkIds": []any{os.Getenv("REDIRECT_TEST_REPORT_LINK")}}}))
+	second := must(account.CreateReport(ctx, Object{"name": "SDK Go second", "filters": Object{"linkIds": []any{os.Getenv("REDIRECT_TEST_REPORT_LINK")}}}))
+	rid := report["id"].(string)
+	if must(account.GetReport(ctx, rid))["name"] != report["name"] {
+		t.Fatal("Report get mismatch")
+	}
+	page := must(account.ListReports(ctx, 1, ""))
+	if len(page["data"].([]any)) != 1 || page["nextCursor"] == nil {
+		t.Fatal("Report cursor missing")
+	}
+	if len(must(account.ListReports(ctx, 1, page["nextCursor"].(string)))["data"].([]any)) != 1 {
+		t.Fatal("Second report page missing")
+	}
+	_, err = other.GetReport(ctx, rid)
+	expectStatus(err, 404)
+	if must(other.ListReports(ctx, 50, ""))["count"].(interface{ String() string }).String() != "0" {
+		t.Fatal("Other account sees reports")
+	}
+	oldVersion := report["version"]
+	report = must(account.UpdateReport(ctx, rid, Object{"version": oldVersion, "name": "Reviewed Go report"}))
+	_, err = account.UpdateReport(ctx, rid, Object{"version": oldVersion, "name": "Stale"})
+	expectStatus(err, 409)
+	aggregate := must(account.RunReport(ctx, rid))
+	if aggregate["totals"].(map[string]any)["clicks"].(interface{ String() string }).String() != "1" {
+		t.Fatal("Report clicks changed")
+	}
+	if _, ok := aggregate["revenue"].([]any)[0].(map[string]any)["amount"].(string); !ok {
+		t.Fatal("Report revenue lost precision")
+	}
+	share := must(account.CreateReportShare(ctx, rid, Object{"title": "Go shared", "reportVersion": report["version"], "expiresAt": nil}))
+	if must(account.ListReportShares(ctx, rid))["data"].([]any)[0].(map[string]any)["id"] != share["id"] {
+		t.Fatal("Report share not listed")
+	}
+	reader, err := New("qg_report_"+share["id"].(string), os.Getenv("REDIRECT_TEST_BASE"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if must(reader.ReadPublicReport(ctx, nil))["report"].(map[string]any)["totals"].(map[string]any)["clicks"].(interface{ String() string }).String() != "1" {
+		t.Fatal("Public report clicks changed")
+	}
+	if must(reader.ReadPublicReport(ctx, Object{"dates": Object{"start": "2020-01-01T00:00:00Z", "end": "2020-01-02T00:00:00Z"}}))["report"].(map[string]any)["totals"].(map[string]any)["clicks"].(interface{ String() string }).String() != "0" {
+		t.Fatal("Public date filter ignored")
+	}
+	if must(account.RevokeReportShare(ctx, rid, share["id"].(string)))["revoked"] != true {
+		t.Fatal("Share not revoked")
+	}
+	_, err = reader.ReadPublicReport(ctx, nil)
+	expectStatus(err, 404)
+	guarded := must(account.CreateReportShare(ctx, rid, Object{"title": "Go protected", "reportVersion": report["version"], "password": "sdk-report-password", "includeConversions": true, "expiresAt": nil}))
+	protected, err := New("qg_report_"+guarded["id"].(string), os.Getenv("REDIRECT_TEST_BASE"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = protected.ReadPublicReport(ctx, nil)
+	expectStatus(err, 401)
+	if _, ok := must(protected.ReadPublicReport(ctx, Object{"password": "sdk-report-password"}))["report"].(map[string]any)["revenue"].([]any)[0].(map[string]any)["amount"].(string); !ok {
+		t.Fatal("Public revenue lost precision")
+	}
+	if must(account.DeleteReport(ctx, rid))["deleted"] != true {
+		t.Fatal("Report not deleted")
+	}
+	_, err = protected.ReadPublicReport(ctx, Object{"password": "sdk-report-password"})
+	expectStatus(err, 404)
+	must(account.DeleteReport(ctx, second["id"].(string)))
+
 }

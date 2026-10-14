@@ -1763,3 +1763,39 @@ conflicts, session-vs-key denial, plain/protected public reads, body date filter
 share revocation, deletion cascade and page cursors. Documentation explains the
 three credential kinds and production-release status. Existing approved feature
 scope covers this additive design; no schema or production writes are planned.
+
+
+### Saved report SDK contracts checkpoint
+
+TypeScript, Python, Ruby, PHP and Go now expose named saved-report create/get/list/
+versioned-update/delete/run methods, explicit share create/list/revoke methods,
+and GET/POST public aggregate reads. Private report methods use current account
+sessions, preserving personal ownership and membership/events checks. Machine
+keys still receive 403 and another valid workspace owner cannot read personal
+reports. Public readers use a separate qg_report_<share UUID> capability client;
+password/date inputs stay in bounded POST bodies, never query parameters. No
+operation publishes implicitly or adds retries. Transport limits and HTTP status/
+Retry-After errors remain. TypeScript exports exact filter/metadata/share/public
+DTOs; aggregate decimal revenue remains strings. PHP serializes empty filter and
+date arrays as objects, including explicit empty public POST bodies.
+
+All five native SDK suites and all five examples pass through the actual HTTP
+handler and migrated isolated PostgreSQL. Each native suite executes all ten
+new methods, two-page cursors, stale edits, other-account and machine-key denial,
+private aggregate execution, exact decimal-string response types, plain/protected
+public reads, body-only date changes, revocation and report-deletion cascade.
+PHP additionally verifies empty filter/date objects. Final SQL confirms native
+SDK reports are cleaned before subsequent HTTP fixtures. Existing link/root,
+resource/policy, QR/custom-artwork, domain lifecycle, conversions and sanitized
+share checks continue to pass. Strict TypeScript SDK checking/declaration emission
+and Python/Ruby/PHP syntax checks pass; Go formatting and native compile/tests
+pass using the existing ignored runtime. No schema changes, production writes,
+remote provider/DNS calls or package publication occurred. Credential/method
+contracts and release status are documented in sdk/redirects/README.md.
+
+The report SDK gap is implemented locally. Required team discovery/account and
+permission/invite work remains, alongside domain lifecycle/DNS automation, native/
+deferred deep links, branded password pages, customer enrichment, Segment/GTM,
+signed outgoing webhooks and controlled service/infrastructure release and SDK
+publication. The full Dub parity goal remains active; this checkpoint does not
+prove production readiness or remove remaining scope.

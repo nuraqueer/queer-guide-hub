@@ -68,6 +68,16 @@ module QueerGuide
     def track_sale(data); request('POST','/track/sale',data); end
     def analytics(filters={}); request('GET','/analytics',nil,{filters:filters}); end
     def events(filters={},**options); request('GET','/events',nil,options.merge(filters:filters)); end
+    def create_report(data); request('POST','/reports',data); end
+    def get_report(id); request('GET','/reports/'+URI.encode_www_form_component(id)); end
+    def list_reports(limit:50,cursor:nil); request('GET','/reports',nil,{limit:limit,cursor:cursor}); end
+    def update_report(id,data); request('PATCH','/reports/'+URI.encode_www_form_component(id),data); end
+    def delete_report(id); request('DELETE','/reports/'+URI.encode_www_form_component(id)); end
+    def run_report(id); request('GET','/reports/'+URI.encode_www_form_component(id)+'/run'); end
+    def create_report_share(id,data); request('POST','/reports/'+URI.encode_www_form_component(id)+'/shares',data); end
+    def list_report_shares(id); request('GET','/reports/'+URI.encode_www_form_component(id)+'/shares'); end
+    def revoke_report_share(id,share_id); request('DELETE','/reports/'+URI.encode_www_form_component(id)+'/shares/'+URI.encode_www_form_component(share_id)); end
+    def read_public_report(data=nil); request(data.nil? ? 'GET' : 'POST','/public-report',data); end
     def get_resource(kind,id); request('GET','/'+kind+'/'+id); end
     def list_resources(kind,limit:100,cursor:nil); request('GET','/'+kind,nil,{limit:limit,cursor:cursor}); end
     def create_resource(kind,data); request('POST','/'+kind,data); end

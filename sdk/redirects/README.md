@@ -3,7 +3,8 @@
 Local SDK sources for TypeScript, Python, Go, Ruby and PHP. Each client targets
 queer.guide's Redirects API contract; these are not Dub SDK aliases. They cover
 managed link CRUD/upsert/count/list/bulk, folder/tag/template CRUD/list, private
-analytics and event pages, lead/sale tracking, and presentation/image-upload methods. Link iterators follow keyset
+analytics and event pages, lead/sale tracking, presentation/image-upload methods,
+QR publication and personal saved reports/shared dashboards. Link iterators follow keyset
 pages and reject repeated cursors. Resource and event pages expose their cursors
 for explicit iteration.
 
@@ -76,7 +77,7 @@ provider or schema is touched.
 Go must be available on PATH or configured via `REDIRECT_GO_BIN`; the local agent's
 verified vendor runtime was kept under ignored `tmp/go-runtime`. The test command
 does not download runtimes. Production migrations/release, package publication,
-policy/domain/deep-link fields, webhooks and external integrations remain pending.
+remaining domain/deep-link methods, webhooks and external integrations remain pending.
 
 Presentation APIs are documented in `docs/guides/redirect-presentations.md`.
 The SDK integration suite checks all five presentation/upload wrappers with real
@@ -199,3 +200,76 @@ domain preferences are unchanged. A failed/unknown upload leaves a private draft
 for cleanup; do not blindly retry writes. List/revoke can manage failed drafts.
 Uploaded raster artwork is public, with a read grace before physical cleanup after
 revocation/deletion. Downloaded/previously fetched images cannot be erased.
+
+
+## Personal saved reports and shared dashboards
+
+Report methods use a **current account-session access token**, passed as the
+client credential. They preserve personal report ownership and current workspace
+membership/events access. Scoped machine API keys receive 403 for private report
+management. Clients do not sign in or refresh sessions; the calling application
+supplies a current token and creates a new client after refreshing it.
+
+All five languages expose the same operations, using their usual naming:
+
+| Operation | TypeScript / PHP | Python / Ruby | Go |
+| --- | --- | --- | --- |
+| Create personal report | `createReport(data)` | `create_report(data)` | `CreateReport(ctx, data)` |
+| Get report | `getReport(id)` | `get_report(id)` | `GetReport(ctx, id)` |
+| Cursor page | `listReports(limit, cursor)` | `list_reports(limit, cursor)` | `ListReports(ctx, limit, cursor)` |
+| Versioned edit | `updateReport(id, data)` | `update_report(id, data)` | `UpdateReport(ctx, id, data)` |
+| Delete report | `deleteReport(id)` | `delete_report(id)` | `DeleteReport(ctx, id)` |
+| Run saved filters | `runReport(id)` | `run_report(id)` | `RunReport(ctx, id)` |
+| Explicit publication | `createReportShare(id, data)` | `create_report_share(id, data)` | `CreateReportShare(ctx, id, data)` |
+| List publications | `listReportShares(id)` | `list_report_shares(id)` | `ListReportShares(ctx, id)` |
+| Revoke publication | `revokeReportShare(id, shareId)` | `revoke_report_share(id, share_id)` | `RevokeReportShare(ctx, id, shareID)` |
+| Read public aggregates | `readPublicReport(data?)` | `read_public_report(data)` | `ReadPublicReport(ctx, data)` |
+
+Python and Ruby page options are keyword arguments. Go always takes an explicit
+limit and uses an empty cursor for the first page; the others default to 50.
+Create takes `{name, filters}`; filters support link/folder/tag scope, UTC dates,
+event kind, geo/device/referrer/domain/variant/bot/QR choices and interval. Edits
+take the current `version` and optional name/filters; reload after a 409 conflict.
+Report metadata preserves the API's `created_at`, `updated_at`, `owner_user_id`
+names. Aggregate money remains decimal strings; no SDK converts it to floats.
+
+Creating/running a private report does not publish it. Share creation requires
+`title` and reviewed `reportVersion`; optional settings are `scopeMode` (snapshot
+or live folder), `includeConversions`, `allowIndexing`, `password` and `expiresAt`.
+The default is click-only, non-indexed, frozen link selection and 30-day expiry;
+explicit null expiry lasts until revoked. Live folder shares retain the backend's
+owner requirement. Password-protected shares cannot opt into indexing. A later
+report edit does not silently change the published filters.
+
+```ts
+const account = new RedirectsClient(currentAccountAccessToken);
+let report = await account.createReport({
+  name: 'Newsletter', filters: { linkIds: [linkId], qr: true, interval: 'day' },
+});
+const aggregates = await account.runReport(report.id);
+report = await account.updateReport(report.id, {
+  version: report.version, name: 'Reviewed newsletter',
+});
+const share = await account.createReportShare(report.id, {
+  title: 'Newsletter clicks', reportVersion: report.version,
+});
+// Separate capability client: never substitute an account credential here.
+const reader = new RedirectsClient('qg_report_' + share.id);
+const publicAggregates = await reader.readPublicReport();
+await account.revokeReportShare(report.id, share.id);
+```
+
+The public client receives only sanctioned aggregate fields and can POST a
+password and/or `{dates: {start, end}}` without URL query parameters. Omit data for
+GET (Python/Ruby default nil/None, Go nil); provide an object/map for POST. Date
+selection is restricted to the published reporting period. Public reads retain
+rate-limit, password, current access, expiry and revocation checks. Deleting a
+personal report revokes its shares through the existing deletion cascade.
+
+Native SDK tests use two isolated current account sessions plus a scoped key.
+Each language exercises every method, page cursors, stale version conflicts,
+other-account/key denial, exact revenue types, public date bodies, password gates,
+revocation and deletion cascade through the actual handler/migrated PostgreSQL.
+PHP additionally checks empty filter/date objects. Report records are cleaned
+before the rest of the suite runs. These remain local SDK sources and require
+controlled API rollout and package publication before release.

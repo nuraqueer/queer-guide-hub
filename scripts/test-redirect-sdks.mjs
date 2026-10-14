@@ -93,7 +93,10 @@ await db.query("INSERT INTO public.user_roles(user_id,role) VALUES($1,'admin')",
 const sdkRootDomain=webcrypto.randomUUID();
 await db.query("INSERT INTO public.redirect_domains(id,hostname,verification_token,ownership_state,verified_at,verified_until,provider_id,routing_provider_id,routing_protocol,routing_seen_at) VALUES($1,'root-sdk.example.com',repeat('a',64),'verified',now(),now()+interval '1 day','fixture-root-provider','fixture-root-provider',1,now())",[sdkRootDomain]);
 await db.query("INSERT INTO public.redirect_domain_jobs(domain_id,zone_id,cname_target,requested_by,state,provider_status,ssl_status,checked_at) VALUES($1,repeat('a',32),'links.queer.guide',$2,'ready','active','active',now())",[sdkRootDomain,reportActor]);
-const identity={auth:{getUser:async(value)=>({data:{user:value==='fixture-account-session'?{id:reportActor,created_at:'2026-10-01T00:00:00Z',is_anonymous:false}:null},error:null})},rpc:async()=>({data:true,error:null})};
+const reportOtherActor='00000000-0000-4000-8000-000000000098';
+await db.query('INSERT INTO auth.users(id) VALUES($1)',[reportOtherActor]);
+await db.query("INSERT INTO public.user_roles(user_id,role) VALUES($1,'admin')",[reportOtherActor]);
+const identity={auth:{getUser:async(value)=>({data:{user:['fixture-account-session','fixture-other-account-session'].includes(value)?{id:value==='fixture-account-session'?reportActor:reportOtherActor,created_at:'2026-10-01T00:00:00Z',is_anonymous:false}:null},error:null})},rpc:async()=>({data:true,error:null})};
 let dnsCalls=0,dnsMissing=false;
 const providerConfig={zoneId:'a'.repeat(32),token:'fixture-provider-token',cnameTarget:'links.queer.guide'};
 const providerObjects=new Map();let providerCreates=0,providerDeletes=0,providerRestarts=0;
@@ -210,6 +213,9 @@ await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
 const base = 'http://127.0.0.1:' + server.address().port + '/api/redirects';
 const env = {
   ...process.env,
+  REDIRECT_TEST_SESSION: 'fixture-account-session',
+  REDIRECT_TEST_OTHER_SESSION: 'fixture-other-account-session',
+  REDIRECT_TEST_REPORT_LINK: seed.rows[0].id,
   REDIRECT_TEST_ROOT_DOMAIN: sdkRootDomain,
   REDIRECT_TEST_BASE: base,
   REDIRECT_TEST_TOKEN: token,
@@ -241,6 +247,8 @@ try {
   await run('ruby', ['sdk/redirects/tests/ruby.rb']);
   await run('php', ['sdk/redirects/tests/php.php']);
   await run(process.env.REDIRECT_GO_BIN ?? 'go', ['test', './...'], { cwd: 'sdk/redirects/go' });
+  const leftoverReports=await db.query('SELECT count(*)::int AS count FROM public.redirect_saved_reports');
+  if(leftoverReports.rows[0].count!==0)throw new Error('SDK report records were not cleaned');
   const sdkArtworkStorage=policyRuntime.qrAssetStorageConfig('https://fixture.supabase.co','fixture-service');
   await db.query("UPDATE public.redirect_qr_assets a SET next_cleanup_at=now()-interval '1 second' WHERE state='active' AND NOT EXISTS(SELECT FROM public.redirect_qr_styles WHERE logo_asset_id=a.id) AND NOT EXISTS(SELECT FROM public.redirect_qr_image_links WHERE logo_asset_id=a.id)");
   for(let sdkCleanup=0;sdkCleanup<4&&logoObjects.size;sdkCleanup++)await policyRuntime.dispatchRedirectQrAssetCleanup(service,sdkArtworkStorage,fixtureDnsFetch);
