@@ -10,6 +10,7 @@
 import { getCorsHeaders, getServiceClient, requireInternalOrAdmin, jsonResponse } from '../_shared/supabase-client.ts'
 import { hasValidWebhookSecret } from '../_shared/webhook-auth.ts'
 import { probeLink } from '../_shared/link-health.ts'
+import { boundedBatch, workBudget } from '../_shared/work-budget.ts'
 
 const DEFAULT_BATCH = 50
 const STEP = 'liveness'
@@ -33,21 +34,25 @@ Deno.serve(async (req: Request) => {
   }
 
   const body = await req.json().catch(() => ({}))
-  const batchLimit: number = body.batch_limit ?? DEFAULT_BATCH
+  const batchLimit = boundedBatch(body.batch_limit, DEFAULT_BATCH, 50)
+  const budget = workBudget(75_000)
   const dryRun: boolean = body.dry_run ?? false
   const hotelIds: string[] | undefined = body.hotel_ids
 
   let q = supabase.from('hotels').select('id, name, booking_url, website, liveness_status')
-  if (hotelIds?.length) q = q.in('id', hotelIds)
+  if (hotelIds?.length) q = q.in('id', hotelIds.slice(0, batchLimit)).limit(batchLimit)
   else q = q.order('liveness_checked_at', { ascending: true, nullsFirst: true }).limit(batchLimit)
   const { data: hotels, error } = await q
   if (error) return jsonResponse({ error: error.message, success: false }, 500, req)
   if (!hotels?.length) return jsonResponse({ checked: 0, message: 'none' }, 200, req)
 
-  let live = 0, dead = 0, blocked = 0, unknown = 0, skipped = 0
+  let live = 0, dead = 0, blocked = 0, unknown = 0, skipped = 0, checked = 0, failed = 0
   const deadList: Array<Record<string, unknown>> = []
 
   for (const h of hotels) {
+    // HEAD and its GET fallback can each take eight seconds. Leave room for persistence.
+    if (!budget.canStart(20_000)) break
+    checked++
     const url = h.booking_url || h.website
     if (!url) { skipped++; continue }
     let status: string
@@ -62,14 +67,15 @@ Deno.serve(async (req: Request) => {
     else unknown++
 
     if (!dryRun) {
-      await supabase.from('hotels').update({
+      const { error: updateError } = await supabase.from('hotels').update({
         liveness_status: status,
         liveness_checked_at: new Date().toISOString(),
         last_verified_at: new Date().toISOString(),
       }).eq('id', h.id)
+      if (updateError) { failed++; continue }
       await supabase.from('enrichment_log').insert({ entity_type: 'hotel', entity_id: h.id, step: STEP, status }).then(() => {}, () => {})
     }
   }
 
-  return jsonResponse({ checked: hotels.length, live, dead, blocked, unknown, skipped, dead_listings: deadList, dry_run: dryRun }, 200, req)
+  return jsonResponse({ success: failed === 0, checked, items_examined: checked, items_changed: dryRun ? 0 : checked - skipped - failed, items_failed: failed, deferred: hotels.length - checked, live, dead, blocked, unknown, skipped, dead_listings: deadList, dry_run: dryRun }, 200, req)
 })

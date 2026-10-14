@@ -153,7 +153,7 @@ Deno.serve(withErrorReporting('marketplace-sync-merchants', async (req) => {
     const synced = results.filter(r => r.status === 'ok').length
     const staged = results.reduce((n, r) => n + (Number(r.items) || 0), 0)
     return jsonResponse({
-      success: true, dry_run: dryRun,
+      success: results.every(r => r.status !== 'error'), dry_run: dryRun,
       merchants: results.length, synced, remaining,
       budget_ms_used: Date.now() - runStarted,
       items: staged, items_processed: staged, items_succeeded: staged,

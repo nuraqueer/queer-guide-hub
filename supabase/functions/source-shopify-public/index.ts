@@ -260,7 +260,7 @@ Deno.serve(withErrorReporting('source-shopify-public', async (req) => {
     // Legacy products.json feeds can become rate-limited after a successful
     // import. Try the theme's public token before remaining on that old path.
     // Persist it only after the supported API and currencies have been verified.
-    const discovered = !storefrontToken && mcfg.legacy_feed === true
+    let discovered = !storefrontToken && mcfg.legacy_feed === true
       ? await publicStorefrontCredentials(shopDomain).catch(() => null) : null
     storefrontToken ||= discovered?.token ?? null
     if (mcfg.legacy_feed !== true || storefrontToken) {
@@ -289,6 +289,7 @@ Deno.serve(withErrorReporting('source-shopify-public', async (req) => {
       let seenCurrency: string | null = null
       let completedSweep = false
       let cursorRetried = false
+      let credentialsRetried = false
       const sweepStarted = Date.now()
       let pagesFetched = 0
 
@@ -298,6 +299,17 @@ Deno.serve(withErrorReporting('source-shopify-public', async (req) => {
         try {
           page = await storefrontPage(discovered?.domain || cfgStr('storefront_domain') || shopDomain, storefrontToken, marketCountry, cursor)
         } catch (err) {
+          // Some shops return INTERNAL_SERVER_ERROR for tokenless catalog access
+          // even though their theme publishes a working read-only Storefront token.
+          if (!storefrontToken && !credentialsRetried && /storefront (graphql|401|403)/i.test((err as Error).message)) {
+            credentialsRetried = true
+            discovered = await publicStorefrontCredentials(shopDomain).catch(() => null)
+            if (discovered) {
+              storefrontToken = discovered.token
+              pages--
+              continue
+            }
+          }
           // Storefront cursors are opaque and go stale when the product set shifts.
           // A persisted bad cursor would otherwise wedge this merchant forever, so
           // fall back to a fresh sweep exactly once per run rather than failing.
