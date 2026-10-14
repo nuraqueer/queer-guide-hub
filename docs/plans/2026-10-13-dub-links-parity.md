@@ -1734,3 +1734,32 @@ remaining domain lifecycle/DNS automation, native/deferred deep links, branded
 password pages, customer enrichment, report SDK/team discovery, integrations,
 outgoing webhooks, permission/account discovery and release/publication are not
 removed from scope by this checkpoint.
+
+
+### Saved report SDK contracts design
+
+Dub Links advertises customizable reports, shared dashboards and five-language
+programmatic access. Redirects already implements private personal report CRUD,
+versioned edits, scoped aggregate execution and explicit share creation/revocation,
+but its five SDKs omit these operations. Add named methods in TypeScript, Python,
+Ruby, PHP and Go for create/get/list/update/delete/run reports, create/list/revoke
+shares and read a public report. Keep the existing transport and response bounds,
+HTTP error/Retry-After handling and no automatic write retries.
+
+Use a current account-session credential for private report methods, preserving
+personal ownership and current membership checks. Machine API keys continue to
+receive 403; broadening reports into a workspace-owned resource would change
+existing semantics and is not needed for SDK completeness. Public readers use
+a separate client whose bearer is qg_report_<share UUID>; the public method sends
+only optional password/date fields in a POST body and never URL query parameters.
+Explicit share calls retain snapshot/live-folder scope, conversion/indexing
+opt-ins, password and expiry controls. No implicit publication during create/run.
+
+TypeScript gets exact saved-report/filter/share inputs and metadata responses,
+with decimal revenue preserved as strings in aggregate result types. The dynamic
+SDKs use their incumbent maps. Native tests must execute every new method through
+the actual HTTP handler and migrated database, including personal CRUD/version
+conflicts, session-vs-key denial, plain/protected public reads, body date filters,
+share revocation, deletion cascade and page cursors. Documentation explains the
+three credential kinds and production-release status. Existing approved feature
+scope covers this additive design; no schema or production writes are planned.
