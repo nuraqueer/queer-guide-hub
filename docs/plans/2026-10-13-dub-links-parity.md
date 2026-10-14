@@ -2304,3 +2304,18 @@ working directory. Nine transport/TLS tests pass from both locations without
 relaxing TLS validation. Fixture generation uses no dependencies or credentials;
 private test keys remain ignored under tmp and are freshly generated each run.
 The draft remains incomplete; no merge/deploy is claimed.
+
+### Authoritative member administration design (2026-10-14)
+
+The /members route currently checks an admin JWT and performs privileged table
+reads/mutations separately. Replace its service-client table operations with a
+single service-only RPC receiving the actual session user. Under the common ACL
+lock it checks the current admin role before listing, creating, patching or
+removing members. Keep current REST field validation, offset pagination and
+response shapes, and validate fields again in SQL. No machine key may administer
+membership. This preserves existing UI behavior while closing stale-role and
+check-to-write gaps. Member queries include account identity, use no retained
+cache after unmount, and denied refresh suppresses earlier rows. Remount member
+form state by account so late responses cannot clear another account's draft.
+Verify actual HTTP -> migrated SQL, lost actor role, missing/ordinary actor,
+existing user/machine creation and safe field restrictions.
