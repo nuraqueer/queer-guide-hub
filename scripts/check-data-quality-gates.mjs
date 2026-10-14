@@ -16,6 +16,8 @@ const criticalCeilings = JSON.parse(
   await readFile(new URL('./data-quality-gate-baseline.json', import.meta.url), 'utf8'),
 );
 
+import { callRpc, notEvaluated, stallReason } from './lib/gate-rpc.mjs';
+
 const BASE = process.env.SUPABASE_URL;
 const KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
@@ -25,45 +27,70 @@ if (!BASE || !KEY) {
 }
 
 const callGates = () =>
-  fetch(`${BASE}/rest/v1/rpc/release_gate_checks`, {
+  callRpc(`${BASE}/rest/v1/rpc/release_gate_checks`, {
     method: 'POST',
     headers: { apikey: KEY, Authorization: `Bearer ${KEY}`, 'Content-Type': 'application/json' },
     body: '{}',
   });
 
 let res = await callGates();
-let body = res.ok ? null : await res.text();
 
-// 57014 is Postgres's statement_timeout, NOT a gate failing. The RPC ran out of
-// time, so no gate was evaluated at all — the safety checks silently did not run
-// and the PR goes red for a reason unrelated to its diff. Retry once: at 17:11
-// UTC on 2026-09-04 one run passed and another failed in the SAME MINUTE, which
-// is a query sitting on its ceiling, and one retry is the difference between a
-// flake and a blocked release.
+// A gate script has THREE outcomes and only two are about the gate: it passed,
+// it was breached, or IT WAS NEVER EVALUATED — the safety checks silently did
+// not run and the PR goes red for a reason unrelated to its diff. Retry once:
+// at 17:11 UTC on 2026-09-04 one run passed and another failed in the SAME
+// MINUTE, which is a query sitting on its ceiling, and one retry is the
+// difference between a flake and a blocked release.
+//
+// TWO CONDITIONS COUNT AS NOT EVALUATED, and only one was handled here until
+// 2026-10-14. A Postgres 57014 is the 8s statement_timeout: the server gave up
+// mid-query. The other is a TRANSPORT STALL, where `fetch` throws instead of
+// returning a response — so a branch reading `57014` out of a response body is
+// structurally unreachable and this script dies on an unhandled rejection with
+// a raw stack trace. That is what happened on #4404's head 09fdf873f, here at
+// line 34 (18:26:22 -> 18:31:25) and in check-trust-safety-gates.mjs at line 32
+// (18:26:19 -> 18:31:21): two jobs, two runners, both the FIRST call, both dead
+// at exactly five minutes (undici's headers timeout), four seconds apart, on a
+// documentation-only diff. `notEvaluated()` (scripts/lib/gate-rpc.mjs) owns
+// which conditions count, so the sibling scripts cannot drift apart on it.
+//
+// THE RETRY IS NOW DELAYED, AND THAT DELAY IS THE WHOLE FIX. This script
+// retried immediately, which is the defect #3996 measured on the sibling: both
+// attempts land in the SAME contention window and both fail seconds apart. The
+// 2026-10-14 stall lasted about nine minutes, so an instant retry re-samples
+// nothing.
 //
 // Deliberately LOUD. A retry that quietly succeeds is how a function creeps back
 // toward the ceiling unnoticed — which is exactly what happened between
 // 20261021110000 and 20270401100400. If this appears in the logs, re-measure the
 // RPC per arm; do not raise the retry count.
-if (!res.ok && body?.includes('57014')) {
+//
+// A non-evaluation never becomes a pass: it still exits 1 below. Any other
+// non-ok status is the server answering and still fails at once — a real gate
+// breach must never be retried into silence.
+const RETRY_DELAY_MS = 30_000;
+if (notEvaluated(res)) {
   console.warn(
-    '⚠ release_gate_checks hit the statement timeout (57014) — no gate was evaluated. Retrying once.',
+    `⚠ release_gate_checks did not evaluate any gate — ${stallReason(res)}. ` +
+      `Retrying ONCE in ${RETRY_DELAY_MS / 1000}s, to sample a different load window.`,
   );
+  await new Promise((r) => setTimeout(r, RETRY_DELAY_MS));
   const t0 = Date.now();
   res = await callGates();
-  body = res.ok ? null : await res.text();
   console.warn(
-    `⚠ retry ${res.ok ? 'SUCCEEDED' : 'FAILED'} after ${Date.now() - t0}ms. The RPC is near its 8s ` +
-      'ceiling — re-measure per arm (see migration 20270401100400) rather than retrying harder.',
+    `⚠ retry ${res.ok ? 'SUCCEEDED' : 'FAILED'} after ${Date.now() - t0}ms. If it FAILED on the ` +
+      'statement timeout, the RPC is near its 8s ceiling — re-measure per arm (see migration ' +
+      '20270401100400) rather than retrying harder. If it FAILED with no HTTP response, that is ' +
+      'the network or the instance, not this query, and no amount of re-measuring the arms helps.',
   );
 }
 
 if (!res.ok) {
-  console.error(`release_gate_checks → HTTP ${res.status}: ${body}`);
+  console.error(`release_gate_checks → HTTP ${res.status}: ${res.body}`);
   process.exit(1);
 }
 
-const rows = await res.json();
+const rows = res.data;
 let blocking = 0;
 
 const reportGate = (r) => {
@@ -101,13 +128,13 @@ for (const r of rows.sort(
 // contract can remain stable for older deployments. PGRST202 means the branch
 // is being checked before its migration has reached the target database; warn
 // during that rollout window, but every other RPC failure remains fatal.
-const personalityRes = await fetch(`${BASE}/rest/v1/rpc/personality_quality_gate_checks`, {
+const personalityRes = await callRpc(`${BASE}/rest/v1/rpc/personality_quality_gate_checks`, {
   method: 'POST',
   headers: { apikey: KEY, Authorization: `Bearer ${KEY}`, 'Content-Type': 'application/json' },
   body: '{}',
 });
 if (!personalityRes.ok) {
-  const body = await personalityRes.text();
+  const body = personalityRes.body;
   if (personalityRes.status === 404 && body.includes('PGRST202')) {
     console.warn('⚠ personality_quality_gate_checks is not deployed yet — rollout window');
   } else {
@@ -115,7 +142,7 @@ if (!personalityRes.ok) {
     process.exit(1);
   }
 } else {
-  const personalityRows = await personalityRes.json();
+  const personalityRows = personalityRes.data;
   for (const r of personalityRows.sort(
     (a, b) => a.severity.localeCompare(b.severity) || a.gate.localeCompare(b.gate),
   )) {
@@ -126,13 +153,13 @@ if (!personalityRes.ok) {
 // Event programme gates remain advisory while event_quality_rollout is in
 // shadow mode. The RPC promotes zero-tolerance gates to critical only after
 // enforcement is explicitly enabled.
-const eventRes = await fetch(`${BASE}/rest/v1/rpc/event_quality_gate_checks`, {
+const eventRes = await callRpc(`${BASE}/rest/v1/rpc/event_quality_gate_checks`, {
   method: 'POST',
   headers: { apikey: KEY, Authorization: `Bearer ${KEY}`, 'Content-Type': 'application/json' },
   body: '{}',
 });
 if (!eventRes.ok) {
-  const body = await eventRes.text();
+  const body = eventRes.body;
   if (eventRes.status === 404 && body.includes('PGRST202')) {
     console.warn('⚠ event_quality_gate_checks is not deployed yet — rollout window');
   } else {
@@ -140,7 +167,7 @@ if (!eventRes.ok) {
     process.exit(1);
   }
 } else {
-  const eventRows = await eventRes.json();
+  const eventRows = eventRes.data;
   for (const r of eventRows.sort(
     (a, b) => a.severity.localeCompare(b.severity) || a.gate.localeCompare(b.gate),
   )) {

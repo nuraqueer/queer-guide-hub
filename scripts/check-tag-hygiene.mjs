@@ -25,6 +25,8 @@ import { fileURLToPath } from 'node:url'
 const HERE = dirname(fileURLToPath(import.meta.url))
 const BASELINE = join(HERE, 'tag-hygiene-baseline.json')
 
+import { callRpc, notEvaluated, stallReason } from './lib/gate-rpc.mjs'
+
 const BASE = process.env.SUPABASE_URL
 const KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
 const UPDATE = process.argv.includes('--update')
@@ -35,14 +37,13 @@ if (!BASE || !KEY) {
 }
 
 const callStats = () =>
-  fetch(`${BASE}/rest/v1/rpc/tag_hygiene_stats`, {
+  callRpc(`${BASE}/rest/v1/rpc/tag_hygiene_stats`, {
     method: 'POST',
     headers: { apikey: KEY, Authorization: `Bearer ${KEY}`, 'Content-Type': 'application/json' },
     body: '{}',
   })
 
 let res = await callStats()
-let body = res.ok ? null : await res.text()
 
 // 57014 is Postgres's statement_timeout on `authenticator`, NOT a hygiene metric
 // growing. The RPC ran out of time, so NO metric was evaluated at all and the PR
@@ -79,15 +80,24 @@ let body = res.ok ? null : await res.text()
 // Before trusting ANY timing here, re-run the unchanged baseline afterwards: if
 // the two baselines disagree, the measurement in between measured the instance.
 const RETRY_DELAY_MS = 30_000
-if (!res.ok && body?.includes('57014')) {
+// TWO conditions count as "no metric was evaluated" and only one was handled
+// here until 2026-10-14: a Postgres 57014 (the server gave up mid-query) and a
+// TRANSPORT STALL, where `fetch` throws instead of returning a response — so a
+// branch reading `57014` out of a response body is structurally unreachable
+// and the script dies on an unhandled rejection with a raw stack trace. Two
+// sibling gate scripts did exactly that on #4404's head 09fdf873f, both at
+// undici's five-minute headers timeout, four seconds apart. `notEvaluated()`
+// (scripts/lib/gate-rpc.mjs) owns which conditions count, so these scripts
+// cannot drift apart on it. A non-evaluation still exits 1 below; any other
+// non-ok status is the server answering and still fails at once.
+if (notEvaluated(res)) {
   console.warn(
-    `⚠ tag_hygiene_stats() hit the statement timeout (57014) — no metric was evaluated. ` +
+    `⚠ tag_hygiene_stats() evaluated no metric — ${stallReason(res)}. ` +
       `Retrying ONCE in ${RETRY_DELAY_MS / 1000}s, to sample a different load window.`,
   )
   await new Promise((r) => setTimeout(r, RETRY_DELAY_MS))
   const t0 = Date.now()
   res = await callStats()
-  body = res.ok ? null : await res.text()
   console.warn(
     `⚠ retry ${res.ok ? 'SUCCEEDED' : 'FAILED'} after ${Date.now() - t0}ms. If it FAILED, the ` +
       'database was busy for >30s or the function has genuinely regressed — measure it on a quiet ' +
@@ -96,10 +106,10 @@ if (!res.ok && body?.includes('57014')) {
 }
 
 if (!res.ok) {
-  console.error(`✗ tag_hygiene_stats() → HTTP ${res.status}: ${body}`)
+  console.error(`✗ tag_hygiene_stats() → HTTP ${res.status}: ${res.body}`)
   process.exit(1)
 }
-const stats = await res.json()
+const stats = res.data
 
 const baseline = JSON.parse(readFileSync(BASELINE, 'utf8'))
 // Keys starting with _ are prose; `totals` is context, not a gate.
