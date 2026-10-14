@@ -12,6 +12,15 @@ const response = {
   },
 };
 describe('Shopify public Storefront pages', () => {
+  it('retries a transient GraphQL error with the same cursor and market', async () => {
+    const fetch = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ errors: [{ message: 'Internal error. Looks like something went wrong', extensions: { code: 'INTERNAL_SERVER_ERROR' } }] })))
+      .mockResolvedValueOnce(new Response(JSON.stringify(response)));
+    vi.stubGlobal('fetch', fetch);
+    expect((await storefrontPage('example.com', null, 'GB', 'previous')).endCursor).toBe('next');
+    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(fetch.mock.calls[0][1].body).toBe(fetch.mock.calls[1][1].body);
+  });
   it('uses tokenless fields and pins the currency market, preserving pagination', async () => {
     const fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify(response)));
     vi.stubGlobal('fetch', fetch);
@@ -64,7 +73,7 @@ describe('Shopify public Storefront pages', () => {
   it.each([429, 500])('does not treat HTTP %s as an empty catalog', async (status) => {
     vi.stubGlobal(
       'fetch',
-      vi.fn().mockResolvedValue(new Response('upstream unavailable', { status })),
+      vi.fn().mockImplementation(() => Promise.resolve(new Response('upstream unavailable', { status }))),
     );
     await expect(storefrontPage('example.com', null, 'US', 'cursor')).rejects.toThrow(
       `storefront ${status}`,
