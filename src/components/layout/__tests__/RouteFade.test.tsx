@@ -1,11 +1,11 @@
 /**
  * @vitest-environment jsdom
  */
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter, useNavigate } from 'react-router';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { RouteFade } from '../RouteFade';
-import { isRouteMotionAllowed, routeJourneyTrack } from '../routeJourney';
+import { isRouteMotionAllowed } from '../routeJourney';
 
 function NavigationHarness({ destination }: { destination: string }) {
   const navigate = useNavigate();
@@ -18,16 +18,7 @@ function NavigationHarness({ destination }: { destination: string }) {
   );
 }
 
-describe('RouteFade subway journey', () => {
-  afterEach(() => vi.useRealTimers());
-
-  it('maps route families to their semantic line colour', () => {
-    expect(routeJourneyTrack('/venues')).toBe('pink');
-    expect(routeJourneyTrack('/de/cities/berlin')).toBe('blue');
-    expect(routeJourneyTrack('/community')).toBe('green');
-    expect(routeJourneyTrack('/news')).toBe('yellow');
-  });
-
+describe('RouteFade', () => {
   it('keeps admin and safety routes motion-free', () => {
     expect(isRouteMotionAllowed('/admin')).toBe(false);
     expect(isRouteMotionAllowed('/help')).toBe(false);
@@ -35,21 +26,21 @@ describe('RouteFade subway journey', () => {
     expect(isRouteMotionAllowed('/events')).toBe(true);
   });
 
-  it('draws one 620ms station journey for a route change', () => {
-    vi.useFakeTimers();
-    render(
-      <MemoryRouter initialEntries={['/venues']}>
-        <NavigationHarness destination="/community" />
-      </MemoryRouter>,
-    );
-
-    fireEvent.click(screen.getByRole('button', { name: 'Ride' }));
-    expect(screen.getByTestId('route-journey')).toHaveClass('route-journey--green');
-    act(() => void vi.advanceTimersByTime(619));
-    expect(screen.getByTestId('route-journey')).toBeInTheDocument();
-    act(() => void vi.advanceTimersByTime(1));
-    expect(screen.queryByTestId('route-journey')).not.toBeInTheDocument();
-  });
+  it.each(['/venues', '/community', '/cities', '/news'])(
+    'never covers %s with a coloured loading overlay',
+    (destination) => {
+      const { container } = render(
+        <MemoryRouter initialEntries={['/']}>
+          <NavigationHarness destination={destination} />
+        </MemoryRouter>,
+      );
+      fireEvent.click(screen.getByRole('button', { name: 'Ride' }));
+      expect(screen.queryByTestId('route-journey')).not.toBeInTheDocument();
+      expect(container.firstChild).toHaveClass('station-arrive');
+      expect(container.firstChild).not.toHaveClass('station-arrive--journey');
+      expect(screen.getByRole('button', { name: 'Ride' })).toBeVisible();
+    },
+  );
 
   it('does not animate a transition into a crisis surface', () => {
     render(

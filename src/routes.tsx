@@ -372,9 +372,8 @@ export const AppRoutes = () => {
         // edge-bleed scroll strips keep working; it only trims stray X overflow.
         className="flex-1 relative z-[1] outline-none overflow-x-clip"
       >
-        {/* RouteFade must persist across route changes so it can retain the
-            departure station. The inner keyed boundary still resets errors
-            for every destination without remounting the journey controller. */}
+        {/* Content arrives quietly; Suspense owns actual loading feedback.
+            The keyed error boundary resets for each destination. */}
         <RouteFade>
           <ErrorBoundary key={location.pathname}>
             <Suspense

@@ -1,7 +1,5 @@
 import { stripLocale } from '@/lib/locale';
 
-export const ROUTE_JOURNEY_MS = 620;
-
 export type JourneyTrack = 'pink' | 'blue' | 'green' | 'yellow';
 
 const MOTION_FREE_PREFIXES = ['/admin', '/help', '/support', '/rights/trans', '/report', '/safety'];
@@ -29,11 +27,4 @@ export function routeJourneyTrack(pathname: string): JourneyTrack {
     return 'yellow';
   }
   return 'pink';
-}
-
-export function routeStationName(pathname: string): string {
-  const path = stripLocale(pathname);
-  const segment = path.split('/').filter(Boolean)[0];
-  if (!segment) return 'queer.guide';
-  return segment.replaceAll('-', ' ');
 }

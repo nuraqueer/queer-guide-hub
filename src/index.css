@@ -1196,6 +1196,10 @@ h2:not(.font-sans),
   stroke-dasharray: 30 90;
   animation: track-loop var(--motion-loader-loop) linear infinite;
 }
+.track-loader--slow path {
+  animation: none;
+  stroke-dasharray: none;
+}
 .track-loader--pending {
   visibility: hidden;
 }
@@ -2042,162 +2046,9 @@ h2:not(.font-sans),
 .station-arrive {
   animation: station-arrive var(--motion-normal) cubic-bezier(0, 0, 0.2, 1);
 }
-.station-arrive--journey {
-  animation-duration: var(--motion-route-content);
-  animation-delay: var(--motion-route-arrival-delay);
-  animation-fill-mode: both;
-}
-
-/* Route navigation is a ride between two stations. The timing follows the
-   Loading Animation reference: departure, line at 100ms, rider at 220ms,
-   arrival at 380ms, line held for 200ms; the whole transition is 620ms. */
-@keyframes route-journey-shell {
-  0% {
-    opacity: 0;
-  }
-  8%,
-  92% {
-    opacity: 1;
-  }
-  100% {
-    opacity: 0;
-  }
-}
-@keyframes route-journey-line {
-  from {
-    stroke-dashoffset: 1;
-  }
-  to {
-    stroke-dashoffset: 0;
-  }
-}
-@keyframes route-journey-rider {
-  0% {
-    offset-distance: 0%;
-    opacity: 0;
-  }
-  12% {
-    opacity: 1;
-  }
-  88% {
-    opacity: 1;
-  }
-  100% {
-    offset-distance: 100%;
-    opacity: 0;
-  }
-}
-@keyframes route-journey-arrival {
-  0% {
-    transform: scale(0);
-  }
-  62% {
-    transform: scale(1.28);
-  }
-  100% {
-    transform: scale(1);
-  }
-}
-.route-journey {
-  position: fixed;
-  inset: 0;
-  z-index: 80;
-  display: grid;
-  place-items: center;
-  pointer-events: none;
-  background: hsl(var(--background) / 0.94);
-  animation: route-journey-shell var(--motion-journey) linear both;
-}
-.route-journey__stage {
-  position: relative;
-  width: min(88vw, 960px);
-  height: min(42vw, 360px);
-  min-height: 220px;
-  color: hsl(var(--foreground));
-}
-.route-journey__stage svg {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  overflow: visible;
-}
-.route-journey__line {
-  fill: none;
-  stroke: var(--route-journey-color);
-  stroke-width: 16;
-  stroke-linecap: round;
-  stroke-dasharray: 1;
-  animation: route-journey-line var(--motion-route-line) cubic-bezier(0.6, 0.02, 0.24, 1)
-    var(--motion-route-line-delay) both;
-  vector-effect: non-scaling-stroke;
-}
-.route-journey__station {
-  fill: hsl(var(--card));
-  stroke: hsl(var(--track-ring));
-  stroke-width: 8;
-  transform-box: fill-box;
-  transform-origin: center;
-  vector-effect: non-scaling-stroke;
-}
-.route-journey__station--to {
-  animation: route-journey-arrival var(--motion-route-arrival) cubic-bezier(0.22, 1, 0.36, 1)
-    var(--motion-route-arrival-delay) both;
-}
-.route-journey__rider {
-  position: absolute;
-  inset: 0 auto auto 0;
-  width: 18px;
-  height: 18px;
-  border-radius: 9999px;
-  background: hsl(var(--foreground));
-  offset-path: path('M 96 205 C 269 40 653 270 864 86');
-  offset-rotate: 0deg;
-  animation: route-journey-rider var(--motion-route-rider) cubic-bezier(0.55, 0.06, 0.32, 0.99)
-    var(--motion-route-rider-delay) both;
-}
-.route-journey__label {
-  position: absolute;
-  z-index: 1;
-  max-width: 40%;
-  font-family: var(--font-display);
-  font-size: var(--text-headline);
-  line-height: 1;
-  text-transform: lowercase;
-}
-.route-journey__label--from {
-  left: 0;
-  bottom: 4%;
-}
-.route-journey__label--to {
-  right: 0;
-  top: 0;
-  text-align: right;
-}
-.route-journey--pink {
-  --route-journey-color: hsl(var(--track-pink));
-}
-.route-journey--blue {
-  --route-journey-color: hsl(var(--track-blue));
-}
-.route-journey--green {
-  --route-journey-color: hsl(var(--track-green));
-}
-.route-journey--yellow {
-  --route-journey-color: hsl(var(--track-yellow));
-}
-@media (max-width: 640px) {
-  .route-journey__label {
-    font-size: var(--text-title);
-  }
-}
 @media (prefers-reduced-motion: reduce) {
-  .station-arrive,
-  .route-journey {
+  .station-arrive {
     animation: none;
-  }
-  .route-journey {
-    display: none;
   }
 }
 

@@ -23,6 +23,7 @@ import {
 } from 'react';
 import { Outlet, useLocation, useNavigate, Link } from 'react-router';
 import { Skeleton } from '@/components/ui/skeleton';
+import { LoadingRegion } from '@/components/ui/loading-region';
 import { Sheet, SheetContent } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import {
@@ -99,30 +100,31 @@ const CMSEditorLayout = lazy(() =>
 /** Skeleton loading placeholder that mimics the sidebar + content layout */
 function ShellSkeleton() {
   return (
-    <div className="flex w-full" style={{ minHeight: 'var(--admin-content-min-h)' }}>
-      {/* Skeleton sidebar */}
-      <div className="hidden md:block w-[260px] flex-shrink-0 border-r border-border bg-background p-4">
-        <Skeleton className="w-40 h-6 mb-2" />
-        <Skeleton className="w-24 h-4 mb-6" />
-        {Array.from({ length: 8 }).map((_, i) => (
-          <div key={i} className="flex items-center gap-4 mb-2">
-            <Skeleton className="h-7 w-7 rounded-element" />
-            {/* eslint-disable-next-line react-hooks/purity -- time-relative value (Date.now / Math.random) used to compute a label or filter cutoff; sub-second precision irrelevant for this UI. */}
-            <Skeleton className="h-5" style={{ width: 80 + Math.random() * 60 }} />
-          </div>
-        ))}
-      </div>
-
-      {/* Skeleton main content */}
-      <div className="flex-1 p-6">
-        <Skeleton className="w-[200px] h-8 mb-2" />
-        <Skeleton className="w-[300px] h-5 mb-6" />
-        <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 md:grid-cols-3">
-          {Array.from({ length: 6 }).map((_, i) => (
-            <Skeleton key={i} className="h-[120px] rounded-container" />
+    <div style={{ minHeight: 'var(--admin-content-min-h)' }}>
+      <LoadingRegion className="flex w-full">
+        {/* Skeleton sidebar */}
+        <div className="hidden md:block w-[260px] flex-shrink-0 border-r border-border bg-background p-4">
+          <Skeleton className="w-40 h-6 mb-2" />
+          <Skeleton className="w-24 h-4 mb-6" />
+          {Array.from({ length: 8 }).map((_, i) => (
+            <div key={i} className="flex items-center gap-4 mb-2">
+              <Skeleton className="h-7 w-7 rounded-element" />
+              <Skeleton className="h-5" style={{ width: 80 + (i % 3) * 20 }} />
+            </div>
           ))}
         </div>
-      </div>
+
+        {/* Skeleton main content */}
+        <div className="flex-1 p-6">
+          <Skeleton className="w-[200px] h-8 mb-2" />
+          <Skeleton className="w-[300px] h-5 mb-6" />
+          <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 md:grid-cols-3">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <Skeleton key={i} className="h-[120px] rounded-container" />
+            ))}
+          </div>
+        </div>
+      </LoadingRegion>
     </div>
   );
 }
