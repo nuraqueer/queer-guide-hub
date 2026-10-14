@@ -2401,3 +2401,22 @@ service-table operations, and direct authenticated Redirects RLS/organization
 RPCs still trust cached admin JWT roles. Bring those paths under actual current
 owner checks without changing public automatic-alias routing or granting members
 raw table access; continue all-source discovery/organization afterward.
+
+### Direct Redirects RLS and legacy owner policy design (2026-10-15)
+
+The remaining authenticated table policies and organization RPCs use the cached
+admin JWT claim. Add a narrow no-argument current-owner check for Redirects,
+using the actual auth.uid and current user_roles entry under the ACL/role locks.
+Use it only for Redirects private/admin RLS and its campaign/organization RPCs;
+do not change the app's global JWT helper or public automatic-alias routing.
+No member gets raw private-table access. Existing admins keep the same abilities;
+revoked roles lose direct table writes/reads without waiting for a new JWT.
+
+Legacy save-redirect-policy will send the verified actor context on its service
+client and the policy setter will invoke shared write scope, closing the earlier
+service bypass while retaining trusted internal fixtures/jobs. Update old SQL
+fixtures that claim admin without an actual user/role to use real owners. Verify
+cached admin claims after current role removal, ordinary account denial, unchanged
+current owner organization behavior, private table/grant policy shapes and legacy
+policy save behavior. Token administration remains next, followed by all-source
+member management and invitation/discovery flows.
