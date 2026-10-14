@@ -794,3 +794,33 @@ review, queued/pending/active certificate states and disconnection. At 390 pixel
 client and scroll widths are both 390. Temporary browser tab/viewport were cleaned
 up. Provider/DNS state in native tests is explicitly simulated and all production
 requests blocked. No production Cloudflare, DNS, registry or deployment writes.
+
+### Hostname namespaces and signed public routing
+
+Add a domain foreign key to managed SHORT links, with uniqueness per domain and a
+separate default `/go/` namespace. The built-in resolver must explicitly filter
+that namespace, never select an arbitrary same-slug record. Preserve link-ID
+scopes, folder permissions, atomic bulk/upsert, policies and attribution.
+Store the immutable public hostname alongside each binding for inventory reads;
+clients cannot override that derived value. Binding new/moved links requires a
+ready domain; edits to an existing unavailable domain can still repair its links.
+
+A dedicated Cloudflare SaaS relay takes hostname/path from its actual request URL,
+strips incoming internal headers, and signs method, hostname, path, canonical
+query and visitor IP with a domain-separated HMAC. The resolver verifies the
+signature and consistency before looking up the domain. Unknown/unready domains
+never fall back to the built-in namespace. Current domain/owner/TLS rights are
+checked in SQL, including again at click recording. Root/not-found/expired
+fallbacks use stored defaults, while previews, passwords, targeting, conversions,
+QR attribution and cloaking keep the existing resolver behavior.
+
+An explicit browser GET to the branded health endpoint proves that public DNS/TLS
+and the deployed relay reach this backend; only its signed, authorized request
+records a routing check tied to the provider ID and protocol. No server-side
+fetch to a user-supplied hostname is introduced. Current TLS/ownership plus a
+recent matching routing check gates choices/binding/primary. Background provider
+checks renew previously verified TXT proofs before expiry, using the same bounded
+DNS verifier and current owner authority. Missing proof closes routing. The full
+builder, primary, inventory, CSV/QR, five SDK and controlled-deployment integration
+requirements remain in scope; managed root-link policies and provider validation
+restart also remain explicit follow-up requirements.
