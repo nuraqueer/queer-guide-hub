@@ -511,3 +511,19 @@ describe('preview generation API', () => {
     expect((await app.invoke('/links/' + click + '/preview-generate', {})).status).toBe(403);
   });
 });
+
+describe('bulk import payload size', () => {
+  it('accepts a legitimate hundred-row batch over the single-link 64 KB limit', async () => {
+    const app = runtime();
+    const operations = Array.from({ length: 100 }, (_, index) => ({
+      operation: 'create',
+      data: {
+        slug: 'import-' + index,
+        target: 'https://example.com/?description=' + 'x'.repeat(1000),
+      },
+    }));
+    const response = await app.invoke('/links/bulk', { operations });
+    expect(response.status).toBe(200);
+    expect((await response.json()).data).toHaveLength(100);
+  });
+});

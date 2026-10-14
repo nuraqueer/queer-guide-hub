@@ -16,7 +16,7 @@ exist. Existing local tools are a foundation, not proof of parity or deployment.
 | Tags | Multiple colored tags, create/rename/delete, shareable filtered list and analytics | Candidate: implemented locally; pending release |
 | Comments | Team-visible comment on link card, clickable hyperlinks | Candidate: implemented locally; pending release |
 | Folder permissions | Explicit view/edit permissions for team members, enforced in database/API | Missing |
-| Bulk actions | Create/update/upsert/delete, folder/tag assignment, archive, import/export, QR export | Partial: atomic API batches, archive/restore, cross-page bulk organization/deletion/selected CSV and verified QR ZIP UI; richer import/upsert UI pending |
+| Bulk actions | Create/update/upsert/delete, folder/tag assignment, archive, import/export, QR export | Candidate for managed links: atomic create/update/upsert/deletion API and CSV review/import/export UI, archive/restore, folder/tag assignment and verified QR ZIP; production release pending |
 | Custom previews | Uploaded OG image (1200×630, ≤1.5 MB), title≤120, description≤240, video API, crawler unfurl | Candidate: editor, scoped upload/presentation APIs and crawler HTML; native browser/Storage release pending |
 | AI previews | Generate title/description from destination content using configured AI provider | Candidate: scoped draft generator with spend limits; live provider and browser verification pending |
 | Custom domains | Verify ownership/DNS, multiple domains, primary domain, redirects on branded hostname | Missing |
@@ -392,3 +392,33 @@ screenshots and the downloaded fixture ZIP are under the workspace's
 reset. This proves local native-browser export, not live redirect attribution or
 production deployment. 32 focused tests, lint, production build and typecheck
 ratchet (704 inherited errors, none new) pass.
+
+## Checkpoint: managed CSV review, upsert and export
+
+Implemented locally: primary Import workflow offers create/update-by-ID/upsert-by-
+slug, pasted or uploaded CSV, a review of exact normalized values and one atomic
+Apply. Supported management fields round trip via the scoped selected-ID CSV
+export. Quoted commas/newlines/quotes, BOM/CRLF, typed JSON, explicit null/empty
+array clearing, duplicate identities and closed headers are handled. Empty cells
+omit changes. Spreadsheet-safe commentJson preserves comments exactly. The bulk
+API payload bound is now 2.1 MB, matching the import size bound; ordinary single-
+link writes remain at 64 KB. Real 100-row requests above 64 KB are tested. The
+existing path importer is retained with the quoted parser and stronger validation;
+its row-by-row results remain explicit, not claimed as atomic upsert.
+
+Evidence: 36 focused tests in four files plus the four managed-dialog tests passed
+(the dialog worker was retried alone after a startup timeout under resource
+contention). Actual CSV source → migrated PostgreSQL proves create/upsert/update,
+metadata preservation, all supported CSV field round trips, transaction rollback
+and revoked-token rejection. Lint, production build and the typecheck ratchet
+(704 inherited errors, none new) pass. No new database migration is required.
+
+Native browser proof uses a local fixture that blocks production fetches and
+simulates Apply receipts. Quoted two-row upsert review, exact expandable values,
+success/duplicate-submit states and real template download were verified. Python's
+CSV reader confirms the downloaded template. Desktop/mobile screenshots are under
+`outputs/redirect-dub-parity/managed-import-*`. The 390-pixel mobile dialog has
+scrollWidth=clientWidth=390; only the 340-pixel review region scrolls to hold its
+576-pixel table. Viewport was reset and temporary tab closed. Production API
+import/export and remaining policy/domain/permissions/report/integration work
+remain outstanding; the complete goal remains active.

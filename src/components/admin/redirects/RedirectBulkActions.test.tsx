@@ -67,6 +67,33 @@ describe('bulk redirect controls', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('Atomic change failed');
     expect(clear).not.toHaveBeenCalled();
   });
+  it('exports all selected managed fields through the scoped read API', async () => {
+    const create = vi.fn((_blob: unknown) => 'blob:managed-export');
+    const NativeURL = URL;
+    vi.stubGlobal(
+      'URL',
+      class extends NativeURL {
+        static createObjectURL = create;
+        static revokeObjectURL = vi.fn();
+      },
+    );
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+    mocks.invoke.mockResolvedValue({
+      data: {
+        data: [{ id: managed.manualId, slug: 'campaign', target: '/events', comment: '=example' }],
+      },
+      error: null,
+    });
+    show([managed]);
+    fireEvent.click(screen.getByRole('button', { name: 'Export managed CSV' }));
+    await waitFor(() => expect(click).toHaveBeenCalledOnce());
+    const request = new NativeURL('https://fixture/' + mocks.invoke.mock.calls[0][0]);
+    expect(JSON.parse(request.searchParams.get('filters')!)).toEqual({ ids: [managed.manualId] });
+    expect(mocks.invoke.mock.calls[0][1]).toEqual({ method: 'GET' });
+    expect(create).toHaveBeenCalledOnce();
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
   it('requires a concrete typed confirmation before sending atomic deletes', async () => {
     mocks.invoke.mockResolvedValue({
       data: { data: [{ id: managed.manualId, deleted: true }] },

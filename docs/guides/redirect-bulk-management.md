@@ -60,3 +60,52 @@ and a completed downloaded fixture ZIP passed scan and CRC inspection. Live
 production behavior and workspace/domain logo precedence remain unverified or unfinished.
 [JSZip generation API](https://stuk.github.io/jszip/documentation/api_jszip/generate_async.html)
 documents the archive format used by this implementation.
+
+## Managed CSV import and round-trip export
+
+Import opens the managed short-link workflow. Paste CSV or upload a file, select
+Create, Update by ID, or Upsert by slug, then Review import. The review lists each
+identity/destination and expandable exact field values. Apply sends one atomic
+API batch; invalid data or a slug conflict rolls back all writes. A network
+failure can make the outcome unknown, so refresh the inventory before retrying.
+After confirmed success, Apply is disabled until the input or mode changes.
+
+The limit is 100 rows and 2.1 MB for the CSV and encoded API request. The bulk API
+now accepts that same bounded payload size; single-link requests keep their
+existing 64 KB bound. An oversized encoded request is rejected before writes.
+The template download provides the supported headers. Blank cells omit fields;
+update/upsert preserve those values on existing records. Upsert requires slug and
+target; update requires id and at least one changed field. ID is ignored in create
+and upsert modes. Slugs are normalized to lowercase. Duplicate identities within
+a batch are rejected rather than silently overwriting earlier rows.
+
+Supported fields are id, slug, target, statusCode, isEnabled, isArchived, queryMode,
+queryOverride, utmDefaults, expiresAt, folderId, tagIds, and comment. Snake-case
+header aliases are accepted. JSON is used for queryOverride/utmDefaults objects
+and tagIds arrays. `null` clears nullable query defaults, expiry or folder values;
+`[]` clears tags. Policy settings outside these fields are preserved by partial
+management updates. The CSV parser supports quoted commas, escaped double quotes,
+multiline comments, UTF-8 BOM, and CRLF. Unknown/duplicate headers, malformed CSV,
+wrong column counts and invalid field types report errors before requests.
+
+Export managed CSV is enabled when every selected row is a managed short link.
+It reads exactly those selected IDs through the authenticated scoped API and
+includes the supported management fields. Exported comments use `commentJson`
+(JSON strings), preserving empty strings, quotes and newlines on reimport and
+preventing spreadsheet formula interpretation. Plain `comment` columns remain
+supported for handwritten CSV. Choose Update by ID to restore an exported file,
+or Upsert by slug to create/update matching slugs. Any change to scope or missing
+selected records stops the export rather than silently dropping rows. Files over
+2.1 MB require a smaller selection.
+
+Import path rules instead keeps the prior path-rule creation workflow. It shares
+the quoted CSV parser and validates destinations/status/enabled flags before
+submitting. Its legacy creation hook still reports success/errors row by row;
+it does not provide the managed short-link API's atomic upsert behavior.
+
+`npm run test:redirect-import` evaluates the actual CSV source against migrated
+isolated PostgreSQL, proving create/update/upsert, retained metadata, full supported
+field round trips, atomic slug-conflict rollback and revoked-credential rejection.
+Local browser fixtures verify desktop/mobile review and simulated apply receipts,
+with production requests blocked. A real browser template download was parsed
+independently with Python. Live production import/export still awaits release.

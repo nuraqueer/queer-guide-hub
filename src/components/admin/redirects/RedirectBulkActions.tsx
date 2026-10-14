@@ -1,3 +1,4 @@
+import { managedLinksCsv } from '@/lib/redirects/importCsv';
 import { RedirectBulkQrDialog } from './RedirectBulkQrDialog';
 import { publicSourceUrl } from '@/lib/redirects/linkTools';
 import { useState } from 'react';
@@ -52,6 +53,44 @@ export function RedirectBulkActions({
       onClear();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Bulk change failed');
+    } finally {
+      setBusy(false);
+      onBusy?.(false);
+    }
+  };
+  const exportManaged = async () => {
+    if (!deletable || busy) return;
+    setBusy(true);
+    onBusy?.(true);
+    setError('');
+    try {
+      const filters = encodeURIComponent(JSON.stringify({ ids: rows.map((row) => row.manualId) }));
+      const { data, error: exportError } = await supabase.functions.invoke(
+        'redirect-api/links?limit=100&filters=' + filters,
+        { method: 'GET' },
+      );
+      if (exportError || data?.error) throw new Error(data?.error ?? exportError?.message);
+      if (
+        !Array.isArray(data?.data) ||
+        data.data.length !== rows.length ||
+        new Set(data.data.map((link: { id: string }) => link.id)).size !== rows.length ||
+        data.data.some((link: { id: string }) => !rows.some((row) => row.manualId === link.id))
+      )
+        throw new Error('Some selected links are missing. Refresh before exporting.');
+      const csv = managedLinksCsv(data.data);
+      const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+      try {
+        const anchor = document.createElement('a');
+        anchor.href = url;
+        anchor.download = 'queerguide-managed-links.csv';
+        document.body.appendChild(anchor);
+        anchor.click();
+        anchor.remove();
+      } finally {
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not export managed links');
     } finally {
       setBusy(false);
       onBusy?.(false);
@@ -147,6 +186,14 @@ export function RedirectBulkActions({
         </Button>
         <Button size="sm" variant="outline" onClick={onExport}>
           Export selected CSV
+        </Button>
+        <Button
+          size="sm"
+          variant="outline"
+          disabled={!deletable}
+          onClick={() => void exportManaged()}
+        >
+          Export managed CSV
         </Button>
         <Button
           size="sm"

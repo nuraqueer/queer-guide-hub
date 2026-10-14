@@ -99,7 +99,7 @@ Deno.serve(async (req: Request) => {
     return json(count?{count:data.count}:data);
    }
    let operations:unknown[];
-   if(path==='/links/bulk'&&req.method==='POST')operations=bulkLinkInput(await boundedJson(req));
+   if(path==='/links/bulk'&&req.method==='POST')operations=bulkLinkInput(await boundedJson(req,2100000));
    else if(path==='/links'&&req.method==='POST')operations=[{operation:'create',data:linkInput(await boundedJson(req),'create')}];
    else if(path==='/links/upsert'&&req.method==='PUT')operations=[{operation:'upsert',data:linkInput(await boundedJson(req),'upsert')}];
    else if(byId&&req.method==='PATCH')operations=[{operation:'update',id,data:linkInput(await boundedJson(req),'update')}];

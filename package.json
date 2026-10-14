@@ -44,6 +44,7 @@
     "verify:gh-sync": "tsx scripts/verify-github-sync.ts",
     "prepare": "husky",
     "test:merchant-sync": "vitest run --config tests/merchant-sync/vitest.config.ts",
+    "test:redirect-import": "node scripts/test-redirect-import.mjs",
     "test:redirect-sql": "node scripts/test-redirect-platform-sql.mjs",
     "test:redirect-stripe": "node scripts/test-redirect-stripe.mjs",
     "test:redirect-sdks": "node scripts/test-redirect-sdks.mjs"

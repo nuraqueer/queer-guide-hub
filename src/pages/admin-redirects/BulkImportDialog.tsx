@@ -1,3 +1,5 @@
+import { validateTarget } from '@/lib/redirects/validation';
+import { parseRedirectCsv } from '@/lib/redirects/importCsv';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import {
@@ -33,30 +35,32 @@ export function BulkImportDialog({ open, onClose, onImport }: BulkImportDialogPr
     setImporting(true);
     setResult(null);
     try {
-      const lines = csvText
-        .trim()
-        .split('\n')
-        .filter((l) => l.trim());
-      if (lines.length < 2) {
-        setResult({ success: 0, errors: ['Need at least a header row and one data row'] });
-        return;
-      }
-      const headers = lines[0].split(',').map((h) => h.trim().toLowerCase());
-      const items = lines
-        .slice(1)
-        .map((line) => {
-          const values = line.split(',').map((v) => v.trim().replace(/^"|"$/g, ''));
-          const obj: Record<string, string | number | boolean | undefined> = {};
-          headers.forEach((h, i) => {
-            if (h === 'slug') obj.slug = values[i];
-            if (h === 'source_path') obj.source_path = values[i];
-            if (h === 'target') obj.target = values[i];
-            if (h === 'status_code') obj.status_code = parseInt(values[i], 10) || 301;
-            if (h === 'is_enabled') obj.is_enabled = values[i] !== 'false' && values[i] !== '0';
-          });
-          return obj;
-        })
-        .filter((item) => item.target);
+      const lines = parseRedirectCsv(csvText);
+      const headers = lines[0].map((h) => h.trim().toLowerCase());
+      const items = lines.slice(1).map((line, index) => {
+        const values = line.map((v) => v.trim());
+        const obj: Record<string, string | number | boolean | undefined> = {};
+        headers.forEach((h, i) => {
+          if (h === 'slug') obj.slug = values[i];
+          if (h === 'source_path') obj.source_path = values[i];
+          if (h === 'target') obj.target = values[i];
+          if (h === 'status_code' && values[i]) {
+            if (!/^(301|302|307|308)$/.test(values[i]))
+              throw new Error('Row ' + (index + 2) + ': invalid HTTP status');
+            obj.status_code = Number(values[i]);
+          }
+          if (h === 'is_enabled' && values[i]) {
+            if (!['true', 'false', '1', '0'].includes(values[i].toLowerCase()))
+              throw new Error('Row ' + (index + 2) + ': invalid enabled state');
+            obj.is_enabled = ['true', '1'].includes(values[i].toLowerCase());
+          }
+        });
+        const target = validateTarget(String(obj.target ?? ''));
+        if (!target.valid) throw new Error('Row ' + (index + 2) + ': ' + target.error);
+        return obj;
+      });
+      if (items.some((item) => !item.target))
+        throw new Error('Every CSV row requires a destination');
       const res = await onImport(
         items as Array<{
           slug?: string;
@@ -78,7 +82,7 @@ export function BulkImportDialog({ open, onClose, onImport }: BulkImportDialogPr
     <Dialog
       open={open}
       onOpenChange={(o) => {
-        if (!o) onClose();
+        if (!o && !importing) onClose();
       }}
     >
       <DialogContent className="max-w-md">
@@ -116,7 +120,7 @@ export function BulkImportDialog({ open, onClose, onImport }: BulkImportDialogPr
           </div>
         )}
         <DialogFooter>
-          <Button variant="outline" onClick={onClose}>
+          <Button variant="outline" disabled={importing} onClick={onClose}>
             Close
           </Button>
           <Button onClick={handleImport} disabled={importing || !csvText.trim()}>
