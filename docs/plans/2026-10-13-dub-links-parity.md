@@ -1799,3 +1799,31 @@ deferred deep links, branded password pages, customer enrichment, Segment/GTM,
 signed outgoing webhooks and controlled service/infrastructure release and SDK
 publication. The full Dub parity goal remains active; this checkpoint does not
 prove production readiness or remove remaining scope.
+
+
+### Private customer enrichment design
+
+Attach a versioned private profile (name, email, HTTPS avatar URL) to an existing
+recorded external customer ID. Keep conversion IDs/events immutable. A separate
+service-only RLS table avoids widening existing Data API views or public dashboard
+DTOs. Read profiles and chronological journeys through authenticated scoped APIs;
+read requires events:read and a currently visible customer visit/conversion.
+Writes/clear require links:write plus events:read and edit authority over every
+attributed link for the customer, avoiding cross-folder identity changes through
+a partial key/member grant. Recheck current key/member/owner under the shared ACL
+lock. Members cannot impersonate another actor. Unknown/unseen identities return
+404. Use version null for first enrichment and current UUID for subsequent writes;
+clear removes only identity fields and advances the version, preserving journeys
+and conflict protection. Reject arbitrary metadata/unsafe avatar URLs; no backend
+fetch or automatic enrichment from public sites.
+
+Add GET/PATCH/DELETE /customers/profile and GET /customers/journey using encoded
+customer IDs in query/body fields, not path interpolation. Journey keyset cursors
+retain scope on every page. All five SDKs gain profile/journey/edit/clear methods.
+The existing journey panel shows an inline profile and explicit versioned edit/
+clear controls; account/customer selection keys prevent stale profile display.
+Avatar loads are anonymous with no referrer and an initial fallback. Public
+reports stay aggregate-only and never include profiles. Trusted applications can
+supply consented identity through the API; no implicit disclosure during tracking.
+Verify real SQL scope/version/clear/private grants and actual owner/member/key
+HTTP plus five native SDKs, focused UI races/conflicts and desktop/mobile browser.
