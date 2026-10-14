@@ -107,6 +107,27 @@ describe('public aggregate dashboard', () => {
       expect.objectContaining({ method: 'GET' }),
     );
   });
+  it('sets index metadata only after the sanitized public response opts in and removes it on revocation', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn<typeof fetch>()
+        .mockResolvedValueOnce(new Response(JSON.stringify({ ...data, allowIndexing: true })))
+        .mockImplementation(
+          async () => new Response('{"error":"Dashboard unavailable"}', { status: 404 }),
+        ),
+    );
+    show();
+    await screen.findByText('Public campaign');
+    expect(document.head.querySelector('meta[name="robots"]')?.getAttribute('content')).toBe(
+      'index,follow',
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh dashboard' }));
+    await screen.findByRole('alert');
+    expect(document.head.querySelector('meta[name="robots"]')?.getAttribute('content')).toBe(
+      'noindex,nofollow',
+    );
+  });
   it('rejects a reversed custom range without a request', async () => {
     const fetcher = vi
       .fn<typeof fetch>()

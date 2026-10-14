@@ -170,7 +170,7 @@ export function SharedReportView({ id }: { id: string }) {
   return (
     <PageContainer>
       <title>Shared link report · Queer Guide</title>
-      <meta name="robots" content="noindex,nofollow" />
+      <meta name="robots" content={data?.allowIndexing ? 'index,follow' : 'noindex,nofollow'} />
       <meta name="referrer" content="no-referrer" />
       <div className="space-y-6">
         <header>

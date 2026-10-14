@@ -35,7 +35,7 @@ exist. Existing local tools are a foundation, not proof of parity or deployment.
 | Conversion tracking | Click attribution, leads/signup/sale/revenue, trusted conversion ingestion and application hooks | Candidate: scoped ingestion, consented signup and verified Stripe hooks implemented locally |
 | Customer insights | Customer journey across click→lead→sale with private event timeline | Partial: private ID-based cross-link paginated journeys; identity enrichment missing |
 | Live events | Paginated live click/lead/sale stream, real events rather than demo data | Candidate: private click/lead/sale activity with keyset pages and five-second refresh |
-| Shared dashboards | Revocable scoped sharing, sanitized aggregate-only default | Partial: saved snapshots, explicit dynamic folders, password/expiry/revoke and aggregate-only public UI implemented locally; indexing opt-in and runtime release pending |
+| Shared dashboards | Revocable scoped sharing, sanitized aggregate-only default | Candidate: saved snapshots, explicit dynamic folders, password/expiry/revoke, aggregate-only UI, date selection and live opt-in indexing implemented locally; runtime release pending |
 | Custom reports | Custom dates, granular link/folder/tag/domain/geo/device/event filters | Partial: date/dimension report UI/API, personal saved definitions and scoped sharing implemented locally; team discovery and runtime release pending |
 | Integrations | Segment and GTM adapters; native configured integrations and provider callbacks | Missing |
 | REST API | Authenticated/scoped link CRUD/upsert/count/list, analytics/events, folders/tags, bulk operations | Partial: scoped link CRUD/upsert/count/list/mixed bulk, conversions and analytics/events; folder/tag/template resource CRUD with workspace scopes; scoped targeting/password/tracking/preview policy endpoints; domain/deep-link fields pending |
@@ -644,3 +644,34 @@ share HTML stays no-store/no-referrer, including failures; localized/query varia
 stay noindex. Indexable reports do not get generic locale alternates or unrelated
 hub content. Client robots metadata follows the same sanitized flag. Revocation
 can stop future publication but cannot immediately remove search-engine copies.
+
+
+## Checkpoint: explicit search indexing for shared dashboards
+
+Publishing review now includes an off-by-default indexing choice, with a visible
+status on each publication. Password entry clears/disables it; API validation
+and a database constraint also reject passwords plus indexing. All existing
+publications retain noindex. Indexing is a frozen share setting: revoke/re-publish
+to change it. No sitemap/token registry is generated.
+
+The edge uses the live sanitized public report endpoint, including current rights,
+budgets, expiry and revocation checks. Only a successful explicit opt-in publishes
+the escaped title and aggregate summary in server HTML. Both human and crawler
+HTML use the same summary and a single robots tag. Other states stay generic and
+noindex, including backend failures and error shells. All report HTML remains
+no-store/no-referrer. Query/localized variants stay noindex without backend reads;
+there are no shared-report hreflang alternates. The browser follows the same flag
+and resets robots metadata when a refresh reports revocation. This controls future
+publication, not the timing of removal from external search-engine caches.
+
+Evidence: SQL proves defaults, explicit stored/listed/read choice, rejected
+password combinations and live revocation. Actual HTTP against migrated PostgreSQL
+verifies creation, public flags and rejection/revocation, alongside five SDKs and
+examples. The actual middleware runs in native workerd/HTMLRewriter and verifies
+robots/headers/body behavior for people/bots, default/protected/revoked/error/rate-
+limited states, query/localized variants and 404/500 shells. Eighty-seven focused
+UI/API/meta tests pass. Build, functions types, targeted lint/formatting and migration
+validation pass; app types remain 704 inherited errors, none new. Native fixture
+proof includes default-off, password restriction, explicit review, saved status,
+index→noindex on revocation and 390-pixel layout without overflow. Temporary tab
+and viewport were cleaned up. No production publication/settings were changed.

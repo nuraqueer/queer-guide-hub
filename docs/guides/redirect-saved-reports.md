@@ -32,11 +32,34 @@ also offers 7, 90 or 365 days and no expiry. Revocation is permanent for that UR
 publishing again creates a new URL. There is no auto-refresh or persistent unlock
 receipt; manual refresh verifies current access again.
 
-Public JSON and page responses use no-store, no-referrer and noindex headers.
+Public JSON uses no-store, no-referrer and noindex headers. Page responses use
+no-store and no-referrer; indexing is disabled by default.
 JSON varies on Authorization. The service worker bypasses redirect API and public
 report paths entirely and removes old entries from its managed caches during
 activation. Failed refreshes clear the rendered report, including its title.
 An already opened page cannot erase a screenshot or data a viewer has copied.
+
+Publishers can explicitly allow search indexing during review. This cannot be
+combined with a password: entering a password clears and disables the option,
+and both the API and database reject the combination. Existing shares stay
+noindex. Publication lists show the saved choice. To change a frozen publication,
+revoke it and publish a new URL with the desired settings.
+
+For each canonical page request, the Cloudflare edge calls the live public report
+endpoint with the share capability and a signed visitor relay when configured.
+Only a successful, explicitly indexable report gets its escaped public title,
+aggregate summary and `index,follow` metadata in server HTML. Humans and crawlers
+receive the same summary. Password, expired, revoked, inaccessible, malformed,
+rate-limited and unavailable responses produce generic noindex HTML; error shells
+also retain no-store/no-referrer/noindex headers. Query/localized variants stay
+noindex, and shared reports do not advertise locale alternates. The client follows
+the sanitized flag and switches back to noindex if a refresh fails. Public view
+budgets cover this edge check too, so a normal page load can use two reads (HTML
+and browser JSON). There is no metadata cache or public token registry.
+
+Allowing indexing permits discovery; it does not guarantee search inclusion.
+Revocation stops future report reads and indexable HTML. Search engines control
+when existing results/copies disappear.
 
 ## HTTP contract
 
@@ -77,8 +100,7 @@ actual worker and verifies network-only routing and targeted cache cleanup.
 Native desktop/mobile evidence under `outputs/redirect-dub-parity/` uses labelled
 local fixtures with production fetches blocked. No live reports or shares were
 created. Production migrations/deployment and controlled-account checks remain
-pending. Search indexing opt-in, report SDK methods and
-team discovery remain open parity work.
+pending. Report SDK methods and team discovery remain open parity work.
 
 
 The public date extension is verified with seeded clicks on both half-open date
@@ -88,3 +110,13 @@ and password-plus-date bodies. Native browser proof covers presets, keyboard-edi
 custom dates, reset, mobile layout and revocation (`shared-report-dates-*` images).
 The browser automation fill helper did not commit native segmented date changes;
 keyboard input verified the actual user interaction. These remain local fixtures.
+
+
+`node scripts/test-redirect-report-indexing.mjs` bundles the actual Pages middleware
+and executes the native workerd HTMLRewriter. It verifies a single robots tag,
+escaped title/aggregate HTML for people and bots, noindex for the closed states,
+query/localized variants and error shells, and no-store throughout. Backend fetches
+in that harness are isolated fixtures. SQL tests separately enforce the stored
+choice/password constraint and live revocation; HTTP tests exercise the actual
+handler against migrated PostgreSQL. Native `report-indexing-*` screenshots verify
+review, password restrictions and mobile layout with production calls blocked.

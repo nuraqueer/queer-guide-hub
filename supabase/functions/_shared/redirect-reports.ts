@@ -16,14 +16,16 @@ export function savedReportInput(value:unknown,create:boolean) {
 export function reportShareInput(value:unknown) {
  if(!value||typeof value!=='object'||Array.isArray(value))throw new Error('Provide share settings');
  const body=value as Record<string,unknown>;
- if(Object.keys(body).some(k=>!['title','reportVersion','includeConversions','scopeMode','expiresAt','password'].includes(k)))throw new Error('Invalid share fields');
+ if(Object.keys(body).some(k=>!['title','reportVersion','includeConversions','scopeMode','expiresAt','password','allowIndexing'].includes(k)))throw new Error('Invalid share fields');
  if(typeof body.title!=='string'||!body.title.trim()||body.title.trim().length>100)throw new Error('Public title must be 1–100 characters');
  if(typeof body.reportVersion!=='string'||!UUID.test(body.reportVersion))throw new Error('Reload and review the report before sharing');
  if(body.includeConversions!==undefined&&typeof body.includeConversions!=='boolean')throw new Error('Invalid conversion sharing option');
+ if(body.allowIndexing!==undefined&&typeof body.allowIndexing!=='boolean')throw new Error('Invalid search indexing option');
+ if(body.allowIndexing===true&&body.password!==undefined)throw new Error('Password-protected dashboards cannot be indexed');
  if(body.scopeMode!==undefined&&!['snapshot','folder'].includes(body.scopeMode as string))throw new Error('Invalid share scope');
  if(body.expiresAt!==undefined&&body.expiresAt!==null&&(typeof body.expiresAt!=='string'||!Number.isFinite(Date.parse(body.expiresAt))||Date.parse(body.expiresAt)<=Date.now()||Date.parse(body.expiresAt)>Date.now()+366*86400000))throw new Error('Choose an expiry within one year or no expiry');
  if(body.password!==undefined&&(typeof body.password!=='string'||body.password.length<1||body.password.length>256))throw new Error('Password must be 1–256 characters');
- return {values:{title:body.title.trim(),reportVersion:body.reportVersion,includeConversions:body.includeConversions??false,scopeMode:body.scopeMode??'snapshot',expiresAt:body.expiresAt===null?null:body.expiresAt??new Date(Date.now()+30*86400000).toISOString()},password:body.password as string|undefined};
+ return {values:{allowIndexing:body.allowIndexing??false,title:body.title.trim(),reportVersion:body.reportVersion,includeConversions:body.includeConversions??false,scopeMode:body.scopeMode??'snapshot',expiresAt:body.expiresAt===null?null:body.expiresAt??new Date(Date.now()+30*86400000).toISOString()},password:body.password as string|undefined};
 }
 function record(value:unknown):Record<string,unknown> {if(!value||typeof value!=='object'||Array.isArray(value))throw new Error('Invalid report response');return value as Record<string,unknown>;}
 function count(value:unknown):number {if(typeof value!=='number'||!Number.isSafeInteger(value)||value<0)throw new Error('Invalid aggregate count');return value;}
@@ -60,7 +62,7 @@ export function publicReportResult(value:unknown) {
  }
  const revenue:{currency:string;amount:string}[]=[];
  if(conversions){if(!Array.isArray(report.revenue)||report.revenue.length>200)throw new Error('Invalid revenue summary');for(const raw of report.revenue){const row=record(raw);if(typeof row.currency!=='string'||!/^[A-Z]{3}$/.test(row.currency)||typeof row.amount!=='string'||!/^\d+(?:\.\d{1,6})?$/.test(row.amount))throw new Error('Invalid revenue amount');revenue.push({currency:row.currency,amount:row.amount});}}
- return {dateRange:publicDateRange(root.dateRange),title:root.title,includeConversions:conversions,linkCount:count(root.linkCount),scopeMode:root.scopeMode==='folder'?'folder':'snapshot',expiresAt:typeof root.expiresAt==='string'?root.expiresAt:null,report:{snapshot:new Date(report.snapshot).toISOString(),interval:report.interval as string,totals:resultTotals,revenue,series,breakdowns}};
+ return {allowIndexing:root.allowIndexing===true,dateRange:publicDateRange(root.dateRange),title:root.title,includeConversions:conversions,linkCount:count(root.linkCount),scopeMode:root.scopeMode==='folder'?'folder':'snapshot',expiresAt:typeof root.expiresAt==='string'?root.expiresAt:null,report:{snapshot:new Date(report.snapshot).toISOString(),interval:report.interval as string,totals:resultTotals,revenue,series,breakdowns}};
 }
 export type PublicRedirectReport=ReturnType<typeof publicReportResult>;
 export interface ReportDb {rpc(name:string,args:Record<string,unknown>):PromiseLike<{data:any;error:{code?:string;message?:string}|null}>;}

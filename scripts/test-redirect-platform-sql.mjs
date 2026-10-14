@@ -19,6 +19,7 @@ try {
   await db.exec(readFileSync('supabase/tests/redirect_access_requests.sql','utf8'));
   await db.exec(readFileSync('supabase/tests/redirect_saved_reports.sql','utf8'));
   await db.exec(readFileSync('supabase/tests/redirect_public_report_dates.sql','utf8'));
+  await db.exec(readFileSync('supabase/tests/redirect_report_indexing.sql','utf8'));
   console.log(
     'Redirect platform SQL: policies, atomic creation, quotas, expiry, variant metrics, conversion attribution, analytics, password throttling scoped link management, workspace APIs and presentations passed.',
   );

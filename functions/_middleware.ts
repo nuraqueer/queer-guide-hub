@@ -58,6 +58,7 @@ import { bootGuardTag } from './_lib/boot-guard';
 import { placeTagEdgeLocation } from './_lib/placeTagRedirect';
 import { applySecurityHeaders, generateCspNonce } from './_lib/securityHeaders';
 import type { Env } from './_lib/sitemap';
+import { redirectReportPage, setRedirectReportHeaders } from './_lib/redirectReportPage';
 
 // Prefixes that look like static assets. If the SPA catch-all in
 // _redirects falls through and we'd otherwise serve index.html for one
@@ -319,6 +320,10 @@ export const onRequest: PagesFunction<Env> = async (context) => {
   }
 
   let response = await next();
+  if (basePath.startsWith('/share/redirect-report/')) {
+    response = new Response(response.body, response);
+    setRedirectReportHeaders(response.headers);
+  }
   let contentType = response.headers.get('content-type') ?? '';
 
   // SPA fallback. With a Pages Function claiming `/*`, the `_redirects`
@@ -401,7 +406,8 @@ export const onRequest: PagesFunction<Env> = async (context) => {
   // would clobber.
   if (response.status !== 200) return response;
 
-  const pathIndexable = isIndexable(basePath);
+  const reportPage = await redirectReportPage(env, request, basePath);
+  const pathIndexable = reportPage ? reportPage.indexable : isIndexable(basePath);
 
   // P3.1 — unlocalised locale-prefixed URLs are noindexed so Google doesn't
   // index 10 English duplicates of every page. Default locale (no prefix)
@@ -449,7 +455,7 @@ export const onRequest: PagesFunction<Env> = async (context) => {
     return notFound;
   }
 
-  const meta = detail?.meta ?? resolveMeta(basePath, bMeta);
+  const meta = reportPage?.meta ?? detail?.meta ?? resolveMeta(basePath, bMeta);
   const canonical = locale ? localizedUrl(locale, basePath) : canonicalUrl(basePath);
   const ogImage = meta.ogImage ?? bMeta.og_image_url ?? DEFAULT_OG_IMAGE;
   // og:type stays 'website' — crawlers rely on JSON-LD @type for fine-grained
@@ -489,7 +495,7 @@ export const onRequest: PagesFunction<Env> = async (context) => {
   // hreflang alternates: one link per supported locale, plus x-default.
   // Each locale's URL points to itself; the default locale is no-prefix
   // English.
-  if (indexable) {
+  if (indexable && !reportPage) {
     // P3.1 — only emit hreflang for locales that have meaningful
     // translations. Untranslated locales produced duplicate English
     // content with no signal value; emitting them as alternates told
@@ -504,8 +510,11 @@ export const onRequest: PagesFunction<Env> = async (context) => {
     headInjections.push(
       `<link rel="alternate" hreflang="x-default" href="${escapeAttr(localizedUrl(DEFAULT_LOCALE, basePath))}">`,
     );
-  } else {
+  }
+  if (!indexable) {
     headInjections.push('<meta name="robots" content="noindex,nofollow">');
+  } else if (reportPage) {
+    headInjections.push('<meta name="robots" content="index,follow">');
   }
 
   if (basePath === '/' || basePath === '') {
@@ -566,19 +575,22 @@ export const onRequest: PagesFunction<Env> = async (context) => {
     .on('meta[name="twitter:image"]', new ElementRemover())
     .on('script', new ScriptNonceInjector(cspNonce))
     .on('head', new HeadInjector(headInjections.join('\n    ')));
+  if (reportPage) rewriter.on('meta[name="robots"]', new ElementRemover());
 
   // P3.3 — per-route noscript fallback. Crisis routes keep the global
   // crisis-hotline default that ships in index.html (buildNoscriptHtml
   // returns null for them). Other indexable routes get a route-specific
   // summary + internal links so pre-JS visitors see meaningful content.
-  const noscriptHtml = indexable ? buildNoscriptHtml(basePath) : null;
+  const noscriptHtml = indexable ? (reportPage?.body || buildNoscriptHtml(basePath)) : null;
   if (noscriptHtml) {
     rewriter.on('noscript', new NoscriptRewriter(noscriptHtml));
   }
 
   const isBot = indexable && isBotUserAgent(request.headers.get('user-agent'));
   let hubLinked = false;
-  if (isBot) {
+  if (reportPage?.indexable) {
+    rewriter.on('#root', new RootBodyInjector(reportPage.body));
+  } else if (isBot) {
     const bodyHtml =
       detail?.body ?? buildBodyHtml(basePath, { title: meta.title, description: meta.description });
     // Data-driven content links for the hub pages. Inside the isBot branch on
@@ -618,9 +630,7 @@ export const onRequest: PagesFunction<Env> = async (context) => {
   }
 
   if (basePath.startsWith('/share/redirect-report/')) {
-    rewritten.headers.set('Cache-Control', 'no-store');
-    rewritten.headers.set('Referrer-Policy', 'no-referrer');
-    rewritten.headers.set('X-Robots-Tag', 'noindex, nofollow');
+    setRedirectReportHeaders(rewritten.headers, indexable);
   }
   return rewritten;
 };

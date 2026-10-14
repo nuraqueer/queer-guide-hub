@@ -20,6 +20,7 @@ interface Share {
   linkCount: number;
   includeConversions: boolean;
   hasPassword: boolean;
+  allowIndexing: boolean;
   expiresAt: string | null;
   revokedAt?: string | null;
 }
@@ -224,6 +225,7 @@ function ReportSharing({ report, userId }: { report: SavedReport; userId: string
   const [title, setTitle] = useState(report.name),
     [conversions, setConversions] = useState(false),
     [password, setPassword] = useState(''),
+    [allowIndexing, setAllowIndexing] = useState(false),
     [days, setDays] = useState('30'),
     [mode, setMode] = useState('snapshot'),
     [review, setReview] = useState(false),
@@ -320,7 +322,10 @@ function ReportSharing({ report, userId }: { report: SavedReport; userId: string
             maxLength={256}
             value={password}
             disabled={review || change.isPending}
-            onChange={(e) => setPassword(e.target.value)}
+            onChange={(e) => {
+              setPassword(e.target.value);
+              if (e.target.value) setAllowIndexing(false);
+            }}
           />
         </div>
         <div className="space-y-2">
@@ -339,6 +344,22 @@ function ReportSharing({ report, userId }: { report: SavedReport; userId: string
             <option value="never">Never (until revoked)</option>
           </select>
         </div>
+      </div>
+      <div className="space-y-2">
+        <label className="flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={allowIndexing}
+            disabled={!!password || review || change.isPending}
+            onChange={(event) => setAllowIndexing(event.target.checked)}
+          />
+          Allow search engines to index this dashboard
+        </label>
+        <p className="text-sm text-muted-foreground">
+          Off by default. Indexing can make the dashboard title and published aggregates
+          discoverable in search results. Password-protected dashboards cannot be indexed. Search
+          engines may retain copies after revocation.
+        </p>
       </div>
       {report.filters.folderId && !report.filters.linkIds && (
         <div className="space-y-2">
@@ -373,7 +394,8 @@ function ReportSharing({ report, userId }: { report: SavedReport; userId: string
             {mode === 'folder'
               ? 'including future matching folder links'
               : 'limited to the currently matching link set'}
-            , expiring {days === 'never' ? 'only when revoked' : 'after ' + days + ' days'}?
+            , {allowIndexing ? 'search indexing enabled' : 'search indexing disabled'}, expiring{' '}
+            {days === 'never' ? 'only when revoked' : 'after ' + days + ' days'}?
           </p>
           <p className="text-sm">
             Saved filters and dates are copied into this share. Editing the private report later
@@ -389,6 +411,7 @@ function ReportSharing({ report, userId }: { report: SavedReport; userId: string
                     title,
                     reportVersion: report.version,
                     includeConversions: conversions,
+                    allowIndexing,
                     scopeMode: mode,
                     expiresAt:
                       days === 'never'
@@ -433,7 +456,8 @@ function ReportSharing({ report, userId }: { report: SavedReport; userId: string
             <p className="text-xs text-muted-foreground">
               {share.linkCount} links at publication ·{' '}
               {share.includeConversions ? 'Conversions included' : 'Clicks only'} ·{' '}
-              {share.hasPassword ? 'Password protected' : 'Anyone with link'}
+              {share.hasPassword ? 'Password protected' : 'Anyone with link'} ·{' '}
+              {share.allowIndexing ? 'Search indexing enabled' : 'Search indexing disabled'}
             </p>
             <Input
               aria-label={'Dashboard URL for ' + share.title}

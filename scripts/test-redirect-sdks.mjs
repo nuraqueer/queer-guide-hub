@@ -237,7 +237,13 @@ try {
   const saved=await reportRequest('/reports','POST',{name:'Native HTTP report',filters:{linkIds:[seed.rows[0].id]}},undefined,201);
   const plain=await reportRequest('/reports/'+saved.id+'/shares','POST',{title:'Clicks only',reportVersion:saved.version,expiresAt:null},undefined,201);
   const published=await reportRequest('/public-report','GET',undefined,'qg_report_'+plain.id);
-  if(published.report.totals.clicks!==1||'leads' in published.report.totals||published.report.revenue.length||JSON.stringify(published).includes('sdk-attribution'))throw new Error('Public report exposed private/conversion fields');
+  if(published.allowIndexing!==false||published.report.totals.clicks!==1||'leads' in published.report.totals||published.report.revenue.length||JSON.stringify(published).includes('sdk-attribution'))throw new Error('Public report exposed private/conversion fields');
+  const indexedShare=await reportRequest('/reports/'+saved.id+'/shares','POST',{title:'Indexed HTTP publication',reportVersion:saved.version,allowIndexing:true,expiresAt:null},undefined,201);
+  const indexedPublic=await reportRequest('/public-report','GET',undefined,'qg_report_'+indexedShare.id);
+  if(indexedPublic.allowIndexing!==true)throw new Error('Explicit indexing choice not exposed by actual HTTP');
+  await reportRequest('/reports/'+saved.id+'/shares','POST',{title:'Rejected combination',reportVersion:saved.version,allowIndexing:true,password:'fixture-report-password'},undefined,400);
+  await reportRequest('/reports/'+saved.id+'/shares/'+indexedShare.id,'DELETE');
+  await reportRequest('/public-report','GET',undefined,'qg_report_'+indexedShare.id,404);
   const zeroDates={start:'2000-01-01T00:00:00.000Z',end:'2000-01-02T00:00:00.000Z'};
   const narrowed=await reportRequest('/public-report','POST',{dates:zeroDates},'qg_report_'+plain.id);
   if(narrowed.report.totals.clicks!==0||narrowed.dateRange.start!==zeroDates.start)throw new Error('Public date selection ignored or failed normalization');

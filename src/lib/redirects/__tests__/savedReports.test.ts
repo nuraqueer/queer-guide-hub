@@ -120,6 +120,7 @@ describe('saved reports and aggregate-only publication', () => {
       title: 'Dashboard',
       includeConversions: false,
       scopeMode: 'snapshot',
+      allowIndexing: false,
     });
     expect(() =>
       reportShareInput({ title: 'Name', reportVersion: version, password: '' }),
@@ -130,6 +131,26 @@ describe('saved reports and aggregate-only publication', () => {
     expect(() =>
       reportShareInput({ title: 'Name', reportVersion: version, linkIds: [id] }),
     ).toThrow();
+  });
+  it('requires explicit indexing and rejects combining it with password protection', () => {
+    expect(
+      reportShareInput({ title: 'Indexed', reportVersion: version, allowIndexing: true }).values
+        .allowIndexing,
+    ).toBe(true);
+    expect(() =>
+      reportShareInput({ title: 'Invalid', reportVersion: version, allowIndexing: 'true' }),
+    ).toThrow();
+    expect(() =>
+      reportShareInput({
+        title: 'Invalid',
+        reportVersion: version,
+        allowIndexing: true,
+        password: 'secret',
+      }),
+    ).toThrow('cannot be indexed');
+    expect(publicReportResult(raw).allowIndexing).toBe(false);
+    expect(publicReportResult({ ...raw, allowIndexing: true }).allowIndexing).toBe(true);
+    expect(publicReportResult({ ...raw, allowIndexing: 'true' }).allowIndexing).toBe(false);
   });
   it('drops raw events, customers, URLs and private dimensions, and normalizes untrusted labels', () => {
     const value = publicReportResult(raw);
