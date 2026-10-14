@@ -135,6 +135,19 @@ func TestSDKIntegration(t *testing.T) {
 	if len(must(api.Events(ctx, nil, Object{"limit": 1}))["data"].([]any)) != 1 {
 		t.Fatal("Events failed")
 	}
+
+	branding := must(api.GetPasswordBranding(ctx, id))
+	if branding["version"] != nil {
+		t.Fatal("Unexpected initial branding")
+	}
+	branding = must(api.UpdatePasswordBranding(ctx, id, Object{"version": nil, "brandName": "Go public brand"}))
+	branding = must(api.UploadPasswordLogo(ctx, id, branding["version"], os.Getenv("REDIRECT_TEST_QR_LOGO")))
+	if branding["logoAsset"].(map[string]any)["mime"] != "image/png" || branding["brandName"] != "Go public brand" {
+		t.Fatal("Password logo/name lost")
+	}
+	if must(api.UpdatePasswordBranding(ctx, id, Object{"version": branding["version"], "clearLogo": true}))["logoAsset"] != nil {
+		t.Fatal("Password logo clear failed")
+	}
 	must(api.DeleteLink(ctx, id))
 	for kind, item := range map[string]Object{"folders": folder, "tags": tag, "templates": template} {
 		must(api.DeleteResource(ctx, kind, item["id"].(string)))

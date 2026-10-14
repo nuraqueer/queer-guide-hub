@@ -34,6 +34,7 @@ try {
   await db.exec(readFileSync('supabase/tests/redirect_qr_image_artwork.sql','utf8'));
   await db.exec(readFileSync('supabase/tests/redirect_customer_profiles.sql','utf8'));
   await db.exec(readFileSync('supabase/tests/redirect_webhooks.sql','utf8'));
+  await db.exec(readFileSync('supabase/tests/redirect_password_branding.sql','utf8'));
   console.log(
     'Redirect platform SQL: policies, atomic creation, quotas, expiry, variant metrics, conversion attribution, analytics, password throttling scoped link management, workspace APIs and presentations passed.',
   );

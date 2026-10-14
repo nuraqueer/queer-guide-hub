@@ -25,6 +25,10 @@ function runtime() {
     join(__dirname, '../../../../supabase/functions/_shared/redirect-relay.ts'),
     'utf8',
   ).replace(/^export\s+/gm, '');
+  const passwordPage = readFileSync(
+    join(__dirname, '../../../../supabase/functions/_shared/redirect-password-page.ts'),
+    'utf8',
+  ).replace(/^export\s+/gm, '');
   const presentation = readFileSync(
     join(__dirname, '../../../../supabase/functions/_shared/redirect-presentation.ts'),
     'utf8',
@@ -39,6 +43,8 @@ function runtime() {
       visitor +
       '\n' +
       relay +
+      '\n' +
+      passwordPage +
       '\n' +
       presentation +
       '\n' +
@@ -78,25 +84,30 @@ function runtime() {
     quota: true,
     retry: 0,
     attemptError: false,
+    branding: null as unknown,
+    brandingError: false,
   };
   const rpc = vi.fn(async (name: string, _args?: Record<string, unknown>) => ({
     error:
+      (name === 'redirect_password_branding_public' && state.brandingError) ||
       (name === 'reserve_redirect_password_attempt' && state.attemptError) ||
       (name === 'redirect_public_domain' && state.domainFailure)
         ? { message: 'offline' }
         : null,
     data:
-      name === 'redirect_public_domain'
-        ? state.domain
-        : name === 'record_redirect_domain_route'
-          ? !!state.domain
-          : name === 'reserve_redirect_password_attempt'
-            ? state.retry
-            : name === 'record_redirect_visit'
-              ? state.quota
-                ? 'click-id'
-                : null
-              : [],
+      name === 'redirect_password_branding_public'
+        ? state.branding
+        : name === 'redirect_public_domain'
+          ? state.domain
+          : name === 'record_redirect_domain_route'
+            ? !!state.domain
+            : name === 'reserve_redirect_password_attempt'
+              ? state.retry
+              : name === 'record_redirect_visit'
+                ? state.quota
+                  ? 'click-id'
+                  : null
+                : [],
   }));
   const db = {
     rpc,
@@ -194,7 +205,10 @@ describe('live short-link resolver', () => {
     expect(denied.status).toBe(401);
     expect(denied.headers.has('Location')).toBe(false);
     expect(await denied.text()).not.toContain('example.com');
-    expect(run.rpc.mock.calls.map(([name]) => name)).toEqual(['reserve_redirect_password_attempt']);
+    expect(run.rpc.mock.calls.map(([name]) => name)).toEqual([
+      'redirect_password_branding_public',
+      'reserve_redirect_password_attempt',
+    ]);
     const allowed = await run.invoke('GET', 'pw=fixture+password&utm_source=qr');
     expect(allowed.status).toBe(302);
     expect(allowed.headers.get('Location')).not.toContain('pw=');
@@ -212,7 +226,11 @@ describe('live short-link resolver', () => {
     vi.unstubAllGlobals();
     expect((await run.invoke('HEAD', 'pw=fixture+password')).status).toBe(401);
     expect((await run.invoke('GET', '')).status).toBe(401);
-    expect(run.rpc).not.toHaveBeenCalled();
+    expect(
+      run.rpc.mock.calls.filter(([name]) =>
+        ['reserve_redirect_password_attempt', 'record_redirect_visit'].includes(name),
+      ),
+    ).toHaveLength(0);
     run.state.retry = 601;
     const blocked = await run.invoke('POST', '', 'password=fixture+password');
     expect(blocked.status).toBe(429);
@@ -222,6 +240,41 @@ describe('live short-link resolver', () => {
     expect(run.rpc.mock.calls.some(([name]) => name === 'record_redirect_visit')).toBe(false);
     run.state.attemptError = true;
     expect((await run.invoke('GET', 'pw=anything')).status).toBe(503);
+  });
+  it('brands challenges and quota failures without exposing targets, and keeps the form on decoration failures', async () => {
+    const run = runtime();
+    vi.stubGlobal('crypto', webcrypto);
+    run.state.settings.password_hash = await hashLinkPassword('fixture password');
+    vi.unstubAllGlobals();
+    const id = 'd0000000-0000-4000-8000-000000000001';
+    run.state.branding = {
+      brandName: 'Community & <friends>',
+      logoAsset: {
+        id,
+        key: id + '.png',
+        mime: 'image/png',
+        bytes: 100,
+        width: 64,
+        height: 64,
+        sha256: 'a'.repeat(64),
+      },
+    };
+    const challenge = await run.invoke('GET', '');
+    const html = await challenge.text();
+    expect(challenge.status).toBe(401);
+    expect(html).toContain('Community &amp; &lt;friends&gt;');
+    expect(html).toContain(id + '.png');
+    expect(html).not.toContain('example.com');
+    run.state.retry = 601;
+    const limited = await run.invoke('POST', '', 'password=wrong');
+    expect(limited.status).toBe(429);
+    expect(await limited.text()).toContain('Community &amp; &lt;friends&gt;');
+    expect(limited.headers.has('Location')).toBe(false);
+    run.state.brandingError = true;
+    const generic = await run.invoke('GET', '');
+    expect(generic.status).toBe(401);
+    expect(await generic.text()).toContain('name="password"');
+    expect(run.rpc.mock.calls.some(([name]) => name === 'record_redirect_visit')).toBe(false);
   });
   it('serves custom unfurl metadata without visits, and never reveals protected previews', async () => {
     const run = runtime();

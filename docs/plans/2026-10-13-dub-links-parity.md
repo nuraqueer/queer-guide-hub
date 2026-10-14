@@ -2159,7 +2159,7 @@ branding cannot be read rather than disclosing destinations or bypassing the
 password. Renderer accepts only the fixed bucket/UUID image URL, escapes the
 plain label, gives logo dimensions/alt text, uses anonymous no-referrer images,
 and restricts img-src to the configured Storage origin. A failed logo decode
-keeps the usable password form. HEAD remains empty. Password hashing, POST-only
+keeps the usable password form. HEAD remains empty. Password hashing, POST form
 secret handling, attempt quotas and signed relay remain unchanged.
 
 The policy dialog includes a separate branding editor with version-preserving
@@ -2170,3 +2170,78 @@ revocation/version/cascade/cleanup, actual HTTP reservation -> Storage -> finish
 public resolver challenge/throttle/header isolation, malformed images/URLs, native
 SDKs and desktop/mobile public/editor UI. Actual Storage/cleanup/gateway release
 proof remains required; a preview-only image is not feature completion.
+
+### Password-page branding implementation and local evidence (2026-10-14)
+
+Migration `99991792009182_redirect_password_branding.sql` adds independent private,
+versioned per-SHORT branding, explicit public label/minimal immutable asset
+metadata, current owner/member/key/link/folder checks, bounded upload reservations
+and same-principal/current-version finish. Existing shared asset claim/receipt
+cleanup excludes branding references; clear/replace/delete schedules the one-hour
+grace. Parent delete/type statement locks preserve ACL-before-row order during
+FK releases. Branding changes emit sanitized link.updated events without exposing
+artwork or labels in outgoing lifecycle payloads.
+
+Private GET/PATCH and POST logo endpoints use the existing fixed Storage transport
+and validated PNG/JPG input. The public handler reads only minimal branding after
+finding a valid password-protected managed link. Challenge, incorrect-password
+and throttle pages are decorated with escaped plain labels, fixed bucket images,
+anonymous/no-referrer requests and restrictive CSP. HEAD skips decoration and
+stays empty. Missing/unavailable decoration leaves a usable password form; no
+password value, hash or destination is embedded by the branding renderer.
+
+The link-behavior dialog adds a separate editor, with version-preserving name
+prefill, byte/dimension/actual browser decode checks, verified saved-image preview,
+explicit clear review, conflict reload, independent name/upload saves and retained
+unsaved names after an own upload. Account/link keys abort late writes and clear
+drafts; denied reads hide prior decoration. The surrounding policy dialog cache
+now includes account/principal, remounts forms across accounts/links, hides data
+after denied refresh and prevents an old form's completion from closing a newer
+one. Branding is shown for managed SHORT rows. All five SDKs implement typed
+read, versioned name/clear and controlled upload methods.
+
+Evidence: full migrated SQL passes including scoped hidden links, viewer caps,
+member impersonation denial, version/principal/role/key changes during upload,
+retained labels, public field privacy, attached-logo exclusion from cleanup and
+FK release. Five native SDK/HTTP suites exercise all three methods through actual
+handlers, migrated SQL and exact immutable Storage bytes. Additional owner HTTP
+proves stale/SVG rejection before Storage, one unknown-receipt POST, no lost-owner
+attachment, minimal public fields and physical orphan/delete cleanup. The SDK
+fixture now uses an actual current owner as key creator, rather than an impossible
+random creator without a user/role. Cleanup fixture rounds scale to its additional
+assets and never claim a retained branding reference.
+
+Twenty-six focused public/editor/resolver tests pass across four files, plus the
+actual domain Worker -> signed root resolver -> migrated SQL suite proves escaped
+brand label/controlled image metadata, empty HEAD, no pre-password destination or
+visits, wrong-password branding and successful original policy behavior. Native
+Deno checks for API/resolver and strict TypeScript SDK checks pass. App ratchet is
+704 inherited errors, none new. All 2285 versions are unique and migrations pass
+the PostgreSQL 17 grammar; production build passes (~21 seconds). Targeted lint
+passes. Native provider/storage execution remains separate release evidence.
+
+Actual browser editor QA used a synthetic PNG in an isolated API/Storage fixture:
+FileChooser/read/decode, immutable upload, SHA/dimension verification (128px
+natural dimensions), saved name preserving logo, clear review and completed
+removal preserving the label. Desktop/mobile images at
+`outputs/redirect-dub-parity/password-branding-editor-desktop.png`,
+`password-branding-editor-mobile.png`, `password-branding-cleared-mobile.png`.
+`password-public-mobile.png` renders the actual public HTML with only controlled
+image transport substituted locally and a visible fixture caption; real CSP/
+metadata/auth behavior is independently checked by the resolver tests. No
+production asset/data was changed. Tabs closed and viewport reset.
+
+A read-only authenticated check of the actual live admin page shows **20,354
+redirects** and pagination over 408 pages, confirming the original empty-list
+issue is resolved. Original PR4378 remains merged; later candidates are local.
+
+Publication dependency discovered during the all-source audit: baseline
+`redirects_public_read` still allows enabled rows to anon/authenticated, including
+SHORT destinations. The resolver's password barrier does not by itself protect
+that Data API path. Before publishing the protected-link candidates, replace
+public raw-table access with minimal public PATH resolution and authoritative
+owner/member scope checks. This is a repository-policy finding, not a claim about
+uninspected production policy state. Remaining all-source/account/invite access
+work is next, followed by domain lifecycle/DNS automation, native/deferred app
+configuration and controlled infrastructure/provider/SDK release. The full goal
+remains active; no checkpoint is marked complete.

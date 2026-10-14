@@ -446,3 +446,50 @@ safely. No email/amount/order details are scraped from URL or page fields.
 actual local HTTP, scoped API authentication, migrated PostgreSQL, signed real
 outbox payloads, and native source mapping. It performs no Segment/Google account
 writes and cannot replace provider account installation/debugger proof.
+
+## Branded password pages
+
+Managed short links have independent password-page branding. All clients expose
+`getPasswordBranding`, `updatePasswordBranding`, and `uploadPasswordLogo` (the
+corresponding snake_case / Go names follow the existing conventions).
+`GET /links/{id}/password-branding` requires read access. Name/clear updates use
+PATCH with the current nullable `version`; uploads use POST on `/logo` with
+`{version, image}` and base64 PNG/JPG bytes. Writes require current link edit
+access and selected IDs/folder grants. The key creator must remain an owner for
+unbound owner keys. Viewer and expired/revoked credentials cannot publish.
+
+```typescript
+let branding = await api.getPasswordBranding(linkId);
+branding = await api.updatePasswordBranding(linkId, {
+  version: branding.version,
+  brandName: 'Community events',
+});
+const upload = await api.uploadPasswordLogo(linkId, branding.version, pngBase64);
+if ('retryAfter' in upload) throw new Error(`Wait ${upload.retryAfter} seconds`);
+branding = upload;
+// Clear the custom logo while preserving the public label:
+branding = await api.updatePasswordBranding(linkId, {
+  version: branding.version,
+  clearLogo: true,
+});
+```
+
+The plain brand name (up to 80 characters) and logo are explicitly public
+pre-unlock decoration. They are separate from social previews, QR preferences,
+and private customer identity. Logos are immutable controlled objects, capped
+at 1.5 MB and 1024 px per dimension; remote image URLs, SVG and arbitrary asset ID
+selection are unavailable. Stale updates return 409. Pending uploads expire after
+15 minutes, finish rechecks the original principal/current grants/version, and
+unknown receipts never trigger a second automatic Storage POST. Replaced/cleared
+or deleted-link logos enter the existing cleanup queue with a one-hour grace.
+
+The resolver decorates valid managed-link password challenges, incorrect-password
+and throttled pages. It escapes labels, restricts image URLs/CSP to the fixed
+Storage bucket origin, sends no referrer or credentials with the image, retains
+the usable form on decoration failures and returns an empty HEAD body. Existing
+password hashes/attempt budgets and destination access remain separate. The
+editor preserves drafts/version conflicts across background reads, aborts old
+account/link writes, and saves names separately from logo uploads without losing
+an unsaved name. Private branding API reads and public minimal metadata have
+separate contracts. Live Storage/cleanup/gateway checks and the pending base-table
+RLS audit must pass before production availability is claimed.

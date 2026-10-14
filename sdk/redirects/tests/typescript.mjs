@@ -38,6 +38,11 @@ await api.trackLead(lead);assert.equal((await api.trackLead(lead)).duplicate,tru
 await api.trackSale({...lead,eventId:'sdk-sale:typescript',amount:'49.900001',currency:'CHF'});
 assert.ok((await api.analytics({country:'CH'})).totals);
 assert.ok((await api.events({}, {limit:1})).data.length);
+
+let branding=await api.getPasswordBranding(id);assert.equal(branding.version,null);
+branding=await api.updatePasswordBranding(id,{version:null,brandName:'TS public brand'});
+branding=await api.uploadPasswordLogo(id,branding.version,process.env.REDIRECT_TEST_QR_LOGO);assert.equal(branding.logoAsset.mime,'image/png');assert.equal(branding.brandName,'TS public brand');
+assert.ok((await api.updatePasswordBranding(id,{version:branding.version,clearLogo:true})).logoAsset===null);
 await api.deleteLink(id);for(const [kind,item] of [['folders',folder],['tags',tag],['templates',template]])await api.deleteResource(kind,item.id);
 for(const [path,status] of [['/redirect-probe',302],['/limited-probe',429]]){await assert.rejects(api.request('GET',path),error=>error instanceof RedirectApiError&&error.status===status&&(status!==429||error.retryAfter==='17'));}
 assert.throws(()=>new RedirectsClient('token',{baseUrl:'http://example.com/api'}));

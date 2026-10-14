@@ -414,3 +414,13 @@ func VerifyWebhook(secrets []string, body []byte, id, timestamp, signature strin
 	}
 	return valid
 }
+
+func (c *Client) GetPasswordBranding(ctx context.Context, id string) (Object, error) {
+	return c.Request(ctx, "GET", "/links/"+url.PathEscape(id)+"/password-branding", nil, nil)
+}
+func (c *Client) UpdatePasswordBranding(ctx context.Context, id string, data Object) (Object, error) {
+	return c.Request(ctx, "PATCH", "/links/"+url.PathEscape(id)+"/password-branding", data, nil)
+}
+func (c *Client) UploadPasswordLogo(ctx context.Context, id string, version any, image string) (Object, error) {
+	return c.Request(ctx, "POST", "/links/"+url.PathEscape(id)+"/password-branding/logo", Object{"version": version, "image": image}, nil)
+}

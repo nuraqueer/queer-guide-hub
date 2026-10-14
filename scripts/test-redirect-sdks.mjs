@@ -18,6 +18,7 @@ const pieces = [
   '_shared/redirect-domain-provider.ts',
   '_shared/redirect-presentation.ts',
   '_shared/redirect-qr-assets.ts',
+  '_shared/redirect-password-branding.ts',
   '_shared/redirect-qr-images.ts',
   '_shared/link-policy.ts',
   '_shared/redirect-policy-api.ts',
@@ -160,8 +161,8 @@ const digest = Buffer.from(
   await webcrypto.subtle.digest('SHA-256', new TextEncoder().encode(token)),
 ).toString('hex');
 await db.query(
-  "INSERT INTO public.redirect_api_tokens(name,token_hash,prefix,scopes,created_by,expires_at) VALUES('SDK fixture',$1,'fixture',ARRAY['links:read','links:write','workspace:read','workspace:write','conversions:write','events:read'],gen_random_uuid(),now()+interval '1 day')",
-  [digest],
+  "INSERT INTO public.redirect_api_tokens(name,token_hash,prefix,scopes,created_by,expires_at) VALUES('SDK fixture',$1,'fixture',ARRAY['links:read','links:write','workspace:read','workspace:write','conversions:write','events:read'],$2,now()+interval '1 day')",
+  [digest,reportActor],
 );
 const seed = await db.query(
   "INSERT INTO public.redirects(type,slug,target) VALUES('SHORT','sdk-attribution','/events') RETURNING id",
@@ -256,8 +257,8 @@ try {
   const leftoverReports=await db.query('SELECT count(*)::int AS count FROM public.redirect_saved_reports');
   if(leftoverReports.rows[0].count!==0)throw new Error('SDK report records were not cleaned');
   const sdkArtworkStorage=policyRuntime.qrAssetStorageConfig('https://fixture.supabase.co','fixture-service');
-  await db.query("UPDATE public.redirect_qr_assets a SET next_cleanup_at=now()-interval '1 second' WHERE state='active' AND NOT EXISTS(SELECT FROM public.redirect_qr_styles WHERE logo_asset_id=a.id) AND NOT EXISTS(SELECT FROM public.redirect_qr_image_links WHERE logo_asset_id=a.id)");
-  for(let sdkCleanup=0;sdkCleanup<4&&logoObjects.size;sdkCleanup++)await policyRuntime.dispatchRedirectQrAssetCleanup(service,sdkArtworkStorage,fixtureDnsFetch);
+  await db.query("UPDATE public.redirect_qr_assets a SET next_cleanup_at=now()-interval '1 second' WHERE state='active' AND NOT EXISTS(SELECT FROM public.redirect_qr_styles WHERE logo_asset_id=a.id) AND NOT EXISTS(SELECT FROM public.redirect_qr_image_links WHERE logo_asset_id=a.id) AND NOT EXISTS(SELECT FROM public.redirect_password_branding WHERE logo_asset_id=a.id)");
+  for(let sdkCleanup=0;sdkCleanup<8&&logoObjects.size;sdkCleanup++)await policyRuntime.dispatchRedirectQrAssetCleanup(service,sdkArtworkStorage,fixtureDnsFetch);
   if(logoObjects.size)throw new Error('Released SDK artwork was not physically cleaned');
   await db.query('DELETE FROM public.redirect_domain_jobs WHERE domain_id=$1',[sdkRootDomain]);
   await db.query('DELETE FROM public.redirect_domains WHERE id=$1',[sdkRootDomain]);
@@ -637,6 +638,33 @@ try {
   if(clearedIdentity.name!==null||clearedIdentity.email!==null||clearedIdentity.version===privateIdentityVersion)throw new Error('HTTP identity clear failed');
   console.log('Private customer profiles: five native SDK methods, opaque UTF-8 IDs, scoped chronological pages, partial-grant edit denial, stale writes, private public-report boundary and identity-only clear passed.');
   console.log('Saved/share/public reports: real HTTP → edge handler → migrated PostgreSQL, real password verification, sanitized totals and revocation passed');
+  const passwordBrandLink=(await reportRequest('/links','POST',{target:'https://example.org/password-brand-fixture'},undefined,201)).link;
+  const passwordBrandPath='/links/'+passwordBrandLink.id+'/password-branding';
+  let passwordBrand=await reportRequest(passwordBrandPath);
+  passwordBrand=await reportRequest(passwordBrandPath,'PATCH',{version:passwordBrand.version,brandName:'Community & <friends>'});
+  const passwordBrandVersion=passwordBrand.version;
+  passwordBrand=await reportRequest(passwordBrandPath+'/logo','POST',{version:passwordBrand.version,image:env.REDIRECT_TEST_QR_LOGO});
+  if(passwordBrand.brandName!=='Community & <friends>'||passwordBrand.logoAsset.mime!=='image/png'||!passwordBrand.logoAsset.url.startsWith('https://fixture.supabase.co/storage/v1/object/public/redirect-brand-assets/'))throw new Error('Password branding HTTP attachment failed');
+  const passwordLogoKey=passwordBrand.logoAsset.key;
+  if(Buffer.compare(Buffer.from(logoObjects.get(passwordLogoKey).bytes),Buffer.from(env.REDIRECT_TEST_QR_LOGO,'base64'))!==0)throw new Error('Password logo upload changed bytes');
+  const passwordUploadCount=logoUploads;
+  await reportRequest(passwordBrandPath+'/logo','POST',{version:passwordBrandVersion,image:env.REDIRECT_TEST_QR_LOGO},undefined,409);
+  await reportRequest(passwordBrandPath+'/logo','POST',{version:passwordBrand.version,image:Buffer.from('<svg onload="private"></svg>').toString('base64')},undefined,400);
+  if(logoUploads!==passwordUploadCount)throw new Error('Rejected password logo reached Storage');
+  loseLogoReceipt=true;await reportRequest(passwordBrandPath+'/logo','POST',{version:passwordBrand.version,image:env.REDIRECT_TEST_QR_LOGO},undefined,503);
+  if(logoUploads!==passwordUploadCount+1)throw new Error('Unknown password-logo upload retried');
+  revokeLogoOwner=true;await reportRequest(passwordBrandPath+'/logo','POST',{version:passwordBrand.version,image:env.REDIRECT_TEST_QR_LOGO},undefined,403);
+  await db.query("INSERT INTO public.user_roles(user_id,role) VALUES($1,'admin')",[reportActor]);
+  passwordBrand=await reportRequest(passwordBrandPath);
+  if(passwordBrand.logoAsset.key!==passwordLogoKey)throw new Error('Lost receipt/owner replaced published password branding');
+  const passwordPublic=(await db.query('SELECT public.redirect_password_branding_public($1) AS value',[passwordBrandLink.id])).rows[0].value;
+  if(Object.keys(passwordPublic).sort().join(',')!=='brandName,logoAsset'||JSON.stringify(passwordPublic).includes('principal'))throw new Error('Public password branding leaked private metadata');
+  const passwordAssets=(await db.query("SELECT id::text||CASE WHEN mime='image/png' THEN '.png' ELSE '.jpg' END AS key FROM public.redirect_qr_assets WHERE target_scope=$1",['password:'+passwordBrandLink.id])).rows.map(row=>row.key);
+  await reportRequest('/links/'+passwordBrandLink.id,'DELETE');
+  await db.query("UPDATE public.redirect_qr_assets SET expires_at=now()-interval '1 second',next_cleanup_at=now()-interval '1 second' WHERE target_scope=$1",['password:'+passwordBrandLink.id]);
+  for(let clean=0;clean<8&&passwordAssets.some(key=>logoObjects.has(key));clean++)await policyRuntime.dispatchRedirectQrAssetCleanup(service,sdkArtworkStorage,fixtureDnsFetch);
+  if(passwordAssets.some(key=>logoObjects.has(key)))throw new Error('Released/lost password-logo objects not physically cleaned');
+  console.log('Password branding: five native SDK read/update/upload methods plus owner HTTP -> versioned reservation -> exact immutable Storage bytes -> current-role finish; stale/SVG preflight denial, no unknown upload replay, lost-owner denial, independent public profile and physical delete cleanup passed.');
   await verifyRedirectIntegrationHttp(db,base,reportActor);
   console.log(
     'Five SDKs passed; no external API calls, credentials, payments or production schema were used.',

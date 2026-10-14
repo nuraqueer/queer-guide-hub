@@ -1,3 +1,4 @@
+import {passwordBrandingInput,storePasswordLogo} from '../_shared/redirect-password-branding.ts';
 import {createWebhookSecret,webhookInput,webhookVersionInput,webhookPage} from '../_shared/redirect-webhooks.ts';
 import {customerId,customerProfileInput,customerPage} from '../_shared/redirect-customers.ts';
 import {createQrImageToken,qrImageLinkInput,qrImageRevokeInput,qrImageUrls,publicQrImageRequest,storeQrImageArtwork} from '../_shared/redirect-qr-images.ts';
@@ -64,6 +65,21 @@ Deno.serve(async (req: Request) => {
     values=manualRedirectInput(body.values,!id);expected=body.expectedUpdatedAt??null;
    }else return json({error:'Method not supported'},405);
    const result=await db.rpc('redirect_manual_record',{p_actor:user!.id,p_id:id,p_values:values,p_expected_updated_at:expected});if(result.error)return rpcError(result.error);return json(result.data,id?200:201);
+  }
+  const passwordBranding=path.match(/^\/links\/([a-f0-9-]{36})\/password-branding(\/logo)?$/i);
+  if(passwordBranding){
+    const [,id,logo]=passwordBranding;const read=req.method==='GET';
+    if(!UUID.test(id)||new URL(req.url).search)return json({error:'Invalid password branding request'},400);
+    if(logo?req.method!=='POST':!['GET','PATCH'].includes(req.method))return json({error:'Method not supported'},405);
+    let principalId:string|null=null;const scope=read?'links:read':'links:write';
+    if(tokenCredential){const auth=await db.rpc('authenticate_redirect_api_token',{p_hash:await tokenDigest(credential),p_scope:scope});if(auth.error)return rpcError(auth.error);if(!auth.data)return json({error:'Link scope is required'},403);principalId=auth.data.id;}
+    else{const principal=await sessionPrincipal(scope);if(principal.failure)return principal.failure;principalId=principal.id;}
+    if(logo){
+      const input=await qrLogoInput(await boundedJson(req,2100000));const config=qrAssetStorageConfig(Deno.env.get('SUPABASE_URL')??'',Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')??'');if(!config)return json({error:'Logo storage is not configured'},503);
+      const result=await storePasswordLogo(db,config,user?.id??null,principalId,id,input);if(result.error)return result.error.code==='QR_STORAGE'?json({error:result.error.message},503):rpcError({code:result.error.code,message:result.error.message??'Password branding unavailable'});return json(qrLogoPublicResponse(result.data,Deno.env.get('SUPABASE_URL')??''));
+    }
+    const values=read?{}:passwordBrandingInput(await boundedJson(req,4096));
+    const result=await db.rpc('redirect_password_branding_resource',{p_action:read?'get':'patch',p_actor:user?.id??null,p_principal:principalId,p_link:id,p_values:values});if(result.error)return rpcError(result.error);return json(qrLogoPublicResponse(result.data,Deno.env.get('SUPABASE_URL')??''));
   }
   const webhooks = path.match(/^\/webhooks(?:\/([a-f0-9-]{36}))?(?:\/(rotate|test|deliveries)(?:\/([a-f0-9-]{36})(?:\/(replay|attempts))?)?)?$/i);
   if (webhooks) {

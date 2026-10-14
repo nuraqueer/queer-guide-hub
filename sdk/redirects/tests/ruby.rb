@@ -33,6 +33,11 @@ lead={clickId:ENV.fetch('REDIRECT_TEST_CLICK'),customerExternalId:'sdk:ruby/cust
 api.track_lead(lead);check(api.track_lead(lead)['duplicate']==true)
 api.track_sale(lead.merge(eventId:'sdk-sale:ruby',amount:'49.900001',currency:'CHF'))
 check(api.analytics({country:'CH'})['totals']);check(!api.events({},limit:1)['data'].empty?)
+
+branding=api.get_password_branding(id);check(branding['version'].nil?)
+branding=api.update_password_branding(id,{version:nil,brandName:'Ruby public brand'})
+branding=api.upload_password_logo(id,branding['version'],ENV['REDIRECT_TEST_QR_LOGO']);check(branding['logoAsset']['mime']=='image/png'&&branding['brandName']=='Ruby public brand')
+check(api.update_password_branding(id,{version:branding['version'],clearLogo:true})['logoAsset'].nil?)
 api.delete_link(id);[['folders',folder],['tags',tag],['templates',template]].each {|kind,item|api.delete_resource(kind,item['id'])}
 [['/redirect-probe',302],['/limited-probe',429]].each do |path,status|
  begin;api.request('GET',path);raise 'Expected API error'

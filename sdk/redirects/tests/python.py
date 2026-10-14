@@ -42,6 +42,11 @@ assert api.track_lead(lead)['duplicate'] is True
 api.track_sale({**lead,'eventId':'sdk-sale:python','amount':'49.900001','currency':'CHF'})
 assert api.analytics({'country':'CH'})['totals']
 assert api.events(limit=1)['data']
+
+branding=api.get_password_branding(id);assert branding['version'] is None
+branding=api.update_password_branding(id,{'version':None,'brandName':'Python public brand'})
+branding=api.upload_password_logo(id,branding['version'],os.environ['REDIRECT_TEST_QR_LOGO']);assert branding['logoAsset']['mime']=='image/png' and branding['brandName']=='Python public brand'
+assert api.update_password_branding(id,{'version':branding['version'],'clearLogo':True})['logoAsset'] is None
 api.delete_link(id)
 for kind,item in [('folders',folder),('tags',tag),('templates',template)]: api.delete_resource(kind,item['id'])
 for path,status in [('/redirect-probe',302),('/limited-probe',429)]:

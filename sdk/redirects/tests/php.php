@@ -32,6 +32,11 @@ $batch=$api->bulk([['operation'=>'update','id'=>$id,'data'=>['comment'=>'Batch']
 $lead=['clickId'=>getenv('REDIRECT_TEST_CLICK'),'customerExternalId'=>'sdk:php/customer & ü','eventId'=>'sdk-lead:php'];$api->trackLead($lead);check($api->trackLead($lead)['duplicate']===true);
 $api->trackSale(array_merge($lead,['eventId'=>'sdk-sale:php','amount'=>'49.900001','currency'=>'CHF']));
 check($api->analytics(['country'=>'CH'])['totals']);check(count($api->events([],['limit'=>1])['data'])===1);
+
+$branding=$api->getPasswordBranding($id);check($branding['version']===null);
+$branding=$api->updatePasswordBranding($id,['version'=>null,'brandName'=>'PHP public brand']);
+$branding=$api->uploadPasswordLogo($id,$branding['version'],getenv('REDIRECT_TEST_QR_LOGO'));check($branding['logoAsset']['mime']==='image/png'&&$branding['brandName']==='PHP public brand');
+check($api->updatePasswordBranding($id,['version'=>$branding['version'],'clearLogo'=>true])['logoAsset']===null);
 $api->deleteLink($id);foreach ([['folders',$folder],['tags',$tag],['templates',$template]] as [$kind,$item]) $api->deleteResource($kind,$item['id']);
 foreach ([['/redirect-probe',302],['/limited-probe',429]] as [$path,$status]) {try {$api->request('GET',$path);throw new RuntimeException('Expected API error');} catch (QueerGuide\RedirectApiError $error) {check($error->status===$status);if ($status===429) check($error->retryAfter==='17');}}
 try {new QueerGuide\RedirectsClient('token','http://example.com/api');throw new RuntimeException('Insecure base accepted');} catch (InvalidArgumentException) {}

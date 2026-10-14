@@ -12,6 +12,7 @@ const source = [
   '_shared/redirect-visitor.ts',
   '_shared/redirect-relay.ts',
   '_shared/redirect-presentation.ts',
+  '_shared/redirect-password-page.ts',
   '_shared/redirect-domain-relay.ts',
   'redirect-handler/index.ts',
 ]
@@ -197,12 +198,47 @@ await db.query(
     JSON.stringify(await policy.hashLinkPassword('fixture-root-password')),
   ],
 );
+const passwordBrand = (
+  await db.query(
+    'SELECT public.redirect_password_branding_resource(\'patch\',$1,NULL,$2,\'{"version":null,"brandName":"Community & <root>"}\'::jsonb) AS value',
+    [actor, root.id],
+  )
+).rows[0].value;
+const passwordAsset = (
+  await db.query(
+    "SELECT public.reserve_redirect_password_logo($1,NULL,$2,$3,'image/png',100,64,64,repeat('a',64)) AS value",
+    [actor, root.id, passwordBrand.version],
+  )
+).rows[0].value;
+await db.query('SELECT public.finish_redirect_password_logo($1,NULL,$2,$3)', [
+  actor,
+  root.id,
+  passwordAsset.id,
+]);
+const brandedChallenge = await open();
+assert.equal(brandedChallenge.status, 401);
+const brandedHtml = await brandedChallenge.text();
+assert.ok(brandedHtml.includes('Community &amp; &lt;root&gt;'));
+assert.ok(
+  brandedHtml.includes('/storage/v1/object/public/redirect-brand-assets/' + passwordAsset.key),
+);
+assert.ok(brandedHtml.includes('crossorigin="anonymous" referrerpolicy="no-referrer"'));
+assert.ok(!brandedHtml.includes('https://example.org/home'));
+assert.ok(
+  brandedChallenge.headers
+    .get('Content-Security-Policy')
+    .includes('img-src https://fixture.supabase.co'),
+);
+const brandedHead = await open('/', { method: 'HEAD' });
+assert.equal(brandedHead.status, 401);
+assert.equal(await brandedHead.text(), '');
 assert.equal((await open()).status, 401);
 assert.equal((await open('/', { method: 'HEAD' })).status, 401);
 assert.equal(await total(), 0);
 const wrong = await open('/', { method: 'POST', password: 'wrong' });
 assert.equal(wrong.status, 401);
 assert.equal(wrong.headers.get('Location'), null);
+assert.ok((await wrong.text()).includes('Community &amp; &lt;root&gt;'));
 assert.equal(await total(), 0);
 const granted = await open('/?qg_qr=1&utm_source=poster', {
   method: 'POST',

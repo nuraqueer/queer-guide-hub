@@ -100,4 +100,7 @@ final class RedirectsClient {
         foreach($secrets as $value){if(!is_string($value)||!preg_match('/\Awhsec_[A-Za-z0-9+\/]{43}=\z/',$value))return false;$key=base64_decode(substr($value,6),true);if($key===false||strlen($key)!==32||base64_encode($key)!==substr($value,6))return false;$expected=hash_hmac('sha256',$id.'.'.$timestamp.'.'.$body,$key,true);foreach($signatures as $candidate){$bytes=base64_decode(substr($candidate,3),true);$valid=($bytes!==false&&hash_equals($expected,$bytes))||$valid;}}
         return $valid;
     }
+    public function getPasswordBranding(string $id): array {return $this->request('GET','/links/'.rawurlencode($id).'/password-branding');}
+    public function updatePasswordBranding(string $id,array $data): array {return $this->request('PATCH','/links/'.rawurlencode($id).'/password-branding',$data);}
+    public function uploadPasswordLogo(string $id,?string $version,string $image): array {return $this->request('POST','/links/'.rawurlencode($id).'/password-branding/logo',['version'=>$version,'image'=>$image]);}
 }

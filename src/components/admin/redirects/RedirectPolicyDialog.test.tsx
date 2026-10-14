@@ -4,6 +4,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { RedirectPolicyDialog } from './RedirectPolicyDialog';
 import type { InventoryRedirect } from '@/lib/redirects/inventory';
 
+vi.mock('@/hooks/useAuth', () => ({ useAuth: () => ({ user: { id: 'fixture-owner' } }) }));
+vi.mock('./RedirectPasswordBranding', () => ({ RedirectPasswordBranding: () => null }));
 const mocks = vi.hoisted(() => ({ invoke: vi.fn(), closed: vi.fn() }));
 vi.mock('@/integrations/supabase/client', () => ({
   supabase: { functions: { invoke: mocks.invoke } },
@@ -43,7 +45,11 @@ function show(hasPassword = false) {
   const client = new QueryClient({
     defaultOptions: { queries: { staleTime: Infinity, retry: false } },
   });
-  client.setQueryData(['redirect-link-policy', 'fixture'], { policy: {}, hasPassword, stats: [] });
+  client.setQueryData(['redirect-link-policy', 'fixture', 'fixture-owner', 'owner'], {
+    policy: {},
+    hasPassword,
+    stats: [],
+  });
   return render(
     <QueryClientProvider client={client}>
       <RedirectPolicyDialog row={row} onClose={mocks.closed} />

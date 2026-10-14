@@ -105,6 +105,9 @@ class RedirectsClient:
     def list_webhook_deliveries(self, webhook_id, limit=50, cursor=None): return self.request('GET','/webhooks'+ '/' + quote(webhook_id,safe='') + '/deliveries',query={'limit':limit,'cursor':cursor})
     def list_webhook_attempts(self, webhook_id, delivery_id, limit=50, cursor=None): return self.request('GET','/webhooks'+ '/' + quote(webhook_id,safe='') + '/deliveries'+'/'+quote(delivery_id,safe='')+'/attempts',query={'limit':limit,'cursor':cursor})
 
+    def get_password_branding(self, link_id): return self.request('GET','/links/'+quote(link_id,safe='')+'/password-branding')
+    def update_password_branding(self, link_id, data): return self.request('PATCH','/links/'+quote(link_id,safe='')+'/password-branding',data)
+    def upload_password_logo(self, link_id, version, image): return self.request('POST','/links/'+quote(link_id,safe='')+'/password-branding/logo',{'version':version,'image':image})
 
 def verify_webhook(secret, raw_body, webhook_id, timestamp, signature, now=None):
     """Verify original bytes before parsing; deduplicate webhook_id separately."""

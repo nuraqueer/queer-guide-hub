@@ -1,4 +1,21 @@
 export { verifyWebhook } from './webhooks.js';
+export interface PasswordBranding {
+  linkId: string;
+  version: string | null;
+  updatedAt: string | null;
+  brandName: string | null;
+  canEdit: boolean;
+  logoAsset: {
+    id: string;
+    key: string;
+    url: string;
+    mime: 'image/png' | 'image/jpeg';
+    bytes: number;
+    width: number;
+    height: number;
+    sha256: string;
+  } | null;
+}
 export type WebhookEvent =
   | 'link.created'
   | 'link.updated'
@@ -526,6 +543,29 @@ export class RedirectsClient {
       limit,
       cursor,
     });
+  }
+  getPasswordBranding(id: string) {
+    return this.request<PasswordBranding>(
+      'GET',
+      '/links/' + encodeURIComponent(id) + '/password-branding',
+    );
+  }
+  updatePasswordBranding(
+    id: string,
+    data: { version: string | null; brandName?: string | null; clearLogo?: boolean },
+  ) {
+    return this.request<PasswordBranding>(
+      'PATCH',
+      '/links/' + encodeURIComponent(id) + '/password-branding',
+      data,
+    );
+  }
+  uploadPasswordLogo(id: string, version: string | null, image: string) {
+    return this.request<PasswordBranding | { retryAfter: number }>(
+      'POST',
+      '/links/' + encodeURIComponent(id) + '/password-branding/logo',
+      { version, image },
+    );
   }
   createWebhook(data: WebhookInput) {
     return this.request<WebhookMutation<Webhook & { secret: string }>>('POST', '/webhooks', data);

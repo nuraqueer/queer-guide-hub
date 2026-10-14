@@ -1,3 +1,4 @@
+import { passwordPageBranding, redirectPasswordPage } from '../_shared/redirect-password-page.ts';
 import { DOMAIN_HEALTH_PATH, hasDomainRelay, verifyDomainRelay } from "../_shared/redirect-domain-relay.ts";
 import { socialPreviewAgent, presentationPage } from "../_shared/redirect-presentation.ts";
 import { redirectClientIp } from "../_shared/redirect-relay.ts";
@@ -7,12 +8,7 @@ import { createClient } from "jsr:@supabase/supabase-js@2.50.5";
 import { chooseLinkTarget, deviceFromAgent, policyErrors, validPublicTarget, verifyLinkPassword, type LinkPolicy, type PasswordHash } from "../_shared/link-policy.ts";
 
 const responseHeaders = {"Cache-Control":"no-cache, no-store","X-Robots-Tag":"noindex","Referrer-Policy":"no-referrer"};
-const escapeHtml = (value: string) => value.replace(/[&<>"']/g, (letter) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[letter]!));
-function page(status: number, title: string, message: string, password = false, head = false): Response {
-  const form = password ? '<form method="post"><label for="password">Link password</label><input id="password" name="password" type="password" maxlength="256" autocomplete="current-password" required><button type="submit">Continue</button></form>' : '';
-  const html = '<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>'+escapeHtml(title)+' · queer.guide</title><style>body{font:16px system-ui;margin:0;background:#fafaf5;color:#111;display:grid;min-height:100vh;place-items:center}main{max-width:32rem;padding:2rem}input,button{display:block;margin:1rem 0;padding:.8rem;font:inherit}button{cursor:pointer}p{line-height:1.5}</style></head><body><main><h1>'+escapeHtml(title)+'</h1><p>'+escapeHtml(message)+'</p>'+form+'</main></body></html>';
-  return new Response(head ? null : html,{status,headers:{...responseHeaders,"Content-Type":"text/html; charset=utf-8","Content-Security-Policy":"default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'"}});
-}
+const page = redirectPasswordPage;
 function mergeQuery(target: string, mode: string, incoming: URLSearchParams, overrides: Record<string,string> | null, defaults: Record<string,string> | null) {
   const parsed=new URL(target,"https://queer.guide");
   if (mode !== "DROP") {
@@ -90,14 +86,21 @@ Deno.serve(async (req: Request) => {
     const hash=new Uint8Array(await crypto.subtle.digest("SHA-256",new TextEncoder().encode(ip+(Deno.env.get("REDIRECT_IP_HASH_SALT") ?? "qg-redirect-salt-2026"))));
     const ipHash=Array.from(hash,(value)=>value.toString(16).padStart(2,"0")).join("");
     if (settings?.password_hash) {
-      if (head || !password && req.method !== "POST") return page(401,"Protected link","Enter the password to open this link.",true,head);
+      let branding = null;
+      if (!head) {
+        try {
+          const result = await db.rpc('redirect_password_branding_public', {p_link:link.id});
+          if (!result.error) branding = passwordPageBranding(result.data,Deno.env.get('SUPABASE_URL')??'');
+        } catch { /* Decoration must not prevent a usable password challenge. */ }
+      }
+      if (head || !password && req.method !== "POST") return page(401,"Protected link","Enter the password to open this link.",true,head,branding);
       const {data:retry,error:attemptError}=await db.rpc("reserve_redirect_password_attempt",{p_redirect_id:link.id,p_client_hash:ipHash});
       if(attemptError || !Number.isInteger(retry) || retry<0 || retry>900) return page(503,"Link unavailable","Please try again shortly.",false,head);
       if(retry>0) {
-        const response=page(429,"Try again later","Too many password attempts. Please wait "+Math.ceil(retry/60)+" minute(s) before trying again.");
+        const response=page(429,"Try again later","Too many password attempts. Please wait "+Math.ceil(retry/60)+" minute(s) before trying again.",false,head,branding);
         response.headers.set("Retry-After",String(retry));return response;
       }
-      if(!await verifyLinkPassword(password,settings.password_hash as PasswordHash)) return page(401,"Protected link","That password was not accepted.",true,head);
+      if(!await verifyLinkPassword(password,settings.password_hash as PasswordHash)) return page(401,"Protected link","That password was not accepted.",true,head,branding);
     }
     const country=req.headers.get("x-qg-visitor-country") || req.headers.get("cf-ipcountry");
     const words=crypto.getRandomValues(new Uint32Array(1));

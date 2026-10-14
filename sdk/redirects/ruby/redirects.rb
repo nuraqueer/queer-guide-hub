@@ -100,6 +100,9 @@ module QueerGuide
     def list_webhooks(limit:50,cursor:nil,archived:false); request('GET','/webhooks',nil,{limit:limit,cursor:cursor,archived:archived}); end
     def list_webhook_deliveries(id,limit:50,cursor:nil); request('GET','/webhooks'+'/'+URI.encode_www_form_component(id)+'/deliveries',nil,{limit:limit,cursor:cursor}); end
     def list_webhook_attempts(id,delivery_id,limit:50,cursor:nil); request('GET','/webhooks'+'/'+URI.encode_www_form_component(id)+'/deliveries'+'/'+URI.encode_www_form_component(delivery_id)+'/attempts',nil,{limit:limit,cursor:cursor}); end
+    def get_password_branding(id); request('GET','/links/'+URI.encode_www_form_component(id)+'/password-branding'); end
+    def update_password_branding(id,data); request('PATCH','/links/'+URI.encode_www_form_component(id)+'/password-branding',data); end
+    def upload_password_logo(id,version,image); request('POST','/links/'+URI.encode_www_form_component(id)+'/password-branding/logo',{version:version,image:image}); end
   end
 
   def self.verify_webhook(secret,body,id,timestamp,signature,now:Time.now.to_i)

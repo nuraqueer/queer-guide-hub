@@ -1,6 +1,8 @@
+import { useAuth } from '@/hooks/useAuth';
+import { RedirectPasswordBranding } from './RedirectPasswordBranding';
 import { memberRedirectApi } from '@/lib/redirects/memberApi';
 import { RedirectPresentationFields } from './RedirectPresentationFields';
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { untypedFrom, untypedRpc } from '@/integrations/supabase/untyped';
@@ -47,6 +49,13 @@ function PolicyForm({
   stats: VariantPerformance[];
   onClose: () => void;
 }) {
+  const alive = useRef(true);
+  useEffect(() => {
+    alive.current = true;
+    return () => {
+      alive.current = false;
+    };
+  }, []);
   const [policy, setPolicy] = useState<LinkPolicy>(initial);
   const [passwordEnabled, setPasswordEnabled] = useState(hasPassword);
   const [password, setPassword] = useState('');
@@ -86,12 +95,13 @@ function PolicyForm({
         });
         if (saveError || data?.error) throw new Error(data?.error ?? saveError?.message);
       }
+      if (!alive.current) return;
       await Promise.allSettled([
         client.invalidateQueries({ queryKey: ['redirect-member', principalId] }),
         client.invalidateQueries({ queryKey: ['redirect-link-policy', row.manualId] }),
         client.invalidateQueries({ queryKey: ['cms-content-list'] }),
       ]);
-      onClose();
+      if (alive.current) onClose();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not save policy');
     } finally {
@@ -502,10 +512,11 @@ export function RedirectPolicyDialog({
   row: InventoryRedirect;
   onClose: () => void;
 }) {
+  const { user } = useAuth();
   const query = useQuery({
-    queryKey: principalId
-      ? ['redirect-link-policy', row.manualId, principalId]
-      : ['redirect-link-policy', row.manualId],
+    queryKey: ['redirect-link-policy', row.manualId, user?.id, principalId ?? 'owner'],
+    enabled: !!user && !!row.manualId,
+    gcTime: 0,
     queryFn: async () => {
       if (principalId) {
         const [setting, stats] = await Promise.all([
@@ -567,16 +578,22 @@ export function RedirectPolicyDialog({
             Could not load link settings. {query.error.message}
           </p>
         )}
-        {query.data && (
-          <PolicyForm
-            row={row}
-            principalId={principalId}
-            readOnly={readOnly}
-            initial={query.data.policy}
-            hasPassword={query.data.hasPassword}
-            stats={query.data.stats}
-            onClose={onClose}
-          />
+        {query.data && !query.isError && (
+          <>
+            <PolicyForm
+              key={(user?.id ?? '') + ':' + row.manualId + ':' + (principalId ?? 'owner')}
+              row={row}
+              principalId={principalId}
+              readOnly={readOnly}
+              initial={query.data.policy}
+              hasPassword={query.data.hasPassword}
+              stats={query.data.stats}
+              onClose={onClose}
+            />
+            {row.isShortLink && (
+              <RedirectPasswordBranding linkId={row.manualId!} readOnly={readOnly} />
+            )}
+          </>
         )}
       </DialogContent>
     </Dialog>
