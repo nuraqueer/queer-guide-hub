@@ -75,6 +75,10 @@ jobs:
           node-version: "22.20.0"
           cache: npm
       - run: npm ci --prefer-offline --no-audit
+      # Server-only importer and script regressions use their own Node config;
+      # the app's jsdom suite and Deno discovery do not collect these files.
+      - name: Run merchant and server-script regressions
+        run: npm run test:merchant-sync
       # Coverage gate is enforced via thresholds in vite.config.ts
       # test.coverage.thresholds (Phase 6, locked 2026-05-16).
       - run: npm run test:coverage
