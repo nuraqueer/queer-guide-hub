@@ -11,10 +11,7 @@ BEGIN
  IF public.authenticate_redirect_api_token(repeat('9',64),'links:read')->>'id' IS DISTINCT FROM key_id::text THEN RAISE EXCEPTION 'Current owner key rejected';END IF;
  IF public.redirect_management_scope(key_id,'links:read') IS DISTINCT FROM ARRAY[link_id] THEN RAISE EXCEPTION 'Selected IDs changed';END IF;
  DELETE FROM public.user_roles WHERE user_id=owner_id;
- BEGIN
-  PERFORM public.authenticate_redirect_api_token(repeat('9',64),'links:read');
-  RAISE EXCEPTION 'Lost owner authenticated';EXCEPTION WHEN insufficient_privilege THEN NULL;
- END;
+ IF public.authenticate_redirect_api_token(repeat('9',64),'links:read') IS NOT NULL THEN RAISE EXCEPTION 'Lost owner authenticated';END IF;
  BEGIN
   PERFORM public.redirect_management_list(p_token_id=>key_id);
   RAISE EXCEPTION 'Already authenticated key read after owner loss';EXCEPTION WHEN insufficient_privilege THEN NULL;

@@ -328,6 +328,7 @@ try {
   await db.query('DELETE FROM public.user_roles WHERE user_id=$1',[reportActor]);
   await reportRequest('/members','GET',undefined,undefined,403);
   await reportRequest('/tokens','GET',undefined,undefined,403);
+  await reportRequest('/links','GET',undefined,ownerCredential.secret,403);
   await reportRequest('/tokens/'+ownerCredential.id,'DELETE',undefined,undefined,403);
   await reportRequest('/tokens','POST',{name:'Denied',expiresAt:new Date(Date.now()+86400000).toISOString(),scopes:['links:read']},undefined,403);
 

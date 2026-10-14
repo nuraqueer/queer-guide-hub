@@ -2498,3 +2498,10 @@ member, schema, provider or asset was created or changed. Account/invitation and
 all-source workspace work, remaining domain/app behavior and live release evidence
 remain active scope; the production venue data-quality gate is still recorded
 separately. No overall completion is claimed.
+
+Credential authentication now returns denial for inactive/revoked authority, as
+it already did for expiry/missing scope. Later resource checks still raise 42501.
+This keeps known lost-owner/member credentials at HTTP 403 instead of older API
+branches treating their auth RPC error as transient 503 and retrying it. Full SQL
+and five native SDK HTTP suites pass, including a newly created key's /links
+request after its creator loses admin role. No privileges were broadened.

@@ -51,3 +51,26 @@ BEGIN
 END $$;
 REVOKE ALL ON FUNCTION public.redirect_token_administration(uuid,text,uuid,jsonb,integer) FROM PUBLIC,anon,authenticated;
 GRANT EXECUTE ON FUNCTION public.redirect_token_administration(uuid,text,uuid,jsonb,integer) TO service_role;
+
+CREATE OR REPLACE FUNCTION public.authenticate_redirect_api_token(p_hash text,p_scope text)
+RETURNS jsonb LANGUAGE plpgsql SECURITY INVOKER SET search_path=public,pg_temp AS $$
+DECLARE t public.redirect_api_tokens;
+BEGIN
+ IF current_user <> 'service_role' THEN RAISE EXCEPTION 'forbidden' USING ERRCODE='42501';END IF;
+ IF p_scope LIKE '%:write' THEN PERFORM pg_advisory_xact_lock(471983093);
+ ELSE PERFORM pg_advisory_xact_lock_shared(471983093);END IF;
+ SELECT * INTO t FROM public.redirect_api_tokens WHERE token_hash=p_hash
+ AND revoked_at IS NULL AND expires_at>clock_timestamp() AND p_scope=ANY(scopes) FOR UPDATE;
+ IF t.id IS NULL THEN RETURN NULL;END IF;
+ BEGIN
+  PERFORM public.redirect_management_scope(t.id,p_scope);
+ EXCEPTION WHEN insufficient_privilege THEN
+  -- Permission revocation is an authentication denial, just like expiry.
+  -- Resource functions still raise 42501 on later scope changes.
+  RETURN NULL;
+ END;
+ UPDATE public.redirect_api_tokens SET last_used_at=now() WHERE id=t.id;
+ RETURN jsonb_build_object('id',t.id,'redirect_ids',t.redirect_ids,'scopes',t.scopes);
+END $$;
+REVOKE ALL ON FUNCTION public.redirect_management_scope(uuid,text),public.authenticate_redirect_api_token(text,text) FROM PUBLIC,anon,authenticated;
+GRANT EXECUTE ON FUNCTION public.redirect_management_scope(uuid,text),public.authenticate_redirect_api_token(text,text) TO service_role;
