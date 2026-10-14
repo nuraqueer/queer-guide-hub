@@ -1,4 +1,14 @@
--- Production incident ledger. This version paused the postal cron again after
--- two test batches had repeated eight-second Photon aborts. The live queue and
--- retry backoff were preserved. A fresh database must not inherit the pause.
-select 1;
+-- Recovered from supabase_migrations.schema_migrations.statements.
+-- Already applied to production; retain the actual SQL rather than a placeholder.
+do $$
+declare j record;
+begin
+  select jobid,schedule,active,command into j from cron.job where jobname='geo_address_drain';
+  if not found or not j.active or j.schedule <> '*/15 * * * *' or j.command not like '%''batch_size'', 5%' then
+    raise exception 'Unexpected postal cron state; refusing pause';
+  end if;
+  perform cron.alter_job(job_id := j.jobid, active := false);
+  update public.admin_automations set enabled=false
+  where slug='geo_address_drain' and enabled=true and lifecycle_state='active';
+  if not found then raise exception 'Unexpected postal automation state'; end if;
+end $$;
