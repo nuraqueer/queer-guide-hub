@@ -63,6 +63,8 @@ describe('hosted QR rendering HTTP', () => {
       expect(response.status).toBe(200);
       expect(response.headers.get('cache-control')).toBe('no-store');
       expect(response.headers.get('access-control-allow-origin')).toBe('*');
+      expect(response.headers.get('access-control-expose-headers')).toContain('X-QG-QR-Verified');
+      expect(response.headers.get('x-qg-qr-verified')).toBe('1');
       expect(response.headers.get('content-type')).toBe(
         'image/' + (format === 'svg' ? 'svg+xml' : format === 'jpg' ? 'jpeg' : 'png'),
       );

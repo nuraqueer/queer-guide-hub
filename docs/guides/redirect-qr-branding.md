@@ -1,8 +1,8 @@
 # Saved QR styles and branding
 
-Saved appearance and the hosted-logo lifecycle/API are implemented locally.
-Saved-logo editor/renderer integration, hosted QR image URLs and production
-rollout remain required; this page does not claim full branding completion.
+Saved appearance, logo editors and rendering, revocable hosted QR image APIs,
+five SDKs and single-code publication/copy/revoke controls are implemented locally.
+Controlled production rollout and real infrastructure verification remain required.
 
 ## Owner preferences
 
@@ -168,9 +168,9 @@ same SVG geometry and scan checks as downloads. See
 GET supports explicit appearance and fixed-bucket saved logo references; POST also
 accepts local PNG/JPG artwork. The relay requires a REDIRECT_QR service binding and
 is not deployed. Revocable saved-default image links and five-SDK contracts are
-implemented locally, including durable per-image custom artwork; UI hosted-image
-copying remains pending. A POST image response
-does not create a durable share URL for its local artwork.
+implemented locally, including durable per-image custom artwork and UI
+publication/copy/revocation. A direct POST /api/qr image response does not create
+a durable share URL; use the authenticated /qr-images API or publication controls.
 
 
 Owners/current members/keys can POST `/qr-images` to explicitly publish a live
@@ -202,3 +202,30 @@ pruned after one day; their hourly creation history remains. Stored artwork stay
 referenced until revoke/delete, then receives a one-hour read grace before cleanup.
 This depends on the fixed site QR service and the existing internal cleanup job;
 real gateway/binding/Storage/cron verification is still required before release.
+
+
+## Publish from the QR dialog
+
+Open a single-code QR export and use Hosted image after choosing its appearance
+and optional artwork. Enter a label and choose until revoked, 30 days, or one
+year. Unedited saved shapes/colors follow future branding changes unless Keep
+the current appearance fixed is selected. Edited shapes/colors are fixed.
+Saved logos follow domain/workspace changes; hidden logos stay hidden, and local
+artwork is attached only to this publication. Publishing never changes defaults.
+
+The browser independently fetches, bounds, decodes and scans the hosted PNG
+against the selected URL before exposing the PNG/JPG/SVG copy fields. A failed
+preview retains the publication and offers retry or revoke without a duplicate
+create. Bearer URLs stay only in component state and are not recoverable from
+list metadata. Save the URLs before closing. Any holder can use them while the
+grant is current; publication is an explicit action, not part of downloading.
+
+Manage image links loads accessible records only when expanded, with cursor
+pagination, dates/status and a current-redirect marker. Owners can see workspace
+records; other authors see their own. Revocation uses the selected record version
+and an inline confirmation; conflicts require a reload. It stops embedded image
+retrieval while downloaded codes retain their ordinary redirect URL. Generating
+images does not record visits; scanning a managed code records QR attribution.
+Account/URL/link changes reset secret state and abort old requests. Export edits
+are disabled during publication. The live service must be deployed and configured
+before these controls can publish in production.

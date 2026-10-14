@@ -185,8 +185,8 @@ the actual API/migrated database. Separate full-path HTTP/Wasm tests verify live
 branding changes and independently decode generated PNG/JPG images.
 
 These endpoints and wrappers are local implementation, not a released package or
-production endpoint. Per-export custom-artwork publication is implemented locally; UI authoring and
-controlled deployment remain required.
+production endpoint. Per-export custom artwork and UI publication/copy/revoke
+are implemented locally; controlled deployment remains required.
 
 Custom artwork uses the same create method with `logo` containing bare-base64
 PNG/JPG bytes (up to 1.5 MB and 1024px per dimension). Mode is implicitly custom;

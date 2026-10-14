@@ -1689,3 +1689,48 @@ versions during confirmation. Empty/loading/error/retry states and responsive
 labels use existing form, button and typography tokens. Broad approved scope
 covers this design; verify publication, failed previews, races, pagination and
 revocation in focused tests and a local desktop/mobile browser fixture.
+
+
+### Hosted QR publication controls checkpoint
+
+Single-code QR exports now expose explicit label/lifetime publication, live saved
+or fixed selected appearance, inherited/hidden/custom artwork, verified hosted
+preview, PNG/JPG/SVG URL copying and scoped cursor-paginated management. Bearers
+remain only in component state; account/URL/link changes abort old work and reset
+secret state. Export edits are frozen during publication. The browser bounds,
+decodes and independently scans the hosted PNG against the selected tracked URL
+before exposing copy fields. Failed preview preserves the record and retries the
+preview without another create. Revoke confirms impact, captures the selected
+version, requires reload on conflict and preserves downloaded codes. Confirmation
+receives focus and scrolls into view on mobile. Empty/loading/error/retry states
+use incumbent admin primitives. Long labels wrap; row actions keep compact copy.
+
+A browser integration check caught duplicate sibling React keys on the style
+editor and new hosted controls; the hosted key now has its own prefix. A full
+export regression test ensures one editor survives QR and publication updates.
+The frontend imports current SDK source types explicitly rather than stale built
+SDK declarations. The Worker exposes its verification/Retry-After headers through
+CORS for cross-origin previews; attestation remains gated by actual render scans.
+
+Evidence: 102 focused tests across 15 files pass, including inherited/fixed/custom
+input contracts, fixed-origin/same-bearer response validation, nonadvancing cursor
+rejection, untrusted/oversized preview denial, no copying before verification,
+no bearer query caching, retry without duplicate publication, account remount
+aborts/late-response isolation, version conflict handling and cursor-page revoke.
+App ratchet remains 704 inherited errors, none new; targeted lint and format pass.
+App build passes (30.70s). Desktop/mobile native browser fixture uses actual QR
+rendering and independent hosted image scan with API responses simulated and
+production network requests blocked. It exercises SVG clipboard copying, custom
+artwork plus 30-day expiry, confirmation focus/no horizontal overflow at 390px,
+revoke and refreshed management status. Evidence images are in outputs/redirect-
+dub-parity/hosted-qr-publish-desktop.jpg, hosted-qr-revoke-mobile.png and
+hosted-qr-management-desktop.png in the shared root. Temporary browser tab closed
+and viewport reset. No production writes or deployments occurred.
+
+The local API/SDK/UI QR publication flow is implemented. Real Pages service
+binding, Supabase gateway/Storage/CORS/cron and configured-date runtime/resource
+checks remain controlled release work. The overall goal stays active; required
+remaining domain lifecycle/DNS automation, native/deferred deep links, branded
+password pages, customer enrichment, report SDK/team discovery, integrations,
+outgoing webhooks, permission/account discovery and release/publication are not
+removed from scope by this checkpoint.

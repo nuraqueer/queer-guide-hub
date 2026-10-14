@@ -3,7 +3,8 @@ import { useRedirectQrStyle } from '@/hooks/useRedirectQrStyle';
 import { useQrExportStyle } from '@/hooks/useQrExportStyle';
 import { qrAppearance } from '@/lib/redirects/qrLogos';
 import { QrExportLogoChoice } from './QrExportLogoChoice';
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
+import { RedirectQrImageLinks } from './RedirectQrImageLinks';
 import {
   DEFAULT_QR_STYLE,
   qrStyleError,
@@ -44,6 +45,14 @@ export function QrExport({
   const { user } = useAuth();
   const scope = JSON.stringify([user?.id, url, linkId]);
   const edits = useQrExportStyle(scope);
+  const [publishingScope, setPublishingScope] = useState<string | null>(null);
+  const publishing = publishingScope === scope;
+  const setPublishing = useCallback(
+    (busy: boolean) => {
+      setPublishingScope((previous) => (busy ? scope : previous === scope ? null : previous));
+    },
+    [scope],
+  );
   const [logoBusyScope, setLogoBusyScope] = useState<string | null>(null);
   const logoBusy = logoBusyScope === scope;
   const setLogoBusy = (busy: boolean) =>
@@ -82,11 +91,12 @@ export function QrExport({
           <p role="alert">
             Could not load saved QR style. Retry or explicitly use the standard style.
           </p>
-          <Button variant="outline" onClick={() => void defaults.refetch()}>
+          <Button variant="outline" disabled={publishing} onClick={() => void defaults.refetch()}>
             Retry saved QR style
           </Button>
           <Button
             variant="outline"
+            disabled={publishing}
             onClick={() => {
               edits.reset();
               setFallbackScope(scope);
@@ -111,18 +121,19 @@ export function QrExport({
           setFallbackScope(null);
           void defaults.refetch();
         }}
-        disabled={logoBusy}
+        disabled={logoBusy || publishing}
       />
       <QrStyleFields
         key={scope}
         style={style}
         setStyle={setStyle}
-        disabled={!ready}
+        disabled={!ready || publishing}
         onBusy={setLogoBusy}
       />
       {(edits.hasAppearance || standard) && (
         <Button
           variant="ghost"
+          disabled={publishing}
           onClick={() => {
             edits.savedAppearance();
             setFallbackScope(null);
@@ -234,6 +245,20 @@ export function QrExport({
           Download SVG
         </Button>
       </div>
+      {user?.id && (
+        <RedirectQrImageLinks
+          key={'hosted:' + scope}
+          accountId={user.id}
+          url={url}
+          linkId={linkId}
+          tracked={managedShortLink}
+          style={style}
+          logoMode={standard && edits.logoMode === 'saved' ? 'none' : edits.logoMode}
+          ready={ready && !error && !!qr.data && !qr.isFetching}
+          explicitAppearance={standard || edits.hasAppearance}
+          onBusy={setPublishing}
+        />
+      )}
     </div>
   );
 }

@@ -12,6 +12,7 @@ export async function qrImageResponse(
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Methods': 'GET, HEAD, POST, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type',
+    'Access-Control-Expose-Headers': 'X-QG-QR-Verified, Retry-After',
     'Cache-Control': 'no-store',
     'X-Robots-Tag': 'noindex',
     'Referrer-Policy': 'no-referrer',
