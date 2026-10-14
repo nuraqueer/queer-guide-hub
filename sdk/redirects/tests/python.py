@@ -35,7 +35,7 @@ assert api.count_links({'ids':[id]})['count']==1
 assert len(list(api.iterate_links({'search':'sdk-page-'})))==101
 batch=api.bulk([{'operation':'update','id':id,'data':{'comment':'Batch'}},{'operation':'create','data':{'target':'/events'}}])
 api.delete_link(batch['data'][1]['link']['id'])
-lead={'clickId':os.environ['REDIRECT_TEST_CLICK'],'customerExternalId':'python','eventId':'sdk-lead:python'}
+lead={'clickId':os.environ['REDIRECT_TEST_CLICK'],'customerExternalId':'sdk:python/customer & ü','eventId':'sdk-lead:python'}
 api.track_lead(lead)
 assert api.track_lead(lead)['duplicate'] is True
 api.track_sale({**lead,'eventId':'sdk-sale:python','amount':'49.900001','currency':'CHF'})
@@ -77,3 +77,13 @@ report_error(lambda:protected.read_public_report(),401)
 assert isinstance(protected.read_public_report({'password':'sdk-report-password'})['report']['revenue'][0]['amount'],str)
 assert account.delete_report(report['id'])['deleted']; report_error(lambda:protected.read_public_report({'password':'sdk-report-password'}),404)
 account.delete_report(second['id'])
+
+customer=api.get_customer(lead['customerExternalId']); assert customer['version'] is None and customer['canEdit']
+customer=api.update_customer(lead['customerExternalId'],{'version':None,'name':'SDK Python identity','email':'python@example.com','avatarUrl':'https://example.com/avatar.png'})
+assert api.get_customer(lead['customerExternalId'])['name']=='SDK Python identity'
+report_error(lambda:api.update_customer(lead['customerExternalId'],{'version':None,'name':'Stale identity'}),409)
+page=api.customer_journey(lead['customerExternalId'],limit=1); assert len(page['data'])==1 and page['nextCursor']
+assert len(api.customer_journey(lead['customerExternalId'],limit=1,cursor=page['nextCursor'])['data'])==1
+identity_version=customer['version'];customer=api.clear_customer(lead['customerExternalId'],identity_version)
+assert customer['name'] is None and customer['email'] is None and customer['avatarUrl'] is None and customer['version']!=identity_version
+assert len(api.customer_journey(lead['customerExternalId'])['data'])==3

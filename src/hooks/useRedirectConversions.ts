@@ -1,11 +1,14 @@
+import { useAuth } from './useAuth';
+import { readCustomerJourney, type CustomerJourneyCursor } from '@/lib/redirects/customers';
 import { useQuery, useInfiniteQuery } from '@tanstack/react-query';
-import { untypedFrom, untypedRpc } from '@/integrations/supabase/untyped';
+import { untypedFrom } from '@/integrations/supabase/untyped';
 import { readInventoryPages } from '@/lib/redirects/inventory';
-import type { JourneyEvent, RedirectConversion } from '@/lib/redirects/conversions';
+import type { RedirectConversion } from '@/lib/redirects/conversions';
 export function useRedirectConversions(linkId?: string, days = '30') {
+  const { user } = useAuth();
   return useQuery({
-    queryKey: ['redirect-conversion-report', linkId, days],
-    enabled: !!linkId,
+    queryKey: ['redirect-conversion-report', user?.id, linkId, days],
+    enabled: !!linkId && !!user?.id,
     queryFn: async ({ signal }) => {
       const since =
         days === 'all' ? null : new Date(Date.now() - Number(days) * 86400000).toISOString();
@@ -25,25 +28,16 @@ export function useRedirectConversions(linkId?: string, days = '30') {
     },
   });
 }
-interface JourneyPage {
-  data: JourneyEvent[];
-  nextCursor: { at: string; id: string } | null;
-}
 export function useRedirectCustomerJourney(customer: string | null) {
+  const { user } = useAuth();
   return useInfiniteQuery({
-    queryKey: ['redirect-customer-journey', customer],
-    enabled: !!customer,
-    initialPageParam: null as JourneyPage['nextCursor'],
-    queryFn: async ({ pageParam }) => {
-      const { data, error } = await untypedRpc<JourneyPage>('redirect_customer_journey', {
-        p_customer_key: customer,
-        p_after_at: pageParam?.at ?? null,
-        p_after_id: pageParam?.id ?? null,
-        p_limit: 50,
-      });
-      if (error || !data) throw new Error(error?.message ?? 'Could not load customer journey');
-      return data;
-    },
+    queryKey: ['redirect-customer-journey', user?.id, customer],
+    enabled: !!customer && !!user?.id,
+    initialPageParam: null as CustomerJourneyCursor | null,
+    queryFn: ({ pageParam, signal }) => readCustomerJourney(customer!, pageParam, signal),
     getNextPageParam: (page) => page.nextCursor ?? undefined,
+    gcTime: 0,
+    staleTime: 0,
+    retry: false,
   });
 }

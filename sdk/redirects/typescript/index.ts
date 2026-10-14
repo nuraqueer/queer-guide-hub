@@ -1,4 +1,36 @@
 export type JsonObject = Record<string, unknown>;
+export interface CustomerProfile {
+  customerExternalId: string;
+  name: string | null;
+  email: string | null;
+  avatarUrl: string | null;
+  version: string | null;
+  updatedAt: string | null;
+  canEdit: boolean;
+}
+export interface CustomerProfileChanges {
+  version: string | null;
+  name?: string | null;
+  email?: string | null;
+  avatarUrl?: string | null;
+}
+export interface CustomerJourneyCursor {
+  at: string;
+  id: string;
+}
+export interface CustomerJourneyPage {
+  data: {
+    id: string;
+    kind: 'click' | 'lead' | 'sale';
+    occurred_at: string;
+    source: string | null;
+    event_name: string;
+    amount: string | null;
+    currency: string | null;
+    click_id: string;
+  }[];
+  nextCursor: CustomerJourneyCursor | null;
+}
 export interface ReportFilters {
   linkIds?: string[];
   folderId?: string;
@@ -390,6 +422,28 @@ export class RedirectsClient {
   }
   events(filters: JsonObject = {}, options: JsonObject = {}) {
     return this.request<JsonObject>('GET', '/events', undefined, { ...options, filters });
+  }
+  getCustomer(id: string) {
+    return this.request<CustomerProfile>('GET', '/customers/profile', undefined, { id });
+  }
+  updateCustomer(id: string, data: CustomerProfileChanges) {
+    return this.request<CustomerProfile>('PATCH', '/customers/profile', {
+      ...data,
+      customerExternalId: id,
+    });
+  }
+  clearCustomer(id: string, version: string | null) {
+    return this.request<CustomerProfile>('DELETE', '/customers/profile', {
+      customerExternalId: id,
+      version,
+    });
+  }
+  customerJourney(id: string, limit = 50, cursor?: CustomerJourneyCursor) {
+    return this.request<CustomerJourneyPage>('GET', '/customers/journey', undefined, {
+      id,
+      limit,
+      cursor,
+    });
   }
   createReport(data: { name: string; filters: ReportFilters }) {
     return this.request<SavedReport>('POST', '/reports', data);

@@ -1,3 +1,4 @@
+import { RedirectCustomerDetails } from './RedirectCustomerDetails';
 import { RedirectSavedReports } from './RedirectSavedReports';
 import { useMemberRedirectResources } from '@/hooks/useMemberRedirectResources';
 import { useMemo, useState } from 'react';
@@ -132,6 +133,7 @@ function AnalyticsDialogContent({
     error: Error | null;
   };
 }) {
+  const [customer, setCustomer] = useState<string | null>(null);
   const [range, setRange] = useState('30'),
     [start, setStart] = useState(() => day(new Date(Date.now() - 29 * 86400000))),
     [end, setEnd] = useState(() => day(new Date()));
@@ -602,7 +604,19 @@ function AnalyticsDialogContent({
                           {event.event_name} ({event.kind})
                         </td>
                         <td className="p-2">{event.source ?? 'Unknown'}</td>
-                        <td className="p-2">{event.customer_key ?? '—'}</td>
+                        <td className="p-2">
+                          {event.customer_key ? (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => setCustomer(event.customer_key)}
+                            >
+                              {event.customer_key}
+                            </Button>
+                          ) : (
+                            '—'
+                          )}
+                        </td>
                         <td className="p-2">
                           {event.country ?? 'Unknown'} · {event.city}
                         </td>
@@ -638,6 +652,9 @@ function AnalyticsDialogContent({
               )}
             </section>
           </>
+        )}
+        {customer && (
+          <RedirectCustomerDetails customer={customer} onClose={() => setCustomer(null)} />
         )}
       </DialogContent>
     </Dialog>

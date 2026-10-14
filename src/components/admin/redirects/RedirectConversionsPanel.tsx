@@ -1,13 +1,19 @@
-import { AdminInlineSpinner } from '@/components/admin/primitives/AdminLoading';
+import { useAuth } from '@/hooks/useAuth';
+import { RedirectCustomerDetails } from './RedirectCustomerDetails';
 import { useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { useRedirectConversions, useRedirectCustomerJourney } from '@/hooks/useRedirectConversions';
+import { useRedirectConversions } from '@/hooks/useRedirectConversions';
 import { conversionSummary, amountMicros, formatRevenue } from '@/lib/redirects/conversions';
 import { formatDateTime } from '@/lib/format';
 
 export function RedirectConversionsPanel({ linkId, days }: { linkId?: string; days: string }) {
-  const report = useRedirectConversions(linkId, days),
-    [customer, setCustomer] = useState<string | null>(null);
+  const { user } = useAuth();
+  const scope = JSON.stringify([user?.id, linkId]);
+  const report = useRedirectConversions(linkId, days);
+  const [selection, setSelection] = useState<{ scope: string; customer: string } | null>(null);
+  const customer = selection?.scope === scope ? selection.customer : null;
+  const setCustomer = (value: string | null) =>
+    setSelection(value ? { scope, customer: value } : null);
   const summary = useMemo(() => conversionSummary(report.data ?? []), [report.data]);
   const customers = useMemo(
     () => [
@@ -17,7 +23,6 @@ export function RedirectConversionsPanel({ linkId, days }: { linkId?: string; da
     ],
     [report.data],
   );
-  const journey = useRedirectCustomerJourney(customer);
   return (
     <section className="min-w-0 space-y-4 border-t pt-4" aria-label="Conversion report">
       <h3 className="font-medium">Leads and sales</h3>
@@ -124,61 +129,7 @@ export function RedirectConversionsPanel({ linkId, days }: { linkId?: string; da
         </>
       )}
       {customer && (
-        <section className="space-y-2" aria-label="Customer journey">
-          <div className="flex flex-wrap justify-between gap-2">
-            <h4 className="break-all font-medium">Journey: {customer}</h4>
-            <Button size="sm" variant="ghost" onClick={() => setCustomer(null)}>
-              Close journey
-            </Button>
-          </div>
-          <p className="text-xs text-muted-foreground">
-            Recorded clicks, leads and sales across managed links. Times are shown in chronological
-            order.
-          </p>
-          {journey.isPending && <p role="status">Loading customer journey…</p>}
-          {journey.isError && (
-            <div role="alert">
-              <p>{journey.error.message}</p>
-              <Button size="sm" variant="outline" onClick={() => void journey.refetch()}>
-                Retry journey
-              </Button>
-            </div>
-          )}
-          <ol className="space-y-2">
-            {journey.data?.pages
-              .flatMap((page) => page.data)
-              .map((event) => (
-                <li key={event.id} className="border-l-2 pl-4 text-sm">
-                  <p>
-                    {formatDateTime(event.occurred_at)} · {event.event_name} ({event.kind})
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    {event.source ?? 'Unknown source'}
-                    {event.amount !== null && event.currency
-                      ? ' · ' + formatRevenue(amountMicros(event.amount), event.currency)
-                      : ''}
-                  </p>
-                </li>
-              ))}
-          </ol>
-          {journey.hasNextPage && (
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={journey.isFetchingNextPage}
-              onClick={() => void journey.fetchNextPage()}
-            >
-              {journey.isFetchingNextPage ? (
-                <AdminInlineSpinner label="Loading journey" />
-              ) : (
-                'Load more journey events'
-              )}
-            </Button>
-          )}
-          {journey.data?.pages.every((page) => page.data.length === 0) && (
-            <p className="text-sm">No recorded journey events.</p>
-          )}
-        </section>
+        <RedirectCustomerDetails customer={customer} onClose={() => setCustomer(null)} />
       )}
     </section>
   );

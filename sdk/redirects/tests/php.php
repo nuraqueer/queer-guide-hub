@@ -29,7 +29,7 @@ $api->updateLink($id,['comment'=>'SDK update','isEnabled'=>false]);check($api->g
 check($api->upsertLink(['slug'=>'sdk-php','target'=>'/updated'])['created']===false);check($api->countLinks(['ids'=>[$id]])['count']===1);
 check(count(iterator_to_array($api->iterateLinks(['search'=>'sdk-page-']),false))===101);
 $batch=$api->bulk([['operation'=>'update','id'=>$id,'data'=>['comment'=>'Batch']],['operation'=>'create','data'=>['target'=>'/events']]]);$api->deleteLink($batch['data'][1]['link']['id']);
-$lead=['clickId'=>getenv('REDIRECT_TEST_CLICK'),'customerExternalId'=>'php','eventId'=>'sdk-lead:php'];$api->trackLead($lead);check($api->trackLead($lead)['duplicate']===true);
+$lead=['clickId'=>getenv('REDIRECT_TEST_CLICK'),'customerExternalId'=>'sdk:php/customer & ü','eventId'=>'sdk-lead:php'];$api->trackLead($lead);check($api->trackLead($lead)['duplicate']===true);
 $api->trackSale(array_merge($lead,['eventId'=>'sdk-sale:php','amount'=>'49.900001','currency'=>'CHF']));
 check($api->analytics(['country'=>'CH'])['totals']);check(count($api->events([],['limit'=>1])['data'])===1);
 $api->deleteLink($id);foreach ([['folders',$folder],['tags',$tag],['templates',$template]] as [$kind,$item]) $api->deleteResource($kind,$item['id']);
@@ -66,3 +66,12 @@ $emptyReport=$account->createReport(['name'=>'PHP all-link filters','filters'=>[
 $emptyReport=$account->updateReport($emptyReport['id'],['version'=>$emptyReport['version'],'filters'=>[]]);
 check(is_array($account->runReport($emptyReport['id'])['totals']));
 $account->deleteReport($emptyReport['id']);
+
+$customer=$api->getCustomer($lead['customerExternalId']);check($customer['version']===null&&$customer['canEdit']);
+$customer=$api->updateCustomer($lead['customerExternalId'],['version'=>null,'name'=>'SDK PHP identity','email'=>'php@example.com','avatarUrl'=>'https://example.com/avatar.png']);
+check($api->getCustomer($lead['customerExternalId'])['name']==='SDK PHP identity');
+reportError(fn()=>$api->updateCustomer($lead['customerExternalId'],['version'=>null,'name'=>'Stale identity']),409);
+$page=$api->customerJourney($lead['customerExternalId'],1);check(count($page['data'])===1&&$page['nextCursor']);check(count($api->customerJourney($lead['customerExternalId'],1,$page['nextCursor'])['data'])===1);
+$identityVersion=$customer['version'];$customer=$api->clearCustomer($lead['customerExternalId'],$identityVersion);
+check($customer['name']===null&&$customer['email']===null&&$customer['avatarUrl']===null&&$customer['version']!==$identityVersion);
+check(count($api->customerJourney($lead['customerExternalId'])['data'])===3);

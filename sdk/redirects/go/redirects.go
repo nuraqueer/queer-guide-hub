@@ -300,3 +300,26 @@ func (c *Client) ReadPublicReport(ctx context.Context, data Object) (Object, err
 	}
 	return c.Request(ctx, method, "/public-report", data, nil)
 }
+
+func (c *Client) GetCustomer(ctx context.Context, id string) (Object, error) {
+	return c.Request(ctx, "GET", "/customers/profile", nil, Object{"id": id})
+}
+func (c *Client) UpdateCustomer(ctx context.Context, id string, data Object) (Object, error) {
+	body := Object{"customerExternalId": id}
+	for key, value := range data {
+		if key != "customerExternalId" {
+			body[key] = value
+		}
+	}
+	return c.Request(ctx, "PATCH", "/customers/profile", body, nil)
+}
+func (c *Client) ClearCustomer(ctx context.Context, id string, version any) (Object, error) {
+	return c.Request(ctx, "DELETE", "/customers/profile", Object{"customerExternalId": id, "version": version}, nil)
+}
+func (c *Client) CustomerJourney(ctx context.Context, id string, limit int, cursor Object) (Object, error) {
+	query := Object{"id": id, "limit": limit}
+	if cursor != nil {
+		query["cursor"] = cursor
+	}
+	return c.Request(ctx, "GET", "/customers/journey", nil, query)
+}

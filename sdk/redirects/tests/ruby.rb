@@ -29,7 +29,7 @@ check(api.upsert_link({slug:'sdk-ruby',target:'/updated'})['created']==false)
 check(api.count_links({ids:[id]})['count']==1)
 check(api.iterate_links({search:'sdk-page-'}).to_a.length==101)
 batch=api.bulk([{operation:'update',id:id,data:{comment:'Batch'}},{operation:'create',data:{target:'/events'}}]);api.delete_link(batch['data'][1]['link']['id'])
-lead={clickId:ENV.fetch('REDIRECT_TEST_CLICK'),customerExternalId:'ruby',eventId:'sdk-lead:ruby'}
+lead={clickId:ENV.fetch('REDIRECT_TEST_CLICK'),customerExternalId:'sdk:ruby/customer & ü',eventId:'sdk-lead:ruby'}
 api.track_lead(lead);check(api.track_lead(lead)['duplicate']==true)
 api.track_sale(lead.merge(eventId:'sdk-sale:ruby',amount:'49.900001',currency:'CHF'))
 check(api.analytics({country:'CH'})['totals']);check(!api.events({},limit:1)['data'].empty?)
@@ -63,3 +63,12 @@ report_error(401){protected.read_public_report}
 check(protected.read_public_report({password:'sdk-report-password'})['report']['revenue'][0]['amount'].is_a?(String))
 check(account.delete_report(report['id'])['deleted']);report_error(404){protected.read_public_report({password:'sdk-report-password'})}
 account.delete_report(second['id'])
+
+customer=api.get_customer(lead[:customerExternalId]);check(customer['version'].nil?&&customer['canEdit'])
+customer=api.update_customer(lead[:customerExternalId],{version:nil,name:'SDK Ruby identity',email:'ruby@example.com',avatarUrl:'https://example.com/avatar.png'})
+check(api.get_customer(lead[:customerExternalId])['name']=='SDK Ruby identity')
+report_error(409){api.update_customer(lead[:customerExternalId],{version:nil,name:'Stale identity'})}
+page=api.customer_journey(lead[:customerExternalId],limit:1);check(page['data'].length==1&&page['nextCursor']);check(api.customer_journey(lead[:customerExternalId],limit:1,cursor:page['nextCursor'])['data'].length==1)
+identity_version=customer['version'];customer=api.clear_customer(lead[:customerExternalId],identity_version)
+check(customer['name'].nil?&&customer['email'].nil?&&customer['avatarUrl'].nil?&&customer['version']!=identity_version)
+check(api.customer_journey(lead[:customerExternalId])['data'].length==3)

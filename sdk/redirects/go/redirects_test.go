@@ -118,7 +118,7 @@ func TestSDKIntegration(t *testing.T) {
 	rows := batch["data"].([]any)
 	extra := rows[1].(map[string]any)["link"].(map[string]any)["id"].(string)
 	must(api.DeleteLink(ctx, extra))
-	lead := Object{"clickId": os.Getenv("REDIRECT_TEST_CLICK"), "customerExternalId": "go", "eventId": "sdk-lead:go"}
+	lead := Object{"clickId": os.Getenv("REDIRECT_TEST_CLICK"), "customerExternalId": "sdk:go/customer & ü", "eventId": "sdk-lead:go"}
 	must(api.TrackLead(ctx, lead))
 	if must(api.TrackLead(ctx, lead))["duplicate"] != true {
 		t.Fatal("Retry dedupe failed")
@@ -231,5 +231,32 @@ func TestSDKIntegration(t *testing.T) {
 	_, err = protected.ReadPublicReport(ctx, Object{"password": "sdk-report-password"})
 	expectStatus(err, 404)
 	must(account.DeleteReport(ctx, second["id"].(string)))
+
+	customerID := lead["customerExternalId"].(string)
+	customer := must(api.GetCustomer(ctx, customerID))
+	if customer["version"] != nil || customer["canEdit"] != true {
+		t.Fatal("Invalid initial profile")
+	}
+	customer = must(api.UpdateCustomer(ctx, customerID, Object{"version": nil, "name": "SDK Go identity", "email": "go@example.com", "avatarUrl": "https://example.com/avatar.png"}))
+	if must(api.GetCustomer(ctx, customerID))["name"] != "SDK Go identity" {
+		t.Fatal("Identity not saved")
+	}
+	_, err = api.UpdateCustomer(ctx, customerID, Object{"version": nil, "name": "Stale identity"})
+	expectStatus(err, 409)
+	customerPage := must(api.CustomerJourney(ctx, customerID, 1, nil))
+	if len(customerPage["data"].([]any)) != 1 || customerPage["nextCursor"] == nil {
+		t.Fatal("Missing customer page")
+	}
+	if len(must(api.CustomerJourney(ctx, customerID, 1, customerPage["nextCursor"].(map[string]any)))["data"].([]any)) != 1 {
+		t.Fatal("Second customer page missing")
+	}
+	identityVersion := customer["version"]
+	customer = must(api.ClearCustomer(ctx, customerID, identityVersion))
+	if customer["name"] != nil || customer["email"] != nil || customer["avatarUrl"] != nil || customer["version"] == identityVersion {
+		t.Fatal("Identity clear failed")
+	}
+	if len(must(api.CustomerJourney(ctx, customerID, 100, nil))["data"].([]any)) != 3 {
+		t.Fatal("Identity clear removed events")
+	}
 
 }

@@ -1,3 +1,4 @@
+import {customerId,customerProfileInput,customerPage} from '../_shared/redirect-customers.ts';
 import {createQrImageToken,qrImageLinkInput,qrImageRevokeInput,qrImageUrls,publicQrImageRequest,storeQrImageArtwork} from '../_shared/redirect-qr-images.ts';
 import {qrAssetStorageConfig,qrLogoInput,storeRedirectQrLogo,qrLogoPublicResponse} from '../_shared/redirect-qr-assets.ts';
 import {qrStylePreferenceInput} from '../_shared/redirect-qr-style.ts';
@@ -263,6 +264,61 @@ Deno.serve(async (req: Request) => {
    else if(id&&!endpoint&&req.method==='PATCH'){action='patch';values=domainInput(await boundedJson(req,16384),'patch');}
    else if(id&&!endpoint&&req.method==='DELETE'){action='delete';values=domainInput(await boundedJson(req,16384),'version');}else return json({error:'Method not supported'},405);
    const result=await db.rpc('redirect_domain_resource',{p_action:action,p_actor:user!.id,p_id:id??null,p_values:values,p_limit:limit,p_after:after});if(result.error)return rpcError(result.error);return json(action==='list'?{...result.data,providerSetup:{configured:providerConfig!==null,cnameTarget:providerConfig?.cnameTarget??null}}:result.data,action==='create'?201:200);
+  }
+  if (path === '/customers/profile' || path === '/customers/journey') {
+    const read = req.method === 'GET';
+    if (!read && (path !== '/customers/profile' || !['PATCH', 'DELETE'].includes(req.method)))
+      return json({ error: 'Method not supported' }, 405);
+    const scope = read ? 'events:read' : 'links:write';
+    let principalId: string | null = null;
+    if (tokenCredential) {
+      const auth = await db.rpc('authenticate_redirect_api_token', {
+        p_hash: await tokenDigest(credential),
+        p_scope: scope,
+      });
+      if (auth.error) return rpcError(auth.error);
+      if (!auth.data) return json({ error: 'Customer scope is required' }, 403);
+      principalId = auth.data.id;
+    } else {
+      const principal = await sessionPrincipal(scope);
+      if (principal.failure) return principal.failure;
+      principalId = principal.id;
+    }
+    const q = new URL(req.url).searchParams;
+    if (path === '/customers/journey') {
+      const page = customerPage(q);
+      const { data, error } = await db.rpc('redirect_customer_events', {
+        p_customer: page.id,
+        p_actor: user?.id ?? null,
+        p_principal: principalId,
+        p_after_at: page.cursor?.at ?? null,
+        p_after_id: page.cursor?.id ?? null,
+        p_limit: page.limit,
+      });
+      if (error) return rpcError(error);
+      return json(data);
+    }
+    let id: string,
+      values: Record<string, unknown> = {};
+    if (read) {
+      if ([...q.keys()].some((key) => key !== 'id' || q.getAll(key).length !== 1))
+        return json({ error: 'Provide only a customer ID' }, 400);
+      id = customerId(q.get('id'));
+    } else {
+      if (q.size) return json({ error: 'Profile writes do not accept query fields' }, 400);
+      const input = customerProfileInput(await boundedJson(req, 4096), req.method === 'DELETE');
+      id = input.id;
+      values = input.values;
+    }
+    const { data, error } = await db.rpc('redirect_customer_profile', {
+      p_action: read ? 'get' : req.method === 'DELETE' ? 'clear' : 'patch',
+      p_customer: id,
+      p_actor: user?.id ?? null,
+      p_principal: principalId,
+      p_values: values,
+    });
+    if (error) return rpcError(error);
+    return json(data);
   }
   const reports=path.match(/^\/reports(?:\/([a-f0-9-]{36}))?(?:\/(run|shares)(?:\/([a-f0-9-]{36}))?)?$/i);
   if(reports){

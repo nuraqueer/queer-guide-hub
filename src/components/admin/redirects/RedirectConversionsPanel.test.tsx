@@ -20,13 +20,28 @@ vi.mock('@/integrations/supabase/untyped', () => ({
   },
   untypedRpc: async () => ({ data: null, error: { message: 'journey read denied' } }),
 }));
+vi.mock('@/hooks/useAuth', () => ({ useAuth: () => ({ user: { id: 'customer-owner' } }) }));
+vi.mock('@/lib/redirects/memberApi', () => ({
+  memberRedirectApi: async (path: string) => {
+    if (path.includes('/customers/profile'))
+      return {
+        customerExternalId: 'customer-a',
+        name: null,
+        email: null,
+        avatarUrl: null,
+        version: null,
+        canEdit: false,
+      };
+    throw new Error('journey read denied');
+  },
+}));
 const client = () =>
   new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
 describe('conversion report and journey', () => {
   it('shows real currency totals and a chronological cross-link customer journey', async () => {
     const cache = client();
     cache.setQueryData(
-      ['redirect-conversion-report', 'link', '30'],
+      ['redirect-conversion-report', 'customer-owner', 'link', '30'],
       [
         {
           id: 'lead',
@@ -60,7 +75,7 @@ describe('conversion report and journey', () => {
         },
       ],
     );
-    cache.setQueryData(['redirect-customer-journey', 'customer-a'], {
+    cache.setQueryData(['redirect-customer-journey', 'customer-owner', 'customer-a'], {
       pages: [
         {
           data: [

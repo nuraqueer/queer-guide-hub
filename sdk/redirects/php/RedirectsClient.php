@@ -61,6 +61,10 @@ final class RedirectsClient {
     public function trackSale(array $data): array {return $this->request('POST','/track/sale',$data);}
     public function analytics(array $filters=[]): array {return $this->request('GET','/analytics',null,['filters'=>(object)$filters]);}
     public function events(array $filters=[],array $options=[]): array {return $this->request('GET','/events',null,array_merge($options,['filters'=>(object)$filters]));}
+    public function getCustomer(string $id): array {return $this->request('GET','/customers/profile',null,['id'=>$id]);}
+    public function updateCustomer(string $id,array $data): array {return $this->request('PATCH','/customers/profile',array_merge($data,['customerExternalId'=>$id]));}
+    public function clearCustomer(string $id,?string $version): array {return $this->request('DELETE','/customers/profile',['customerExternalId'=>$id,'version'=>$version]);}
+    public function customerJourney(string $id,int $limit=50,?array $cursor=null): array {return $this->request('GET','/customers/journey',null,['id'=>$id,'limit'=>$limit,'cursor'=>$cursor]);}
     public function createReport(array $data): array {if (isset($data['filters']) && is_array($data['filters'])) $data['filters']=(object)$data['filters'];return $this->request('POST','/reports',$data);}
     public function getReport(string $id): array {return $this->request('GET','/reports/'.rawurlencode($id));}
     public function listReports(int $limit=50,?string $cursor=null): array {return $this->request('GET','/reports',null,['limit'=>$limit,'cursor'=>$cursor]);}

@@ -29,11 +29,11 @@ exist. Existing local tools are a foundation, not proof of parity or deployment.
 | Password links | Password challenge, hashed secret, no disclosure/bypass, scoped access | Partial: hashed protection, atomic attempt throttling and signed IP relay; custom password logo pending |
 | Expiration | Date and expired destination URL, live enforcement without stale cached rules | Candidate: date/phrase parser, custom fallback and live enforcement tested |
 | Link cloaking | Explicit iframe mode with accurate iframe limitations, standard redirect fallback | Candidate: HTTPS guarded iframe wrapper and persistent direct fallback; runtime release pending |
-| Branded QR | Dots square/circle/joined; marker center square/circle; border square/rounded/circle; colors | Partial: dot/marker/color controls, saved workspace/domain appearance and logos, scoped individual/bulk defaults and scan verification implemented locally; hosted-image authoring/integration and release pending |
-| QR logos/export | Workspace/domain/logo precedence and hide; SVG/PNG/JPG; clipboard image and image URL | Partial: saved/local logos, PNG/JPG/SVG and clipboard exports, durable logo assets/editor/cleanup implemented locally; server image-rendering service implemented locally; revocable live hosted-image profiles and five-SDK methods implemented locally; per-image custom artwork implemented locally; UI/release pending |
+| Branded QR | Dots square/circle/joined; marker center square/circle; border square/rounded/circle; colors | Partial: dot/marker/color controls, saved workspace/domain appearance and logos, scoped individual/bulk defaults and scan verification implemented locally; hosted-image publication/copy/revoke UI and five SDKs implemented locally; release pending |
+| QR logos/export | Workspace/domain/logo precedence and hide; SVG/PNG/JPG; clipboard image and image URL | Partial: saved/local logos, PNG/JPG/SVG and clipboard exports, durable logo assets/editor/cleanup implemented locally; server image-rendering service implemented locally; revocable live hosted-image profiles and five-SDK methods implemented locally; per-image custom artwork and publication/copy/revoke UI implemented locally; release pending |
 | Click analytics | Real-time totals/time series, custom date/filter/export, countries/cities/devices/browsers/OS/referrers | Candidate: SQL totals/time series, date/dimension filters, export and bounded live refresh; release pending |
 | Conversion tracking | Click attribution, leads/signup/sale/revenue, trusted conversion ingestion and application hooks | Candidate: scoped ingestion, consented signup and verified Stripe hooks implemented locally |
-| Customer insights | Customer journey across click→lead→sale with private event timeline | Partial: private ID-based cross-link paginated journeys; identity enrichment missing |
+| Customer insights | Customer journey across click→lead→sale with private event timeline | Candidate: private versioned name/email/avatar enrichment, scoped chronological journey API/UI and five SDKs implemented locally; production release pending |
 | Live events | Paginated live click/lead/sale stream, real events rather than demo data | Candidate: private click/lead/sale activity with keyset pages and five-second refresh |
 | Shared dashboards | Revocable scoped sharing, sanitized aggregate-only default | Candidate: saved snapshots, explicit dynamic folders, password/expiry/revoke, aggregate-only UI, date selection and live opt-in indexing implemented locally; runtime release pending |
 | Custom reports | Custom dates, granular link/folder/tag/domain/geo/device/event filters | Partial: date/dimension report UI/API, personal saved definitions and scoped sharing implemented locally; team discovery and runtime release pending |
@@ -1827,3 +1827,52 @@ reports stay aggregate-only and never include profiles. Trusted applications can
 supply consented identity through the API; no implicit disclosure during tracking.
 Verify real SQL scope/version/clear/private grants and actual owner/member/key
 HTTP plus five native SDKs, focused UI races/conflicts and desktop/mobile browser.
+
+
+### Customer identity and scoped journeys checkpoint
+
+Implemented service-only RLS profiles for existing external customer IDs, with
+versioned optional name/email/HTTPS avatar, current actor/key/member validation,
+scoped reads and identity-only clear. Writes require events:read plus links:write
+and edit access to every attributed link; partial grants and viewers cannot alter
+shared identity. Customer attribution and profile scope checks serialize per
+customer. Clear advances the version and preserves journeys. Anchor deletion
+cascades identity removal; explicit later enrichment can re-anchor to a remaining
+conversion without restoring erased fields. Profile fields never enter public
+report DTOs, redirect payloads or event exports; there is no backend avatar fetch.
+
+GET/PATCH/DELETE /customers/profile and chronological GET /customers/journey use
+opaque IDs in encoded query/body fields and bounded paired cursors. All five SDKs
+expose profile get/update/clear and journey methods, including exact response types
+in TypeScript. The conversion panel and analytics activity table open the same
+private profile/journey surface. Editing prefills identity and captures a version;
+conflicts require discard/reload. Clearing is confirmed and preserves the timeline.
+Account/customer changes remount drafts and abort reads, query keys include the
+account, denied refreshes hide old identity, and anonymous no-referrer avatars
+fall back safely. Conversion cache keys now include the current account as well.
+
+Evidence: full migrated platform SQL passes including profile/private grants,
+unknown identity, stale insert/edit/clear resurrection denial, partial key/member
+edits, impersonation, viewer caps, scoped hidden-source exclusion, chronological
+cursor pages, unsafe input, current-key revoke, FK erase and explicit safe
+re-enrichment. All five native SDKs/examples pass through actual HTTP/migrated SQL;
+new methods exercise opaque UTF-8 IDs with colon/slash/ampersand, stale versions,
+pages and identity-only clearing. Real HTTP additionally moves a customer sale to
+a hidden link, proves partial-grant edit denial and scoped exclusion, restores the
+fixture and proves public reports exclude stored name/email. Twelve focused tests
+across four files pass, covering input/cursor bounds, returned-identity guards,
+prefill/background version conflict, clear, late saves after account remount,
+denied-refresh hiding and anonymous avatar fallback. Targeted lint/format and
+strict SDK TS pass. App ratchet remains 704 inherited errors, none new; build passes
+(32.29s). All 2,283 migration versions and Postgres 17 grammar/body checks pass.
+Desktop/mobile browser fixtures verify edit/save, viewer permissions and identity
+clear while retaining visits/leads/sales, with no horizontal overflow at 390px.
+API is simulated there; CSP/fetch block remote requests. Shared evidence images:
+outputs/redirect-dub-parity/customer-identity-desktop.png,
+customer-identity-mobile.png and customer-identity-cleared-mobile.png. Tab closed
+and viewport reset. No production/schema/provider writes or publication occurred.
+
+Customer enrichment is implemented locally. Continue through signed outgoing
+webhooks, Segment/GTM, native/deferred deep links, branded password pages, domain
+lifecycle/DNS automation, team/account/invites/all-source permissions and controlled
+infrastructure release plus SDK publication. The full goal remains active.

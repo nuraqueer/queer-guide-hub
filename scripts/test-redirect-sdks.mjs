@@ -23,6 +23,7 @@ const pieces = [
   '_shared/redirect-links.ts',
   '_shared/redirect-manual-records.ts',
   '_shared/redirect-analytics.ts',
+  '_shared/redirect-customers.ts',
   '_shared/redirect-relay.ts',
   '_shared/redirect-reports.ts',
   'redirect-api/index.ts',
@@ -583,9 +584,30 @@ try {
   console.log('Domain choices/primary: real HTTP proves ready-only public fields, key read scope, owner-only preference, stale-write conflicts, disconnected default warning and FK/version cleanup.');
 
   console.log('Domain registry: real HTTP handler → migrated SQL → isolated DNS response, fresh ownership, cooldown before DNS, lost proof, versioned defaults/deletion and key rejection passed; no DNS/provider writes.');
+  const identityCustomer=(await db.query("SELECT customer_key FROM public.redirect_link_customers WHERE customer_key LIKE 'sdk:%/customer & ü' ORDER BY customer_key LIMIT 1")).rows[0].customer_key;
+  const identityPath='/customers/profile?id='+encodeURIComponent(identityCustomer);
+  let identityProfile=await reportRequest(identityPath);
+  identityProfile=await reportRequest('/customers/profile','PATCH',{customerExternalId:identityCustomer,version:identityProfile.version,name:'PRIVATE_IDENTITY_HTTP',email:'private-identity@example.com'});
+  const privateIdentityVersion=identityProfile.version;
+  await reportRequest('/customers/profile','PATCH',{customerExternalId:identityCustomer,version:null,name:'Stale HTTP'},undefined,409);
+  await reportRequest('/customers/profile','PATCH',{customerExternalId:identityCustomer,version:privateIdentityVersion,avatarUrl:'https://127.0.0.1/logo.png'},undefined,400);
+  const hiddenIdentityLink=(await db.query("INSERT INTO public.redirects(type,slug,target) VALUES('SHORT','identity-hidden-http','https://example.com/hidden') RETURNING id")).rows[0].id;
+  const hiddenIdentityClick=(await db.query("SELECT public.record_redirect_visit($1,'/go/identity-hidden-http',NULL,NULL,'Fixture','CH',NULL,302,NULL,'https://example.com/hidden') AS id",[hiddenIdentityLink])).rows[0].id;
+  const movedIdentitySale=(await db.query("UPDATE public.redirect_link_conversions SET click_id=$1 WHERE customer_key=$2 AND kind='sale' RETURNING id",[hiddenIdentityClick,identityCustomer])).rows[0].id;
+  await db.query('UPDATE public.redirect_api_tokens SET redirect_ids=$1 WHERE token_hash=$2',[[seed.rows[0].id],digest]);
+  if((await reportRequest(identityPath,'GET',undefined,token)).canEdit!==false)throw new Error('Partial customer HTTP key can edit identity');
+  await reportRequest('/customers/profile','PATCH',{customerExternalId:identityCustomer,version:privateIdentityVersion,name:'Partial scope'},token,403);
+  const scopedJourney=await reportRequest('/customers/journey?id='+encodeURIComponent(identityCustomer),'GET',undefined,token);
+  if(JSON.stringify(scopedJourney).includes('/go/identity-hidden-http'))throw new Error('Customer journey HTTP leaked a hidden source');
+  await db.query('UPDATE public.redirect_api_tokens SET redirect_ids=$1 WHERE token_hash=$2',[[hiddenIdentityLink],digest]);
+  await reportRequest('/customers/profile?id='+encodeURIComponent('unknown customer'),'GET',undefined,token,404);
+  await db.query('UPDATE public.redirect_api_tokens SET redirect_ids=NULL WHERE token_hash=$1',[digest]);
+  await db.query('UPDATE public.redirect_link_conversions SET click_id=$1 WHERE id=$2',[click.rows[0].id,movedIdentitySale]);
+  await db.query('DELETE FROM public.redirects WHERE id=$1',[hiddenIdentityLink]);
   const saved=await reportRequest('/reports','POST',{name:'Native HTTP report',filters:{linkIds:[seed.rows[0].id]}},undefined,201);
   const plain=await reportRequest('/reports/'+saved.id+'/shares','POST',{title:'Clicks only',reportVersion:saved.version,expiresAt:null},undefined,201);
   const published=await reportRequest('/public-report','GET',undefined,'qg_report_'+plain.id);
+  if(JSON.stringify(published).includes('PRIVATE_IDENTITY_HTTP')||JSON.stringify(published).includes('private-identity@example.com'))throw new Error('Public report leaked customer identity');
   if(published.allowIndexing!==false||published.report.totals.clicks!==1||'leads' in published.report.totals||published.report.revenue.length||JSON.stringify(published).includes('sdk-attribution'))throw new Error('Public report exposed private/conversion fields');
   const indexedShare=await reportRequest('/reports/'+saved.id+'/shares','POST',{title:'Indexed HTTP publication',reportVersion:saved.version,allowIndexing:true,expiresAt:null},undefined,201);
   const indexedPublic=await reportRequest('/public-report','GET',undefined,'qg_report_'+indexedShare.id);
@@ -606,6 +628,9 @@ try {
   if(protectedDates.report.totals.sales!==0)throw new Error('Password-protected date filtering failed');
   await reportRequest('/reports/'+saved.id+'/shares/'+guarded.id,'DELETE');
   await reportRequest('/public-report','POST',{password:'fixture-report-password'},'qg_report_'+guarded.id,404);
+  const clearedIdentity=await reportRequest('/customers/profile','DELETE',{customerExternalId:identityCustomer,version:privateIdentityVersion});
+  if(clearedIdentity.name!==null||clearedIdentity.email!==null||clearedIdentity.version===privateIdentityVersion)throw new Error('HTTP identity clear failed');
+  console.log('Private customer profiles: five native SDK methods, opaque UTF-8 IDs, scoped chronological pages, partial-grant edit denial, stale writes, private public-report boundary and identity-only clear passed.');
   console.log('Saved/share/public reports: real HTTP → edge handler → migrated PostgreSQL, real password verification, sanitized totals and revocation passed');
   console.log(
     'Five SDKs passed; no external API calls, credentials, payments or production schema were used.',

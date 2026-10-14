@@ -32,7 +32,7 @@ assert.equal((await api.countLinks({ids:[id]})).count,1);
 let count=0;for await(const row of api.iterateLinks({search:'sdk-page-'})){assert.match(row.slug,/^sdk-page-/);count++;}assert.equal(count,101);
 const batch=await api.bulk([{operation:'update',id,data:{comment:'Batch'}},{operation:'create',data:{target:'/events'}}]);
 await api.deleteLink(batch.data[1].link.id);
-const lead={clickId:process.env.REDIRECT_TEST_CLICK,customerExternalId:'typescript',eventId:'sdk-lead:typescript'};
+const lead={clickId:process.env.REDIRECT_TEST_CLICK,customerExternalId:'sdk:typescript/customer & ü',eventId:'sdk-lead:typescript'};
 await api.trackLead(lead);assert.equal((await api.trackLead(lead)).duplicate,true);
 await api.trackSale({...lead,eventId:'sdk-sale:typescript',amount:'49.900001',currency:'CHF'});
 assert.ok((await api.analytics({country:'CH'})).totals);
@@ -68,3 +68,13 @@ assert.equal(typeof(await guardedReader.readPublicReport({password:'sdk-report-p
 assert.equal((await account.deleteReport(report.id)).deleted,true);
 await assert.rejects(guardedReader.readPublicReport({password:'sdk-report-password'}),error=>error.status===404);
 await account.deleteReport(report2.id);
+
+let customer=await api.getCustomer(lead.customerExternalId);assert.equal(customer.version,null);assert.equal(customer.canEdit,true);
+customer=await api.updateCustomer(lead.customerExternalId,{version:null,name:'SDK TS identity',email:'typescript@example.com',avatarUrl:'https://example.com/avatar.png'});
+assert.equal((await api.getCustomer(lead.customerExternalId)).name,'SDK TS identity');
+await assert.rejects(api.updateCustomer(lead.customerExternalId,{version:null,name:'Stale identity'}),error=>error.status===409);
+let customerPage=await api.customerJourney(lead.customerExternalId,1);assert.equal(customerPage.data.length,1);assert.ok(customerPage.nextCursor);
+assert.equal((await api.customerJourney(lead.customerExternalId,1,customerPage.nextCursor)).data.length,1);
+const identityVersion=customer.version;customer=await api.clearCustomer(lead.customerExternalId,identityVersion);
+assert.equal(customer.name,null);assert.equal(customer.email,null);assert.equal(customer.avatarUrl,null);assert.notEqual(customer.version,identityVersion);
+assert.equal((await api.customerJourney(lead.customerExternalId)).data.length,3);

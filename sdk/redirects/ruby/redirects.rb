@@ -68,6 +68,10 @@ module QueerGuide
     def track_sale(data); request('POST','/track/sale',data); end
     def analytics(filters={}); request('GET','/analytics',nil,{filters:filters}); end
     def events(filters={},**options); request('GET','/events',nil,options.merge(filters:filters)); end
+    def get_customer(id); request('GET','/customers/profile',nil,{id:id}); end
+    def update_customer(id,data); request('PATCH','/customers/profile',data.merge(customerExternalId:id)); end
+    def clear_customer(id,version); request('DELETE','/customers/profile',{customerExternalId:id,version:version}); end
+    def customer_journey(id,limit:50,cursor:nil); request('GET','/customers/journey',nil,{id:id,limit:limit,cursor:cursor}); end
     def create_report(data); request('POST','/reports',data); end
     def get_report(id); request('GET','/reports/'+URI.encode_www_form_component(id)); end
     def list_reports(limit:50,cursor:nil); request('GET','/reports',nil,{limit:limit,cursor:cursor}); end

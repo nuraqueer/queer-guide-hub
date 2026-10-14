@@ -273,3 +273,37 @@ revocation and deletion cascade through the actual handler/migrated PostgreSQL.
 PHP additionally checks empty filter/date objects. Report records are cleaned
 before the rest of the suite runs. These remain local SDK sources and require
 controlled API rollout and package publication before release.
+
+
+## Customer identity and journeys
+
+All five clients expose getCustomer(id), updateCustomer(id, data),
+clearCustomer(id, version) and customerJourney(id, limit, cursor), with their
+usual snake_case / Go method naming. IDs are opaque UTF-8 text and are sent in
+encoded query/body fields, so slashes, colons, spaces and ampersands are supported.
+Journey cursors are objects containing at and id, not link-list UUID cursors.
+
+Read requires events:read and a currently visible attributed link. Profile edits
+and clearing additionally require links:write and edit access to every customer
+link, preserving shared identity across folder/ID restrictions. Writes take the
+current UUID version, or null for the first enrichment, and optional name/email/
+avatarUrl fields. Blank/null clears a field. Clear removes only identity and
+advances the version; it preserves visits/conversions. Conflicts return 409.
+Profiles and journeys remain private; public dashboard DTOs never include them.
+
+```ts
+let customer = await api.getCustomer(externalCustomerId);
+customer = await api.updateCustomer(externalCustomerId, {
+  version: customer.version, name: 'Avery', email: 'avery@example.com',
+});
+const page = await api.customerJourney(externalCustomerId, 50);
+await api.clearCustomer(externalCustomerId, customer.version);
+```
+
+Supply identity only through explicit application calls with appropriate consent.
+There is no automatic scrape/enrichment, avatar fetch or implicit public sharing.
+Native tests verify all four methods, encoded IDs, version conflicts, cursor
+pages, identity-only clearing and preserved journeys against the real API/SQL.
+The HTTP fixture additionally proves partial-grant edit denial, hidden-source
+exclusion and public-report identity isolation. See the conversion guide for the
+service-only table, deletion lifecycle, profile limits and UI behavior.

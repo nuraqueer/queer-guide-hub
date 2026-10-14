@@ -128,3 +128,45 @@ Primary references: [Dub attribution](https://github.com/dubinc/docs/blob/main/d
 [Stripe fulfillment](https://docs.stripe.com/checkout/fulfillment?payment-ui=stripe-hosted),
 [Stripe currency rules](https://docs.stripe.com/currencies),
 [Stripe three-decimal support](https://support.stripe.com/questions/which-payments-methods-and-products-are-available-in-the-uae).
+
+
+## Private customer identity
+
+Customer profiles attach optional name, email and public HTTPS avatar URL to an
+existing recorded external customer ID. They are private to the workspace’s
+current permitted analytics readers and do not enter public reports, events
+exports or the redirect payload. An avatar loads anonymously without a referrer;
+the backend never fetches its URL. Trusted applications can supply consented
+identity explicitly; tracking a lead/sale does not automatically publish identity.
+
+GET /customers/profile?id=<encoded external ID> requires events:read and a
+visible visit/conversion. The response includes customerExternalId, name, email,
+avatarUrl, version, updatedAt and canEdit. PATCH /customers/profile takes
+customerExternalId, current version (null for first enrichment), and any identity
+fields; empty text/null clears a field. A name is at most 120 characters, email
+254 and avatar URL 2048. DELETE /customers/profile takes only customerExternalId
+and version and clears identity while preserving events, attribution and a new
+version. Stale edits, including stale drafts after clearing, return 409.
+
+Writes require links:write plus events:read and edit authority over every link
+attributed to the customer. Partial keys/members can read a visible customer and
+only their scoped journey, but cannot change an identity shared with hidden links.
+Viewers cannot edit, and current role/key/member/folder restrictions are checked
+under the existing ACL lock. Customer attribution/profile changes serialize per
+customer. Profiles live in a service-only RLS table; direct authenticated/anonymous
+Data API access is denied. Deleting the original attribution anchor erases the
+profile through FK cascade. A later explicit enrichment can re-anchor to a
+remaining recorded conversion; old identity fields are not restored.
+
+GET /customers/journey?id=<encoded external ID>&limit=50&cursor=<JSON {at,id}>
+returns chronological scoped click/lead/sale pages. No caller can override link
+scope. All five SDKs provide getCustomer/updateCustomer/clearCustomer/customerJourney
+(or snake_case / Go names). The analytics activity table opens the profile/journey,
+and the existing lead/sale panel uses the same account-scoped interface. Editing
+prefills identity and captures its version; conflicts require discard/reload.
+Clearing is explicitly confirmed and preserves the timeline. Account/customer
+changes abort reads and reset drafts, and denied refreshes hide stale identity.
+
+This flow is locally implemented and verified through migrated SQL, actual HTTP,
+five native SDKs, UI races/conflicts and desktop/mobile browser fixtures. It still
+requires controlled production schema/handler/frontend rollout.
