@@ -592,3 +592,17 @@ outputs directory. The mobile page fits 390 pixels without horizontal overflow.
 No production reports, shares or grants were created. Public indexing opt-in,
 viewer date overrides, team report discovery, report SDK methods and production
 release remain open alongside the full requirements ledger above.
+
+### Next extension: viewer date selection
+
+Within the approved dashboard parity scope, public viewers can select preset or
+custom UTC dates and reset to the captured report dates. Changing a public date
+range must never widen a saved start/end boundary or change link, folder, tag,
+conversion or private dimension filters. Unbounded published boundaries allow
+selection on that side. The server validates ISO instants and positive intervals,
+returns only the public date bounds/selection, and performs the same password,
+view budget, permission, version, expiry and revocation checks for every read.
+Date inputs stay in a bounded POST body with passwords; none enter public URLs.
+The existing aggregate grain stays fixed to the published report. Invalid dates
+produce an actionable error without displaying stale metrics. This increment
+does not settle the separate search-indexing option or production release.
