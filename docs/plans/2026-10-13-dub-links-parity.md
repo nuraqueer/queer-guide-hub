@@ -1656,3 +1656,36 @@ The overall goal remains active with domain lifecycle/DNS automation, native/
 deferred deep links, branded password pages, customer enrichment, report SDK/team
 discovery, integrations, outgoing webhooks, permissions/account discovery and
 controlled release/publication still required.
+
+
+### Hosted QR controls design
+
+Use the existing single-code export surface for publication; a separate settings
+page would disconnect the published image from its preview, and automatic
+publication on download would create unwanted public capabilities. Add an inline
+Hosted image section after local export actions. Explicit publish captures label,
+optional 30-day/one-year/unlimited lifetime, saved/live or explicit appearance,
+and inherited/hidden/local-custom artwork. Saved appearance follows future
+workspace/domain changes; explicit appearance stays fixed. Custom artwork is
+publicly hosted and never updates workspace/domain preferences. State that image
+URLs can be used by anyone who has them and are only returned once.
+
+Keep bearer URLs solely in component state, never query caches or query keys.
+After successful creation, fetch the fixed-origin PNG without credentials,
+redirects, cache or referrer, bound/decode/scan its bytes against the intended
+redirect URL, then enable PNG/JPG/SVG URL copying and show the verified preview.
+If hosted verification fails, preserve the created record and offer retry preview
+or revoke; never repeat the create request automatically. Freeze export edits
+while publishing. Account/URL/link selection changes remount the controls; late
+responses cannot appear in another scope. Use aborts and scoped cache keys.
+
+An explicit expandable management list shows all currently accessible image
+records, with labels, dates, publication/revoked/expired status and current-link
+indicator. Owners may see workspace records; other authors see their own. Use
+server cursor pagination and fail on repeated cursors. Never reconstruct lost
+bearers. Versioned revoke requires an inline confirmation describing the impact
+on embeds and preserving downloaded codes. Reload on conflict; keep captured
+versions during confirmation. Empty/loading/error/retry states and responsive
+labels use existing form, button and typography tokens. Broad approved scope
+covers this design; verify publication, failed previews, races, pagination and
+revocation in focused tests and a local desktop/mobile browser fixture.
