@@ -34,8 +34,8 @@ async function checkUrl(rawUrl: string): Promise<CheckResult> {
   try {
     assertPublicHttpUrl(url)
   } catch {
-    // Private/loopback/metadata target — permanently invalid as a content
-    // link, so let it ride the BROKEN → recheck → auto-remove path.
+    // Never request private/loopback/metadata targets. Retain the record for
+    // admin review; automatic removal requires a confirmed HTTP404/410.
     return { status: 'BROKEN', httpStatus: null, finalUrl: null, error: 'Blocked unsafe URL (SSRF guard)' }
   }
 
@@ -216,7 +216,7 @@ Deno.serve(async (req: Request) => {
           // Transient history cannot count toward confirmed-dead removal.
           console.log(`[validate-links] Still broken: ${link.original_url} check_count ${previousCheckCount} → ${newCheckCount}`)
 
-          // If check_count reaches 4 after 3 failed rechecks → auto-remove
+          // Remove only after four confirmed-dead checks.
           if (mayRemoveContentLink(result.status, result.httpStatus, newCheckCount)) {
             console.log(`[validate-links] AUTO-REMOVING: ${link.original_url} after ${newCheckCount - 1} failed rechecks`)
             const { error: rpcErr } = await supabase.rpc('auto_remove_broken_link', { link_id: link.id })
