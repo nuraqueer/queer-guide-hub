@@ -27,6 +27,20 @@
  * whoever reads this output to ignore it, which is how the hotline check failed.
  * They are counted separately as UNVERIFIABLE and do not fail the run.
  *
+ * A FAILED CONNECTION IS NOT DEATH EITHER, for exactly the same reason, and this
+ * check called it death until 2026-10-14. A `fetch` that never completes — DNS,
+ * TLS, reset, timeout — yields no status at all, and the runner cannot tell a
+ * host that is gone from a host it merely could not reach. Measured: the Uganda
+ * Anti-Homosexuality Act PDF on `parliament.go.ug` was reported
+ * `HTTP 0 (fetch failed)` and hard-failed this gate on 10-13 and 10-14, while
+ * the SAME url had passed as `54 ok, 0 dead` on 10-10 and 10-11 and served a
+ * 991 KB application/pdf on demand throughout. A transport failure is therefore
+ * UNVERIFIABLE, not DEAD. A status FROM the server (404/410, or a soft-404 that
+ * lands on an error path) is evidence and still fails the run; a connection that
+ * never happened is the absence of evidence. The cost is stated rather than
+ * hidden: a host that truly vanishes now only warns, so read the unverifiable
+ * list — a url that is unreachable run after run is rot, not weather.
+ *
  * THE STATUS CODE CATCHES NOTHING ON THESE HOSTS — measured, not assumed. Every
  * one of the citation hosts answers a missing document with HTTP 200 and a
  * redirect to an error page:
@@ -101,12 +115,14 @@ async function probe(url) {
       }
       if (method === 'GET') return { state: 'dead', code: res.status, final: res.url }
     } catch (err) {
+      // No status came back at all, so the server said nothing about the
+      // document. Unreachable-from-CI, not gone — see the header note.
       if (method === 'GET') {
-        return { state: 'dead', code: 0, final: String(err?.message ?? err).slice(0, 80) }
+        return { state: 'unverifiable', code: 0, final: String(err?.message ?? err).slice(0, 80) }
       }
     }
   }
-  return { state: 'dead', code: 0, final: 'unreachable' }
+  return { state: 'unverifiable', code: 0, final: 'unreachable' }
 }
 
 const dead = []
@@ -138,7 +154,7 @@ for (const row of rows) {
       /* a malformed stored URL is already caught by the CHECK constraint */
     }
   } else if (r.state === 'unverifiable') {
-    unverifiable.push({ slug, url, code: r.code })
+    unverifiable.push({ slug, url, code: r.code, note: r.final })
   } else {
     dead.push({ slug, url, code: r.code, note: r.final })
   }
@@ -147,8 +163,18 @@ for (const row of rows) {
 console.log(`legal citations: ${rows.length} checked — ${ok} ok, ${unverifiable.length} unverifiable, ${dead.length} dead`)
 
 if (unverifiable.length) {
-  console.log('\nUnverifiable from CI (bot challenge — open in a browser to confirm):')
-  for (const u of unverifiable) console.log(`  - ${u.slug}: HTTP ${u.code} ${u.url}`)
+  // HTTP 403/429 and a failed connection are both "cannot verify from here",
+  // but they are not the same thing to whoever reads this, so say which.
+  console.log('\nUnverifiable from CI — open in a browser to confirm:')
+  for (const u of unverifiable) {
+    const why = u.code === 0 ? `unreachable (${u.note})` : `HTTP ${u.code} (bot challenge/ratelimit)`
+    console.log(`  - ${u.slug}: ${why} ${u.url}`)
+  }
+  if (unverifiable.some((u) => u.code === 0)) {
+    console.log(
+      '  Note: an unreachable url that repeats run after run is rot, not weather — check it by hand.',
+    )
+  }
 }
 
 if (moved.length) {
