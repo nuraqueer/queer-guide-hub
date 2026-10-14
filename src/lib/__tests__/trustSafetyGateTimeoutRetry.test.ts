@@ -3,81 +3,126 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 /**
- * `Trust & safety gates` is a REQUIRED check that calls the live prod RPC
- * `trust_safety_gate_status()` over PostgREST, where `authenticator` pins
- * `statement_timeout = 8s`. A 57014 there means the RPC ran out of time, so NO
- * gate was evaluated at all — the opposite of a gate being breached — and the
- * PR goes red for a reason unrelated to its diff.
+ * The gate scripts are REQUIRED checks that call live prod RPCs over PostgREST.
+ * A gate script has THREE outcomes and only two are about the gate: it passed,
+ * it was breached, or IT WAS NEVER EVALUATED. The third must read as neither of
+ * the others, or a PR goes red for a reason unrelated to its diff.
  *
- * It fired on #4275 (green on the previous head 20 minutes earlier, identical
- * diff). Measured on the live instance at that moment: the function is 294 ms /
- * 55,096 blocks / zero temp spill cold-planned, 800 ms warm, against the
- * 8,000 ms ceiling — 27x headroom. Contention, not cost.
+ * TWO conditions are a non-evaluation, and only one was handled until
+ * 2026-10-14:
+ *   - Postgres 57014, `authenticator`'s 8s statement_timeout. Fired on #4275;
+ *     measured then at 294 ms / 55,096 blocks cold, 800 ms warm against the
+ *     8,000 ms ceiling — 27x headroom, so contention, not cost.
+ *   - A TRANSPORT STALL, where `fetch` THROWS instead of returning a response.
+ *     A branch reading `57014` out of a response body is then structurally
+ *     unreachable and the script dies on an unhandled rejection with a raw
+ *     stack trace. Measured on #4404's head 09fdf873f: check-trust-safety-
+ *     gates.mjs:32 (18:26:19 -> 18:31:21) and check-data-quality-gates.mjs:34
+ *     (18:26:22 -> 18:31:25) — two jobs, two runners, both the FIRST call, both
+ *     dead at exactly five minutes (undici's headers timeout), four seconds
+ *     apart, on a documentation-only diff.
  *
- * Three of the four gate scripts already retried on 57014; this one never got
- * it. These assertions guard the port, and they are anchored the way the
- * sibling's own guard records as necessary — on the RETRY and on the DELAY,
- * never on the presence of the string, because printing `57014` in an error
- * message satisfies a bare match while the retry is gone.
+ * The CLASSIFICATION now lives in scripts/lib/gate-rpc.mjs and is tested
+ * BEHAVIOURALLY in gateRpcNotEvaluated.test.ts — a source assertion cannot tell
+ * a live guard from a dead one, which is the defect above. What is asserted
+ * here is ADOPTION and the per-script invariants a shared helper cannot carry.
+ *
+ * All three adopters are covered, not just the one that was fixed first: the
+ * helper exists so they cannot drift apart, and a test for one of them does not
+ * notice the other two reverting to a bare fetch.
  */
-describe('check-trust-safety-gates.mjs — 57014 retry', () => {
-  const SCRIPT = readFileSync(
-    join(process.cwd(), 'scripts/check-trust-safety-gates.mjs'),
-    'utf8',
-  );
 
-  // Counting `process.exit(1)` over the RAW file is satisfied by a COMMENTED-OUT
-  // copy of it — measured: commenting out the terminal exit, which softens the
-  // CRITICAL gate into a warning, survived that assertion. Anything counted
-  // rather than matched is counted here instead. Line-start only, because this
-  // script's prose legitimately contains `//` mid-line in URLs.
-  const CODE = SCRIPT.split('\n')
+const ADOPTERS = [
+  {
+    file: 'scripts/check-trust-safety-gates.mjs',
+    call: 'callGates',
+    rpc: 'trust_safety_gate_status',
+  },
+  { file: 'scripts/check-data-quality-gates.mjs', call: 'callGates', rpc: 'release_gate_checks' },
+  { file: 'scripts/check-tag-hygiene.mjs', call: 'callStats', rpc: 'tag_hygiene_stats' },
+] as const;
+
+const read = (f: string) => readFileSync(join(process.cwd(), f), 'utf8');
+
+// Counting over the RAW file is satisfied by a COMMENTED-OUT copy — measured:
+// commenting out the terminal exit, which softens a CRITICAL gate into a
+// warning, survived that assertion. Anything COUNTED is counted over this.
+// Line-start only, because the prose legitimately contains `//` mid-line.
+const stripComments = (s: string) =>
+  s
+    .split('\n')
     .filter((l) => !l.trimStart().startsWith('//') && !l.trimStart().startsWith('*'))
     .join('\n');
 
-  it('retries once on 57014 instead of failing a required check', () => {
-    // Anchored from the 57014 branch INTO a second call, so a mutation that
-    // keeps the detection and drops the retry fails here.
-    expect(SCRIPT).toMatch(/includes\('57014'\)[\s\S]{0,600}?await callGates\(\)/);
+describe.each(ADOPTERS)('$file — non-evaluation retry', ({ file, call, rpc }) => {
+  const SCRIPT = read(file);
+  const CODE = stripComments(SCRIPT);
+
+  it('routes its RPC through the shared helper, so it cannot throw', () => {
+    expect(CODE).toMatch(/import \{[^}]*callRpc[^}]*\} from '\.\/lib\/gate-rpc\.mjs'/);
+    // The RPC call itself must go through callRpc. A bare `fetch` on this path
+    // is the defect: it throws, and the retry below can never see it.
+    expect(CODE).toMatch(new RegExp(`callRpc\\(\`\\$\\{BASE\\}/rest/v1/rpc/${rpc}\``));
+    expect(CODE).not.toMatch(new RegExp(`fetch\\(\`\\$\\{BASE\\}/rest/v1/rpc/${rpc}\``));
   });
 
-  it('delays the retry, which is the whole fix', () => {
-    // #3996 measured this on the sibling script: an immediate retry puts both
-    // attempts inside the SAME contention window and both time out. The anchor
-    // runs from the branch THROUGH an awaited timer and INTO the retry call.
-    expect(SCRIPT).toMatch(
-      /includes\('57014'\)[\s\S]{0,600}?await new Promise[\s\S]{0,160}?setTimeout\([\s\S]{0,240}?await callGates\(\)/,
+  it('gates the retry on notEvaluated(), not on a hand-rolled body match', () => {
+    // A local `body?.includes('57014')` is the shape that missed the throw.
+    // Keeping the decision in one place is why the helper exists.
+    expect(CODE).toMatch(new RegExp(`if \\(notEvaluated\\(res\\)\\)`));
+    expect(CODE).not.toContain("body?.includes('57014')");
+  });
+
+  it('retries exactly once, and the retry is DELAYED', () => {
+    // #3996 measured this: an immediate retry puts both attempts inside the
+    // SAME contention window and both fail seconds apart. The 2026-10-14 stall
+    // lasted about nine minutes. Anchored from the branch THROUGH an awaited
+    // timer and INTO the second call, so dropping any link fails here.
+    expect(CODE).toMatch(
+      new RegExp(
+        `notEvaluated\\(res\\)[\\s\\S]{0,900}?await new Promise[\\s\\S]{0,200}?setTimeout\\([\\s\\S]{0,300}?await ${call}\\(\\)`,
+      ),
     );
+    // Exactly two call sites: two retries would double the window silently.
+    expect(CODE.match(new RegExp(`await ${call}\\(\\)`, 'g')) ?? []).toHaveLength(2);
   });
 
-  it('keeps the delay a reviewable literal', () => {
-    const m = SCRIPT.match(/RETRY_DELAY_MS\s*=\s*([0-9_]+)/);
+  it('keeps the delay a reviewable literal of at least 10s', () => {
+    const m = CODE.match(/RETRY_DELAY_MS\s*=\s*([0-9_]+)/);
     expect(m, 'RETRY_DELAY_MS must be a literal so its magnitude is reviewable').not.toBeNull();
-    const ms = Number((m ? m[1] : '0').replace(/_/g, ''));
-    // Far enough out to sample a DIFFERENT load window; an instant retry
-    // re-samples the same one and both attempts time out (#3996).
-    expect(ms).toBeGreaterThanOrEqual(10_000);
+    expect(Number((m ? m[1] : '0').replace(/_/g, ''))).toBeGreaterThanOrEqual(10_000);
   });
 
-  it('retries ONLY on 57014, so a real gate breach still fails at once', () => {
-    // The guard condition must test the body, not merely `!res.ok`. A retry on
-    // any failure would retry a genuine CRITICAL breach into silence.
-    expect(SCRIPT).toMatch(/if\s*\(!res\.ok\s*&&\s*body\?\.includes\('57014'\)\)/);
-    // Exactly one retry call site: two would double the window silently.
-    expect(CODE.match(/await callGates\(\)/g) ?? []).toHaveLength(2);
+  it('a non-evaluation still FAILS the check — it never becomes a pass', () => {
+    // "We could not look" reading as "nothing found" is the vacuous green this
+    // repo keeps recording. The retry must not have softened that.
+    expect(CODE).toMatch(/if \(!res\.ok\) \{[\s\S]{0,400}?process\.exit\(1\)/);
   });
 
   it('prints the response body on failure, not just the status', () => {
-    // Diagnosing the #4275 occurrence needed a query against prod because the
-    // log read `HTTP 500` and named no cause. A failed probe must say why.
-    expect(SCRIPT).toMatch(/HTTP \$\{res\.status\}: \$\{body\}/);
+    // Diagnosing #4275 needed a query against prod because the log read
+    // `HTTP 500` and named no cause. A failed probe must say why.
+    expect(CODE).toMatch(/HTTP \$\{res\.status\}: \$\{res\.body\}/);
   });
+});
+
+describe('check-trust-safety-gates.mjs — gate semantics', () => {
+  const SCRIPT = read('scripts/check-trust-safety-gates.mjs');
+  const CODE = stripComments(SCRIPT);
 
   it('still fails hard on a breached CRITICAL gate', () => {
-    // The retry must not have softened the thing this gate exists to do.
     expect(CODE).toContain('CRITICAL gate(s) breached');
     // Two live exits: the RPC-unreachable one and the breached-gate one.
-    // Over CODE, not SCRIPT — see the note on the stripper above.
     expect(CODE.match(/process\.exit\(1\)/g) ?? []).toHaveLength(2);
+  });
+});
+
+describe('no gate script re-introduces a throwing fetch on its primary RPC', () => {
+  it('every adopter is free of a bare fetch', () => {
+    // The helper only helps where it is used. This is the drift check.
+    for (const { file } of ADOPTERS) {
+      const code = stripComments(read(file));
+      expect(code, `${file} must not call fetch() directly`).not.toMatch(/[^.\w]fetch\(/);
+    }
   });
 });

@@ -482,11 +482,23 @@ describe('tag_hygiene_stats() reads each hot table once', () => {
 describe('the tag-hygiene gate survives a statement timeout', () => {
   const SCRIPT = readFileSync(join(process.cwd(), 'scripts/check-tag-hygiene.mjs'), 'utf8');
 
-  it('retries once on 57014 instead of failing the PR', () => {
-    expect(SCRIPT).toMatch(/57014/);
-    // Anchored on the RETRY, not just the code: printing 57014 in an error
-    // message also matches a bare mention.
-    expect(SCRIPT).toMatch(/includes\('57014'\)[\s\S]{0,400}?await callStats\(\)/);
+  // 2026-10-14. The retry used to be gated on reading `57014` out of a RESPONSE
+  // BODY, and `fetch` THROWS on a transport stall rather than returning one — so
+  // that branch was structurally unreachable and the script died on an unhandled
+  // rejection with a raw stack trace. Two sibling gate scripts did exactly that
+  // on #4404's head, both at undici's five-minute headers timeout, four seconds
+  // apart. The decision now lives in `notEvaluated()` (scripts/lib/gate-rpc.mjs),
+  // which covers BOTH non-evaluations and is tested behaviourally in
+  // gateRpcNotEvaluated.test.ts — a source assertion cannot tell a live guard
+  // from a dead one, which is the defect itself.
+  it('retries once on a non-evaluation instead of failing the PR', () => {
+    // Anchored on the RETRY, not just the call: naming the helper in a comment
+    // also matches a bare mention.
+    expect(SCRIPT).toMatch(/notEvaluated\(res\)[\s\S]{0,900}?await callStats\(\)/);
+    // A hand-rolled body match is the shape that could not see the throw.
+    expect(SCRIPT).not.toContain("body?.includes('57014')");
+    // And the call must not be a bare fetch, or it throws before any of this.
+    expect(SCRIPT).toMatch(/callRpc\(`\$\{BASE\}\/rest\/v1\/rpc\/tag_hygiene_stats`/);
   });
 
   it('retries exactly once', () => {
@@ -512,7 +524,7 @@ describe('the tag-hygiene gate survives a statement timeout', () => {
     // call. A delay declared at the top of the file and never awaited, or awaited
     // after the retry, does not satisfy this.
     expect(SCRIPT).toMatch(
-      /includes\('57014'\)[\s\S]{0,400}?await new Promise[\s\S]{0,120}?setTimeout\([\s\S]{0,200}?await callStats\(\)/,
+      /notEvaluated\(res\)[\s\S]{0,900}?await new Promise[\s\S]{0,200}?setTimeout\([\s\S]{0,300}?await callStats\(\)/,
     );
   });
 
@@ -943,7 +955,9 @@ describe('99991791303353 materializes the unambiguous CTE', () => {
   it('patches the live definition instead of restating it', () => {
     expect(statements).toContain("pg_get_functiondef('public.tag_hygiene_stats()'::regprocedure)");
     // A full restate would revert 99991789930597 and 99991790719601 silently.
-    expect(statements).not.toMatch(/create\s+(or\s+replace\s+)?function\s+public\.tag_hygiene_stats/i);
+    expect(statements).not.toMatch(
+      /create\s+(or\s+replace\s+)?function\s+public\.tag_hygiene_stats/i,
+    );
   });
 
   it('replaces the anchor with the materialized form', () => {
@@ -996,8 +1010,12 @@ describe('99991791303353 materializes the unambiguous CTE', () => {
   it('asserts 99991790719601 survives the patch', () => {
     // Each shared CTE by name: a restate drops them as silently as a counter,
     // and without them the function re-reads unified_tags eleven times.
-    for (const cte of ['ut as materialized', 'uta_rollup as materialized',
-                       'ev_assign as materialized', 'ev as materialized']) {
+    for (const cte of [
+      'ut as materialized',
+      'uta_rollup as materialized',
+      'ev_assign as materialized',
+      'ev as materialized',
+    ]) {
       expect(statements, `${cte} is not asserted`).toContain(`position('${cte}' in v_code)`);
     }
   });

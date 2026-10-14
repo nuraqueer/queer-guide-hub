@@ -1,0 +1,151 @@
+import { afterEach, describe, expect, it, vi } from 'vitest';
+// @ts-expect-error - plain .mjs helper, no types; exercised behaviourally on purpose.
+import { callRpc, notEvaluated, stallReason, NO_RESPONSE } from '../../../scripts/lib/gate-rpc.mjs';
+
+/**
+ * Behavioural, not source-text. A source assertion cannot tell a live guard
+ * from a dead one — the rule this repo has recorded repeatedly — and the whole
+ * defect being fixed here is a branch that was present in the file and
+ * structurally unreachable at run time.
+ *
+ * The condition: a gate script has three outcomes and only two are about the
+ * gate — passed, breached, or NEVER EVALUATED. `fetch` THROWS on a transport
+ * stall rather than returning a response, so a retry gated on reading `57014`
+ * out of a response body can never see it. Measured 2026-10-14 on #4404's head:
+ * two different gate scripts in two different jobs both died at exactly five
+ * minutes (undici's headers timeout) on their first RPC call, four seconds
+ * apart, on a documentation-only diff.
+ */
+describe('scripts/lib/gate-rpc.mjs', () => {
+  const realFetch = globalThis.fetch;
+  afterEach(() => {
+    globalThis.fetch = realFetch;
+    vi.restoreAllMocks();
+  });
+
+  const res = (init: {
+    ok: boolean;
+    status: number;
+    text?: () => Promise<string>;
+    json?: () => Promise<unknown>;
+  }) => init as unknown as Response;
+
+  it('does not throw when fetch throws, and reports no HTTP response', async () => {
+    const err = Object.assign(new TypeError('fetch failed'), {
+      cause: { code: 'UND_ERR_HEADERS_TIMEOUT' },
+    });
+    globalThis.fetch = vi.fn().mockRejectedValue(err);
+
+    const r = await callRpc('https://example.invalid/rest/v1/rpc/x', { method: 'POST' });
+
+    expect(r.ok).toBe(false);
+    expect(r.status).toBe(NO_RESPONSE);
+    // The cause has to survive into the log, or the run says "it failed" and
+    // names nothing — the #4275 lesson, one layer lower.
+    expect(r.body).toContain('UND_ERR_HEADERS_TIMEOUT');
+    expect(r.data).toBeNull();
+  });
+
+  it('classifies a fetch throw as NOT EVALUATED — the branch that was unreachable', async () => {
+    globalThis.fetch = vi.fn().mockRejectedValue(new TypeError('fetch failed'));
+    const r = await callRpc('https://example.invalid/x', {});
+    expect(notEvaluated(r)).toBe(true);
+    expect(stallReason(r)).toBe('no HTTP response (transport stall)');
+  });
+
+  it('still classifies a 57014 body as NOT EVALUATED', async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue(
+      res({
+        ok: false,
+        status: 500,
+        text: async () => '{"code":"57014","message":"canceling statement"}',
+      }),
+    );
+    const r = await callRpc('https://example.invalid/x', {});
+    expect(notEvaluated(r)).toBe(true);
+    expect(stallReason(r)).toBe('Postgres statement_timeout (57014)');
+  });
+
+  it('names the two non-evaluations APART, so a log says which happened', async () => {
+    // They need different fixes — one is the network, one is the query — so
+    // collapsing them into one message loses the only actionable half.
+    globalThis.fetch = vi.fn().mockRejectedValue(new TypeError('fetch failed'));
+    const transport = await callRpc('https://example.invalid/x', {});
+    globalThis.fetch = vi
+      .fn()
+      .mockResolvedValue(res({ ok: false, status: 500, text: async () => '57014' }));
+    const timeout = await callRpc('https://example.invalid/x', {});
+    expect(stallReason(transport)).not.toBe(stallReason(timeout));
+  });
+
+  it('does NOT treat a real server answer as a non-evaluation', async () => {
+    // The narrowness is the point: retrying any failure would retry a genuine
+    // CRITICAL gate breach into silence.
+    for (const [status, text] of [
+      [403, 'permission denied for function'],
+      [404, '{"code":"PGRST202"}'],
+      [500, '{"code":"42883","message":"function does not exist"}'],
+    ] as const) {
+      globalThis.fetch = vi
+        .fn()
+        .mockResolvedValue(res({ ok: false, status, text: async () => text }));
+      const r = await callRpc('https://example.invalid/x', {});
+      expect(notEvaluated(r), `HTTP ${status} must fail at once`).toBe(false);
+      expect(stallReason(r)).toBeNull();
+    }
+  });
+
+  it('a successful call is never a non-evaluation and carries parsed data', async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue(
+      res({
+        ok: true,
+        status: 200,
+        json: async () => [{ gate: 'g', severity: 'critical', failing: 0 }],
+      }),
+    );
+    const r = await callRpc('https://example.invalid/x', {});
+    expect(r.ok).toBe(true);
+    expect(notEvaluated(r)).toBe(false);
+    expect(r.data).toEqual([{ gate: 'g', severity: 'critical', failing: 0 }]);
+    expect(r.body).toBeNull();
+  });
+
+  it('a 2xx whose body will not parse is not evaluated, and does not claim to be a transport stall', async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue(
+      res({
+        ok: true,
+        status: 200,
+        json: async () => {
+          throw new SyntaxError('Unexpected token <');
+        },
+      }),
+    );
+    const r = await callRpc('https://example.invalid/x', {});
+    expect(r.ok).toBe(false);
+    // Real status preserved, so the log does not misreport the network.
+    expect(r.status).toBe(200);
+    expect(r.body).toContain('did not parse as JSON');
+    expect(r.body).not.toContain('before any HTTP response');
+  });
+
+  it('an unreadable error body keeps the status rather than losing both', async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue(
+      res({
+        ok: false,
+        status: 502,
+        text: async () => {
+          throw new Error('aborted');
+        },
+      }),
+    );
+    const r = await callRpc('https://example.invalid/x', {});
+    expect(r.status).toBe(502);
+    expect(r.body).toContain('unreadable');
+    expect(notEvaluated(r)).toBe(false);
+  });
+
+  it('notEvaluated is safe on a null/undefined result', () => {
+    expect(notEvaluated(null)).toBe(false);
+    expect(notEvaluated(undefined)).toBe(false);
+  });
+});
