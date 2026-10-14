@@ -208,6 +208,33 @@ describe('CountryDetail', () => {
     });
   });
 
+  it('uses the first population-ranked city when the capital is unavailable', () => {
+    state.cities = [
+      { id: 'hamburg', name: 'Hamburg', slug: 'hamburg', timezone: 'Europe/Berlin' },
+      { id: 'munich', name: 'Munich', slug: 'munich', timezone: 'Europe/Berlin' },
+    ];
+    renderPage();
+    const action = screen.getByRole('button', { name: /Plan a trip to/ });
+    expect(JSON.parse(action.getAttribute('data-trip-seed') ?? 'null')).toMatchObject({
+      cityId: 'hamburg',
+      countryId: 'co1',
+      countryCode: 'DE',
+    });
+  });
+
+  it('matches the capital without requiring identical name casing', () => {
+    state.cities = [
+      { id: 'hamburg', name: 'Hamburg', slug: 'hamburg' },
+      { id: 'berlin', name: 'BERLIN', slug: 'berlin' },
+    ];
+    renderPage();
+    const action = screen.getByRole('button', { name: /Plan a trip to/ });
+    expect(JSON.parse(action.getAttribute('data-trip-seed') ?? 'null')).toMatchObject({
+      cityId: 'berlin',
+      countryId: 'co1',
+    });
+  });
+
   it('keeps the neutral travel fallback when the country has no published city', () => {
     renderPage();
     expect(screen.getByRole('button', { name: /Plan a trip to/ })).not.toHaveAttribute(

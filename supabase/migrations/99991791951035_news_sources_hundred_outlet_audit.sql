@@ -183,7 +183,7 @@ where not exists (select 1 from public.news_sources s where s.url = v.url)
   and not exists (select 1 from public.news_sources s where s.slug = v.slug);
 
 -- Postconditions. These assert the END STATE this file is responsible for, not
--- "45 rows were inserted": the insert is guarded, so a re-run legitimately
+-- "47 rows were inserted": the insert is guarded, so a re-run legitimately
 -- inserts nothing and must still pass. The refusals listed in the header are
 -- deliberately NOT asserted here -- a text/row check on another session's future
 -- work would abort db push for the whole repo (see 20810101100100). They are
@@ -206,7 +206,7 @@ declare
   v_bad int;
   v_cnt int;
 begin
-  -- P1: every one of the 45 is present exactly once, active, and shaped like a
+  -- P1: every one of the 47 is present exactly once, active, and shaped like a
   -- news RSS source. Counting the GOOD shape positively, so a slug that went
   -- missing from the corpus fails instead of passing by absence.
   select count(*) into v_cnt
