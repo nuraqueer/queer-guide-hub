@@ -9,6 +9,7 @@ assert.equal((await api.listResources('templates')).data.length,1);
 assert.equal((await api.getResource('folders',folder.id)).name,'Héllo & + TS');
 const created=await api.createLink({target:'https://example.com/?q=a%26b#detail',slug:'sdk-typescript',folderId:folder.id,tagIds:[tag.id]});
 const id=created.link.id;
+const art=await api.uploadPreviewImage(id,process.env.REDIRECT_TEST_IMAGE);await api.updatePresentation(id,{preview:{title:'SDK preview',image:art.image,video:'https://example.com/a.mp4'},cloaked:true});assert.equal((await api.getPresentation(id)).preview.title,'SDK preview');
 await api.updateLink(id,{comment:'SDK update',isEnabled:false});
 assert.equal((await api.getLink(id)).folderId,folder.id);
 assert.equal((await api.upsertLink({slug:'sdk-typescript',target:'/updated'})).created,false);

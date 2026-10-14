@@ -1,3 +1,4 @@
+import sharp from 'sharp';
 import { readFileSync } from 'node:fs';
 import { webcrypto } from 'node:crypto';
 import ts from 'typescript';
@@ -25,8 +26,12 @@ function runtime() {
   const links = readFileSync(new URL(root + '_shared/redirect-links.ts', import.meta.url), 'utf8')
     .replace(/^import .*;\s*$/gm, '')
     .replace(/^export\s+/gm, '');
+  const presentation = readFileSync(
+    new URL(root + '_shared/redirect-presentation.ts', import.meta.url),
+    'utf8',
+  ).replace(/^export\s+/gm, '');
   const code = ts.transpileModule(
-    shared + '\n' + analytics + '\n' + policy + '\n' + links + '\n' + source,
+    shared + '\n' + analytics + '\n' + policy + '\n' + links + '\n' + presentation + '\n' + source,
     {
       compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext },
     },
@@ -77,6 +82,20 @@ function runtime() {
           error: state.conversionError,
         },
   );
+  const upload = vi.fn(async () => ({ error: null })),
+    remove = vi.fn(async () => ({ error: null }));
+  const storage = {
+    from: () => ({
+      upload,
+      remove,
+      getPublicUrl: (key: string) => ({
+        data: {
+          publicUrl:
+            'https://fixture.supabase.co/storage/v1/object/public/redirect-previews/' + key,
+        },
+      }),
+    }),
+  };
   const from = vi.fn(() => {
     const query = {
       select: () => query,
@@ -115,7 +134,7 @@ function runtime() {
         handler = fn;
       },
     },
-    (_url: string, key: string) => (key === 'service' ? { rpc, from } : identity),
+    (_url: string, key: string) => (key === 'service' ? { rpc, from, storage } : identity),
     webcrypto,
   );
   return {
@@ -123,6 +142,8 @@ function runtime() {
     rpc,
     from,
     getUser,
+    upload,
+    remove,
     invoke: (
       path: string,
       body?: unknown,
@@ -144,6 +165,72 @@ function runtime() {
 const click = '00000000-0000-4000-8000-000000000002',
   lead = { clickId: click, customerExternalId: 'customer-a', eventId: 'signup:a' };
 describe('actual Redirects API handler', () => {
+  it('validates public presentation settings and bounds real image uploads before storage', async () => {
+    const run = runtime(),
+      token = 'qg_redirect_' + 'a'.repeat(64);
+    expect(
+      (
+        await run.invoke(
+          '/links/' + click + '/presentation',
+          { preview: { title: 'Community', video: 'https://example.com/a.mp4' }, cloaked: true },
+          token,
+          'PATCH',
+        )
+      ).status,
+    ).toBe(200);
+    expect(
+      (
+        await run.invoke(
+          '/links/' + click + '/presentation',
+          { preview: { title: 'x'.repeat(121) } },
+          token,
+          'PATCH',
+        )
+      ).status,
+    ).toBe(400);
+    expect(
+      (
+        await run.invoke(
+          '/links/' + click + '/preview-image',
+          { image: Buffer.from('<svg/>').toString('base64') },
+          token,
+        )
+      ).status,
+    ).toBe(400);
+    expect(run.upload).not.toHaveBeenCalled();
+    const bytes = await sharp({
+      create: { width: 1200, height: 630, channels: 3, background: '#ffeecc' },
+    })
+      .png()
+      .toBuffer();
+    const uploaded = await run.invoke(
+      '/links/' + click + '/preview-image',
+      { image: bytes.toString('base64') },
+      token,
+    );
+    expect(uploaded.status).toBe(201);
+    expect(run.upload).toHaveBeenCalledWith(
+      expect.stringMatching(/\.png$/),
+      expect.any(Uint8Array),
+      expect.objectContaining({ contentType: 'image/png', upsert: false }),
+    );
+    const body = await uploaded.json();
+    expect(body.width).toBe(1200);
+    expect(body.height).toBe(630);
+    expect(body.image).toContain('/redirect-previews/');
+    run.upload.mockClear();
+    run.state.conversionError = { code: '42501', message: 'Outside link scope' };
+    expect(
+      (
+        await run.invoke(
+          '/links/' + click + '/preview-image',
+          { image: bytes.toString('base64') },
+          token,
+        )
+      ).status,
+    ).toBe(403);
+    expect(run.upload).not.toHaveBeenCalled();
+  });
   it('enforces independent workspace permissions and denies selected-link workspace credentials', async () => {
     const run = runtime(),
       token = 'qg_redirect_' + 'a'.repeat(64);

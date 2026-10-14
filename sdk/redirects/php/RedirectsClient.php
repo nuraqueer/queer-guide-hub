@@ -35,6 +35,9 @@ final class RedirectsClient {
             return $data;
         } finally {fclose($stream);}
     }
+    public function getPresentation(string $id): array {return $this->request('GET','/links/'.$id.'/presentation');}
+    public function updatePresentation(string $id,array $data): array {return $this->request('PATCH','/links/'.$id.'/presentation',$data);}
+    public function uploadPreviewImage(string $id,string $imageBase64): array {return $this->request('POST','/links/'.$id.'/preview-image',['image'=>$imageBase64]);}
     public function createLink(array $data): array {return $this->request('POST','/links',$data);}
     public function getLink(string $id): array {return $this->request('GET','/links/'.$id);}
     public function updateLink(string $id,array $data): array {return $this->request('PATCH','/links/'.$id,$data);}

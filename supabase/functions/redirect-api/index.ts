@@ -1,3 +1,5 @@
+import { previewImageInfo } from "../_shared/redirect-presentation.ts";
+import { policyErrors } from "../_shared/link-policy.ts";
 import { bulkLinkInput, linkInput, linkListInput, workspaceInput, LINK_SCOPES } from "../_shared/redirect-links.ts";
 import { analyticsFilters } from "../_shared/redirect-analytics.ts";
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
@@ -44,6 +46,32 @@ Deno.serve(async (req: Request) => {
    let tokenId:string|null=null;
    if(tokenCredential){const {data,error}=await db.rpc('authenticate_redirect_api_token',{p_hash:await tokenDigest(credential),p_scope:scope});if(error)return json({error:'Credential verification unavailable'},503);if(!data)return json({error:'Required link scope is missing'},403);tokenId=data.id;}
    else{const {data,error}=await identityClient!.rpc('has_role_jwt',{required_role:'admin'});if(error)return json({error:'Authorization unavailable'},503);if(!data)return json({error:'Forbidden'},403);}
+   const presentationMatch=path.match(/^\/links\/([a-f0-9-]{36})\/(presentation|preview-image)$/i);
+   if(presentationMatch){
+    const [,linkId,endpoint]=presentationMatch;if(!UUID.test(linkId))return json({error:'Invalid link ID'},400);
+    if(endpoint==='preview-image'&&req.method==='POST'){
+     const access=await db.rpc('redirect_presentation',{p_redirect_id:linkId,p_action:'check',p_token_id:tokenId});
+     if(access.error)return rpcError(access.error);
+     const body=await boundedJson(req,2100000);
+     if(!body||Object.keys(body).some(key=>key!=='image')||typeof body.image!=='string'||body.image.length>2000000||!body.image.length||!/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(body.image))return json({error:'Provide a base64 PNG or JPG image'},400);
+     const bytes=Uint8Array.from(atob(body.image),char=>char.charCodeAt(0)),info=previewImageInfo(bytes);
+     if(info.width!==1200||info.height!==630)return json({error:'Preview artwork must be 1200 × 630 pixels'},400);
+     const key=linkId+'/'+crypto.randomUUID()+'.'+info.extension,bucket=db.storage.from('redirect-previews');
+     const {error:uploadError}=await bucket.upload(key,bytes,{contentType:info.mime,upsert:false,cacheControl:'3600'});if(uploadError)return json({error:'Image upload unavailable'},503);
+     const image=bucket.getPublicUrl(key).data.publicUrl;
+     const saved=await db.rpc('redirect_presentation',{p_redirect_id:linkId,p_action:'check',p_token_id:tokenId});
+     if(saved.error){try{await bucket.remove([key]);}catch{/* Keep the primary authorization failure if asset cleanup is unavailable. */}return rpcError(saved.error);}return json({image,width:info.width,height:info.height},201);
+    }
+    if(endpoint==='presentation'&&(req.method==='GET'||req.method==='PATCH')){
+     let values:Record<string,unknown>={};
+     if(req.method==='PATCH'){
+      const body=await boundedJson(req);if(!body||typeof body!=='object'||Array.isArray(body)||!Object.keys(body).length||Object.keys(body).some(key=>!['preview','cloaked'].includes(key)))return json({error:'Invalid presentation fields'},400);
+      const errors=policyErrors({...body,...(body.preview===null?{preview:undefined}:{})});if(errors.length)return json({error:errors.join('; ')},400);values=body;
+     }
+     const {data,error}=await db.rpc('redirect_presentation',{p_redirect_id:linkId,p_action:req.method==='GET'?'get':'patch',p_values:values,p_token_id:tokenId});if(error)return rpcError(error);return json(data);
+    }
+    return json({error:'Method not supported'},405);
+   }
    const query=new URL(req.url).searchParams;
    if(new URL(req.url).search.length>16384)return json({error:'Filters are too large'},400);
    const id=path.slice('/links/'.length), byId=UUID.test(id);

@@ -11,8 +11,9 @@ try {
   await db.exec(readFileSync('supabase/tests/redirect_password_throttle.sql', 'utf8'));
   await db.exec(readFileSync('supabase/tests/redirect_link_management_api.sql', 'utf8'));
   await db.exec(readFileSync('supabase/tests/redirect_workspace_api.sql', 'utf8'));
+  await db.exec(readFileSync('supabase/tests/redirect_presentations.sql', 'utf8'));
   console.log(
-    'Redirect platform SQL: policies, atomic creation, quotas, expiry, variant metrics, conversion attribution, analytics, password throttling scoped link management and workspace APIs passed.',
+    'Redirect platform SQL: policies, atomic creation, quotas, expiry, variant metrics, conversion attribution, analytics, password throttling scoped link management, workspace APIs and presentations passed.',
   );
 } finally {
   await db.close();

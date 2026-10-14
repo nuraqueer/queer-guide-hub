@@ -25,11 +25,11 @@ export async function tokenDigest(value: string) {
 export function createRedirectToken() {
  return 'qg_redirect_'+Array.from(crypto.getRandomValues(new Uint8Array(32)),byte=>byte.toString(16).padStart(2,'0')).join('');
 }
-export async function boundedJson(req: Request) {
+export async function boundedJson(req: Request,maxBytes=65536) {
  if(!req.headers.get('content-type')?.toLowerCase().startsWith('application/json')) throw new Error('Use application/json');
  if(!req.body) throw new Error('Missing request body');
  const reader=req.body.getReader(),chunks:Uint8Array[]=[];let total=0;
- for(;;){const {done,value}=await reader.read();if(done)break;total+=value.length;if(total>65536){await reader.cancel();throw new Error('Request body exceeds 64 KB');}chunks.push(value);}
+ for(;;){const {done,value}=await reader.read();if(done)break;total+=value.length;if(total>maxBytes){await reader.cancel();throw new Error('Request body exceeds '+maxBytes+' bytes');}chunks.push(value);}
  const bytes=new Uint8Array(total);let offset=0;for(const chunk of chunks){bytes.set(chunk,offset);offset+=chunk.length;}
  return JSON.parse(new TextDecoder().decode(bytes));
 }

@@ -17,7 +17,7 @@ exist. Existing local tools are a foundation, not proof of parity or deployment.
 | Comments | Team-visible comment on link card, clickable hyperlinks | Candidate: implemented locally; pending release |
 | Folder permissions | Explicit view/edit permissions for team members, enforced in database/API | Missing |
 | Bulk actions | Create/update/upsert/delete, folder/tag assignment, archive, import/export, QR export | Partial: CSV import/basic export plus scoped atomic API batches and folder/tag assignment; archive and bulk UI/QR exports pending |
-| Custom previews | Uploaded OG image (1200×630, ≤1.5 MB), title≤120, description≤240, video API, crawler unfurl | Missing |
+| Custom previews | Uploaded OG image (1200×630, ≤1.5 MB), title≤120, description≤240, video API, crawler unfurl | Candidate: editor, scoped upload/presentation APIs and crawler HTML; native browser/Storage release pending |
 | AI previews | Generate title/description from destination content using configured AI provider | Missing |
 | Custom domains | Verify ownership/DNS, multiple domains, primary domain, redirects on branded hostname | Missing |
 | Domain defaults | Root/not-found redirects, default expiration URL, workspace/domain QR logos | Missing |
@@ -28,7 +28,7 @@ exist. Existing local tools are a foundation, not proof of parity or deployment.
 | A/B completion | Device→geo→experiment priority; choose winner by sales/conversions, rates, clicks; leads fallback | Candidate: selection/metrics now fed by verified native and scoped server conversion ingestion |
 | Password links | Password challenge, hashed secret, no disclosure/bypass, scoped access | Partial: hashed protection, atomic attempt throttling and signed IP relay; custom password logo pending |
 | Expiration | Date and expired destination URL, live enforcement without stale cached rules | Candidate: date/phrase parser, custom fallback and live enforcement tested |
-| Link cloaking | Explicit iframe mode with accurate iframe limitations, standard redirect fallback | Missing |
+| Link cloaking | Explicit iframe mode with accurate iframe limitations, standard redirect fallback | Candidate: HTTPS guarded iframe wrapper and persistent direct fallback; runtime release pending |
 | Branded QR | Dots square/circle/joined; marker center square/circle; border square/rounded/circle; colors | Candidate: all dot/marker/color controls; scan verification before export |
 | QR logos/export | Workspace/domain/logo precedence and hide; SVG/PNG/JPG; clipboard image and image URL | Partial: per-export logo, PNG/JPG/SVG, image/data URL copy; workspace/domain precedence pending |
 | Click analytics | Real-time totals/time series, custom date/filter/export, countries/cities/devices/browsers/OS/referrers | Candidate: SQL totals/time series, date/dimension filters, export and bounded live refresh; release pending |
@@ -285,3 +285,30 @@ frontend/proxy builds, targeted lint and migration-version validation passed.
 App typecheck has no new errors (704 inherited). The attempted native-browser
 preview timed out, so browser verification of the new workspace permission
 controls remains unproven; component tests and builds are the available evidence.
+
+## Checkpoint: custom previews and framed destinations
+
+Implemented locally: preview title/description/image/video controls, prepared raster
+uploads, scoped presentation/upload APIs, metadata HTML for social unfurl agents,
+and optional sandboxed frames with a direct fallback. Password checks precede
+preview disclosure; crawler metadata is not a counted visit. Frame requests carry
+one recorded click and conversion attribution. HTTPS guards cover active targets,
+device/geo/experiment rules and later destination edits. Existing protection,
+expiry and tracking survive presentation updates. Upload assets remain public;
+removing a preview removes its reference, not previously published artwork.
+
+27 focused resolver/API/editor/media tests passed. Isolated SQL tests verify scopes,
+protected settings preservation, HTTPS guards and restrictive Storage policies.
+All five SDKs exercise new presentation and encoded-image methods against actual
+source handlers and SQL; Storage uses a fixture adapter. Native browser preview
+and actual Supabase Storage upload/download verification remain outstanding,
+along with production migrations/release and AI generation.
+
+See `docs/guides/redirect-presentations.md` for behavior, scope and exact limits.
+This does not complete overall parity: every missing/partial ledger row remains.
+
+Final checkpoint checks: nine existing policy/save authorization tests also passed
+(36 focused tests total). Five native SDK clients and examples, isolated SQL,
+genuine signed-Stripe regression, frontend/proxy builds, SDK declarations,
+targeted lint and migration-version gate passed. App typecheck reports no new
+errors (704 inherited). No production bucket, schema or deployment was changed.

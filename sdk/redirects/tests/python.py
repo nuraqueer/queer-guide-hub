@@ -11,6 +11,7 @@ assert len(api.list_resources('templates')['data'])==1
 assert api.get_resource('folders',folder['id'])['name']=='Héllo & + Python'
 created=api.create_link({'target':'https://example.com/?q=a%26b#detail','slug':'sdk-python','folderId':folder['id'],'tagIds':[tag['id']]})
 id=created['link']['id']
+art=api.upload_preview_image(id,os.environ['REDIRECT_TEST_IMAGE']);api.update_presentation(id,{'preview':{'title':'SDK preview','image':art['image'],'video':'https://example.com/a.mp4'},'cloaked':True});assert api.get_presentation(id)['preview']['title']=='SDK preview'
 api.update_link(id,{'comment':'SDK update','isEnabled':False})
 assert api.get_link(id)['folderId']==folder['id']
 assert api.upsert_link({'slug':'sdk-python','target':'/updated'})['created'] is False

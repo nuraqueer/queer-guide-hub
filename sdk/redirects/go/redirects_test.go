@@ -42,6 +42,11 @@ func TestSDKIntegration(t *testing.T) {
 
 	created := must(api.CreateLink(ctx, Object{"target": "https://example.com/?q=a%26b#detail", "slug": "sdk-go", "folderId": fid, "tagIds": []string{tid}}))
 	id := created["link"].(map[string]any)["id"].(string)
+	art := must(api.UploadPreviewImage(ctx, id, os.Getenv("REDIRECT_TEST_IMAGE")))
+	must(api.UpdatePresentation(ctx, id, Object{"preview": Object{"title": "SDK preview", "image": art["image"], "video": "https://example.com/a.mp4"}, "cloaked": true}))
+	if must(api.GetPresentation(ctx, id))["preview"].(map[string]any)["title"] != "SDK preview" {
+		t.Fatal("Presentation round trip failed")
+	}
 	must(api.UpdateLink(ctx, id, Object{"comment": "SDK update", "isEnabled": false}))
 	if must(api.GetLink(ctx, id))["folderId"] != fid {
 		t.Fatal("Metadata lost")

@@ -2,6 +2,8 @@
 export interface LinkVariant { id: string; url: string; weight: number }
 export interface LinkExperiment { starts_at: string; ends_at: string; variants: LinkVariant[]; completed_target?: string }
 export interface LinkPolicy {
+  preview?: {title?:string;description?:string;image?:string;video?:string};
+  cloaked?: boolean;
   track_conversions?: boolean;
   device_targets?: Partial<Record<'ios' | 'android', string>>;
   geo_targets?: Record<string, string>;
@@ -33,8 +35,18 @@ export function validPublicTarget(target: string): boolean {
 export function policyErrors(policy: LinkPolicy): string[] {
   const errors: string[] = [];
   if (!policy || typeof policy !== 'object' || Array.isArray(policy)) return ['Policy must be an object'];
-  const allowed = ['track_conversions','device_targets','geo_targets','experiment','expires_at','expired_target'];
+  const allowed = ['preview','cloaked','track_conversions','device_targets','geo_targets','experiment','expires_at','expired_target'];
   if (Object.keys(policy).some((key) => !allowed.includes(key))) errors.push('Unknown policy setting');
+  if(policy.cloaked!==undefined&&typeof policy.cloaked!=='boolean')errors.push('Invalid cloaking setting');
+  if(policy.preview!==undefined){
+   const preview=policy.preview;
+   if(!preview||typeof preview!=='object'||Array.isArray(preview))errors.push('Invalid link preview');
+   else{
+    if(Object.keys(preview).some(key=>!['title','description','image','video'].includes(key)))errors.push('Unknown preview field');
+    for(const [key,limit] of [['title',120],['description',240]] as const)if(preview[key]!==undefined&&(typeof preview[key]!=='string'||preview[key]!.length>limit))errors.push('Preview '+key+' exceeds '+limit+' characters');
+    for(const key of ['image','video'] as const)if(preview[key]!==undefined&&(!validPublicTarget(preview[key]!)||!preview[key]!.startsWith('https://')))errors.push('Preview '+key+' must be a public HTTPS URL');
+   }
+  }
   if (policy.track_conversions !== undefined && typeof policy.track_conversions !== 'boolean') errors.push('Conversion tracking must be enabled or disabled');
   for (const [kind, targets] of [['device',policy.device_targets], ['country',policy.geo_targets]] as const) {
     if (!targets) continue;
@@ -42,6 +54,7 @@ export function policyErrors(policy: LinkPolicy): string[] {
     for (const [key, target] of Object.entries(targets)) {
       if (kind === 'device' ? !['ios','android'].includes(key) : !/^[A-Z]{2}$/.test(key)) errors.push('Invalid ' + kind + ' ' + key);
       if (!validPublicTarget(target)) errors.push('Invalid destination for ' + key);
+      if(policy.cloaked&&typeof target==='string'&&target.toLowerCase().startsWith('http:'))errors.push('Framed destinations require HTTPS');
     }
   }
   if (policy.expires_at && !Number.isFinite(Date.parse(policy.expires_at))) errors.push('Invalid expiration date');
@@ -54,6 +67,7 @@ export function policyErrors(policy: LinkPolicy): string[] {
       if (experiment.variants.reduce((sum, variant) => sum + variant.weight, 0) !== 100) errors.push('Traffic weights must total 100%');
       for (const variant of experiment.variants) {
         if (typeof variant.id !== 'string' || !/^[a-zA-Z0-9_-]{1,64}$/.test(variant.id) || !validPublicTarget(variant.url)) errors.push('Invalid A/B destination');
+        if(policy.cloaked&&typeof variant.url==='string'&&variant.url.toLowerCase().startsWith('http:'))errors.push('Framed destinations require HTTPS');
         if (!Number.isInteger(variant.weight) || variant.weight < 10 || variant.weight > 90) errors.push('Each A/B destination must receive at least 10%');
       }
     }

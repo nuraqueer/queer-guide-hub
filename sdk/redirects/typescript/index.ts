@@ -136,6 +136,19 @@ export class RedirectsClient {
       );
     return data as T;
   }
+  getPresentation(id: string) {
+    return this.request<JsonObject>('GET', '/links/' + id + '/presentation');
+  }
+  updatePresentation(id: string, data: JsonObject) {
+    return this.request<JsonObject>('PATCH', '/links/' + id + '/presentation', data);
+  }
+  uploadPreviewImage(id: string, imageBase64: string) {
+    return this.request<{ image: string; width: number; height: number }>(
+      'POST',
+      '/links/' + id + '/preview-image',
+      { image: imageBase64 },
+    );
+  }
   createLink(data: LinkInput & { target: string }) {
     return this.request<Mutation>('POST', '/links', data);
   }

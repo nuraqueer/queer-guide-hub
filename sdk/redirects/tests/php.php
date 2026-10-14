@@ -8,6 +8,7 @@ check($api->updateResource('folders',$folder['id'],['description'=>'Changed'])['
 check($api->updateResource('tags',$tag['id'],['color'=>'blue'])['color']==='blue');check(count($api->listResources('templates')['data'])===1);
 check($api->getResource('folders',$folder['id'])['name']==='Héllo & + PHP');
 $created=$api->createLink(['target'=>'https://example.com/?q=a%26b#detail','slug'=>'sdk-php','folderId'=>$folder['id'],'tagIds'=>[$tag['id']]]);$id=$created['link']['id'];
+$art=$api->uploadPreviewImage($id,getenv('REDIRECT_TEST_IMAGE'));$api->updatePresentation($id,['preview'=>['title'=>'SDK preview','image'=>$art['image'],'video'=>'https://example.com/a.mp4'],'cloaked'=>true]);check($api->getPresentation($id)['preview']['title']==='SDK preview');
 $api->updateLink($id,['comment'=>'SDK update','isEnabled'=>false]);check($api->getLink($id)['folderId']===$folder['id']);
 check($api->upsertLink(['slug'=>'sdk-php','target'=>'/updated'])['created']===false);check($api->countLinks(['ids'=>[$id]])['count']===1);
 check(count(iterator_to_array($api->iterateLinks(['search'=>'sdk-page-']),false))===101);

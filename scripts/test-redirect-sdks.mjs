@@ -1,3 +1,4 @@
+import sharp from 'sharp';
 import { createServer } from 'node:http';
 import { spawn } from 'node:child_process';
 import { readFileSync, mkdirSync, writeFileSync } from 'node:fs';
@@ -10,6 +11,7 @@ await db.exec('SET ROLE service_role; SET request.jwt.claims = \'{"role":"servic
 let handler;
 const pieces = [
   '_shared/redirect-api.ts',
+  '_shared/redirect-presentation.ts',
   '_shared/link-policy.ts',
   '_shared/redirect-links.ts',
   '_shared/redirect-analytics.ts',
@@ -23,7 +25,31 @@ const code = ts.transpileModule(pieces.join('\n'), {
   compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext },
 }).outputText;
 const jsonArgs = new Set(['p_event', 'p_filters', 'p_values', 'p_operations']);
+const artwork = await sharp({
+  create: { width: 1200, height: 630, channels: 3, background: 'white' },
+})
+  .png()
+  .toBuffer();
+const uploadedArtwork = new Map();
 const service = {
+  storage: {
+    from: () => ({
+      upload: async (key, bytes, options) => {
+        uploadedArtwork.set(key, { bytes, options });
+        return { error: null };
+      },
+      getPublicUrl: (key) => ({
+        data: {
+          publicUrl:
+            'https://fixture.supabase.co/storage/v1/object/public/redirect-previews/' + key,
+        },
+      }),
+      remove: async (keys) => {
+        for (const key of keys) uploadedArtwork.delete(key);
+        return { error: null };
+      },
+    }),
+  },
   rpc: async (name, args = {}) => {
     try {
       const entries = Object.entries(args);
@@ -122,6 +148,7 @@ const env = {
   REDIRECT_TEST_BASE: base,
   REDIRECT_TEST_TOKEN: token,
   REDIRECT_TEST_CLICK: click.rows[0].id,
+  REDIRECT_TEST_IMAGE: artwork.toString('base64'),
 };
 async function run(command, args, extra = {}) {
   await new Promise((resolve, reject) => {

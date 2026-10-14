@@ -1,3 +1,4 @@
+import { socialPreviewAgent, presentationPage } from "../_shared/redirect-presentation.ts";
 import { redirectClientIp } from "../_shared/redirect-relay.ts";
 import { visitorMetadata } from "../_shared/redirect-visitor.ts";
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
@@ -80,12 +81,18 @@ Deno.serve(async (req: Request) => {
     const targetUrl=new URL(destination);
     targetUrl.searchParams.delete("qg_click_id"); destination=targetUrl.href;
     if (["queer.guide","www.queer.guide"].includes(targetUrl.hostname) && targetUrl.pathname.startsWith("/go/")) return page(508,"Link loop","This link points to another short link.",false,head);
+    if(!selected.expired&&policy.preview&&socialPreviewAgent(req.headers.get("user-agent")??"")) {
+      if(link.click_limit!==null&&link.click_limit!==undefined&&link.click_count>=link.click_limit)return page(410,"Link unavailable","This link has reached its visit limit.",false,head);
+      return presentationPage(policy.preview,"https://queer.guide/go/"+slug,destination,false,head);
+    }
+    if(policy.cloaked&&!selected.expired&&!destination.startsWith("https://"))return page(503,"Link unavailable","Framed destinations require HTTPS.",false,head);
     if (!head && !selected.expired) {
       const {data:clickId,error}=await db.rpc("record_redirect_visit",{p_redirect_id:link.id,p_path:"/go/"+slug,p_query:incoming.toString() || null,p_referer:cleanReferrer(req.headers.get("referer")),p_user_agent:req.headers.get("user-agent"),p_country:country,p_ip_hash:ipHash,p_status:link.status_code,p_variant_id:selected.variantId,p_destination:destination,p_metadata:visitorMetadata(req,isQr)});
       if(error)return page(503,"Link unavailable","Please try again shortly.",false,head);
       if(!clickId)return page(410,"Link unavailable","This link has expired or reached its visit limit.",false,head);
       if(policy.track_conversions){targetUrl.searchParams.set("qg_click_id",clickId);destination=targetUrl.href;}
     }
+    if(policy.cloaked&&!selected.expired)return presentationPage(policy.preview,"https://queer.guide/go/"+slug,destination,true,head);
     return new Response(null,{status:selected.expired ? 302 : link.status_code,headers:{...responseHeaders,Location:destination}});
   } catch {return page(503,"Link unavailable","Please try again shortly.",false,head);}
 });

@@ -8,6 +8,7 @@ check(api.update_resource('tags',tag['id'],{color:'blue'})['color']=='blue')
 check(api.list_resources('templates')['data'].length==1)
 check(api.get_resource('folders',folder['id'])['name']=='Héllo & + Ruby')
 created=api.create_link({target:'https://example.com/?q=a%26b#detail',slug:'sdk-ruby',folderId:folder['id'],tagIds:[tag['id']]});id=created['link']['id']
+art=api.upload_preview_image(id,ENV.fetch('REDIRECT_TEST_IMAGE'));api.update_presentation(id,{preview:{title:'SDK preview',image:art['image'],video:'https://example.com/a.mp4'},cloaked:true});check(api.get_presentation(id)['preview']['title']=='SDK preview')
 api.update_link(id,{comment:'SDK update',isEnabled:false});check(api.get_link(id)['folderId']==folder['id'])
 check(api.upsert_link({slug:'sdk-ruby',target:'/updated'})['created']==false)
 check(api.count_links({ids:[id]})['count']==1)

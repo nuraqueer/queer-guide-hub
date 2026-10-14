@@ -1,3 +1,4 @@
+import { RedirectPresentationFields } from './RedirectPresentationFields';
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -44,11 +45,15 @@ function PolicyForm({
   const [passwordEnabled, setPasswordEnabled] = useState(hasPassword);
   const [password, setPassword] = useState('');
   const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const [error, setError] = useState('');
   const [expirationPhrase, setExpirationPhrase] = useState('');
   const client = useQueryClient();
   const save = async () => {
+    if (uploading) return;
     const errors = policyErrors(policy);
+    if (policy.cloaked && row.target?.toLowerCase().startsWith('http:'))
+      errors.push('Change the link destination to HTTPS before enabling framing');
     if (passwordEnabled && !hasPassword && !password)
       errors.push('Enter or generate a link password');
     if (errors.length) {
@@ -85,6 +90,12 @@ function PolicyForm({
         void save();
       }}
     >
+      <RedirectPresentationFields
+        id={row.manualId!}
+        policy={policy}
+        onChange={setPolicy}
+        onUploading={setUploading}
+      />
       <fieldset className="space-y-2">
         <legend className="font-medium">Conversion tracking</legend>
         <label className="flex items-center gap-2">
@@ -421,7 +432,7 @@ function PolicyForm({
           {error}
         </p>
       )}
-      <Button type="submit" disabled={saving}>
+      <Button type="submit" disabled={saving || uploading}>
         {saving ? 'Saving…' : 'Save link behavior'}
       </Button>
     </form>

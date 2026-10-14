@@ -42,6 +42,9 @@ class RedirectsClient:
             if not 200<=response.code<300: raise RedirectApiError(response.code, data.get('error','Redirect API request failed'), response.headers.get('Retry-After'))
             return data
 
+    def get_presentation(self, link_id): return self.request('GET','/links/'+link_id+'/presentation')
+    def update_presentation(self, link_id, data): return self.request('PATCH','/links/'+link_id+'/presentation',data)
+    def upload_preview_image(self, link_id, image_base64): return self.request('POST','/links/'+link_id+'/preview-image',{'image':image_base64})
     def create_link(self, data): return self.request('POST','/links',data)
     def get_link(self, link_id): return self.request('GET','/links/'+link_id)
     def update_link(self, link_id, data): return self.request('PATCH','/links/'+link_id,data)

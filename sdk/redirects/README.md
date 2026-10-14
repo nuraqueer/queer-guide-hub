@@ -3,7 +3,7 @@
 Local SDK sources for TypeScript, Python, Go, Ruby and PHP. Each client targets
 queer.guide's Redirects API contract; these are not Dub SDK aliases. They cover
 managed link CRUD/upsert/count/list/bulk, folder/tag/template CRUD/list, private
-analytics and event pages, and lead/sale tracking. Link iterators follow keyset
+analytics and event pages, lead/sale tracking, and presentation/image-upload methods. Link iterators follow keyset
 pages and reject repeated cursors. Resource and event pages expose their cursors
 for explicit iteration.
 
@@ -77,3 +77,7 @@ Go must be available on PATH or configured via `REDIRECT_GO_BIN`; the local agen
 verified vendor runtime was kept under ignored `tmp/go-runtime`. The test command
 does not download runtimes. Production migrations/release, package publication,
 policy/domain/deep-link fields, webhooks and external integrations remain pending.
+
+Presentation APIs are documented in `docs/guides/redirect-presentations.md`.
+The SDK integration suite checks all five presentation/upload wrappers with real
+encoded raster bytes; file storage uses a fixture adapter.

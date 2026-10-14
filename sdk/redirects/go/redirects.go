@@ -120,6 +120,15 @@ func filters(value Object) Object {
 	}
 	return value
 }
+func (c *Client) GetPresentation(ctx context.Context, id string) (Object, error) {
+	return c.Request(ctx, "GET", "/links/"+id+"/presentation", nil, nil)
+}
+func (c *Client) UpdatePresentation(ctx context.Context, id string, data Object) (Object, error) {
+	return c.Request(ctx, "PATCH", "/links/"+id+"/presentation", data, nil)
+}
+func (c *Client) UploadPreviewImage(ctx context.Context, id, imageBase64 string) (Object, error) {
+	return c.Request(ctx, "POST", "/links/"+id+"/preview-image", Object{"image": imageBase64}, nil)
+}
 func (c *Client) CreateLink(ctx context.Context, data Object) (Object, error) {
 	return c.Request(ctx, "POST", "/links", data, nil)
 }

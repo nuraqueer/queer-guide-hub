@@ -33,3 +33,13 @@ CREATE FUNCTION public.record_redirect_click(uuid,text,text,text,text,text,text,
 CREATE TABLE public.donations(id uuid PRIMARY KEY DEFAULT gen_random_uuid());
 
 GRANT ALL ON public.donations TO service_role;
+
+-- Representative Storage ACL surface for isolated migration/policy verification.
+CREATE SCHEMA storage;
+GRANT USAGE ON SCHEMA storage TO anon,authenticated,service_role;
+CREATE TABLE storage.buckets(id text PRIMARY KEY,name text,public boolean,file_size_limit bigint,allowed_mime_types text[]);
+CREATE TABLE storage.objects(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),bucket_id text REFERENCES storage.buckets(id),name text);
+ALTER TABLE storage.objects ENABLE ROW LEVEL SECURITY;
+GRANT ALL ON storage.objects TO authenticated,service_role;
+GRANT ALL ON storage.buckets TO service_role;
+CREATE POLICY fixture_existing_storage_access ON storage.objects TO authenticated USING(true) WITH CHECK(true);

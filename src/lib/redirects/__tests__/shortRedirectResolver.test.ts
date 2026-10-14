@@ -22,9 +22,16 @@ function runtime() {
     join(__dirname, '../../../../supabase/functions/_shared/redirect-relay.ts'),
     'utf8',
   ).replace(/^export\s+/gm, '');
-  const code = ts.transpileModule(shared + '\n' + visitor + '\n' + relay + '\n' + source, {
-    compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext },
-  }).outputText;
+  const presentation = readFileSync(
+    join(__dirname, '../../../../supabase/functions/_shared/redirect-presentation.ts'),
+    'utf8',
+  ).replace(/^export\s+/gm, '');
+  const code = ts.transpileModule(
+    shared + '\n' + visitor + '\n' + relay + '\n' + presentation + '\n' + source,
+    {
+      compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext },
+    },
+  ).outputText;
   let handler: ((request: Request) => Promise<Response>) | undefined;
   const state = {
     link: {
@@ -91,7 +98,7 @@ function runtime() {
   return {
     state,
     rpc,
-    invoke: (method = 'GET', query = 'utm_source=qr', body?: string) =>
+    invoke: (method = 'GET', query = 'utm_source=qr', body?: string, agent = '') =>
       handler!(
         new Request(
           'https://fixture.supabase.co/functions/v1/redirect-handler?slug=pride-qr&q=' +
@@ -101,6 +108,7 @@ function runtime() {
             headers: {
               'x-qg-visitor-country': 'CH',
               'cf-ipcountry': 'US',
+              'user-agent': agent,
               ...(body ? { 'content-type': 'application/x-www-form-urlencoded' } : {}),
             },
             body,
@@ -160,6 +168,42 @@ describe('live short-link resolver', () => {
     expect(run.rpc.mock.calls.some(([name]) => name === 'record_redirect_visit')).toBe(false);
     run.state.attemptError = true;
     expect((await run.invoke('GET', 'pw=anything')).status).toBe(503);
+  });
+  it('serves custom unfurl metadata without visits, and never reveals protected previews', async () => {
+    const run = runtime();
+    run.state.settings.policy = {
+      preview: {
+        title: 'Community preview',
+        description: 'Join us',
+        image: 'https://example.com/art.png',
+      },
+    };
+    const preview = await run.invoke('GET', '', undefined, 'Twitterbot/1.0');
+    expect(preview.status).toBe(200);
+    expect(await preview.text()).toContain('Community preview');
+    expect(run.rpc).not.toHaveBeenCalled();
+    expect((await run.invoke()).status).toBe(302);
+    vi.stubGlobal('crypto', webcrypto);
+    run.state.settings.password_hash = await hashLinkPassword('fixture password');
+    vi.unstubAllGlobals();
+    const denied = await run.invoke('GET', '', undefined, 'Twitterbot/1.0');
+    expect(denied.status).toBe(401);
+    expect(await denied.text()).not.toContain('Community preview');
+  });
+  it('records a framed visit once, forwards attribution and exposes a direct fallback', async () => {
+    const run = runtime();
+    run.state.settings.policy = { cloaked: true, track_conversions: true };
+    const result = await run.invoke();
+    expect(result.status).toBe(200);
+    const html = await result.text();
+    expect(html).toContain('<iframe');
+    expect(html).toContain('qg_click_id=click-id');
+    expect(html).toContain('Open destination directly');
+    expect(run.rpc.mock.calls.filter(([name]) => name === 'record_redirect_visit')).toHaveLength(1);
+    expect((await run.invoke('HEAD')).status).toBe(200);
+    expect(run.rpc.mock.calls.filter(([name]) => name === 'record_redirect_visit')).toHaveLength(1);
+    run.state.link.target = 'http://example.com/plain';
+    expect((await run.invoke()).status).toBe(503);
   });
   it('uses live state instead of a stale cached rule and never tracks expired fallbacks', async () => {
     const run = runtime();
