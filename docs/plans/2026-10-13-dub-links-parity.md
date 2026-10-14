@@ -1051,3 +1051,33 @@ report SDK/team discovery, integrations, durable outgoing webhooks, remaining
 permissions/account discovery and controlled real-service/release validation
 remain required. No production migrations, DNS/provider writes, deployments,
 package publication or release have occurred in this checkpoint.
+
+
+### Restart provider validation
+
+Continue the approved domain lifecycle design with an explicit owner restart
+control. A direct synchronous PATCH would bypass durable authorization and lease
+coordination; automatically PATCHing every status refresh would reset provider
+backoff without owner intent. Instead, add a versioned restart request tied to the
+current provider operation in the existing durable job. Require enabled, freshly
+verified ownership, a known connected provider ID and matching zone/target, with
+a five-minute request cooldown. Enqueue a status refresh and invalidate cached
+certificate readiness immediately.
+
+After GET verifies the exact provider hostname/ID, reserve a single-use restart
+under the ACL lock and current lease/operation, provider binding, owner permission,
+proof and configuration. Only then send a no-change SSL PATCH using the observed
+method/type. Support only the workspace's DV/txt-or-http-or-email configuration;
+reject missing/unrecognized values rather than changing certificate settings.
+Cancellation or intervening refresh makes an older request ineligible. Consuming
+the request before PATCH ensures worker crashes or ambiguous network outcomes
+cannot automatically repeat it. Subsequent jobs inspect status; an owner may
+request again after cooldown if needed. No new hostname creation or DNS changes.
+Expose queued/started timestamps and explain this uncertainty in the UI/docs.
+
+Verify SQL permissions, stale versions/leases/bindings and lost proof, request
+cooldown, one-use reservation and cancellation; adapter GET/PATCH exact payload,
+timeout/non-repeat and mismatches; owner HTTP denial for keys/members; and UI
+restart eligibility/status without conflating it with read-only refresh.
+Source: Cloudflare Common API Calls, retrieved 2026-10-14:
+https://developers.cloudflare.com/cloudflare-for-platforms/cloudflare-for-saas/start/common-api-calls/
