@@ -23,14 +23,14 @@ import { LOADER_DELAY_MS, useLoaderDelay } from './useLoaderDelay';
  */
 export function TrackLoader({
   size = 22,
-  track = 'pink',
+  track = 'ink',
   label,
   className,
   delayMs = LOADER_DELAY_MS,
 }: {
   size?: number;
-  /** Which line is working. Defaults to pink — the primary track. */
-  track?: 'pink' | 'blue' | 'green' | 'yellow';
+  /** Which line is working. Neutral ink by default on every surface. */
+  track?: 'ink' | 'pink' | 'blue' | 'green' | 'yellow';
   /** Announced to screen readers. Omit only when an adjacent live region says it. */
   label?: string;
   className?: string;
@@ -40,14 +40,19 @@ export function TrackLoader({
    */
   delayMs?: number;
 }) {
-  const { visible } = useLoaderDelay(true, { delayMs });
-  const stroke = `hsl(var(--track-${track}))`;
+  const { visible, slow } = useLoaderDelay(true, { delayMs });
+  const stroke = track === 'ink' ? 'currentColor' : `hsl(var(--track-${track}))`;
   return (
     <svg
       viewBox="0 0 44 44"
       width={size}
       height={size}
-      className={cn('track-loader', !visible && 'track-loader--pending', className)}
+      className={cn(
+        'track-loader',
+        !visible && 'track-loader--pending',
+        slow && 'track-loader--slow',
+        className,
+      )}
       {...(label ? { role: 'status', 'aria-label': label } : { 'aria-hidden': true })}
     >
       {/* A rounded square loop in bezier, not a circle: same reason the map

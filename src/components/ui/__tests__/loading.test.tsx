@@ -14,9 +14,9 @@ describe('Loading variants', () => {
     const { container } = render(<LoadingSpinner />);
     expect(container).toBeTruthy();
   });
-  it('PageLoading renders text', () => {
+  it('PageLoading announces its label', () => {
     render(<PageLoading text="Hold on" />);
-    expect(screen.getByText('Hold on')).toBeInTheDocument();
+    expect(screen.getByRole('status', { name: 'Hold on' })).toBeInTheDocument();
   });
   it('InlineLoading renders text', () => {
     render(<InlineLoading text="Wait" />);

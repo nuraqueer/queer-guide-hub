@@ -9,6 +9,7 @@ import {
   normPostal,
   postalContradicts,
   postalJobOutcome,
+  canStartPostalRequest,
   stampGeocode,
   houseNumberContradicts,
   normPlace,
@@ -30,6 +31,11 @@ function venue(over: Partial<GeoVenue> = {}): GeoVenue {
     ...over,
   }
 }
+
+Deno.test('postal drain stops before an in-flight request could exceed its HTTP budget', () => {
+  assert(canStartPostalRequest(70_000, 15_000, 1_100, 90_000))
+  assertFalse(canStartPostalRequest(74_000, 15_000, 1_100, 90_000))
+})
 
 // The live reproduction this guard was written for.
 const KUNSTWERK = venue({

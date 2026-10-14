@@ -6,6 +6,8 @@ import {
 } from '../_shared/supabase-client.ts'
 import { consumeLlmBudget } from '../_shared/llm-budget.ts'
 import { marketplaceDescriptionFromRaw } from '../_shared/marketplace-description.ts'
+import { boundedBatch, workBudget } from '../_shared/work-budget.ts'
+import { parseMarketplaceEnhancement, descriptionResponseFormat } from '../_shared/marketplace-enhancement.ts'
 
 // ============================================================
 // marketplace-description-enhance — translate + clean poor marketplace
@@ -42,7 +44,7 @@ function coerce(x: unknown): string {
 }
 
 async function callAnthropic(apiKey: string, title: string, source: string): Promise<string> {
-  const res = await fetch('https://api.anthropic.com/v1/messages', { method: 'POST', headers: { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' }, body: JSON.stringify({ model: 'claude-haiku-4-5-20251001', max_tokens: 400, system: SYSTEM_PROMPT, messages: [{ role: 'user', content: `Title: ${title}\nSource:\n${(source || '').slice(0, 1500)}` }] }) })
+  const res = await fetch('https://api.anthropic.com/v1/messages', { method: 'POST', signal: AbortSignal.timeout(45000), headers: { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' }, body: JSON.stringify({ model: 'claude-haiku-4-5-20251001', max_tokens: 400, system: SYSTEM_PROMPT, messages: [{ role: 'user', content: `Title: ${title}\nSource:\n${(source || '').slice(0, 1500)}` }] }) })
   if (!res.ok) throw new Error(`anthropic ${res.status}: ${(await res.text()).slice(0, 120)}`)
   const data = await res.json()
   return data.content?.[0]?.text || ''
@@ -56,7 +58,7 @@ async function callWorkersAI(acct: string, token: string, title: string, source:
   const model = modelOverride || Deno.env.get('CF_AI_MODEL') || '@cf/meta/llama-3.1-8b-instruct-fast'
   const ctrl = new AbortController(); const t = setTimeout(() => ctrl.abort(), 45000)
   try {
-    const res = await fetch(`https://api.cloudflare.com/client/v4/accounts/${acct}/ai/run/${model}`, { method: 'POST', signal: ctrl.signal, headers: { Authorization: `Bearer ${token}`, 'content-type': 'application/json' }, body: JSON.stringify({ messages: [{ role: 'system', content: SYSTEM_PROMPT }, { role: 'user', content: `Title: ${title}\nSource:\n${(source || '').slice(0, 1500)}` }], max_tokens: 400 }) })
+    const res = await fetch(`https://api.cloudflare.com/client/v4/accounts/${acct}/ai/run/${model}`, { method: 'POST', signal: ctrl.signal, headers: { Authorization: `Bearer ${token}`, 'content-type': 'application/json' }, body: JSON.stringify({ messages: [{ role: 'system', content: SYSTEM_PROMPT }, { role: 'user', content: `Title: ${title}\nSource:\n${(source || '').slice(0, 1500)}` }], max_tokens: 400, response_format: descriptionResponseFormat(model) }) })
     if (!res.ok) throw new Error(`workers-ai ${res.status}: ${(await res.text()).slice(0, 120)}`)
     const data = await res.json()
     return coerce(data?.result?.response ?? data?.result)
@@ -73,11 +75,7 @@ async function enhance(title: string, source: string, modelOverride?: string): P
   if (acct && cfToken) raw = await callWorkersAI(acct, cfToken, title, source, modelOverride)
   else if (anthropic) raw = await callAnthropic(anthropic, title, source)
   else throw new Error('no LLM configured (need CF_ACCOUNT_ID+CF_AI_API_TOKEN or ANTHROPIC_API_KEY)')
-  const s = coerce(raw)
-  const match = s.match(/\{[\s\S]*\}/)
-  if (!match) throw new Error('non-json LLM response: ' + s.slice(0, 80))
-  const parsed = JSON.parse(match[0])
-  return { description: String(parsed.description || '').trim(), source_lang: String(parsed.source_lang || 'other').toLowerCase() }
+  return parseMarketplaceEnhancement(coerce(raw))
 }
 
 Deno.serve(async (req) => {
@@ -94,7 +92,8 @@ Deno.serve(async (req) => {
     // ohmyfantasy.com forever, so 12.5k boilerplate rows elsewhere never
     // became eligible.)
     const merchantDomain = typeof body.merchant_domain === 'string' ? (body.merchant_domain as string) : null
-    const batchSize = Math.min(Number(body.batch_size ?? 25), 60)
+    const batchSize = boundedBatch(body.batch_size, 25, 60)
+    const budgetClock = workBudget(75_000)
     const dryRun = body.dry_run || false
     // Opt-in strong model for manual runs; the default is the cheap 8B.
     const modelOverride = typeof body.model === 'string' && body.model.startsWith('@cf/') ? (body.model as string) : undefined
@@ -137,7 +136,8 @@ Deno.serve(async (req) => {
           if (!dryRun) {
             i18n._recovery_checked_at = new Date().toISOString()
             i18n._recovery_version = 'source-payload-v1'
-            await supabase.from('marketplace_listings').update({ description_i18n: i18n }).eq('id', row.id)
+            const { error } = await supabase.from('marketplace_listings').update({ description_i18n: i18n }).eq('id', row.id)
+            if (error) throw error
           }
           continue
         }
@@ -148,11 +148,12 @@ Deno.serve(async (req) => {
           i18n._recovered_from = found.source.source_slug
           i18n._recovery_version = 'source-payload-v1'
           i18n._original = found.text
-          await supabase.from('marketplace_listings').update({
+          const { error } = await supabase.from('marketplace_listings').update({
             description: found.text.slice(0, 1200),
             description_i18n: i18n,
             updated_at: new Date().toISOString(),
           }).eq('id', row.id)
+          if (error) throw error
         }
       }
     }
@@ -162,37 +163,17 @@ Deno.serve(async (req) => {
       return !recoveredIds.has(r.id) && !i18n._enhanced_at && String(r.description ?? '').trim().length > 20
     }).slice(0, batchSize)
     if (pending.length === 0) return json({ success: true, items: recovered, items_examined: (rows || []).length, items_changed: recovered, items_terminal: recovered + recoveryMisses, items_failed: 0, recovered, recovery_misses: recoveryMisses, message: 'source recovery complete' })
-    // Central daily cap (llm_budget, seeded 500/day — migration 20260817090000):
-    // this fn previously ran the */5 cron with NO cap. One consume for the whole
-    // batch (one LLM call per pending row). If the RPC is missing (fn deployed
-    // ahead of the migration), consumeLlmBudget warns and we run uncapped, as
-    // before.
-    const budget = await consumeLlmBudget(supabase, 'marketplace-description-enhance', pending.length)
-    if (!budget.allowed) {
-      return json({
-        success: true,
-        items: recovered,
-        items_examined: (rows || []).length,
-        items_changed: recovered,
-        // The queue claim is terminal for this dispatch even though inference
-        // is deferred to a later UTC budget window. Refill makes the rows
-        // eligible again; this avoids treating an intentional spend ceiling as
-        // a broken worker and auto-pausing it for the following day.
-        items_terminal: (rows || []).length,
-        items_failed: 0,
-        skipped: pending.length,
-        recovered,
-        recovery_misses: recoveryMisses,
-        message: 'llm_budget_deferred',
-        daily_cap: budget.cap,
-        merchant_domain: merchantDomain,
-        dry_run: dryRun,
-      })
-    }
+    let budgetDeferral: { cap: number | null } | null = null
     let done = 0, skipped = 0, failed = 0, firstErr: string | null = null
     for (const row of pending) {
+      // One provider call may take 45s; return completed work before the gateway deadline.
+      if (!budgetClock.canStart(48_000)) break
       const original = (row.description as string) || ''
       try {
+        // Charge only the inference about to run, never rows deferred by the
+        // deadline. The shared helper retains its existing degraded fallback.
+        const budget = await consumeLlmBudget(supabase, 'marketplace-description-enhance', 1)
+        if (!budget.allowed) { budgetDeferral = budget; break }
         const r = await enhance(String(row.title || ''), original, modelOverride)
         if (!r.description || r.description.length < 25 || r.description.length > 900) { skipped++; continue }
         if (dryRun) { done++; continue }
@@ -200,11 +181,16 @@ Deno.serve(async (req) => {
         const lang = ['de', 'fr', 'en', 'other'].includes(r.source_lang) ? r.source_lang : 'other'
         if (lang !== 'en') i18n[lang] = original
         i18n._original = original; i18n._original_lang = lang; i18n._enhanced_at = new Date().toISOString()
-        await supabase.from('marketplace_listings').update({ description: r.description.slice(0, 600), description_i18n: i18n, updated_at: new Date().toISOString() }).eq('id', row.id)
+        const { error: updateError } = await supabase.from('marketplace_listings').update({ description: r.description.slice(0, 600), description_i18n: i18n, updated_at: new Date().toISOString() }).eq('id', row.id)
+        if (updateError) throw updateError
         done++
         await new Promise((res) => setTimeout(res, 150))
       } catch (err) { if (!firstErr) firstErr = (err as Error).message; failed++ }
     }
-    return json({ success: failed === 0, items: done + recovered, items_examined: (rows || []).length, items_changed: done + recovered, items_terminal: done + recovered + recoveryMisses + skipped, items_processed: done + skipped + failed + recovered + recoveryMisses, items_succeeded: done + recovered, items_skipped: skipped, items_failed: failed, recovered, recovery_misses: recoveryMisses, generator_version: 'marketplace-description-v2', first_error: firstErr, merchant_domain: merchantDomain, dry_run: dryRun })
+    const deferred = pending.length - done - skipped - failed
+    // Daily-cap deferral is terminal for this dispatch; refill makes the rows
+    // eligible in the next budget window without pausing a healthy worker.
+    const quotaSkipped = budgetDeferral ? deferred : 0
+    return json({ success: failed === 0, items: done + recovered, items_examined: (rows || []).length, items_changed: done + recovered, items_terminal: done + recovered + recoveryMisses + skipped + quotaSkipped, items_processed: done + skipped + failed + recovered + recoveryMisses, items_succeeded: done + recovered, items_skipped: skipped + quotaSkipped, items_failed: failed, recovered, recovery_misses: recoveryMisses, deferred, generator_version: 'marketplace-description-v3', first_error: firstErr, merchant_domain: merchantDomain, dry_run: dryRun, ...(budgetDeferral ? { message: 'llm_budget_deferred', daily_cap: budgetDeferral.cap, skipped: quotaSkipped } : {}) })
   } catch (error) { return json({ success: false, error: (error as Error).message }, 500) }
 })

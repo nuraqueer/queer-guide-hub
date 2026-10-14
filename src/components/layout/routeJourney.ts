@@ -1,7 +1,5 @@
 import { stripLocale } from '@/lib/locale';
 
-export const ROUTE_JOURNEY_MS = 620;
-
 export type JourneyTrack = 'pink' | 'blue' | 'green' | 'yellow';
 
 const MOTION_FREE_PREFIXES = ['/admin', '/help', '/support', '/rights/trans', '/report', '/safety'];

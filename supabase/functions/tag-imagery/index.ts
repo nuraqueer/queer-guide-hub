@@ -8,11 +8,16 @@
  * Pexels/Unsplash hit for a keyword-mapped tag name -- no scoring, no
  * content-match check -- and 1,262 of them with no recoverable license".
  *
- * THREE TIERS, and only one of them may publish unattended:
+ * THREE TIERS, AND NONE OF THEM PUBLISHES UNATTENDED. Tier 1 did until
+ * 2026-10-11; the first 40-row dry run on prod returned 12 auto-publish
+ * candidates and ZERO of the 12 were right, so the guard's verdict union lost
+ * its `publish` arm and this function has no apply branch left. The numbers and
+ * the mechanism are in `_shared/tag-image-guard.ts`'s P18 branch.
  *
  *   1. `wikidata:p18` -- the image a Wikidata editor curated on the tag's OWN
- *      entity. The match is structural rather than guessed, so this is the only
- *      tier that writes without a human. QIDs listed in
+ *      entity. Review-gated like the rest: the entity is right for the ENTITY,
+ *      and this corpus's tags systematically do not mean their namesake entity.
+ *      QIDs listed in
  *      `tag_wikidata_repair_audit` are skipped: that table is the register of
  *      identifiers this repo has already disowned for pointing at the wrong
  *      thing, and it is exactly what would otherwise reproduce `cum` ->
@@ -78,7 +83,7 @@ interface TagRow {
 interface RowResult {
   slug: string
   tier: Tier | null
-  decision: 'published' | 'queued' | 'refused' | 'skipped' | 'error'
+  decision: 'queued' | 'refused' | 'skipped' | 'error'
   why: string
   url?: string
 }
@@ -328,7 +333,6 @@ Deno.serve(async (req) => {
   }
 
   const results: RowResult[] = []
-  let published = 0
   let queued = 0
   let refused = 0
   let errors = 0
@@ -432,12 +436,11 @@ Deno.serve(async (req) => {
         results.push({
           slug: tag.slug,
           tier: requestedTier,
-          decision: verdict.decision === 'publish' ? 'published' : 'queued',
-          why: `dry_run:${verdict.decision === 'publish' ? 'would_publish' : verdict.why}`,
+          decision: 'queued',
+          why: `dry_run:${verdict.why}`,
           url: candidate.url,
         })
-        if (verdict.decision === 'publish') published++
-        else queued++
+        queued++
         continue
       }
 
@@ -485,90 +488,57 @@ Deno.serve(async (req) => {
         continue
       }
 
-      if (verdict.decision === 'publish') {
-        // NOT a PostgREST update. `log_unified_tag_change()` RAISEs when an
-        // UNDECLARED actor (`system:%`, which is what a service-role write is)
-        // modifies a `human_reviewed` row, and 79% of prose-bearing active tags
-        // carry that flag -- so the direct write failed on exactly the rows most
-        // worth illustrating. The RPC declares `machine:tag-imagery` and claims
-        // the asset link in the same transaction; it does NOT bypass
-        // `enforce_tag_image_contract`, so an unlicensed or stock-on-adult write
-        // is still refused here and that refusal is a bug in the guard above.
-        const { error: upErr } = await supabase.rpc('tag_image_apply', {
-          p_tag_id: tag.id,
-          p_url: mirrored.url,
-          p_alt: alt,
-          p_source: candidate.source,
-          p_license: candidate.license,
-          p_attribution: candidate.attribution,
-          p_explicit: verdict.explicit,
-          p_asset_id: assetId,
-        })
-        if (upErr) {
-          // A check_violation here is the contract refusing something the guard
-          // let through, which is a BUG in the guard and must be loud.
-          results.push({
-            slug: tag.slug,
-            tier: requestedTier,
-            decision: 'error',
-            why: `publish_rejected:${upErr.message.slice(0, 120)}`,
-            url: mirrored.url,
-          })
-          errors++
-          continue
-        }
+      // EVERY TIER QUEUES. The guard has no `publish` verdict since 2026-10-11,
+      // so there is no branch here and no call to `tag_image_apply` -- the
+      // approval path (`_apply_review_value`'s `tag_image` arm, 99991791617122)
+      // writes all six columns and claims the asset link when a human approves.
+      // `tag_image_apply` stays in the database unused rather than being dropped
+      // in the same change that stopped calling it.
+      const { error: qErr } = await supabase.from('entity_review_queue').insert({
+        entity_type: 'tag',
+        entity_id: tag.id,
+        field: 'image_url',
+        proposed_value: {
+          url: mirrored.url,
+          alt,
+          source: candidate.source,
+          license: candidate.license,
+          attribution: candidate.attribution,
+          explicit: verdict.explicit,
+          asset_id: assetId,
+          upstream: candidate.url,
+          source_ref: candidate.sourceRef,
+        },
+        // A flat 0.6, not a per-tier score. The tier-1 measurement is what
+        // retired auto-publish, so ranking P18 above a keyword hit would put
+        // the worst-performing tier at the top of a reviewer's queue.
+        confidence: 0.6,
+        model: `tag-imagery:${requestedTier}`,
+        status: 'open',
+      })
+      if (qErr) {
+        // 23505 against uq_erq_open means a proposal is already open for this
+        // tag -- a skip, not a failure. The database enforcing the invariant
+        // the pre-check could not see.
+        const skip = qErr.message.includes('duplicate key')
         results.push({
           slug: tag.slug,
           tier: requestedTier,
-          decision: 'published',
-          why: 'auto',
+          decision: skip ? 'skipped' : 'error',
+          why: skip ? 'already_queued' : `queue_failed:${qErr.message.slice(0, 120)}`,
           url: mirrored.url,
         })
-        published++
-      } else {
-        const { error: qErr } = await supabase.from('entity_review_queue').insert({
-          entity_type: 'tag',
-          entity_id: tag.id,
-          field: 'image_url',
-          proposed_value: {
-            url: mirrored.url,
-            alt,
-            source: candidate.source,
-            license: candidate.license,
-            attribution: candidate.attribution,
-            explicit: verdict.explicit,
-            asset_id: assetId,
-            upstream: candidate.url,
-            source_ref: candidate.sourceRef,
-          },
-          confidence: verdict.decision === 'review' ? 0.6 : 0.9,
-          model: `tag-imagery:${requestedTier}`,
-          status: 'open',
-        })
-        if (qErr) {
-          // 23505 against uq_erq_open means a proposal is already open for this
-          // tag -- a skip, not a failure. The database enforcing the invariant
-          // the pre-check could not see.
-          const skip = qErr.message.includes('duplicate key')
-          results.push({
-            slug: tag.slug,
-            tier: requestedTier,
-            decision: skip ? 'skipped' : 'error',
-            why: skip ? 'already_queued' : `queue_failed:${qErr.message.slice(0, 120)}`,
-            url: mirrored.url,
-          })
-          if (!skip) errors++
-          continue
-        }
-        results.push({
-          slug: tag.slug,
-          tier: requestedTier,
-          decision: 'queued',
-          why: verdict.why,
-          url: mirrored.url,
-        })
-        queued++
+        if (!skip) errors++
+        continue
       }
+      results.push({
+        slug: tag.slug,
+        tier: requestedTier,
+        decision: 'queued',
+        why: verdict.why,
+        url: mirrored.url,
+      })
+      queued++
     } catch (err) {
       results.push({
         slug: tag.slug,
@@ -587,7 +557,10 @@ Deno.serve(async (req) => {
       dry_run: dryRun,
       considered: candidates.length,
       eligible: eligible.length,
-      published,
+      // No `published` key. It would be structurally zero now that every tier
+      // queues, and a counter that can only ever read zero is worse than its
+      // absence -- a reader cannot tell it from an engine that published
+      // nothing today.
       queued,
       refused,
       errors,
@@ -615,7 +588,8 @@ async function bumpMiss(
   // whenever two batches touch one tag, and an undercounted attempt means the
   // terminal sentinel never fires and the row is re-probed forever. The RPC
   // also declares the actor, which a direct write cannot on a `human_reviewed`
-  // row -- see the publish site above.
+  // row. (The publish site this used to point at is gone; the same constraint
+  // is why the approval path goes through `_apply_review_value`.)
   const { error } = await supabase.rpc('tag_image_bump_miss', {
     p_tag_id: tag.id,
     p_why: why,

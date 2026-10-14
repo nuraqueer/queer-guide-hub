@@ -27,12 +27,12 @@ export function DestinationTiles({ cities }: DestinationTilesProps) {
           <LocalizedLink
             key={c.city_id}
             to={href}
-            className="relative block group overflow-hidden aspect-[4/3] no-underline"
+            className="relative block group overflow-hidden rounded-container aspect-[4/3] no-underline"
             style={{ color: 'inherit' }}
             aria-label={`${c.name}, ${c.hotel_count} hotels`}
           >
             {showNetwork ? (
-              <div className="absolute inset-0 flex items-center justify-center bg-background p-4 pb-12">
+              <div className="absolute inset-0 flex items-center justify-center rounded-container bg-background p-4 pb-12">
                 <CityNetwork slug={c.slug} variant="thumb" className="h-full" />
               </div>
             ) : (

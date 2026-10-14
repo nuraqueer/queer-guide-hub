@@ -1,5 +1,7 @@
 import { getCorsHeaders, getServiceClient, requireAdmin } from '../_shared/supabase-client.ts'
 import { assertPublicHttpUrl } from '../_shared/ssrf-guard.ts'
+import { contentLinkHttpStatus, mayRemoveContentLink, nextContentLinkCheckCount } from '../_shared/content-link-state.ts'
+import { boundedBatch, workBudget } from '../_shared/work-budget.ts'
 
 const HEAD_TIMEOUT = 5_000
 const GET_TIMEOUT = 10_000
@@ -32,8 +34,8 @@ async function checkUrl(rawUrl: string): Promise<CheckResult> {
   try {
     assertPublicHttpUrl(url)
   } catch {
-    // Private/loopback/metadata target — permanently invalid as a content
-    // link, so let it ride the BROKEN → recheck → auto-remove path.
+    // Never request private/loopback/metadata targets. Retain the record for
+    // admin review; automatic removal requires a confirmed HTTP404/410.
     return { status: 'BROKEN', httpStatus: null, finalUrl: null, error: 'Blocked unsafe URL (SSRF guard)' }
   }
 
@@ -64,18 +66,18 @@ async function checkUrl(rawUrl: string): Promise<CheckResult> {
     }
 
     // 401/403 = BLOCKED (could be geo-restricted or login-required)
-    if (httpStatus === 401 || httpStatus === 403) {
+    if (contentLinkHttpStatus(httpStatus) === 'BLOCKED') {
       return { status: 'BLOCKED', httpStatus, finalUrl: null, error: `HTTP ${httpStatus}` }
     }
 
-    // 4xx/5xx = BROKEN
-    return { status: 'BROKEN', httpStatus, finalUrl: null, error: `HTTP ${httpStatus}` }
+    // Only a confirmed 404/410 is dead; other errors are transient.
+    return { status: contentLinkHttpStatus(httpStatus), httpStatus, finalUrl: null, error: `HTTP ${httpStatus}` }
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
     if (msg.includes('timed out') || msg.includes('timeout') || msg.includes('AbortError')) {
       return { status: 'TIMEOUT', httpStatus: null, finalUrl: null, error: 'Request timed out' }
     }
-    return { status: 'BROKEN', httpStatus: null, finalUrl: null, error: msg.substring(0, 200) }
+    return { status: 'TIMEOUT', httpStatus: null, finalUrl: null, error: msg.substring(0, 200) }
   }
 }
 
@@ -125,7 +127,9 @@ Deno.serve(async (req: Request) => {
 
     console.log(`[validate-links] mode=${mode}, linkIds=${linkIds?.length ?? 'none'}, batchLimit=${batchLimit}`)
 
-    let links: unknown[]
+    batchLimit = boundedBatch(batchLimit, DEFAULT_BATCH_LIMIT, 50)
+    const budget = workBudget(75_000)
+    let links: Array<{ id: string; original_url: string; status: string; http_status: number | null; check_count: number | null }>
 
     if (mode === 'single' && linkIds?.length) {
       // Validate specific links by ID
@@ -174,6 +178,7 @@ Deno.serve(async (req: Request) => {
     }
 
     let checked = 0
+    let examined = 0
     let recovered = 0
     let stillBroken = 0
     let autoRemoved = 0
@@ -184,6 +189,8 @@ Deno.serve(async (req: Request) => {
     }> = []
 
     for (let i = 0; i < links.length; i++) {
+      if (!budget.canStart(20_000)) break
+      examined++
       const link = links[i]
       try {
         const previousStatus = link.status
@@ -194,8 +201,10 @@ Deno.serve(async (req: Request) => {
         console.log(`[validate-links] Result: status=${result.status} http=${result.httpStatus} final=${result.finalUrl ?? 'none'}`)
 
         // Determine new check_count
-        let newCheckCount = previousCheckCount
-        const wasBroken = previousStatus === 'BROKEN' || previousStatus === 'TIMEOUT'
+        let newCheckCount = nextContentLinkCheckCount(
+          previousStatus, link.http_status, previousCheckCount, result.status, result.httpStatus,
+        )
+        const wasBroken = ['BROKEN', 'TIMEOUT', 'BLOCKED'].includes(previousStatus)
 
         if (result.status === 'OK' || result.status === 'REDIRECT') {
           // Link recovered — reset check_count
@@ -203,14 +212,12 @@ Deno.serve(async (req: Request) => {
             recovered++
             console.log(`[validate-links] RECOVERED: ${link.original_url} (was check_count=${previousCheckCount})`)
           }
-          newCheckCount = 0
         } else if (result.status === 'BROKEN' || result.status === 'TIMEOUT') {
-          // Still broken — increment check_count
-          newCheckCount = previousCheckCount + 1
+          // Transient history cannot count toward confirmed-dead removal.
           console.log(`[validate-links] Still broken: ${link.original_url} check_count ${previousCheckCount} → ${newCheckCount}`)
 
-          // If check_count reaches 4 after 3 failed rechecks → auto-remove
-          if (newCheckCount >= 4) {
+          // Remove only after four confirmed-dead checks.
+          if (mayRemoveContentLink(result.status, result.httpStatus, newCheckCount)) {
             console.log(`[validate-links] AUTO-REMOVING: ${link.original_url} after ${newCheckCount - 1} failed rechecks`)
             const { error: rpcErr } = await supabase.rpc('auto_remove_broken_link', { link_id: link.id })
             if (rpcErr) {
@@ -223,23 +230,21 @@ Deno.serve(async (req: Request) => {
               })
             } else {
               autoRemoved++
+              checked++
               results.push({
                 id: link.id, url: link.original_url, status: 'AUTO_REMOVED',
                 previous_status: previousStatus, check_count: newCheckCount,
               })
             }
-            checked++
             if (i < links.length - 1) await delay(BETWEEN_CHECK_DELAY)
             continue // Skip normal update — auto_remove_broken_link handles it
           }
 
           stillBroken++
-        } else if (result.status === 'BLOCKED') {
-          // BLOCKED: increment check_count but do NOT auto-remove
-          newCheckCount = previousCheckCount + 1
-          // Cap at 3 — blocked links don't escalate to removal
-          if (newCheckCount > 3) newCheckCount = 3
         }
+
+        // Transient failures stay eligible for monthly rechecks, never removal.
+        newCheckCount = Math.min(newCheckCount, 3)
 
         // Update the content_links row
         const updatePayload: Record<string, unknown> = {
@@ -282,7 +287,7 @@ Deno.serve(async (req: Request) => {
       }
     }
 
-    const response = { checked, recovered, still_broken: stillBroken, auto_removed: autoRemoved, errors: errorCount, total: links.length, results }
+    const response = { success: errorCount === 0, items_examined: examined, items_changed: checked, items_failed: errorCount, deferred: Math.max(0, links.length - examined), checked, recovered, still_broken: stillBroken, auto_removed: autoRemoved, errors: errorCount, total: links.length, results }
     console.log(`[validate-links] Done: checked=${checked} recovered=${recovered} still_broken=${stillBroken} auto_removed=${autoRemoved} errors=${errorCount}`)
     return new Response(
       JSON.stringify(response),
