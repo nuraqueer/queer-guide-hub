@@ -2505,3 +2505,49 @@ This keeps known lost-owner/member credentials at HTTP 403 instead of older API
 branches treating their auth RPC error as transient 503 and retrying it. Full SQL
 and five native SDK HTTP suites pass, including a newly created key's /links
 request after its creator loses admin role. No privileges were broadened.
+
+### All-source member inventory design (2026-10-15)
+
+The live owner inventory already spans manual SHORT/PATH, fourteen slug-alias
+families, venue/username aliases and declarative static/client rules. Member
+workspace and scoped REST listings currently expose managed SHORT rows only.
+Extend member inventory/organization to the actual sources, retaining the existing
+managed-link editor and analytics rather than pretending automatic routes are
+editable short links.
+
+Client-only filtering is insufficient for API keys and private comments; copying
+all live aliases into another table would become stale. Use a service-only database
+view over the real alias/manual rows plus a generated, source-controlled static/
+client manifest derived from the existing parsers. The Edge handler alone supplies
+the manifest; caller bodies cannot inject it. No public source routing or target
+entity content permission changes. View permission covers the source/destination
+route descriptor and workspace metadata; source records remain owned by their
+original routing/entity systems.
+
+Add paginated /inventory and private metadata/organization endpoints with current
+owner/member/key/folder/selected-ID enforcement under the ACL lock. Unrestricted
+owner keys can view all; selected-ID keys retain only their allowed managed SHORT
+rows. Members see unfiled sources and their readable folders, and may change only
+comments/tags/archive/folder organization when their current rank and links:write
+allow it. Require destination edit permission for folder moves. Keep public aliases
+publicly routable independently of private workspace listing. Unknown/hidden records
+share the same unavailable response; recheck grants and existence for every write.
+Bulk organization is atomic, source-base fields are immutable through these routes,
+and metadata versions preserve drafts across concurrent edits.
+
+Static/client rows keep the existing semantic metadata keys. Tag aliases have a
+physical bigint ID; support a distinct row identity if duplicate source histories
+appear, while metadata continues following the semantic source URL. Read-only
+production schema inspection confirms all fourteen alias foreign keys are UUID,
+venue aliases have UUID IDs, tag aliases have bigint IDs and the others use old
+slug/username keys. A read-only aggregate found zero duplicate tag source URLs.
+No routing/data rows were read or changed for this schema discovery.
+
+The member page gets an Other redirects section with source/kind/search/folder/
+archive filters, clear read-only base-field labels, private metadata editor,
+folder/tag/archive actions and applicable source copy/QR/managed-link prefill.
+Never fabricate concrete targets for client parameterized descriptors. Update
+five SDKs, REST docs and the existing scoped permission SQL/HTTP/UI fixtures.
+Verify hidden/unfiled/folder/selected-key boundaries across all sources, stale
+writes, role/permission revocation, immutable routing and generated-manifest parity.
+Owner inventory behavior and the existing managed-link capabilities remain intact.
