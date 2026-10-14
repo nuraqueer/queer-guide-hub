@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 const ROOT = process.cwd();
-const MIGRATION = '99991791999298_content_revision_retention_and_heartbeat_noise.sql';
+const MIGRATION = '99991792001788_content_revision_retention_and_heartbeat_noise.sql';
 const strip = (sql: string) =>
   sql
     .split('\n')
@@ -58,7 +58,7 @@ describe('content revision retention', () => {
   it('CLAUDE.md no longer claims the 290 MB steady state', () => {
     const md = readFileSync(join(ROOT, 'CLAUDE.md'), 'utf8');
     expect(md).not.toContain('giving a steady state near 290 MB');
-    expect(md).toContain('99991791999298');
+    expect(md).toContain('99991792001788');
   });
 
   it('health script horizon matches the 21d retention', () => {
