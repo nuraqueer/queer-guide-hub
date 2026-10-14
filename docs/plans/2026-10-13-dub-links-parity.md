@@ -2002,3 +2002,68 @@ archive/transfer/subpaths and authorized DNS automation, team/account discovery
 and invitations/all-source folder permissions, plus controlled infrastructure
 release and SDK publication are still required. Existing QR/customer/report
 candidates also retain their documented production verification requirements.
+
+### Native Segment/GTM integration design (2026-10-14)
+
+Dub's current Segment guide explicitly includes both a destination (Segment ->
+conversions) and a source (customer events -> Segment). Implement both with native
+Segment Functions, whose documented handlers and secret settings are available
+without registering a new global catalog product. Alternative approaches are a
+plain webhook URL (insufficient inbound native mapping) or a new global catalog
+submission (requires provider approval outside this repository). Native Source
+and Destination Functions plus in-product setup are the implementation choice.
+Do not claim a global Segment catalog listing or an installed account connection.
+
+The Destination Function maps configurable lead/sale event names, stable message
+IDs, customer userId, click ID properties/context traits, currency, explicit
+major-unit six-decimal amounts and optional occurredAt into the existing scoped
+conversion endpoint. Store an ID-limited conversions:write key in Segment's
+secret setting; fixed queer.guide API origin only. Ignore unrelated events and
+source events carrying the Redirects-origin marker to prevent a feedback loop.
+Reject missing/unsafe IDs, numeric precision loss and missing sale currency;
+retry provider network/429/5xx via Segment RetryError with stable event IDs, while
+surface permanent validation/permission errors without leaking credentials or
+response payloads. Do not import arbitrary Segment traits as private profiles.
+
+The Source Function verifies Standard Webhooks original raw request text with
+Node crypto/timingSafeEqual, bounded timestamp/body/signatures and optional old
+secret during rotation, before parsing. Map explicit supported events into native
+Segment.track using stable messageId and a Redirects source marker. Customer-ID
+opt-in maps to userId; otherwise use event/click IDs as anonymousId. Copy only
+allowlisted sanitized properties and retain decimal amounts as strings. Support
+test events with a clear provider test event, and dedup stable messageId. Real
+Segment debugger tests must verify raw-body availability and dedup behavior; the
+official example buildpack supports request.text(), but is not production-runtime
+proof. No settings in global state or logs.
+
+GTM uses an importable server-container template with sandbox APIs, strict send
+permission for https://queer.guide/api/redirects/track/{lead,sale}, typed fields,
+a server-side conversion key and configured stable event/customer/click IDs.
+Only validated trusted application/server events are conversion inputs; generic
+browser dataLayer pushes must not fabricate verified payments. A browser helper
+can expose consented attribution and events after trusted backend confirmation
+for GTM trigger wiring, with no private key or browser conversion API calls.
+Consent revocation clears attribution and disables subsequent pushes. Template
+must report failure/success exactly once, bound requests, reject redirects, and
+avoid forwarding unrelated event data, credentials or profile identity.
+
+Owner setup UI offers downloadable provider source/template artifacts, field
+mapping guidance, safe key/secret storage instructions, outbound subscription
+prefill, and explicit local-vs-installed status. Existing API/SDK idempotency and
+folder/link grants remain authoritative. Verify artifacts in provider-like
+sandboxes plus actual HTTP -> migrated SQL fixtures; add native Google template
+sandbox assertions and Segment inbound/outbound loop/precision/signature tests.
+Actual Segment/GTM account installation, debugger receipts, third-party consent
+and live delivery configuration remain release requirements, alongside the
+existing Edge/cron deployment. Continue independent features while awaiting the
+requested iOS/Android app IDs; app associations cannot be published with guessed
+application identities.
+
+Primary sources:
+https://dub.co/docs/integrations/segment
+https://dub.co/docs/integrations/google-tag-manager
+https://www.twilio.com/docs/segment/connections/functions/destination-functions
+https://www.twilio.com/docs/segment/connections/functions/source-functions
+https://github.com/segmentio/functions-library/blob/master/buildpack/boreal/window.js
+https://developers.google.com/tag-platform/tag-manager/server-side/api
+https://developers.google.com/tag-platform/tag-manager/datalayer
