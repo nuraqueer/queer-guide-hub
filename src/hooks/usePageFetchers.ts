@@ -413,11 +413,17 @@ export async function upsertEmailTemplate(
   editingId: string | null,
 ) {
   if (editingId) {
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from('email_templates')
       .update(template as never)
-      .eq('id', editingId);
-    return { error };
+      .eq('id', editingId)
+      .select('id')
+      .single();
+    return {
+      error:
+        error ??
+        (!data ? new Error('No email template was updated. Refresh and try again.') : null),
+    };
   }
   const { error } = await supabase.from('email_templates').insert([template] as never);
   return { error };
