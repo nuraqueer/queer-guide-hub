@@ -5477,7 +5477,7 @@ const DISOWNED_PROSE_CEILING = 380
 
 // ---------------------------------------------------------------------------
 // §  The admin review queue serves its corpus-wide counts from a cache
-//    (2026-10-14, 99991791999590)
+//    (2026-10-14, 99991792000371)
 // ---------------------------------------------------------------------------
 // get_admin_review_queue and get_admin_review_summary both used to aggregate a
 // 41-view union over ~327k rows on every /admin page load. Measured in
@@ -5499,7 +5499,7 @@ const DISOWNED_PROSE_CEILING = 380
     // The nightly run checks out `main` and calls the LIVE backend, so a window
     // where main carries this script and prod has not applied the migration is
     // not a defect.
-    console.warn('⚠ admin_review_counts_signals() not deployed yet (migration 99991791999590?) — skipping')
+    console.warn('⚠ admin_review_counts_signals() not deployed yet (migration 99991792000371?) — skipping')
   } else if (!res.ok) {
     console.error(`✗ admin_review_counts_signals() returned HTTP ${res.status} — measured nothing`)
     FAILED = true
