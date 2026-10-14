@@ -870,3 +870,26 @@ restart, remaining domain lifecycle/DNS automation, and every other open feature
 in this ledger. Dedicated Worker/zone routing, real DNS/TLS, scheduled renewal,
 production migrations, release/PR/push and controlled-domain verification remain
 unperformed. No production provider/DNS/database/deployment writes were made.
+
+### Domain choices, primary preference and interactive builders
+
+Use a private versioned singleton workspace preference for the primary hostname.
+Only current owner sessions may change it, and choosing a custom primary requires
+current ownership, TLS and routing proof. Selecting the built-in domain clears
+the preference. This changes interactive creation defaults, never existing links;
+the documented API omission behavior remains the built-in namespace.
+
+A links-read endpoint supplies paginated ready public domain IDs/hostnames without
+challenge/provider data. Creators see ready workspace domains; credentials bound
+to existing IDs and non-creating members see only domains already used by visible
+links. Current scope, member activity and folder permissions are checked in SQL.
+Return primary availability explicitly so a failed primary never silently changes
+the interactive creation URL. Client pagination must detect repeated cursors.
+
+The admin builder and member editor use one shared accessible domain selector,
+show the selected canonical URL, submit explicit domain IDs through scoped atomic
+link mutations and use the returned shortUrl for QR/export. Existing bindings can
+be preserved when a domain becomes unavailable, so repair remains possible; new
+or moved bindings still require readiness. Account-keyed queries and current SQL
+checks prevent stale client choices granting access. Owner primary controls use
+optimistic versions and re-fetch availability; no DNS/provider writes are added.
