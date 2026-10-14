@@ -1580,3 +1580,28 @@ remaining domain lifecycle/DNS automation, native/deferred deep links, branded
 password pages, customer enrichment, report SDK/team discovery, integrations,
 outgoing webhooks, permissions/account discovery and publication remain required.
 The overall Dub parity goal remains active.
+
+### Per-image custom artwork publication
+
+Extend explicit image creation with optional bare-base64 PNG/JPG artwork. Keep
+these uploads separate from saved workspace/domain defaults. Custom publications
+start pending and expose no public profile/image URL until verified and attached.
+Reserve an immutable asset under the creator/current grant version and existing
+asset budgets; fully render/scan-check it through the fixed site QR service before
+Storage upload. Check the PNG response/verification header with bounded reads,
+never follow redirects or fetch a caller URL. A verification/storage failure keeps
+the draft and reservation for cleanup; never blindly repeat an uncertain upload.
+Recheck the creator, current link scope, grant version, expiry and reservation
+before atomically marking the asset active and publication published.
+
+Use the existing controlled public raster bucket/immutable asset lifecycle. Add
+image references to cleanup guards so referenced artwork cannot be deleted. On
+revocation or image/link/creator deletion, release the asset with the read grace;
+pending drafts expire in 15 minutes and are pruned after one day. Pending expired
+records do not consume the active publication limit, but their creation/upload
+budget history remains. Public reads reject drafts. Rendering custom image
+artwork takes precedence over workspace/domain defaults and leaves those settings
+unchanged. Add the input/types/method coverage to all five SDKs. Complete UI
+publication/copy/revoke controls afterward, with preview/account/selection identity
+guards. Existing broad implementation approval applies; production release and
+real service-binding/gateway/Storage/cron proof remain required.
