@@ -1117,3 +1117,32 @@ remaining domain lifecycle/DNS automation, native/deferred deep links, durable Q
 styles, branded password pages, customer enrichment, report SDK/team discovery,
 integrations, outgoing webhooks, remaining permissions/account discovery and
 controlled real-service/release verification remain required.
+
+
+### Managed domain-root links
+
+Represent a branded homepage as a managed SHORT link with isDomainRoot=true,
+constrained to a non-null custom domain and unique per domain. Keep an internal
+valid slug for storage/API identity, but expose the canonical URL as https://host/;
+the internal slug path must not resolve the root row. This preserves existing
+link IDs, folder/tag/comment organization, previews, policies, analytics and
+conversion attribution. A separate root-policy store would duplicate enforcement;
+a root-only redirect to a normal short URL would leak the second URL and bypass
+canonical root previews. Use the existing managed pipeline instead.
+
+Expose the flag through management APIs/SDKs, CMS and builders, preserve omitted
+update semantics, normalize PATH conversions to false, and include CSV support.
+New root bindings require current domain readiness just like new host bindings.
+Uniqueness and builtin/PATH rejection live in SQL. Root upsert addresses the
+unique domain root; slug upserts must not accidentally edit a root row. Root
+listing, inventory, copy, QR and preview canonical URLs retain the homepage.
+
+For signed branded '/' traffic, look up the domain root row and apply the same
+password/scheduling/expiry/visit-limit/targeting/preview/cloaking/tracking pipeline.
+Only if no root row exists use the legacy rootUrl fallback. Disabled/scheduled/
+expired roots must never fall back to legacy rootUrl. Atomic click recording
+rechecks root-vs-slug path identity as well as current domain readiness so a
+concurrent conversion cannot count against the wrong source. Builtin '/' stays
+outside this feature. Verify DB, actual HTTP/resolver, UI, CSV/SDK and canonical
+URLs, including password failure/HEAD/bot no-click behavior and root uniqueness.
+Reference: https://dub.co/changelog/root-domain-links (retrieved 2026-10-14).
