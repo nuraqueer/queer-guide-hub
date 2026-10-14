@@ -117,17 +117,19 @@ describe('admin archetype registry', () => {
     // (22 -> 23 clean when /admin/governance landed: an F wrapping the three
     // surfaces that were Inbox / Quality / Duplicates. The three old paths stay
     // registered as redirects, so the two derived e2e suites keep their coverage.)
+    // (12 -> 11 caveated when /admin/maps was retired.)
     const clean = ADMIN_ARCHETYPES.filter((e) => e.archetype && !e.caveat).length;
     const caveated = ADMIN_ARCHETYPES.filter((e) => e.archetype && e.caveat).length;
     const exempt = ADMIN_ARCHETYPES.filter((e) => e.archetype === null).length;
-    expect({ clean, caveated, exempt }).toEqual({ clean: 23, caveated: 12, exempt: 6 });
+    // Organisation workspace has its own static route; Business remains a redirect.
+    expect({ clean, caveated, exempt }).toEqual({ clean: 26, caveated: 13, exempt: 4 });
     expect(clean + caveated + exempt).toBe(ADMIN_ARCHETYPES.length);
   });
 
   it('resolves a live pathname to its frame', () => {
     expect(getArchetypeForRoute('/admin/automation')).toBe('H');
     expect(getArchetypeForRoute('/admin/inbox')).toBe('F');
-    expect(getArchetypeForRoute('/admin')).toBeNull(); // the shell itself
+    expect(getArchetypeForRoute('/admin')).toBe('F'); // the shell itself
     expect(getArchetypeForRoute('/admin/design')).toBeNull(); // exempt
   });
 

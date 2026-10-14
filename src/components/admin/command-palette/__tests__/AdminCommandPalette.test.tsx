@@ -25,7 +25,16 @@ vi.mock('@/config/adminNavigation', () => ({
       id: 's2',
       label: 'Content',
       icon: Box,
-      items: [{ id: 'venues', label: 'Venues', icon: Box, route: '/admin/content/venues' }],
+      items: [
+        {
+          id: 'venues',
+          label: 'Venues',
+          icon: Box,
+          route: '/admin/content/venues',
+          group: 'Places',
+          keywords: ['locations'],
+        },
+      ],
     },
   ],
   resolveItemMinRole: () => 'editor',
@@ -60,7 +69,7 @@ describe('AdminCommandPalette', () => {
     expect(navigateMock).toHaveBeenCalledWith('/admin/content/venues');
   });
 
-  it('filters by search input', () => {
+  it.each(['venues', 'locations', 'places'])('filters by navigation search term %s', (query) => {
     render(
       <QueryClientProvider client={makeQc()}>
         <MemoryRouter>
@@ -71,7 +80,7 @@ describe('AdminCommandPalette', () => {
       </QueryClientProvider>,
     );
     const input = screen.getByPlaceholderText(/jump to page/i);
-    fireEvent.change(input, { target: { value: 'venues' } });
+    fireEvent.change(input, { target: { value: query } });
     expect(screen.getByText('Venues')).toBeTruthy();
     expect(screen.queryByText('Overview')).toBeNull();
   });

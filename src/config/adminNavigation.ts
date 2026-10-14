@@ -1,7 +1,7 @@
 /**
  * Admin Navigation Configuration
- * Four-section layout: Cockpit (the daily driver — dashboard + every queue),
- * Content (what the site is made of), Data (how it gets in and stays clean),
+ * Four-section layout: Workspace (daily review work and staff communication),
+ * Content (records and assets), Data & automation (ingestion and tooling),
  * System (admin-only ops + configuration).
  * Central config for the unified admin sidebar. Each section groups related nav items.
  * Used by AdminSidebar, AdminCommandPalette and the cockpit's JumpToGrid.
@@ -28,16 +28,13 @@ import {
   Cloud,
   Layers,
   Building,
-  Briefcase,
   Calendar,
   Newspaper,
+  UserRoundPen,
+  Rss,
   Users,
   UserCog,
-  MapPin,
-  Map,
-  Globe,
   Tag,
-  ListTree,
   ShoppingBag,
   BookOpen,
   UsersRound,
@@ -46,21 +43,17 @@ import {
   Download,
   Settings,
   Mail,
-  MailOpen,
   MailCheck,
   Route as RouteIcon,
   Handshake,
   Workflow,
   Timer,
-  Home,
   History,
   MessageSquarePlus,
   Search,
   Palette,
   SpellCheck,
   Award,
-  PenLine,
-  UserPlus,
   Waypoints,
   Network,
   Trash2,
@@ -88,8 +81,10 @@ export interface AdminNavItem {
   minRole?: AdminRole;
   /** Optional lightweight subheader label within a section (e.g. "Places",
    *  "People"). Items sharing a `group` render under one muted subheader, in
-   *  declaration order. Items without a group render above the first group. */
+   *  declaration order. Ungrouped items keep their declared position. */
   group?: string;
+  /** Familiar terms and previous labels used by navigation search. */
+  keywords?: string[];
 }
 
 export interface AdminNavSection {
@@ -107,94 +102,62 @@ export interface AdminNavSection {
 // ── Navigation Sections ────────────────────────────────────────────────────────
 
 export const adminNavSections: AdminNavSection[] = [
-  // ── Cockpit — the daily driver. Every queue an editor works lives here, in
-  //    the order they are worked: what arrived, what is wrong, what people
-  //    said. The old Cockpit/Review split put `Postfach` and `Inbox` — two
-  //    near-synonyms — in different sections either side of a divider. ──────
   {
     id: 'cockpit',
-    label: 'Cockpit',
+    label: 'Workspace',
     icon: LayoutDashboard,
     defaultExpanded: true,
     minRole: 'editor',
     items: [
       {
         id: 'overview',
-        label: 'Overview',
-        icon: LayoutDashboard,
-        route: '/admin',
-      },
-      {
-        // The three governance surfaces are ONE nav entry and one route
-        // (`/admin/governance?mode=`). They were three (Inbox / Quality /
-        // Duplicates & merge) and the split was the problem: deciding an item,
-        // watching the engine that proposed it, and merging its duplicate are
-        // one job done in three places. `?mode=` keeps them distinct without
-        // making them separate destinations.
-        //
-        // Icons must stay unique tree-wide (the 64px rail is a flat icon list),
-        // so collapsing three entries frees ShieldCheck and CopyCheck.
-        //
-        // `moderator`, inherited from the old Quality row: it declared this
-        // explicitly because Cockpit's floor is `editor`, and the merge tool has
-        // always been moderator-and-up in practice.
-        id: 'governance',
-        label: 'Governance',
+        label: 'Review queue',
         icon: Inbox,
-        route: '/admin/governance',
-        minRole: 'moderator',
+        route: '/admin',
+        keywords: [
+          'dashboard',
+          'cockpit',
+          'overview',
+          'governance',
+          'review',
+          'quality',
+          'triage',
+          'inbox',
+          'approvals',
+          'duplicates',
+          'merge',
+          'editorial drafts',
+          'places editorial',
+        ],
       },
-      {
-        id: 'postfach',
-        label: 'Postfach',
-        icon: Mail,
-        route: '/admin/postfach',
-      },
-      {
-        // Cross-type, so it cannot live under any one content type. The whole
-        // point is recovering something when you no longer remember which type
-        // it was.
-        id: 'trash',
-        label: 'Trash',
-        icon: Trash2,
-        route: '/admin/trash',
-      },
+
       {
         id: 'feedback',
         label: 'Feedback',
         icon: MessageSquarePlus,
-        route: '/admin/feedback',
-        reviewCountKey: 'review_feedback',
+        route: '/admin?queue=feedback',
+      },
+      {
+        id: 'postfach',
+        label: 'Staff messages',
+        icon: Mail,
+        route: '/admin/postfach',
+        keywords: ['postfach', 'mailbox', 'staff', 'messages'],
       },
     ],
   },
-
-  // ── Content — what the site is made of, grouped by kind:
-  //    Places & Events · Geography · People · Editorial · Commerce ·
-  //    Taxonomy & Media. Groups are ordered by how often an editor opens
-  //    them, not alphabetically. ──────
   {
     id: 'content',
     label: 'Content',
     icon: Layers,
-    defaultExpanded: true,
+    defaultExpanded: false,
     minRole: 'editor',
     items: [
       {
         id: 'all-content',
-        label: 'All Content',
+        label: 'All content',
         icon: Layers,
         route: '/admin/content',
-      },
-      // Places & Events — the two highest-traffic content types.
-      {
-        id: 'organizations',
-        label: 'Organisations',
-        minRole: 'admin',
-        icon: Building,
-        route: '/admin/content/organizations',
-        countTable: 'organizations',
-        group: 'Places & Events',
       },
       {
         id: 'events',
@@ -202,49 +165,33 @@ export const adminNavSections: AdminNavSection[] = [
         icon: Calendar,
         route: '/admin/content/events',
         countTable: 'events',
-        group: 'Places & Events',
+        group: 'Places & events',
       },
-      // Geography — the spine, top-down. Geography (the tree) leads because it
-      // is the surface you re-parent and merge from; the typed tables follow.
+      {
+        id: 'organizations',
+        label: 'Organisations',
+        minRole: 'admin',
+        icon: Building,
+        route: '/admin/content/organizations',
+        countTable: 'organizations',
+        keywords: ['business', 'vendors', 'brands', 'hotels'],
+        group: 'Places & events',
+      },
       {
         id: 'geography',
         label: 'Geography',
         icon: Network,
         route: '/admin/geography',
-        group: 'Geography',
+        group: 'Places & events',
+        keywords: ['countries', 'cities', 'villages', 'places'],
       },
-      {
-        id: 'countries',
-        label: 'Countries',
-        icon: Globe,
-        route: '/admin/content/countries',
-        countTable: 'countries',
-        group: 'Geography',
-      },
-      {
-        id: 'cities',
-        label: 'Cities',
-        icon: MapPin,
-        route: '/admin/content/cities',
-        countTable: 'cities',
-        group: 'Geography',
-      },
-      {
-        id: 'villages',
-        label: 'Queer Villages',
-        icon: Home,
-        route: '/admin/content/queer_villages',
-        countTable: 'queer_villages',
-        group: 'Geography',
-      },
-      // People
       {
         id: 'personalities',
         label: 'Personalities',
         icon: Users,
         route: '/admin/content/personalities',
         countTable: 'personalities',
-        group: 'People',
+        group: 'People & community',
       },
       {
         id: 'milestones',
@@ -252,7 +199,7 @@ export const adminNavSections: AdminNavSection[] = [
         icon: Award,
         route: '/admin/content/milestones',
         countTable: 'milestones',
-        group: 'People',
+        group: 'People & community',
       },
       {
         id: 'groups',
@@ -260,20 +207,7 @@ export const adminNavSections: AdminNavSection[] = [
         icon: UsersRound,
         route: '/admin/content/community_groups',
         countTable: 'community_groups',
-        group: 'People',
-      },
-      {
-        id: 'group-requests',
-        label: 'Group Requests',
-        icon: UserPlus,
-        route: '/admin/content/group-requests',
-        reviewCountKey: 'review_group_requests',
-        // Explicit, matching the `group-requests` queue in adminQueues.ts. Same
-        // omission as the Quality row: the queue said moderator, the nav row took
-        // Content's `editor` floor, so the page was reachable by users the queue
-        // was hidden from.
-        minRole: 'moderator',
-        group: 'People',
+        group: 'People & community',
       },
       // Editorial
       {
@@ -285,18 +219,27 @@ export const adminNavSections: AdminNavSection[] = [
         group: 'Editorial',
       },
       {
+        id: 'news-sources',
+        label: 'News Sources',
+        icon: Rss,
+        route: '/admin/news-sources',
+        minRole: 'moderator',
+        group: 'Editorial',
+      },
+      {
+        id: 'news-authors',
+        minRole: 'moderator',
+        label: 'News Authors',
+        icon: UserRoundPen,
+        route: '/admin/news-authors',
+        group: 'Editorial',
+      },
+      {
         id: 'guides',
         label: 'Guides',
         icon: BookOpen,
         route: '/admin/content/guides',
         countTable: 'guides',
-        group: 'Editorial',
-      },
-      {
-        id: 'places-editorial',
-        label: 'Editorial Drafts',
-        icon: PenLine,
-        route: '/admin/places-editorial',
         group: 'Editorial',
       },
       {
@@ -307,25 +250,12 @@ export const adminNavSections: AdminNavSection[] = [
         countTable: 'cms_pages',
         group: 'Editorial',
       },
-      // Commerce — Business and Affiliate are commerce consoles, not cockpit
-      // dashboards; both were in Cockpit only as spine-unification residue.
-      // Vendors, Brands and Hotels are TABS of the Business console, so they
-      // get no nav row of their own; their old routes redirect there.
       {
         id: 'marketplace',
         label: 'Marketplace',
         icon: ShoppingBag,
         route: '/admin/content/marketplace_listings',
         countTable: 'marketplace_listings',
-        group: 'Commerce',
-      },
-      {
-        id: 'business',
-        label: 'Business',
-        icon: Briefcase,
-        route: '/admin/business',
-        // No review badge: link review lives on /admin/quality with the other gates.
-        adminOnly: true,
         group: 'Commerce',
       },
       {
@@ -336,76 +266,43 @@ export const adminNavSections: AdminNavSection[] = [
         adminOnly: true,
         group: 'Commerce',
       },
-      // Taxonomy & Media — `Vocabularies` (/admin/settings) was labelled
-      // "Taxonomies" under a gear icon at the bottom of System, three sections
-      // away from Tags. It is the same job: controlled vocabulary CRUD.
       {
         id: 'tags',
         label: 'Tags',
         icon: Tag,
         route: '/admin/content/unified_tags',
         countTable: 'unified_tags',
-        group: 'Taxonomy & Media',
-      },
-      {
-        id: 'settings',
-        label: 'Vocabularies',
-        icon: ListTree,
-        route: '/admin/settings',
-        // Explicit, not inherited: this row used to sit in System and take that
-        // section's `moderator` floor. Content's floor is `editor`, so without
-        // this the move would silently open taxonomy CRUD to editors.
-        //
-        // This floor covers THIS route only. It does NOT reach the vocabulary
-        // pages, and the comment here used to claim it did ("every
-        // /admin/settings/* sub-page, via longest-prefix"): each of those
-        // sub-pages is a <Navigate> to /admin/content/<vocab>, whose longest nav
-        // prefix is /admin/content → editor. They are gated by
-        // ADMIN_ROUTE_ROLE_OVERRIDES instead.
-        minRole: 'moderator',
-        group: 'Taxonomy & Media',
+        keywords: ['vocabularies', 'taxonomy', 'taxonomies', 'settings'],
+        group: 'Tags, vocabularies & media',
       },
       {
         id: 'media-library',
-        label: 'Media & Assets',
+        label: 'Media & assets',
         icon: Image,
         route: '/admin/media',
-        group: 'Taxonomy & Media',
+        group: 'Tags, vocabularies & media',
+      },
+      {
+        // Cross-type, so it cannot live under any one content type. The whole
+        // point is recovering something when you no longer remember which type
+        // it was.
+        id: 'trash',
+        label: 'Trash',
+        icon: Trash2,
+        route: '/admin/trash',
+        keywords: ['deleted', 'restore', 'recovery'],
       },
     ],
   },
 
-  // ── Data — how content gets in and stays healthy. Ingestion first, then the
-  //    machinery that runs over it. `Import data` leads because Pipelines is
-  //    adminOnly and a section must not lead with an item its own minRole
-  //    cannot open (the breadcrumb links there). ──────
+  // ── Data — source ingestion lives in Pipelines; automations retain their moderator access. ──
   {
     id: 'data',
-    label: 'Data',
+    label: 'Data & automation',
     icon: Download,
-    defaultExpanded: true,
-    minRole: 'editor',
+    defaultExpanded: false,
+    minRole: 'moderator',
     items: [
-      {
-        id: 'import-data-hub',
-        label: 'Import data',
-        icon: Download,
-        route: '/admin/imports/data',
-      },
-      {
-        id: 'pipelines',
-        label: 'Pipelines',
-        icon: Workflow,
-        route: '/admin/pipelines',
-        adminOnly: true,
-      },
-      {
-        id: 'email-ingestions',
-        label: 'Email Ingestions',
-        icon: MailOpen,
-        route: '/admin/imports/email-ingestions',
-        countTable: 'email_ingestions',
-      },
       {
         // The cron / job registry that drives every engine above it.
         id: 'automation',
@@ -413,30 +310,37 @@ export const adminNavSections: AdminNavSection[] = [
         icon: Timer,
         route: '/admin/automation',
         minRole: 'moderator',
+        group: 'Automation',
+        keywords: ['cron', 'jobs', 'schedules'],
+      },
+      {
+        id: 'pipelines',
+        label: 'Pipelines & imports',
+        icon: Workflow,
+        route: '/admin/pipelines',
+        adminOnly: true,
+        group: 'Automation',
       },
       {
         id: 'search-intelligence',
-        label: 'Search Intelligence',
+        label: 'Search intelligence',
         icon: Search,
         route: '/admin/search-intelligence',
         adminOnly: true,
+        group: 'Intelligence & graphs',
       },
       {
         // An ontology explorer over the content graph — data tooling, and it
         // reads a nightly snapshot, which is why it is not in Content.
         id: 'content-graph',
-        label: 'Content Graph',
+        label: 'Content graph',
         icon: Waypoints,
         route: '/admin/graph',
         adminOnly: true,
+        group: 'Intelligence & graphs',
       },
     ],
   },
-
-  // ── System — admin-only. Two jobs only: watch the platform (Operations) and
-  //    configure it (Configuration). Everything that was merely unclaimed
-  //    moved out: Automations + Content Graph → Data, Recognition Wall →
-  //    Content · People, Taxonomies → Content · Taxonomy & Media. ──────
   {
     id: 'system',
     label: 'System',
@@ -444,7 +348,12 @@ export const adminNavSections: AdminNavSection[] = [
     defaultExpanded: false,
     minRole: 'admin',
     items: [
-      // Operations
+      {
+        id: 'users',
+        label: 'Users & roles',
+        icon: UserCog,
+        route: '/admin/users',
+      },
       {
         id: 'analytics',
         label: 'Analytics',
@@ -454,7 +363,7 @@ export const adminNavSections: AdminNavSection[] = [
       },
       {
         id: 'audit-log',
-        label: 'Audit Log',
+        label: 'Audit log',
         icon: History,
         route: '/admin/audit',
         group: 'Operations',
@@ -468,22 +377,15 @@ export const adminNavSections: AdminNavSection[] = [
       },
       {
         id: 'cloudflare',
-        label: 'Cloudflare',
+        label: 'Infrastructure',
         icon: Cloud,
         route: '/admin/cloudflare',
         group: 'Operations',
-      },
-      // Configuration
-      {
-        id: 'users',
-        label: 'Users & Roles',
-        icon: UserCog,
-        route: '/admin/users',
-        group: 'Configuration',
+        keywords: ['cloudflare', 'hosting'],
       },
       {
         id: 'design',
-        label: 'Design & Branding',
+        label: 'Design & branding',
         icon: Palette,
         route: '/admin/design',
         group: 'Configuration',
@@ -494,14 +396,15 @@ export const adminNavSections: AdminNavSection[] = [
         // Content, for the same reason Design & Branding is — it governs how
         // every entity is written, it is not an entity.
         id: 'styleguide',
-        label: 'Styleguide & Voice',
+        label: 'Editorial style',
         icon: SpellCheck,
         route: '/admin/styleguide',
         group: 'Configuration',
+        keywords: ['styleguide', 'voice', 'terminology'],
       },
       {
         id: 'email-templates',
-        label: 'Email Templates',
+        label: 'Email templates',
         icon: MailCheck,
         route: '/admin/email-templates',
         group: 'Configuration',
@@ -512,13 +415,6 @@ export const adminNavSections: AdminNavSection[] = [
         icon: RouteIcon,
         route: '/admin/content/redirects',
         countTable: 'redirects',
-        group: 'Configuration',
-      },
-      {
-        id: 'maps',
-        label: 'Maps',
-        icon: Map,
-        route: '/admin/maps',
         group: 'Configuration',
       },
     ],
@@ -572,6 +468,11 @@ export function resolveItemMinRole(item: AdminNavItem, section?: AdminNavSection
  * deliberately.
  */
 export const ADMIN_ROUTE_ROLE_OVERRIDES: Record<string, AdminRole> = {
+  '/admin/diagnostics': 'moderator',
+  '/admin/governance': 'moderator',
+  '/admin/editorial-tools': 'admin',
+  '/admin/settings': 'moderator',
+  '/admin/business': 'admin',
   // Controlled vocabularies — the tier the "Vocabularies" nav row intends.
   '/admin/content/venue_services': 'moderator',
   '/admin/content/event_types': 'moderator',
@@ -587,9 +488,9 @@ export const ADMIN_ROUTE_ROLE_OVERRIDES: Record<string, AdminRole> = {
   '/admin/content/organizations': 'admin',
 
   // Deep-link-only triage pages, matching their adminQueues.ts definitions.
-  // /admin/quality and /admin/content/group-requests had the same mismatch but
-  // DO have nav rows, so they are fixed on the item instead — an override there
-  // would leave the sidebar advertising a link that then denies you.
+  // Membership decisions remain moderator-only within the Groups workspace.
+  '/admin/content/community_groups/requests': 'moderator',
+  '/admin/content/group-requests': 'moderator',
   '/admin/content/liveness': 'moderator',
   '/admin/content/event-quality': 'moderator',
 };
@@ -643,32 +544,23 @@ export function getBreadcrumbsForRoute(pathname: string): Array<{ label: string;
     { label: 'Admin Console', route: '/admin' },
   ];
 
-  // Find the section and item that match this pathname
+  // Match only whole path segments and prefer the nearest destination.
+  let best: { item: AdminNavItem; section: AdminNavSection } | undefined;
   for (const section of adminNavSections) {
     for (const item of section.items) {
-      if (item.route === pathname) {
-        if (section.id !== 'cockpit') {
-          const sectionRoute = section.items[0]?.route;
-          crumbs.push({ label: section.label, route: sectionRoute });
-        }
-        crumbs.push({ label: item.label });
-        return crumbs;
+      const matches =
+        pathname === item.route ||
+        (item.route !== '/admin' && pathname.startsWith(item.route + '/'));
+      if (matches && (!best || item.route.length > best.item.route.length)) {
+        best = { item, section };
       }
     }
   }
-
-  // Fallback: if no exact match, try to match by section
-  for (const section of adminNavSections) {
-    for (const item of section.items) {
-      if (pathname.startsWith(item.route) && item.route !== '/admin') {
-        if (section.id !== 'cockpit') {
-          const sectionRoute = section.items[0]?.route;
-          crumbs.push({ label: section.label, route: sectionRoute });
-        }
-        crumbs.push({ label: item.label });
-        return crumbs;
-      }
+  if (best) {
+    if (best.section.id !== 'cockpit') {
+      crumbs.push({ label: best.section.label, route: best.section.items[0]?.route });
     }
+    crumbs.push({ label: best.item.label });
   }
 
   return crumbs;

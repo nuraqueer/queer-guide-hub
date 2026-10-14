@@ -19,6 +19,12 @@ const HealthTab = lazy(() => import('./tabs/HealthTab'));
 const NewsTab = lazy(() => import('./tabs/NewsTab'));
 const DLQTab = lazy(() => import('./tabs/DLQTab'));
 const CoverageTab = lazy(() => import('./tabs/CoverageTab'));
+const ManualImportsTab = lazy(() => import('./tabs/ManualImportsTab'));
+const EmailImportsTab = lazy(() =>
+  import('@/components/admin/EmailIngestionsManager').then((m) => ({
+    default: m.EmailIngestionsManager,
+  })),
+);
 const SourcesTab = lazy(() => import('./tabs/SourcesTab'));
 const ErrorsTab = lazy(() => import('./tabs/ErrorsTab'));
 const AlertsTab = lazy(() => import('./tabs/AlertsTab'));
@@ -46,7 +52,9 @@ const HEALTH_SUBS: SubSection[] = [
 ];
 
 const SOURCES_SUBS: SubSection[] = [
-  { key: 'sources', label: 'Managers', Component: SourcesTab },
+  { key: 'sources', label: 'Source registry', Component: SourcesTab },
+  { key: 'imports', label: 'Manual imports', Component: ManualImportsTab },
+  { key: 'email', label: 'Email history', Component: EmailImportsTab },
   { key: 'coverage', label: 'Coverage', Component: CoverageTab },
   { key: 'integrations', label: 'Integrations', Component: IntegrationsTab },
   { key: 'backfills', label: 'Backfills', Component: BackfillsTab },

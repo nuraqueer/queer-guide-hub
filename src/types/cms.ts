@@ -41,10 +41,19 @@ export type FieldType =
   | 'profession_autocomplete'
   | 'roles_autocomplete'
   | 'link_list'
-  | 'organisation_locations';
+  | 'organisation_locations'
+  | 'organisation_relationships';
 
 export type FieldGroup =
-  'basic' | 'details' | 'location' | 'media' | 'seo' | 'settings' | 'lgbtq' | 'external';
+  | 'basic'
+  | 'details'
+  | 'location'
+  | 'media'
+  | 'seo'
+  | 'settings'
+  | 'lgbtq'
+  | 'external'
+  | 'relationships';
 
 export interface SelectOption {
   value: string;
@@ -320,12 +329,17 @@ export interface ContentTypeConfig {
    * `'*,countries(name,equality_score),venues(count)'`.
    */
   listSelect?: string;
+  /** Stored text columns searched together; defaults to titleField. */
+  listSearchFields?: string[];
+  listStatus?: (row: Record<string, unknown>) => string | undefined;
   /**
    * Embedded resources in `listSelect` to scope to the embedded type's default
    * list slice (unmerged, unarchived), so a count column agrees with the list
    * it links to. `type` is the embedded type's config, passed directly rather
    * than looked up by key — configs cannot import the registry (cycle).
    */
+  /** Fetch embedded counts only for the loaded page, after pagination. */
+  listCountsAfterPagination?: boolean;
   listEmbedScopes?: Array<{
     embed: string;
     type: Pick<ContentTypeConfig, 'merge' | 'lifecycle'>;

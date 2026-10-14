@@ -645,3 +645,10 @@ verify_jwt = false
 # namespace; it never accepts directory entities or arbitrary upload prefixes.
 [functions.submit-community-report]
 verify_jwt = false
+
+# Cloudflare admin UI uses user JWTs; the handler also validates the admin role.
+[functions.cloudflare-api]
+verify_jwt = true
+
+[functions.complete-entity-location]
+verify_jwt = false

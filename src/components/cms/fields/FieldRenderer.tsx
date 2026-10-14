@@ -1,4 +1,6 @@
+import { OrganisationRelationshipsField } from './OrganisationRelationshipsField';
 import React from 'react';
+import { contentKind, preserveStructuredStorage } from './structured/structuredValue';
 import { OrganisationLocationsField } from './OrganisationLocationsField';
 import type { FieldConfig } from '@/types/cms';
 import { TextField } from './TextField';
@@ -33,10 +35,12 @@ export interface FieldProps {
   setFields?: (fields: Record<string, unknown>) => void;
   /** All current form values (used by fields that depend on sibling field values) */
   allValues?: Record<string, unknown>;
+  onPersistedChange?: () => Promise<void>;
 }
 
 const FIELD_COMPONENTS: Record<string, React.ComponentType<FieldProps>> = {
   organisation_locations: OrganisationLocationsField,
+  organisation_relationships: OrganisationRelationshipsField,
   text: TextField,
   url: TextField,
   email: TextField,
@@ -76,6 +80,7 @@ export function FieldRenderer({
   disabled,
   setFields,
   allValues,
+  onPersistedChange,
 }: FieldRendererProps) {
   if (field.hidden) {
     return null;
@@ -88,7 +93,15 @@ export function FieldRenderer({
     return null;
   }
 
-  const Component = FIELD_COMPONENTS[field.type];
+  const adaptive = ['text', 'textarea', 'richtext', 'json'].includes(field.type);
+  const kind = adaptive ? contentKind(value) : 'text';
+  const effectiveType =
+    kind === 'structured' || kind === 'unreadable'
+      ? 'json'
+      : kind === 'richtext'
+        ? 'richtext'
+        : field.type;
+  const Component = FIELD_COMPONENTS[effectiveType];
 
   if (!Component) {
     return (
@@ -104,11 +117,16 @@ export function FieldRenderer({
     <Component
       field={field}
       value={value}
-      onChange={onChange}
+      onChange={
+        kind === 'structured' && field.type !== 'json'
+          ? (next) => onChange(preserveStructuredStorage(value, next))
+          : onChange
+      }
       error={error}
       disabled={isDisabled}
       setFields={setFields}
       allValues={allValues}
+      onPersistedChange={onPersistedChange}
     />
   );
 }

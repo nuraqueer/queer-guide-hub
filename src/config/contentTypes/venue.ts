@@ -93,6 +93,7 @@ export const venueFields: FieldConfig[] = [
     },
   },
   { name: 'postal_code', label: 'Postal Code', type: 'text', group: 'location' },
+  { name: 'timezone', label: 'Timezone', type: 'text', group: 'location', readOnly: true },
   {
     name: 'latitude',
     label: 'Latitude',

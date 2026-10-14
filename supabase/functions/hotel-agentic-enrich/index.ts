@@ -155,7 +155,8 @@ Deno.serve(async (req: Request) => {
       update.last_verified_at = new Date().toISOString()
 
       if (!dryRun) {
-        await supabase.from('hotels').update(update).eq('id', h.id)
+        const { error: writeError } = await supabase.from('hotels').update(update).eq('id', h.id)
+        if (writeError) throw new Error(writeError.message)
       }
       status = 'done'
       if (highConf && Object.keys(update).length > 2) enriched++; else flagged++
@@ -167,7 +168,8 @@ Deno.serve(async (req: Request) => {
     await logStep(supabase, h.id, status, started, dryRun)
   }
 
-  return jsonResponse({ enriched, flagged, skipped, dry_run: dryRun, results }, 200, req)
+  const failed = results.filter(r => r.status === 'error').length
+  return jsonResponse({ success: failed === 0, enriched, flagged, skipped, failed, dry_run: dryRun, results }, failed ? 500 : 200, req)
 })
 
 async function logStep(supabase: ReturnType<typeof getServiceClient>, hotelId: string, status: string, started: number, dryRun: boolean) {

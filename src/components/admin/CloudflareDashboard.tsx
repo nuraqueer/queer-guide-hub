@@ -20,7 +20,6 @@ import {
   BarChart3,
   Globe,
   Lock,
-  Activity,
   TrendingUp,
   Users,
   AlertTriangle,
@@ -33,7 +32,10 @@ interface CloudflareStats {
   zoneInfo?: CloudflareZoneInfo | null;
   securitySettings?: CloudflareSecuritySettings | null;
   performanceSettings?: CloudflarePerformanceSettings | null;
-  threatAnalytics?: Record<string, unknown> | null;
+  errors?: Partial<
+    Record<'analytics' | 'zoneInfo' | 'securitySettings' | 'performanceSettings', string>
+  >;
+  updatedAt?: Date;
 }
 
 export function CloudflareDashboard() {
@@ -45,47 +47,41 @@ export function CloudflareDashboard() {
     try {
       if (showRefreshToast) setRefreshing(true);
 
-      const testResult = await cloudflareAPI.getZoneInfo();
-
-      const [analytics, zoneInfo, securitySettings, performanceSettings, threatAnalytics] =
-        await Promise.allSettled([
-          cloudflareAPI.getAnalytics(),
-          Promise.resolve(testResult),
-          cloudflareAPI.getSecuritySettings(),
-          cloudflareAPI.getPerformanceSettings(),
-          cloudflareAPI.getThreatAnalytics(),
-        ]);
-
+      const results = await Promise.allSettled([
+        cloudflareAPI.getAnalytics(),
+        cloudflareAPI.getZoneInfo(),
+        cloudflareAPI.getSecuritySettings(),
+        cloudflareAPI.getPerformanceSettings(),
+      ]);
+      const keys = ['analytics', 'zoneInfo', 'securitySettings', 'performanceSettings'] as const;
+      const errors: NonNullable<CloudflareStats['errors']> = {};
+      results.forEach((result, index) => {
+        if (result.status === 'rejected') {
+          errors[keys[index]] =
+            result.reason instanceof Error ? result.reason.message : 'Request failed';
+        }
+      });
+      const [analytics, zoneInfo, securitySettings, performanceSettings] = results;
       setStats({
         analytics: analytics.status === 'fulfilled' ? analytics.value : null,
         zoneInfo: zoneInfo.status === 'fulfilled' ? zoneInfo.value : null,
         securitySettings: securitySettings.status === 'fulfilled' ? securitySettings.value : null,
         performanceSettings:
           performanceSettings.status === 'fulfilled' ? performanceSettings.value : null,
-        threatAnalytics: threatAnalytics.status === 'fulfilled' ? threatAnalytics.value : null,
+        errors,
+        updatedAt: results.some((result) => result.status === 'fulfilled') ? new Date() : undefined,
       });
-
       if (showRefreshToast) {
-        toast.success(
-          'Cloudflare Data Refreshed: Latest statistics have been loaded successfully.',
-        );
+        if (Object.keys(errors).length) {
+          toast.error('Cloudflare refresh incomplete. See the errors below.');
+        } else {
+          toast.success('Cloudflare data refreshed.');
+        }
       }
     } catch (error: unknown) {
-      console.error('Error fetching Cloudflare data:', error);
-
-      const message = error instanceof Error ? error.message : String(error);
-      let errorMessage = 'Failed to fetch Cloudflare data.';
-
-      if (message.includes('API token not configured')) {
-        errorMessage =
-          'Cloudflare API token is not configured. Please set the CLOUDFLARE_API_TOKEN in your Supabase secrets.';
-      } else if (message.includes('Unauthorized')) {
-        errorMessage = 'Invalid Cloudflare API token. Please check your token permissions.';
-      } else if (message.includes('Forbidden')) {
-        errorMessage = 'Insufficient permissions. Your API token may not have access to this zone.';
-      }
-
-      toast.error(`Error: ${errorMessage}`);
+      const message = error instanceof Error ? error.message : 'Failed to fetch Cloudflare data';
+      setStats({ errors: { zoneInfo: message } });
+      toast.error(message);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -134,6 +130,39 @@ export function CloudflareDashboard() {
           </Button>
         }
       />
+
+      {stats.errors && Object.keys(stats.errors).length > 0 && (
+        <Card role="alert">
+          <CardHeader>
+            <CardTitle>Some Cloudflare data could not be loaded</CardTitle>
+            <CardDescription>
+              Available sections are shown below. Refresh to retry failed requests.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ul className="space-y-2 text-sm">
+              {Object.entries(stats.errors).map(([section, message]) => (
+                <li key={section}>
+                  <strong>
+                    {
+                      (
+                        {
+                          zoneInfo: 'Connection',
+                          analytics: 'Analytics',
+                          securitySettings: 'Security',
+                          performanceSettings: 'Performance',
+                        } as Record<string, string>
+                      )[section]
+                    }
+                    :
+                  </strong>{' '}
+                  {message}
+                </li>
+              ))}
+            </ul>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Zone Status */}
       {zoneInfo && (
@@ -351,7 +380,9 @@ export function CloudflareDashboard() {
                   <div className="flex justify-between items-center">
                     <span>Browser Cache TTL</span>
                     <Badge variant="outline">
-                      {performanceSettings.result?.browser_cache_ttl?.value || 'Unknown'}s
+                      {performanceSettings.result?.browser_cache_ttl?.value != null
+                        ? `${performanceSettings.result.browser_cache_ttl.value}s`
+                        : 'Unknown'}
                     </Badge>
                   </div>
                   <div className="flex justify-between items-center">
@@ -364,53 +395,6 @@ export function CloudflareDashboard() {
                       }
                     >
                       {performanceSettings.result?.development_mode?.value === 'on' ? 'ON' : 'OFF'}
-                    </Badge>
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader>
-                  <CardTitle>
-                    <Activity size={20} />
-                    Optimization
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="flex justify-between items-center">
-                    <span>Minify CSS</span>
-                    <Badge
-                      variant={
-                        performanceSettings.result?.minify?.value?.css === 'on'
-                          ? 'default'
-                          : 'secondary'
-                      }
-                    >
-                      {performanceSettings.result?.minify?.value?.css === 'on' ? 'ON' : 'OFF'}
-                    </Badge>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span>Minify JS</span>
-                    <Badge
-                      variant={
-                        performanceSettings.result?.minify?.value?.js === 'on'
-                          ? 'default'
-                          : 'secondary'
-                      }
-                    >
-                      {performanceSettings.result?.minify?.value?.js === 'on' ? 'ON' : 'OFF'}
-                    </Badge>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span>Minify HTML</span>
-                    <Badge
-                      variant={
-                        performanceSettings.result?.minify?.value?.html === 'on'
-                          ? 'default'
-                          : 'secondary'
-                      }
-                    >
-                      {performanceSettings.result?.minify?.value?.html === 'on' ? 'ON' : 'OFF'}
                     </Badge>
                   </div>
                 </CardContent>
@@ -448,7 +432,7 @@ export function CloudflareDashboard() {
                       </>
                     )}
                   </div>
-                  {!stats.zoneInfo && (
+                  {stats.errors?.zoneInfo?.includes('not configured') && (
                     <div
                       className="mt-4 p-4 rounded-element"
                       style={{
@@ -474,11 +458,11 @@ export function CloudflareDashboard() {
                         }}
                       >
                         <li>Go to Cloudflare Dashboard → My Profile → API Tokens</li>
-                        <li>Create a token with Zone:Read permissions for your zone</li>
                         <li>
-                          Set CLOUDFLARE_API_TOKEN, CLOUDFLARE_ZONE_ID, and CLOUDFLARE_ACCOUNT_ID in
-                          Supabase secrets
+                          Use a token scoped to your zone with Zone, Zone Settings, and Analytics
+                          read permissions
                         </li>
+                        <li>Set CLOUDFLARE_API_TOKEN and CLOUDFLARE_ZONE_ID in Supabase secrets</li>
                         <li>Refresh this page</li>
                       </ol>
                     </div>
@@ -486,7 +470,9 @@ export function CloudflareDashboard() {
                 </div>
                 <div className="flex flex-col gap-2">
                   <h4 className="font-medium">Last Updated</h4>
-                  <p className="text-sm text-muted-foreground">{new Date().toLocaleString()}</p>
+                  <p className="text-sm text-muted-foreground">
+                    {stats.updatedAt?.toLocaleString() || '—'}
+                  </p>
                 </div>
               </div>
             </CardContent>

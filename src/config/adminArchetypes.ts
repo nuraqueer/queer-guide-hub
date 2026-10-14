@@ -109,14 +109,7 @@ export type AdminArchetypeEntry = {
 
 export const ADMIN_ARCHETYPES: AdminArchetypeEntry[] = [
   // ── Not archetypes ────────────────────────────────────────────────────
-  {
-    path: '(index)',
-    archetype: null,
-    exempt:
-      'This is the SHELL, not a page in it. `Admin Templates.dc.html` draws the cockpit as the ' +
-      'frame itself — ink rail, topbar greeting, 4-up stat row, panels — and the eight archetypes ' +
-      'are what sit inside that frame. Forcing it into E would invent a chart it has no data for.',
-  },
+  { path: '(index)', archetype: 'F', title: 'Review queue', adopted: true },
   {
     path: 'design',
     archetype: null,
@@ -139,27 +132,36 @@ export const ADMIN_ARCHETYPES: AdminArchetypeEntry[] = [
       'ReviewRedirect renders no UI — it resolves the legacy /admin/review entry point and ' +
       'navigates. An element-bearing redirect is still a redirect.',
   },
-  {
-    path: 'imports/data',
-    archetype: null,
-    exempt:
-      'RETIRE rather than reframe. AdminImports is a launcher grid of eight import widgets with ' +
-      'no data of its own; each tool belongs in its entity index as the primary action, which is ' +
-      'exactly what the fixed header grammar reserves that slot for. TRAP: removing its nav row ' +
-      'also removes the Data section FIRST item, which getBreadcrumbsForRoute links the section ' +
-      'crumb to — and the next item, `pipelines`, is adminOnly, so the Data breadcrumb would 403 ' +
-      'for editors. Promote email-ingestions first.',
-  },
 
   // ── A · Index (the archetype the claim lives or dies on) ───────────────
   { path: 'content', archetype: 'A', title: 'Content', adopted: true },
   { path: 'content/:type', archetype: 'A', adopted: true },
+  { path: 'content/redirects', archetype: 'A', title: 'Redirects', adopted: true },
+  { path: 'content/redirects/manual', archetype: 'A', adopted: true },
   { path: 'content/personalities', archetype: 'A', title: 'Personalities', adopted: true },
   { path: 'content/milestones', archetype: 'A', title: 'Milestones', adopted: true },
   { path: 'users', archetype: 'A', title: 'Users', adopted: true },
-  { path: 'business', archetype: 'A', title: 'Business', adopted: true },
+  {
+    path: 'news-sources',
+    archetype: 'A',
+    title: 'News Sources',
+    caveat: 'Feed index with publisher linking and ingestion diagnostics.',
+  },
+  {
+    path: 'news-authors/articles',
+    archetype: 'A',
+    title: 'Author articles',
+    caveat: 'Exact-byline article index reached from author management.',
+  },
+  {
+    path: 'news-authors',
+    archetype: 'A',
+    title: 'News Authors',
+    caveat: 'RPC-backed byline index with an article drilldown and name-management dialogs.',
+  },
+  { path: 'content/organizations', archetype: 'A', title: 'Organisations', adopted: true },
+  { path: 'business', archetype: 'A', title: 'Organisations', adopted: true },
   { path: 'audit', archetype: 'A', title: 'Audit log', adopted: true },
-  { path: 'imports/email-ingestions', archetype: 'A', title: 'Email ingestions', adopted: true },
   {
     path: 'media',
     archetype: 'A',
@@ -168,13 +170,12 @@ export const ADMIN_ARCHETYPES: AdminArchetypeEntry[] = [
     caveat: 'Index frame with a GRID view rather than a table — see the note on A below.',
   },
   {
-    path: 'settings',
+    path: 'content/unified_tags',
     archetype: 'A',
-    title: 'Vocabularies',
+    title: 'Tags',
     adopted: true,
     caveat:
-      'An A table with seven quality panels bolted on. The panels belong on /admin/quality or ' +
-      'behind an F drawer; until they move this route is A-plus-extras.',
+      'The canonical CMS list, with collection tools and controlled vocabularies in separate sections.',
   },
 
   // ── B · Record editor ─────────────────────────────────────────────────
@@ -223,15 +224,10 @@ export const ADMIN_ARCHETYPES: AdminArchetypeEntry[] = [
   },
 
   // ── E · Analytics board ───────────────────────────────────────────────
+  { path: 'editorial-tools', archetype: 'F', title: 'Editorial tools', adopted: true },
+  { path: 'diagnostics', archetype: 'H', title: 'Engine diagnostics', adopted: true },
   { path: 'analytics', archetype: 'E', title: 'Analytics', adopted: true },
   { path: 'affiliate', archetype: 'E', title: 'Affiliate', adopted: true },
-  {
-    path: 'content/event-quality',
-    archetype: 'E',
-    title: 'Event quality',
-    adopted: true,
-    caveat: 'A single panel with no ranked list — an E fragment rather than a full board.',
-  },
   {
     path: 'search-intelligence',
     archetype: 'E',
@@ -250,8 +246,6 @@ export const ADMIN_ARCHETYPES: AdminArchetypeEntry[] = [
   // registry — dropping them here silently drops their coverage.
   { path: 'inbox', archetype: 'F', title: 'Inbox' },
   { path: 'postfach', archetype: 'F', title: 'Mailbox', adopted: true },
-  { path: 'content/group-requests', archetype: 'F', title: 'Group requests', adopted: true },
-  { path: 'content/liveness', archetype: 'F', title: 'Liveness', adopted: true },
   { path: 'places-editorial', archetype: 'F', title: 'Places editorial', adopted: true },
   {
     path: 'feedback',
@@ -264,15 +258,6 @@ export const ADMIN_ARCHETYPES: AdminArchetypeEntry[] = [
   // ── G · Tree + canvas ─────────────────────────────────────────────────
   { path: 'geography', archetype: 'G', title: 'Geography', adopted: true },
   { path: 'graph', archetype: 'G', title: 'Content graph', adopted: true },
-  {
-    path: 'maps',
-    archetype: 'G',
-    title: 'Maps',
-    adopted: true,
-    caveat:
-      'Full-bleed MapShell with no tree today; the layer/filter panel is promoted into the 320px ' +
-      'column. MapShell itself must NOT be modified — it is shared with the public /map.',
-  },
 
   // ── H · Registry ──────────────────────────────────────────────────────
   { path: 'automation', archetype: 'H', title: 'Automations', adopted: true },

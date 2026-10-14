@@ -1,3 +1,5 @@
+import DOMPurify from 'dompurify';
+
 /**
  * Helpers for showing and editing jsonb column values in the CMS as
  * structured data — labelled rows, lists and inputs — instead of raw JSON
@@ -18,14 +20,53 @@ export function isPlainObject(v: unknown): v is PlainObject {
  * the plain string it is.
  */
 export function normalizeStructured(value: unknown): unknown {
-  if (typeof value !== 'string') return value;
-  const t = value.trim();
-  if (!(t.startsWith('{') || t.startsWith('['))) return value;
-  try {
-    return JSON.parse(t);
-  } catch {
-    return value;
+  let decoded = value;
+  for (let i = 0; i < 3 && typeof decoded === 'string'; i += 1) {
+    const text = decoded.trim();
+    if (!/^[{["]/.test(text)) break;
+    try {
+      const parsed: unknown = JSON.parse(text);
+      if (typeof parsed !== 'string' && !Array.isArray(parsed) && !isPlainObject(parsed)) break;
+      decoded = parsed;
+    } catch {
+      break;
+    }
   }
+  return decoded;
+}
+
+export function isRichTextDocument(value: unknown): value is PlainObject {
+  return isPlainObject(value) && value.type === 'doc' && Array.isArray(value.content);
+}
+
+export function containsHtml(value: unknown): value is string {
+  return typeof value === 'string' && /<\/?[a-z][^>]*>/i.test(value);
+}
+
+export function hasInvalidStructuredSource(value: unknown): boolean {
+  return (
+    typeof value === 'string' &&
+    /^(?:\s*\{\s*["}]|\s*\[\s*(?:["{\]0-9]|true\b|false\b|null\b))/.test(value) &&
+    typeof normalizeStructured(value) === 'string'
+  );
+}
+
+export const UNRENDERABLE_CONTENT =
+  'This stored content could not be displayed. Reload the record or restore it from its source.';
+
+export function contentKind(value: unknown): 'structured' | 'richtext' | 'text' | 'unreadable' {
+  const normalized = normalizeStructured(value);
+  if (hasInvalidStructuredSource(normalized)) return 'unreadable';
+  if (isRichTextDocument(normalized) || containsHtml(normalized)) return 'richtext';
+  if (Array.isArray(normalized) || isPlainObject(normalized)) return 'structured';
+  return 'text';
+}
+
+/** JSON in text columns remains text when a structured control saves it. */
+export function preserveStructuredStorage(original: unknown, next: unknown): unknown {
+  return typeof original === 'string' && contentKind(original) === 'structured'
+    ? JSON.stringify(next)
+    : next;
 }
 
 /** `hate_crime_law` / `hateCrimeLaw` → `Hate crime law`. */
@@ -79,10 +120,29 @@ export const KIND_LABELS: Record<StructuredKind, string> = {
 };
 
 /** One-line human text for a scalar. */
-export function formatScalar(v: unknown): string {
+export function formatScalar(original: unknown): string {
+  const v = normalizeStructured(original);
+  if (hasInvalidStructuredSource(v)) return UNRENDERABLE_CONTENT;
+  if (Array.isArray(v) || isPlainObject(v)) return summarizeStructured(v);
   if (v === null || v === undefined || v === '') return '—';
   if (typeof v === 'boolean') return v ? 'Yes' : 'No';
   if (typeof v === 'number') return v.toLocaleString();
+  if (typeof v === 'string' && containsHtml(v)) {
+    if (typeof document !== 'undefined') {
+      // Summary text can itself come from the DOM. Sanitize before parsing so
+      // decoded markup never becomes an active element or resource request.
+      const parsed = new DOMParser().parseFromString(
+        DOMPurify.sanitize(v, { FORBID_TAGS: ['script', 'style', 'iframe', 'object', 'embed'] }),
+        'text/html',
+      );
+      parsed.querySelectorAll('script,style,iframe,object').forEach((node) => node.remove());
+      return parsed.body.textContent?.trim() || '—';
+    }
+    return v
+      .replace(/<[^>]*>/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
   return String(v);
 }
 
@@ -92,6 +152,14 @@ export function formatScalar(v: unknown): string {
  */
 export function summarizeStructured(value: unknown, maxParts = 3): string {
   const v = normalizeStructured(value);
+  if (isRichTextDocument(v)) {
+    const text = (node: unknown): string => {
+      if (!isPlainObject(node)) return '';
+      if (typeof node.text === 'string') return node.text;
+      return Array.isArray(node.content) ? node.content.map(text).join(' ') : '';
+    };
+    return text(v) || '—';
+  }
   if (Array.isArray(v)) {
     if (v.length === 0) return '—';
     if (v.every((x) => !isPlainObject(x) && !Array.isArray(x))) {

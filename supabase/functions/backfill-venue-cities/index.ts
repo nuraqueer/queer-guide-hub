@@ -84,9 +84,10 @@ function nominatimHeaders(): Record<string, string> {
 // This function used to own its own probe ladder — name+country ilike, then
 // city_aliases, then a plain insert with a re-fetch on failure. It was the best
 // of the five insert paths and still the wrong place for the logic: it is also
-// the ONLY live creator (1,139 rows carrying data_source='nominatim-geocode',
-// 572 of them in the last 90 days), and 128 of the 249 sub-2 km duplicate pairs
-// on production involve a row it minted. Every probe it had keyed on the string,
+// the ONLY live creator of cities on this platform (re-measured 2026-10-13:
+// 13,125 rows in 30 days, 1,400/day, against 93 from geonames and 76 from
+// venue-city-match), and 128 of the 249 sub-2 km duplicate pairs on production
+// involve a row it minted. Every probe it had keyed on the string,
 // so an exonym or a qualified variant read as a brand-new city.
 //
 // It now delegates to `city_resolve_or_create`, which probes the QID, both TOTAL
@@ -104,11 +105,28 @@ function nominatimHeaders(): Record<string, string> {
 // match Heraklion instead of minting a second one, and a city SUBDIVISION
 // ("Botanica Sector") or a local-script name may only link to an existing city
 // — p_allow_create=false makes the resolver refuse, and the refusal is queued.
+//
+// `sourceSlug` NAMES THE PROVIDER AND THE CALLER MUST PASS IT. It used to be the
+// hardcoded literal 'nominatim-geocode' for all four call sites, including the
+// two that call PHOTON — and that mislabel cost a full diagnosis on 2026-10-13.
+// `cities.data_source` said every one of 13,125 rows came from Nominatim, so the
+// obvious fix for those rows having no identifier was "stop discarding the
+// `extratags.wikidata` Nominatim returns". Nominatim does return one (probed
+// live: 13 of 14 reachable rows carried a usable identifier) and it is not the
+// producer — public Nominatim has 403'd this egress since 2026-09-24, which is
+// why photonSearch and photonReverseCity exist, and Photon's response carries
+// NO identifier of any kind: its properties are osm_type / osm_id / osm_key /
+// osm_value / name / city / county / country / postcode, where osm_id belongs to
+// the matched FEATURE (a street, a nature reserve) and `city` is a bare label.
+// There was nothing being thrown away. READ THE PRODUCER, NEVER THE data_source
+// STRING — and the rows already written keep their old label, because it is the
+// honest record of what this code claimed at the time.
 async function matchCity(
   supabase: ReturnType<typeof getServiceClient>,
   rawCityName: string,
   countryCode: string | null,
   coords?: { lat: number; lon: number } | null,
+  sourceSlug: 'photon-geocode' | 'nominatim-geocode' = 'nominatim-geocode',
 ): Promise<{ id: string; country_id: string } | null> {
   const { name: cityName, allowCreate, reason: createBlock } = classifyGeocodedCityName(rawCityName)
   const { data, error } = await supabase.rpc('city_resolve_or_create', {
@@ -116,7 +134,7 @@ async function matchCity(
     p_country_code: countryCode,
     p_lat: coords?.lat ?? null,
     p_lng: coords?.lon ?? null,
-    p_source_slug: 'nominatim-geocode',
+    p_source_slug: sourceSlug,
     p_allow_create: allowCreate,
     p_actor: 'venue-geocode',
   })
@@ -588,7 +606,7 @@ async function processReverse(
     try {
       const { city: cityName, countryCode } = await photonReverseCity(Number(venue.latitude), Number(venue.longitude))
       const cityMatch = cityName
-        ? await matchCity(supabase, cityName, countryCode, { lat: Number(venue.latitude), lon: Number(venue.longitude) })
+        ? await matchCity(supabase, cityName, countryCode, { lat: Number(venue.latitude), lon: Number(venue.longitude) }, 'photon-geocode')
         : null
       const { data: status, error: applyErr } = await supabase.rpc('venue_apply_reverse_city', {
         p_venue_id: venue.id,
@@ -762,7 +780,7 @@ async function processForward(
       if (cityName) {
         if (!venue.city) update.city = cityName
         const fwdCoords = (lat && lon) ? { lat, lon } : null
-        const cityMatch = await matchCity(supabase, cityName, countryCode, fwdCoords)
+        const cityMatch = await matchCity(supabase, cityName, countryCode, fwdCoords, 'photon-geocode')
         if (cityMatch) {
           // Only ever FILL a missing city — never re-link one that exists.
           // This pass now also sees venues that already have a city_id (their
@@ -974,7 +992,8 @@ async function processSingleVenue(
       const venueCoords = hasCoords
         ? { lat: Number(venue.latitude), lon: Number(venue.longitude) }
         : (nominatimData.lat && nominatimData.lon ? { lat: parseFloat(nominatimData.lat), lon: parseFloat(nominatimData.lon) } : null)
-      const cityMatch = await matchCity(supabase, cityName, countryCode, venueCoords)
+      const cityMatch = await matchCity(supabase, cityName, countryCode, venueCoords,
+        hasCoords ? 'nominatim-geocode' : 'photon-geocode')
       if (cityMatch) {
         update.city_id = cityMatch.id
         if (!venue.country_id) update.country_id = cityMatch.country_id
@@ -1053,7 +1072,7 @@ async function processSingleEvent(
 
     if (cityName) {
       const eventCoords = { lat: Number(event.latitude), lon: Number(event.longitude) }
-      const cityMatch = await matchCity(supabase, cityName, countryCode, eventCoords)
+      const cityMatch = await matchCity(supabase, cityName, countryCode, eventCoords, 'nominatim-geocode')
       if (cityMatch) {
         update.city_id = cityMatch.id
         if (!event.country_id) update.country_id = cityMatch.country_id
@@ -1281,6 +1300,24 @@ async function processPostalQueue(
   return { processed: jobs.length, filled, extras, parked, failed, remaining: count ?? 0 }
 }
 
+async function processPostalQueueWithLease(
+  supabase: ReturnType<typeof getServiceClient>,
+  batchSize: number,
+) {
+  const { data: claimedAt, error } = await supabase.rpc('claim_postal_geocoder_lease')
+  if (error) throw error
+  if (!claimedAt) return { processed: 0, filled: 0, extras: 0, parked: 0, failed: 0, remaining: null, lease_busy: true }
+
+  try {
+    return await processPostalQueue(supabase, batchSize)
+  } finally {
+    const { error: releaseError } = await supabase.rpc('release_entity_location_lease', { p_claimed_at: claimedAt })
+    // The lease has a 150-second expiry if the release fails. Keep the batch's
+    // actual result and let the next scheduled run observe the busy lease.
+    if (releaseError) console.error('postal geocoder lease release failed', releaseError)
+  }
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return corsResponse(req)
 
@@ -1314,7 +1351,7 @@ Deno.serve(async (req) => {
     // modes below because it speaks Photon, not Nominatim, and returns its own
     // shape — see processPostalQueue.
     if (mode === 'postal') {
-      const postal = await processPostalQueue(supabase, batchSize)
+      const postal = await processPostalQueueWithLease(supabase, batchSize)
       return jsonResponse({ success: true, mode: 'postal', ...postal }, 200, req)
     }
 

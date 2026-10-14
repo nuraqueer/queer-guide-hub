@@ -67,8 +67,8 @@ export function Editable({
   }, [contentType, field, fieldOverride]);
 
   const Editor = useMemo(
-    () => (fieldConfig ? getEditorForFieldType(fieldConfig.type) : null),
-    [fieldConfig],
+    () => (fieldConfig ? getEditorForFieldType(fieldConfig.type, value) : null),
+    [fieldConfig, value],
   );
 
   // `virtual` fields are joined/computed and have no column to write — the list
