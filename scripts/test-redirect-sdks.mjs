@@ -87,6 +87,9 @@ const service = {
 const reportActor='00000000-0000-4000-8000-000000000099';
 await db.query('INSERT INTO auth.users(id) VALUES($1)',[reportActor]);
 await db.query("INSERT INTO public.user_roles(user_id,role) VALUES($1,'admin')",[reportActor]);
+const sdkRootDomain=webcrypto.randomUUID();
+await db.query("INSERT INTO public.redirect_domains(id,hostname,verification_token,ownership_state,verified_at,verified_until,provider_id,routing_provider_id,routing_protocol,routing_seen_at) VALUES($1,'root-sdk.example.com',repeat('a',64),'verified',now(),now()+interval '1 day','fixture-root-provider','fixture-root-provider',1,now())",[sdkRootDomain]);
+await db.query("INSERT INTO public.redirect_domain_jobs(domain_id,zone_id,cname_target,requested_by,state,provider_status,ssl_status,checked_at) VALUES($1,repeat('a',32),'links.queer.guide',$2,'ready','active','active',now())",[sdkRootDomain,reportActor]);
 const identity={auth:{getUser:async(value)=>({data:{user:value==='fixture-account-session'?{id:reportActor,created_at:'2026-10-01T00:00:00Z',is_anonymous:false}:null},error:null})},rpc:async()=>({data:true,error:null})};
 let dnsCalls=0,dnsMissing=false;
 const providerConfig={zoneId:'a'.repeat(32),token:'fixture-provider-token',cnameTarget:'links.queer.guide'};
@@ -176,6 +179,7 @@ await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
 const base = 'http://127.0.0.1:' + server.address().port + '/api/redirects';
 const env = {
   ...process.env,
+  REDIRECT_TEST_ROOT_DOMAIN: sdkRootDomain,
   REDIRECT_TEST_BASE: base,
   REDIRECT_TEST_TOKEN: token,
   REDIRECT_TEST_CLICK: click.rows[0].id,
@@ -205,6 +209,8 @@ try {
   await run('ruby', ['sdk/redirects/tests/ruby.rb']);
   await run('php', ['sdk/redirects/tests/php.php']);
   await run(process.env.REDIRECT_GO_BIN ?? 'go', ['test', './...'], { cwd: 'sdk/redirects/go' });
+  await db.query('DELETE FROM public.redirect_domain_jobs WHERE domain_id=$1',[sdkRootDomain]);
+  await db.query('DELETE FROM public.redirect_domains WHERE id=$1',[sdkRootDomain]);
   if (traps !== 0 || limited !== 5)
     throw new Error('SDK followed a redirect or retried a throttled request');
   const result = await db.query(

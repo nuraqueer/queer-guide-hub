@@ -74,11 +74,13 @@ Deno.serve(async (req: Request) => {
       if(error || managed?.id || ["queer.guide","www.queer.guide"].includes(parsed.hostname)&&parsed.pathname.startsWith("/go/"))return null;
       return new Response(null,{status:302,headers:{...responseHeaders,Location:parsed.href}});
     };
-    if(domain && relay?.path==="/") return await fallback(domain.rootUrl) ?? page(404,"Link not found","No destination is configured for this domain.",false,head);
-    if(!validSlug)return await fallback(domain?.notFoundUrl) ?? page(404,"Link not found","This short link does not exist.",false,head);
-    const query=db.from("redirects").select("*").eq("type","SHORT").eq("slug",slug);
+    const rootRequest=!!domain && relay?.path==="/";
+    if(!rootRequest&&!validSlug)return await fallback(domain?.notFoundUrl) ?? page(404,"Link not found","This short link does not exist.",false,head);
+    const baseQuery=db.from("redirects").select("*").eq("type","SHORT").eq("is_domain_root",rootRequest);
+    const query=rootRequest ? baseQuery : baseQuery.eq("slug",slug);
     const {data:link,error:lookupError}=await (domain ? query.eq("domain_id",domain.id) : query.is("domain_id",null)).maybeSingle();
     if (lookupError) return page(503,"Link unavailable","Please try again shortly.",false,head);
+    if(rootRequest&&!link)return await fallback(domain?.rootUrl) ?? page(404,"Link not found","No destination is configured for this domain.",false,head);
     if (!link || !link.is_enabled || link.start_at && Date.parse(link.start_at)>Date.now()) return await fallback(domain?.notFoundUrl) ?? page(404,"Link not found","This link is unavailable.",false,head);
     const {data:settings,error:settingsError}=await db.from("redirect_link_policies").select("policy,password_hash").eq("redirect_id",link.id).maybeSingle();
     if (settingsError) return page(503,"Link unavailable","Please try again shortly.",false,head);
@@ -115,14 +117,14 @@ Deno.serve(async (req: Request) => {
     const {data:managedTarget,error:targetError}=await db.from("redirect_domains").select("id").eq("hostname",targetUrl.hostname).maybeSingle();
     if(targetError)return page(503,"Link unavailable","Please try again shortly.",false,head);
     if(managedTarget?.id)return page(508,"Link loop","This link points to another short link.",false,head);
-    const canonical=domain ? "https://"+domain.hostname+"/"+slug : "https://queer.guide/go/"+slug;
+    const canonical=domain ? "https://"+domain.hostname+"/"+(rootRequest ? "" : slug) : "https://queer.guide/go/"+slug;
     if(!selected.expired&&policy.preview&&socialPreviewAgent(req.headers.get("user-agent")??"")) {
       if(link.click_limit!==null&&link.click_limit!==undefined&&link.click_count>=link.click_limit)return page(410,"Link unavailable","This link has reached its visit limit.",false,head);
       return presentationPage(policy.preview,canonical,destination,false,head);
     }
     if(policy.cloaked&&!selected.expired&&!destination.startsWith("https://"))return page(503,"Link unavailable","Framed destinations require HTTPS.",false,head);
     if (!head && !selected.expired) {
-      const {data:clickId,error}=await db.rpc("record_redirect_visit",{p_redirect_id:link.id,p_path:domain ? "/"+slug : "/go/"+slug,p_query:incoming.toString() || null,p_referer:cleanReferrer(req.headers.get("referer")),p_user_agent:req.headers.get("user-agent"),p_country:country,p_ip_hash:ipHash,p_status:link.status_code,p_variant_id:selected.variantId,p_destination:destination,p_metadata:{...visitorMetadata(req,isQr),domain:domain?.hostname ?? "queer.guide"}});
+      const {data:clickId,error}=await db.rpc("record_redirect_visit",{p_redirect_id:link.id,p_path:domain ? rootRequest ? "/" : "/"+slug : "/go/"+slug,p_query:incoming.toString() || null,p_referer:cleanReferrer(req.headers.get("referer")),p_user_agent:req.headers.get("user-agent"),p_country:country,p_ip_hash:ipHash,p_status:link.status_code,p_variant_id:selected.variantId,p_destination:destination,p_metadata:{...visitorMetadata(req,isQr),domain:domain?.hostname ?? "queer.guide"}});
       if(error)return page(503,"Link unavailable","Please try again shortly.",false,head);
       if(!clickId)return page(410,"Link unavailable","This link has expired or reached its visit limit.",false,head);
       if(policy.track_conversions){targetUrl.searchParams.set("qg_click_id",clickId);destination=targetUrl.href;}

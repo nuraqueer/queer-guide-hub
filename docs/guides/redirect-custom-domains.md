@@ -51,9 +51,9 @@ proof refreshes keep expanded setup panels open.
 Signed branded routing serves these defaults after current readiness checks.
 Domain namespaces, guarded CRUD/bulk, five SDK field contracts, inventory/CSV/QR
 and the tracked/member builders are implemented locally. Remaining domain work
-includes managed root-link policies,
-archive/transfer/subpath workflows, provider validation restart, authorized DNS
-auto-configuration/forwarding setup and production rollout.
+includes archive/transfer/subpath workflows, authorized DNS auto-configuration/
+forwarding setup and production rollout. Managed root-link policies and explicit
+provider validation restart are implemented locally; see their sections below.
 
 ## HTTP contract
 
@@ -209,9 +209,9 @@ Every branded request rechecks current provider requester authority, enabled
 state, 24-hour ownership proof and provider hostname/TLS observations no older
 than 15 minutes. Click recording checks domain state again before consuming quota.
 Public previews, password gates, targeting, conversions, cloaking and QR visits
-continue through the same resolver. Root/not-found/expired fallbacks never count
-as visits. Runtime destination checks reject registered redirect-domain loops.
-Advanced managed root-link policies are a separate remaining requirement.
+continue through the same resolver. Legacy root/not-found/expired fallbacks never
+count as visits. Managed root records follow normal quota/analytics behavior.
+Runtime destination checks reject registered redirect-domain loops.
 
 The owner uses **Check branded routing** after DNS and TLS setup. The browser makes
 an explicit, cookie-free GET with no referrer to
@@ -378,3 +378,43 @@ Cloudflare documents the matching SSL-object PATCH as a DCV restart in its
 [Common API Calls guide](https://developers.cloudflare.com/cloudflare-for-platforms/cloudflare-for-saas/start/common-api-calls/).
 Local provider simulations establish request behavior, not actual certificate
 issuance or production DNS/provider configuration.
+
+
+## Managed domain homepages
+
+Create a managed root through the link API with
+`{domainId: "<ready-domain-UUID>", isDomainRoot: true, target: "https://destination.example/path"}`.
+The public `shortUrl` is `https://hostname/`. The returned slug is an internal
+storage key and is not a public alias for the homepage. Only one root is allowed
+per custom domain. Built-in and PATH roots are rejected. New root conversions or
+host moves require current ownership, TLS and routing proof. Updates that omit
+the flag preserve it, including repairs while a domain is unavailable.
+
+Root upsert uses `domainId` and `isDomainRoot: true`, without requiring a slug.
+Normal slug upserts exclude root records. A root and a normal link may have the
+same storage slug because their public paths differ. Converting a root to a normal
+link requires an available slug; conflicts roll back atomically. Existing ID/folder/
+member/key permissions and metadata apply. Root links appear in normal link lists
+and domain facets and can use folders, tags, comments, policies and reports.
+CSV uses the `isDomainRoot` boolean alongside domainId; duplicate root identities
+are rejected during import review. All five SDKs pass the same field.
+
+The active CMS, tracked-link builder and member editor expose **Use domain
+homepage**. The CMS allocates an internal slug when needed. Copy, QR and preview
+URLs use the homepage, including scan-verified bulk QR exports with QR attribution.
+Member prefilling creates a regular draft by default so copying a root does not
+implicitly claim another domain homepage.
+
+Signed branded `/` requests use the existing managed resolver pipeline: password,
+scheduling, expiration, visit limits, targeting/experiments, previews, cloaking,
+queries/UTM defaults and conversion tracking. The atomic visit recorder checks the
+root-vs-normal source again before incrementing counters. Protected HEAD/bot
+requests and failed password attempts do not record visits. The legacy `rootUrl`
+is used only when there is no managed root record. A disabled/scheduled/expired
+root never uses that legacy destination to bypass its settings. Removing the root
+record restores the configured legacy fallback.
+
+`npm run test:redirect-roots` runs the actual Worker, signed resolver and migrated
+isolated PostgreSQL together, with provider/DNS/production requests excluded.
+This proves local behavior; controlled real-host and deployment validation remain
+part of release.

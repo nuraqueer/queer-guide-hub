@@ -6,6 +6,19 @@ import {
   randomLinkSlug,
 } from '../../../../supabase/functions/_shared/redirect-links';
 describe('link management input contract', () => {
+  it('accepts root create/upsert without public slug and rejects builtin or malformed flags', () => {
+    const domainId = '00000000-0000-4000-8000-000000000001';
+    expect(linkInput({ domainId, isDomainRoot: true, target: '/events' }, 'upsert')).toEqual({
+      domainId,
+      isDomainRoot: true,
+      target: '/events',
+    });
+    expect(linkInput({ isDomainRoot: false }, 'update')).toEqual({ isDomainRoot: false });
+    expect(() => linkInput({ isDomainRoot: true, target: '/events' }, 'create')).toThrow(
+      /custom domain/,
+    );
+    expect(() => linkInput({ isDomainRoot: 'true' }, 'update')).toThrow(/flag/);
+  });
   it('validates scheduling, nullable limits and notes without resetting omitted fields', () => {
     expect(
       linkInput(

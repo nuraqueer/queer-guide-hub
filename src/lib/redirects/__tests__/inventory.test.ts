@@ -15,6 +15,20 @@ import {
 } from '../inventory';
 
 describe('complete redirect inventory', () => {
+  it('lists a managed root by its branded homepage rather than its internal slug', () => {
+    const row = manualRedirect({
+      id: 'root',
+      type: 'SHORT',
+      slug: 'internal-key',
+      domain_id: 'domain',
+      domain_hostname: 'links.community.com',
+      is_domain_root: true,
+      target: '/events',
+      is_enabled: true,
+    });
+    expect(row.source).toBe('https://links.community.com/');
+    expect(inventoryDomain(row)).toBe('links.community.com');
+  });
   it('loads beyond the Data API cap even when the server returns fewer than 1000 rows', async () => {
     const rows = Array.from({ length: 2501 }, (_, id) => ({ id }));
     const offsets: number[] = [];

@@ -1,5 +1,6 @@
 export type JsonObject = Record<string, unknown>;
 export interface LinkInput {
+  isDomainRoot?: boolean;
   slug?: string;
   target?: string;
   statusCode?: 301 | 302 | 307 | 308;
@@ -208,7 +209,7 @@ export class RedirectsClient {
   updateLink(id: string, data: LinkInput) {
     return this.request<Mutation>('PATCH', '/links/' + id, data);
   }
-  upsertLink(data: LinkInput & { slug: string; target: string }) {
+  upsertLink(data: LinkInput & { target: string } & ({slug: string} | {isDomainRoot: true;domainId: string})) {
     return this.request<Mutation>('PUT', '/links/upsert', data);
   }
   deleteLink(id: string) {

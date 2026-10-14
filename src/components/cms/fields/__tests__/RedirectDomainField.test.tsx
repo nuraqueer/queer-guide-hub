@@ -49,6 +49,22 @@ function show(element: React.ReactNode) {
   return render(<QueryClientProvider client={client}>{element}</QueryClientProvider>);
 }
 describe('active CMS domain field', () => {
+  it('shows the canonical root URL for an existing homepage with an internal storage slug', async () => {
+    show(
+      <Form
+        initial={domain}
+        original={{
+          id: 'link',
+          type: 'SHORT',
+          domain_id: domain,
+          domain_hostname: 'links.community.com',
+          is_domain_root: true,
+        }}
+      />,
+    );
+    expect(await screen.findByText('https://links.community.com/')).toBeVisible();
+    expect(screen.queryByText('https://links.community.com/cms-link')).not.toBeInTheDocument();
+  });
   it('adopts the ready primary for a new record and persists an explicit builtin choice', async () => {
     show(<Form />);
     await waitFor(() => expect(screen.getByTestId('bound-value')).toHaveTextContent(domain));

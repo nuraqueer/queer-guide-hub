@@ -198,7 +198,7 @@ export function RedirectBulkActions({
         <Button
           size="sm"
           variant="outline"
-          disabled={rows.some((row) => !publicSourceUrl(row.source))}
+          disabled={rows.some((row) => !publicSourceUrl(row.source, row.domainHostname))}
           onClick={() => setQrRows([...rows])}
         >
           Export selected QR codes

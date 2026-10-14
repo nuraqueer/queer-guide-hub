@@ -1,6 +1,6 @@
 import { linkInput } from './redirect-links.ts';
-export const MANUAL_REDIRECT_FIELDS=['type','slug','source_path','match_kind','target','status_code','is_enabled','start_at','end_at','query_mode','query_override','utm_defaults','click_limit','notes','domain_id'];
-const MANUAL_MAP:Record<string,string>={slug:'slug',target:'target',status_code:'statusCode',is_enabled:'isEnabled',start_at:'startsAt',end_at:'expiresAt',query_mode:'queryMode',query_override:'queryOverride',utm_defaults:'utmDefaults',click_limit:'clickLimit',notes:'notes',domain_id:'domainId'};
+export const MANUAL_REDIRECT_FIELDS=['type','slug','source_path','match_kind','target','status_code','is_enabled','start_at','end_at','query_mode','query_override','utm_defaults','click_limit','notes','domain_id','is_domain_root'];
+const MANUAL_MAP:Record<string,string>={slug:'slug',target:'target',status_code:'statusCode',is_enabled:'isEnabled',start_at:'startsAt',end_at:'expiresAt',query_mode:'queryMode',query_override:'queryOverride',utm_defaults:'utmDefaults',click_limit:'clickLimit',notes:'notes',domain_id:'domainId',is_domain_root:'isDomainRoot'};
 export function manualRedirectInput(value:unknown,create:boolean){
  if(!value||typeof value!=='object'||Array.isArray(value))throw new Error('Provide redirect fields');
  const values=value as Record<string,unknown>;
@@ -12,8 +12,8 @@ export function manualRedirectInput(value:unknown,create:boolean){
  const shared:Record<string,unknown>={};
  for(const[key,field]of Object.entries(MANUAL_MAP))if(values[key]!==undefined&&!(key==='slug'&&values[key]===null))shared[field]=values[key];
  const checked=create||Object.keys(shared).length?linkInput(shared,create?'create':'update'):{};
- if(create&&values.type==='SHORT'&&!checked.slug)throw new Error('A slug is required');
+ if(create&&values.type==='SHORT'&&!checked.slug&&!checked.isDomainRoot)throw new Error('A slug is required');
  const result={...values};for(const[key,field]of Object.entries(MANUAL_MAP))if(Object.hasOwn(checked,field))result[key]=checked[field];
- if(values.type==='PATH'){if(values.domain_id!=null)throw new Error('Path redirects cannot use a short-link domain');result.slug=null;result.domain_id=null;}
+ if(values.type==='PATH'){if(values.domain_id!=null)throw new Error('Path redirects cannot use a short-link domain');result.slug=null;result.domain_id=null;result.is_domain_root=false;}
  return result;
 }

@@ -38,6 +38,7 @@ export function RedirectDomainField({
   return (
     <>
       <RedirectDomainSelect
+        isDomainRoot={allValues?.is_domain_root === true}
         selection={selection}
         slug={String(allValues?.slug ?? '')}
         disabled={disabled}

@@ -45,6 +45,7 @@ function inventory(link: MemberLink): InventoryRedirect {
     id: link.id,
     type: 'SHORT',
     slug: link.slug,
+    is_domain_root: link.isDomainRoot ?? false,
     domain_id: link.domainId,
     domain_hostname: link.domainHostname,
     target: link.target,
@@ -94,6 +95,7 @@ function LinkEditor({
     link ? { id: link.domainId ?? null, hostname: link.domainHostname ?? null } : undefined,
   );
   const initial = link ?? prefill;
+  const [isDomainRoot, setIsDomainRoot] = useState(link?.isDomainRoot ?? false);
   const [slug, setSlug] = useState(link?.slug ?? ''),
     [target, setTarget] = useState(initial?.target ?? ''),
     [folderId, setFolderId] = useState(
@@ -112,6 +114,7 @@ function LinkEditor({
         ...(slug ? { slug } : {}),
         target,
         domainId: domain.domainId,
+        isDomainRoot,
         folderId: folderId || null,
         comment,
         tagIds: tags,
@@ -141,7 +144,7 @@ function LinkEditor({
           className="space-y-4"
           onSubmit={(e) => {
             e.preventDefault();
-            if (domain.valid) save.mutate();
+            if (domain.valid && (!isDomainRoot || domain.domainId)) save.mutate();
           }}
         >
           <fieldset disabled={save.isPending} className="space-y-4">
@@ -156,13 +159,30 @@ function LinkEditor({
                 placeholder="https://example.com/register"
               />
             </div>
-            <RedirectDomainSelect selection={domain} slug={slug} disabled={save.isPending} />
+            <RedirectDomainSelect
+              selection={domain}
+              slug={slug}
+              isDomainRoot={isDomainRoot}
+              disabled={save.isPending}
+            />
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={isDomainRoot}
+                onChange={(e) => setIsDomainRoot(e.target.checked)}
+              />
+              Use domain homepage
+            </label>
+            {isDomainRoot && !domain.domainId && (
+              <p role="alert">Choose a custom domain for its homepage link.</p>
+            )}
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
                 <Label htmlFor="member-link-slug">Short path</Label>
                 <Input
                   id="member-link-slug"
-                  required={!!link}
+                  disabled={isDomainRoot}
+                  required={!!link && !isDomainRoot}
                   maxLength={64}
                   value={slug}
                   onChange={(e) => setSlug(e.target.value)}
@@ -288,7 +308,10 @@ function LinkEditor({
               {save.error.message}
             </p>
           )}
-          <Button type="submit" disabled={save.isPending || !domain.valid}>
+          <Button
+            type="submit"
+            disabled={save.isPending || !domain.valid || (isDomainRoot && !domain.domainId)}
+          >
             {save.isPending ? 'Saving…' : link ? 'Save link' : 'Create link'}
           </Button>
         </form>

@@ -5,6 +5,15 @@ const mocks = vi.hoisted(() => ({ api: vi.fn() }));
 vi.mock('../memberApi', () => ({ memberRedirectApi: mocks.api }));
 beforeEach(() => vi.resetAllMocks());
 describe('manual record contract', () => {
+  it('accepts a manual domain homepage without a slug and keeps its typed root flag', () => {
+    const value = {
+      type: 'SHORT',
+      domain_id: '00000000-0000-4000-8000-000000000001',
+      is_domain_root: true,
+      target: '/events',
+    };
+    expect(manualRedirectInput(value, true)).toMatchObject(value);
+  });
   it('maps shared validation while preserving typed manual path and query fields', () => {
     expect(
       manualRedirectInput(
@@ -55,6 +64,7 @@ describe('manual record contract', () => {
     };
     expect(manualRedirectValues(data)).toEqual({
       type: 'PATH',
+      is_domain_root: false,
       source_path: '/old',
       slug: null,
       domain_id: null,

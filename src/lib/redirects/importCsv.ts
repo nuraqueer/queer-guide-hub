@@ -10,6 +10,7 @@ export const IMPORT_HEADERS = [
   'id',
   'slug',
   'domainId',
+  'isDomainRoot',
   'target',
   'statusCode',
   'isEnabled',
@@ -134,7 +135,7 @@ export function managedImportCsv(text: string, mode: ImportMode): ImportOperatio
           if (!UUID.test(id)) throw new Error('Invalid link ID');
           continue;
         }
-        if (['isEnabled', 'isArchived'].includes(field)) {
+        if (['isDomainRoot', 'isEnabled', 'isArchived'].includes(field)) {
           const normalized = raw.trim().toLowerCase();
           if (!['true', 'false', '1', '0'].includes(normalized))
             throw new Error(field + ' must be true or false');
@@ -162,9 +163,11 @@ export function managedImportCsv(text: string, mode: ImportMode): ImportOperatio
       const identity =
         mode === 'update'
           ? id
-          : checked.slug
-            ? `${checked.domainId ?? 'builtin'}:${checked.slug}`
-            : undefined;
+          : checked.isDomainRoot
+            ? `${checked.domainId}:root:/`
+            : checked.slug
+              ? `${checked.domainId ?? 'builtin'}:${checked.slug}`
+              : undefined;
       if (identity) {
         const key = String(identity);
         if (identities.has(key)) throw new Error('Duplicate link identity in this batch');

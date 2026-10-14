@@ -51,6 +51,36 @@ const row = (id: string, source: string): InventoryRedirect => ({
   source,
 });
 describe('bulk verified QR ZIP', () => {
+  it('exports scan-verified branded roots and slug links with QR attribution', async () => {
+    const root = manualRedirect({
+      id: 'root',
+      type: 'SHORT',
+      slug: 'internal-root',
+      domain_id: 'domain',
+      domain_hostname: 'links.community.com',
+      is_domain_root: true,
+      target: '/events',
+      is_enabled: true,
+    });
+    const normal = { ...root, id: 'normal', source: 'https://links.community.com/pride' };
+    const result = await buildQrBundle([root, normal], DEFAULT_QR_STYLE, 'png');
+    const archive = await JSZip.loadAsync(Buffer.from(result.bytes));
+    expect(await archive.file('manifest.csv')!.async('string')).toContain(
+      'https://links.community.com/?qg_qr=1',
+    );
+    for (const file of Object.values(archive.files).filter((file) => file.name.endsWith('.png'))) {
+      const bytes = await file.async('uint8array');
+      const { data, info } = await sharp(bytes)
+        .ensureAlpha()
+        .raw()
+        .toBuffer({ resolveWithObject: true });
+      expect(jsQR(new Uint8ClampedArray(data), info.width, info.height)?.data).toBe(
+        file.name.startsWith('001')
+          ? 'https://links.community.com/?qg_qr=1'
+          : 'https://links.community.com/pride?qg_qr=1',
+      );
+    }
+  });
   it('exports every format with unique safe names and an accurate manifest, readable by Python ZIP', async () => {
     const rows = [
       row('one', '/go/pride?utm_source=print#details'),

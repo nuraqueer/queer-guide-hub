@@ -6,10 +6,12 @@ import { Label } from '@/components/ui/label';
 export function RedirectDomainSelect({
   selection,
   slug,
+  isDomainRoot = false,
   disabled = false,
 }: {
   selection: RedirectDomainSelection;
   slug?: string;
+  isDomainRoot?: boolean;
   disabled?: boolean;
 }) {
   const id = useId();
@@ -83,9 +85,9 @@ export function RedirectDomainSelect({
           The primary domain is unavailable. Choose another domain to continue.
         </p>
       )}
-      {slug !== undefined && selection.valid && (
+      {slug !== undefined && selection.valid && (!isDomainRoot || !!selection.hostname) && (
         <p className="break-all text-xs text-muted-foreground">
-          {selectedDomainUrl(selection.hostname, slug)}
+          {selectedDomainUrl(selection.hostname, isDomainRoot ? '' : slug)}
         </p>
       )}
     </div>

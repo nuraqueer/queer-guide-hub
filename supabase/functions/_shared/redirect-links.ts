@@ -18,10 +18,10 @@ function stringMap(value: unknown) {
 }
 export function linkInput(value: unknown, operation: 'create' | 'update' | 'upsert') {
   const data = object(value), result: Record<string, unknown> = {};
-  const fields = ['slug','target','statusCode','isEnabled','isArchived','queryMode','queryOverride','utmDefaults','expiresAt','startsAt','clickLimit','notes','domainId','folderId','tagIds','comment'];
+  const fields = ['isDomainRoot','slug','target','statusCode','isEnabled','isArchived','queryMode','queryOverride','utmDefaults','expiresAt','startsAt','clickLimit','notes','domainId','folderId','tagIds','comment'];
   if (Object.keys(data).some(key => !fields.includes(key))) throw new Error('Unknown link field');
   if (operation !== 'update' && data.target === undefined) throw new Error('A destination is required');
-  if (operation === 'upsert' && data.slug === undefined) throw new Error('Upsert requires a slug');
+  if (operation === 'upsert' && data.slug === undefined && data.isDomainRoot !== true) throw new Error('Upsert requires a slug');
   if (operation === 'update' && !Object.keys(data).length) throw new Error('Provide fields to update');
   if (data.slug !== undefined) {
     if (typeof data.slug !== 'string' || !/^[a-z0-9][a-z0-9-]{1,62}[a-z0-9]$/.test(data.slug)) throw new Error('Slug must be 3–64 lowercase letters, numbers or hyphens');
@@ -35,6 +35,8 @@ export function linkInput(value: unknown, operation: 'create' | 'update' | 'upse
     result.target = data.target.trim();
   }
   if (data.statusCode !== undefined && ![301,302,307,308].includes(data.statusCode as number)) throw new Error('Invalid redirect status');
+  if (data.isDomainRoot !== undefined && typeof data.isDomainRoot !== 'boolean') throw new Error('Invalid domain-root flag');
+  if (data.isDomainRoot === true && operation !== 'update' && !uuid(data.domainId)) throw new Error('Domain-root links require a custom domain');
   if (data.isArchived !== undefined && typeof data.isArchived !== 'boolean') throw new Error('Invalid archive state');
   if (data.isEnabled !== undefined && typeof data.isEnabled !== 'boolean') throw new Error('Invalid enabled state');
   if (data.queryMode !== undefined && !['PRESERVE','DROP','OVERRIDE'].includes(data.queryMode as string)) throw new Error('Invalid query mode');

@@ -8,6 +8,7 @@ export function manualRedirectValues(data: Record<string, unknown>) {
     Object.entries(data).filter(([key]) => MANUAL_REDIRECT_FIELDS.includes(key)),
   );
   if (values.type === 'PATH') {
+    values.is_domain_root = false;
     values.slug = null;
     values.domain_id = null;
   }

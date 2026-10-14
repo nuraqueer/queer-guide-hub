@@ -74,6 +74,36 @@ function show() {
   };
 }
 describe('tracked link creation', () => {
+  it('creates a domain homepage with canonical root QR and requires a custom domain', async () => {
+    mocks.choices = {
+      data: [{ id: 'domain-a', hostname: 'links.community.com' }],
+      count: 1,
+      nextCursor: null,
+      primaryDomainId: 'domain-a',
+      primaryUnavailable: false,
+    };
+    mocks.create.mockResolvedValue({
+      slug: 'internal-key',
+      shortUrl: 'https://links.community.com/',
+    });
+    show();
+    await waitFor(() => expect(screen.getByLabelText('Short-link domain')).toHaveValue('domain-a'));
+    fireEvent.click(screen.getByLabelText('Use domain homepage'));
+    expect(screen.getByLabelText('Short-link slug')).toBeDisabled();
+    expect(screen.getByText('https://links.community.com/')).toBeVisible();
+    fireEvent.change(screen.getByLabelText('Short-link domain'), { target: { value: '' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Create tracked link' }));
+    expect(mocks.create).not.toHaveBeenCalled();
+    fireEvent.change(screen.getByLabelText('Short-link domain'), { target: { value: 'domain-a' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Create tracked link' }));
+    await waitFor(() =>
+      expect(mocks.create).toHaveBeenCalledWith(
+        expect.objectContaining({ isDomainRoot: true, domainId: 'domain-a' }),
+      ),
+    );
+    expect(mocks.create.mock.calls[0][0]).not.toHaveProperty('slug');
+    expect(await screen.findByText('Saved QR URL: https://links.community.com/')).toBeVisible();
+  });
   it('does not visually fall back when an explicitly selected domain disappears on refresh', async () => {
     mocks.choices = {
       data: [{ id: 'domain-a', hostname: 'links.community.com' }],

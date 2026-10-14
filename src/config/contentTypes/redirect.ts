@@ -26,7 +26,7 @@ const isPath = (v: Record<string, unknown>) => v.type === 'PATH';
 function requestPathOf(row: Record<string, unknown>): string {
   return row.type === 'SHORT'
     ? row.domain_id && row.domain_hostname
-      ? `https://${row.domain_hostname}/${String(row.slug ?? '')}`
+      ? `https://${row.domain_hostname}/${row.is_domain_root ? '' : String(row.slug ?? '')}`
       : `/go/${String(row.slug ?? '')}`
     : String(row.source_path ?? '');
 }
@@ -64,6 +64,15 @@ export const redirectFields: FieldConfig[] = [
     helpText: 'SHORT serves a short link on the selected domain. PATH forwards an existing URL.',
   },
   {
+    name: 'is_domain_root',
+    label: 'Use domain homepage',
+    type: 'boolean',
+    group: 'basic',
+    visibleWhen: isShort,
+    helpText:
+      'Serve this managed link at the custom domain’s / URL. Only one homepage link is allowed per domain. All link policies and tracking apply.',
+  },
+  {
     name: 'slug',
     label: 'Slug',
     type: 'text',
@@ -71,7 +80,7 @@ export const redirectFields: FieldConfig[] = [
     group: 'basic',
     searchable: true,
     listColumn: true,
-    visibleWhen: isShort,
+    visibleWhen: (data) => isShort(data) && !data.is_domain_root,
     helpText: 'Lowercase, at least 3 characters. The domain above controls the public URL.',
   },
   {
@@ -185,10 +194,11 @@ export const redirectContentType: ContentTypeConfig = {
   color: 'hsl(var(--muted-foreground))',
   fields: redirectFields,
   listSelect:
-    'id,type,slug,domain_id,domain_hostname,source_path,target,status_code,is_enabled,click_count,notes,updated_at',
+    'id,type,slug,domain_id,domain_hostname,is_domain_root,source_path,target,status_code,is_enabled,click_count,notes,updated_at',
   defaults: {
     type: 'SHORT',
     domain_id: 'pending',
+    is_domain_root: false,
     status_code: 301,
     is_enabled: true,
     match_kind: 'EXACT',
@@ -216,7 +226,13 @@ export const redirectContentType: ContentTypeConfig = {
         message: 'Choose an available short-link domain.',
         severity: 'error',
       });
-    if (data.type === 'SHORT') {
+    if (data.type === 'SHORT' && data.is_domain_root && !data.domain_id)
+      errors.push({
+        field: 'domain_id',
+        message: 'A domain homepage requires a custom domain.',
+        severity: 'error',
+      });
+    if (data.type === 'SHORT' && !data.is_domain_root) {
       const slug = validateSlug(String(data.slug ?? ''));
       if (!slug.valid) {
         errors.push({ field: 'slug', message: slug.error ?? 'Invalid slug', severity: 'error' });

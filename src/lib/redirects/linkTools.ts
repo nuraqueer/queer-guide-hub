@@ -78,7 +78,7 @@ export function publicSourceUrl(source: string, managedDomain?: string) {
         !url.password &&
         !url.port &&
         url.hostname === managedDomain &&
-        /^\/[a-z0-9][a-z0-9-]{1,62}[a-z0-9]$/.test(url.pathname)
+        (url.pathname === '/' || /^\/[a-z0-9][a-z0-9-]{1,62}[a-z0-9]$/.test(url.pathname))
         ? url.href
         : null;
     } catch {

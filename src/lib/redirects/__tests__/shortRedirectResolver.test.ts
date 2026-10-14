@@ -53,6 +53,7 @@ function runtime() {
   const state = {
     link: {
       id: 'fixture',
+      is_domain_root: false,
       target: 'https://example.com/pride?utm_campaign=poster#details',
       status_code: 302,
       query_mode: 'PRESERVE',
@@ -100,6 +101,7 @@ function runtime() {
   const db = {
     rpc,
     from: (table: string) => {
+      let rootFilter = false;
       const query = {
         select() {
           return query;
@@ -109,6 +111,7 @@ function runtime() {
           return query;
         },
         eq(key: string, value: unknown) {
+          if (key === 'is_domain_root') rootFilter = value === true;
           state.filters.push([table, key, value]);
           return query;
         },
@@ -117,7 +120,9 @@ function runtime() {
             error: state.failed ? { message: 'offline' } : null,
             data:
               table === 'redirects'
-                ? state.link
+                ? rootFilter === state.link.is_domain_root
+                  ? state.link
+                  : null
                 : table === 'redirect_domains'
                   ? state.managedTarget
                     ? { id: 'managed' }

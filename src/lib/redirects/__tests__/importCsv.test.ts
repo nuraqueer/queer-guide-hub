@@ -2,6 +2,13 @@ import { describe, it, expect } from 'vitest';
 import { parseRedirectCsv, managedImportCsv, managedLinksCsv } from '../importCsv';
 const id = '00000000-0000-4000-8000-000000000001';
 describe('managed CSV import and export', () => {
+  it('roundtrips root identity and separates root upserts from normal slug identities', () => {
+    const root = { domainId: id, isDomainRoot: true, target: '/events' };
+    const csv = managedLinksCsv([root, { domainId: id, slug: 'root', target: '/events' }]);
+    const result = managedImportCsv(csv, 'upsert');
+    expect(result[0].data).toMatchObject(root);
+    expect(() => managedImportCsv(managedLinksCsv([root, root]), 'upsert')).toThrow(/Duplicate/);
+  });
   it('roundtrips scheduling, nullable limits and spreadsheet-safe notes including literal null text', () => {
     for (const notes of ['=HYPERLINK("https://example.com")', 'null', '', null]) {
       const csv = managedLinksCsv([

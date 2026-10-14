@@ -2,8 +2,12 @@
 require_once __DIR__.'/../php/RedirectsClient.php';
 function check($value): void {if (!$value) throw new RuntimeException('Assertion failed');}
 $api=new QueerGuide\RedirectsClient(getenv('REDIRECT_TEST_TOKEN'),getenv('REDIRECT_TEST_BASE'));
-check($api->listDomainChoices()['count']===0);
+check($api->listDomainChoices()['count']===1);
 check($api->listLinkedDomains()['count']===0);
+$root=$api->createLink(['isDomainRoot'=>true,'domainId'=>getenv('REDIRECT_TEST_ROOT_DOMAIN'),'target'=>'https://example.org/home'])['link'];
+check($root['isDomainRoot'] && $root['shortUrl']==='https://root-sdk.example.com/');
+check($api->upsertLink(['isDomainRoot'=>true,'domainId'=>getenv('REDIRECT_TEST_ROOT_DOMAIN'),'target'=>'https://example.org/updated'])['link']['id']===$root['id']);
+$api->deleteLink($root['id']);
 $folder=$api->createResource('folders',['name'=>'Héllo & + PHP']);$tag=$api->createResource('tags',['name'=>'PHP tag','color'=>'pink']);
 $template=$api->createResource('templates',['name'=>'PHP template','parameters'=>['utm_campaign'=>'Launch & +']]);
 check($api->updateResource('folders',$folder['id'],['description'=>'Changed'])['description']==='Changed');

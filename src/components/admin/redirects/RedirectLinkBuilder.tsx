@@ -37,6 +37,7 @@ export function RedirectLinkBuilder({
   defaultFolderId?: string;
 }) {
   const [target, setTarget] = useState(seed?.target ?? '');
+  const [isDomainRoot, setIsDomainRoot] = useState(false);
   const [slug, setSlug] = useState(suggestCampaignSlug(seed?.target ?? ''));
   const [campaign, setCampaign] = useState<CampaignFields>(seed?.campaign ?? {});
   const [parameters, setParameters] = useState<Array<{ id: string; key: string; value: string }>>(
@@ -65,7 +66,12 @@ export function RedirectLinkBuilder({
 
   const save = async () => {
     setError('');
-    const valid = validateSlug(slug);
+    const valid = isDomainRoot
+      ? {
+          valid: !!domain.domainId,
+          error: domain.domainId ? undefined : 'Choose a custom domain for its homepage link.',
+        }
+      : validateSlug(slug);
     if (!valid.valid || destinationError) {
       setError(valid.error ?? destinationError);
       return;
@@ -74,7 +80,8 @@ export function RedirectLinkBuilder({
     try {
       if (!domain.valid) throw new Error('Choose an available domain before creating a link.');
       const result = await memberRedirectApi<{ link: MemberLink }>('/links', 'POST', {
-        slug: slug.trim(),
+        ...(isDomainRoot ? {} : { slug: slug.trim() }),
+        isDomainRoot,
         target: destination,
         domainId: domain.domainId,
         folderId: folderId || null,
@@ -133,6 +140,7 @@ export function RedirectLinkBuilder({
               <Label htmlFor="campaign-slug">Short-link slug</Label>
               <Input
                 id="campaign-slug"
+                disabled={isDomainRoot}
                 value={slug}
                 onChange={(e) => setSlug(e.target.value.toLowerCase())}
                 required
@@ -141,12 +149,29 @@ export function RedirectLinkBuilder({
                 type="button"
                 variant="outline"
                 size="sm"
+                disabled={isDomainRoot}
                 onClick={() => setSlug(randomLinkSlug())}
               >
                 Generate random slug
               </Button>
             </div>
-            <RedirectDomainSelect selection={domain} slug={slug} disabled={saving} />
+            <RedirectDomainSelect
+              selection={domain}
+              slug={slug}
+              isDomainRoot={isDomainRoot}
+              disabled={saving}
+            />
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={isDomainRoot}
+                onChange={(e) => setIsDomainRoot(e.target.checked)}
+              />
+              Use domain homepage
+            </label>
+            {isDomainRoot && !domain.domainId && (
+              <p role="alert">Choose a custom domain for its homepage link.</p>
+            )}
             <fieldset>
               <legend className="mb-2 font-medium">Campaign tracking</legend>
               {workspace.data && (

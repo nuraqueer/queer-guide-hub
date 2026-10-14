@@ -22,7 +22,7 @@ func TestSDKIntegration(t *testing.T) {
 		}
 		return result
 	}
-	if must(api.ListDomainChoices(ctx, 100, ""))["count"].(interface{ String() string }).String() != "0" {
+	if must(api.ListDomainChoices(ctx, 100, ""))["count"].(interface{ String() string }).String() != "1" {
 		t.Fatal("Unexpected domain choices")
 	}
 	if must(api.ListLinkedDomains(ctx, 100, ""))["builtinCount"] == nil {
@@ -46,6 +46,15 @@ func TestSDKIntegration(t *testing.T) {
 		t.Fatal("Unicode resource detail failed")
 	}
 
+	rootLink := must(api.CreateLink(ctx, Object{"isDomainRoot": true, "domainId": os.Getenv("REDIRECT_TEST_ROOT_DOMAIN"), "target": "https://example.org/home"}))["link"].(map[string]any)
+	if rootLink["isDomainRoot"] != true || rootLink["shortUrl"] != "https://root-sdk.example.com/" {
+		t.Fatal("Root identity lost")
+	}
+	rootUpdated := must(api.UpsertLink(ctx, Object{"isDomainRoot": true, "domainId": os.Getenv("REDIRECT_TEST_ROOT_DOMAIN"), "target": "https://example.org/updated"}))["link"].(map[string]any)
+	if rootUpdated["id"] != rootLink["id"] {
+		t.Fatal("Root upsert duplicated")
+	}
+	must(api.DeleteLink(ctx, rootLink["id"].(string)))
 	created := must(api.CreateLink(ctx, Object{"target": "https://example.com/?q=a%26b#detail", "slug": "sdk-go", "startsAt": "2020-01-01T00:00:00Z", "clickLimit": 25, "notes": "SDK notes", "folderId": fid, "tagIds": []string{tid}}))
 	linkFields := created["link"].(map[string]any)
 	if linkFields["clickLimit"].(interface{ String() string }).String() != "25" || linkFields["notes"] != "SDK notes" || linkFields["startsAt"] == nil {

@@ -103,13 +103,53 @@ try {
     ).rows[0].count,
     0,
   );
+  const actor = (await db.query('INSERT INTO auth.users(id) VALUES(gen_random_uuid()) RETURNING id')).rows[0].id;
+  await db.query("INSERT INTO public.user_roles VALUES($1,'admin')", [actor]);
+  const domain = (
+    await db.query(
+      'SELECT public.redirect_domain_resource(\'create\',$1,p_values=>\'{"hostname":"root-csv.example.com"}\') AS d',
+      [actor],
+    )
+  ).rows[0].d;
+  await db.query(
+    "UPDATE public.redirect_domains SET ownership_state='verified',verified_at=now(),verified_until=now()+interval '1 day',provider_id='fixture-csv-root',routing_provider_id='fixture-csv-root',routing_protocol=1,routing_seen_at=now() WHERE id=$1",
+    [domain.id],
+  );
+  await db.query(
+    "INSERT INTO public.redirect_domain_jobs(domain_id,zone_id,cname_target,requested_by,state,provider_status,ssl_status,checked_at) VALUES($1,repeat('a',32),'links.queer.guide',$2,'ready','active','active',now())",
+    [domain.id, actor],
+  );
+  const root = (
+    await mutate(
+      managedImportCsv(
+        managedLinksCsv([{ domainId: domain.id, isDomainRoot: true, target: '/events' }]),
+        'upsert',
+      ),
+    )
+  )[0].link;
+  assert.equal(root.isDomainRoot, true);
+  assert.equal(root.shortUrl, 'https://root-csv.example.com/');
+  const rootRoundTrip = (await mutate(managedImportCsv(managedLinksCsv([root]), 'update')))[0].link;
+  assert.equal(rootRoundTrip.id, root.id);
+  assert.equal(rootRoundTrip.isDomainRoot, true);
+  assert.equal(rootRoundTrip.shortUrl, root.shortUrl);
+  const rootUpsert = (
+    await mutate(
+      managedImportCsv(
+        managedLinksCsv([{ domainId: domain.id, isDomainRoot: true, target: '/city' }]),
+        'upsert',
+      ),
+    )
+  )[0].link;
+  assert.equal(rootUpsert.id, root.id);
+  assert.equal(rootUpsert.target, '/city');
   await db.query('UPDATE public.redirect_api_tokens SET revoked_at=now() WHERE id=$1', [token]);
   await assert.rejects(
     () => mutate(managedImportCsv('slug,target\ncsv-denied,/events', 'create')),
     (error) => error.code === '42501',
   );
   console.log(
-    'Actual CSV source → migrated PostgreSQL: create/upsert/update, metadata preservation, full CSV round trip, atomic rollback and revoked-token rejection passed. No production requests or writes.',
+    'Actual CSV source → migrated PostgreSQL: create/upsert/update, metadata preservation, domain-root upsert/roundtrip, full CSV round trip, atomic rollback and revoked-token rejection passed. No production requests or writes.',
   );
 } finally {
   await db.close();

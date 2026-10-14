@@ -1,8 +1,12 @@
 import assert from 'node:assert/strict';
 import {RedirectsClient,RedirectApiError} from '../../../tmp/sdk-tests/typescript.mjs';
 const api=new RedirectsClient(process.env.REDIRECT_TEST_TOKEN,{baseUrl:process.env.REDIRECT_TEST_BASE});
-assert.equal((await api.listDomainChoices()).count,0);
+assert.equal((await api.listDomainChoices()).count,1);
 assert.equal((await api.listLinkedDomains()).count,0);
+const root=await api.createLink({isDomainRoot:true,domainId:process.env.REDIRECT_TEST_ROOT_DOMAIN,target:'https://example.org/home'});
+assert.equal(root.link.shortUrl,'https://root-sdk.example.com/');assert.equal(root.link.isDomainRoot,true);
+assert.equal((await api.upsertLink({isDomainRoot:true,domainId:process.env.REDIRECT_TEST_ROOT_DOMAIN,target:'https://example.org/updated'})).link.id,root.link.id);
+await api.deleteLink(root.link.id);
 const folder=await api.createResource('folders',{name:'Héllo & + TS'}),tag=await api.createResource('tags',{name:'TS tag',color:'pink'});
 const template=await api.createResource('templates',{name:'TS template',parameters:{utm_campaign:'Launch & +'}});
 assert.equal((await api.updateResource('folders',folder.id,{description:'Changed'})).description,'Changed');

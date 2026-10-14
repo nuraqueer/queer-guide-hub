@@ -130,3 +130,14 @@ revision. They include inactive domains used by visible SHORT links and exclude
 inaccessible folders/IDs. These facets do not establish creation readiness; use
 listDomainChoices for that. When combining pages, reject a changed revision and
 restart the read. Domain UUID/null filters on list/count continue to apply.
+
+
+For a managed domain homepage, create/upsert with `isDomainRoot: true`, a ready
+custom `domainId` and `target`. Root upsert identifies the existing root by domain
+and does not require a slug. There is one root per domain; normal slug upserts
+exclude it. Responses expose `isDomainRoot` and canonical `shortUrl` ending in `/`.
+Use that URL for sharing/QR. The returned storage slug is not a public root alias.
+Omitted update flags preserve the current value. All normal policies, scoped
+permissions, metadata, analytics and conversion APIs apply to the same link ID.
+Five native integration tests create, upsert and delete a managed root through
+the actual HTTP API against an isolated ready-domain fixture.

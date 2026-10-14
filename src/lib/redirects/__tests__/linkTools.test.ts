@@ -78,6 +78,10 @@ describe('campaign link tools', () => {
   });
   it('only exposes a branded source URL when its trusted domain matches', () => {
     expect(publicSourceUrl('https://links.community.com/pride-qr')).toBeNull();
+    expect(publicSourceUrl('https://links.community.com/', 'links.community.com')).toBe(
+      'https://links.community.com/',
+    );
+    expect(publicSourceUrl('https://evil.example/', 'links.community.com')).toBeNull();
     expect(publicSourceUrl('https://links.community.com/pride-qr', 'links.community.com')).toBe(
       'https://links.community.com/pride-qr',
     );

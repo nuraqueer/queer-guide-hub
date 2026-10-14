@@ -119,6 +119,47 @@ beforeEach(() => {
   });
 });
 describe('member redirect workspace', () => {
+  it('creates a managed domain homepage and keeps its custom namespace', async () => {
+    const domain = '00000000-0000-4000-8000-000000000007';
+    const original = mocks.invoke.getMockImplementation()!;
+    mocks.invoke.mockImplementation(async (path, options) =>
+      path.includes('/domain-choices')
+        ? {
+            data: {
+              data: [{ id: domain, hostname: 'links.community.com' }],
+              count: 1,
+              nextCursor: null,
+              primaryDomainId: domain,
+              primaryUnavailable: false,
+            },
+            error: null,
+          }
+        : original(path, options),
+    );
+    show();
+    await screen.findByText('/go/pride');
+    fireEvent.click(screen.getByRole('button', { name: 'Create link' }));
+    await waitFor(() => expect(screen.getByLabelText('Short-link domain')).toHaveValue(domain));
+    fireEvent.change(screen.getByLabelText('Destination'), {
+      target: { value: 'https://example.org/home' },
+    });
+    fireEvent.click(screen.getByLabelText('Use domain homepage'));
+    expect(screen.getByLabelText('Short path')).toBeDisabled();
+    fireEvent.click(
+      screen
+        .getAllByRole('button', { name: 'Create link' })
+        .find((button) => button.closest('form'))!,
+    );
+    await waitFor(() =>
+      expect(mocks.invoke).toHaveBeenCalledWith(
+        'redirect-api/links',
+        expect.objectContaining({
+          method: 'POST',
+          body: expect.objectContaining({ isDomainRoot: true, domainId: domain }),
+        }),
+      ),
+    );
+  });
   it('composes domain, search, folder and archive bookmarks and clears selection when changing namespace', async () => {
     const domain = '00000000-0000-4000-8000-000000000007';
     const initial = mocks.invoke.getMockImplementation()!;

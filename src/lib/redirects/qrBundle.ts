@@ -31,9 +31,9 @@ export async function buildQrBundle(
   const error = qrStyleError(style);
   if (error) throw new Error(error);
   const links = rows.map((row) => {
-    const source = publicSourceUrl(row.source);
+    const source = publicSourceUrl(row.source, row.domainHostname);
     if (!source) throw new Error('No concrete URL for ' + row.source);
-    return { row, url: qrTrackingUrl(source) };
+    return { row, url: qrTrackingUrl(source, !!row.domainHostname && !!row.isShortLink) };
   });
   options.signal?.throwIfAborted();
   const { default: JSZip } = await import('jszip');

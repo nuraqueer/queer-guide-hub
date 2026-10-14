@@ -20,7 +20,7 @@ exist. Existing local tools are a foundation, not proof of parity or deployment.
 | Custom previews | Uploaded OG image (1200×630, ≤1.5 MB), title≤120, description≤240, video API, crawler unfurl | Candidate: editor, scoped upload/presentation APIs and crawler HTML; native browser/Storage release pending |
 | AI previews | Generate title/description from destination content using configured AI provider | Candidate: scoped draft generator with spend limits; live provider and browser verification pending |
 | Custom domains | Verify ownership/DNS, multiple domains, primary domain, redirects on branded hostname | Partial: private registry, exact DNS verification, owner UI and stored defaults implemented locally; durable Cloudflare lifecycle/TLS checks implemented locally; hostname namespaces, signed relay/resolver, routing health, background proof renewal and inventory/CSV/QR/API/SDK fields implemented locally; ready choices, owner primary preference and tracked/member builders implemented locally; active manual CMS domain field and atomic owner saves implemented locally; URL domain filters and scoped linked-domain facets implemented locally; explicit provider validation restart implemented locally; real provider proof and release pending |
-| Domain defaults | Root/not-found redirects, default expiration URL, workspace/domain QR logos | Partial: root/not-found/expiry settings and signed-host resolver implemented locally; managed root-link policies, QR/logo precedence and release pending |
+| Domain defaults | Root/not-found redirects, default expiration URL, workspace/domain QR logos | Partial: root/not-found/expiry settings, signed-host resolver and managed root-link policies/metadata/tracking implemented locally; QR/logo precedence and release pending |
 | Deep links | iOS/Android association files, app page routes, fallback and deferred attribution | Missing |
 | Geo targeting | Country-specific destinations and default fallback | Candidate: country rules and fallback tested |
 | Device targeting | iOS/Android destinations, evaluated before geo | Candidate: iOS/Android priority tested |
@@ -1146,3 +1146,56 @@ concurrent conversion cannot count against the wrong source. Builtin '/' stays
 outside this feature. Verify DB, actual HTTP/resolver, UI, CSV/SDK and canonical
 URLs, including password failure/HEAD/bot no-click behavior and root uniqueness.
 Reference: https://dub.co/changelog/root-domain-links (retrieved 2026-10-14).
+
+
+Implemented locally: custom domain homepages are managed SHORT rows with a
+non-null custom binding, isDomainRoot flag and a unique root index. Normal slug
+uniqueness excludes roots, so storage keys cannot collide with public namespace
+semantics. Root upserts address the domain root; normal upserts exclude roots.
+SQL/API/manual saves preserve omitted flags and normalize PATH conversions. New
+root conversions require ready routing. Management responses expose the homepage
+shortUrl; inventory, CMS tools, member links, copied URLs and QR use it.
+
+The signed '/' resolver runs the existing full policy/visit pipeline. Legacy
+rootUrl applies only when no managed root exists. Internal slugs never resolve a
+root. Atomic visit recording rechecks root-vs-normal source identity. Builders,
+member editing and the active CMS offer Use domain homepage; the CMS allocates an
+internal slug when omitted. A native browser save exposed a stale internal-slug
+preview; the shared CMS domain field now displays the canonical root, with a
+regression test. Prefilling a root creates a regular draft by default.
+
+CSV and TypeScript types expose the root flag; all five native SDKs create,
+upsert and delete roots through actual loopback HTTP/migrated SQL. CSV source
+through migrated SQL verifies root upsert and full update roundtrip. Root metadata,
+folder/tag permissions, policies, reports and conversions reuse the managed ID.
+Bulk QR exports now pass trusted hostnames through URL validation (fixing the
+existing branded-link bulk gap) and mark managed custom-root/slug QR attribution;
+real PNG scan decoding verifies both. Normal path exports retain their old URLs.
+
+Evidence: SQL covers unique/custom-only roots, per-domain identity, root upsert,
+normal/roots sharing a storage slug, failed-conversion rollback, current route
+readiness, repair preservation, PATH cleanup and concurrent source identity
+checks. npm run test:redirect-roots executes the actual Worker → signed resolver →
+migrated PostgreSQL, proving absent-only legacy fallback, password failure and
+POST success, protected HEAD no-count, root canonical previews/bot no-count,
+QR/conversion attribution, device targeting, atomic quota, disabled/scheduled/
+expired behavior and blocked storage-slug access. Eighty-seven focused tests in
+eight files plus eleven link-tools/real QR ZIP tests pass. The five SDKs/examples,
+CSV and SQL suites pass. Native browser exercised the actual CMSEditorLayout with
+labeled simulated domain/API responses and production requests blocked: homepage
+save without a slug, canonical preview after save, and 390px client/scroll widths
+both 390. Screenshots in shared outputs: managed-root-cms-desktop.jpg and
+managed-root-cms-mobile.jpg. Temporary browser tab/viewport cleaned up.
+
+This remains a local parity checkpoint. Remaining domain lifecycle/DNS automation,
+native/deferred deep links, durable QR styles, branded password pages, customer
+enrichment, report SDK/team discovery, integrations, outgoing webhooks, remaining
+permissions/account discovery and controlled real-service/release verification
+remain required. No production writes, DNS/provider changes, deployments or
+package publication occurred.
+
+Validation for this root-link checkpoint: final build 20.98s; functions types and
+targeted lint/format pass. App ratchet remains 704 inherited errors with none new;
+the baseline was not regenerated. All 2,278 migration versions and PostgreSQL 17
+grammar/body-balance checks pass. Working changes are limited to this feature and
+its documented branded bulk-QR fix.

@@ -208,7 +208,7 @@ export function manualRedirect(row: Row, now = Date.now()): InventoryRedirect {
     source:
       row.type === 'SHORT'
         ? row.domain_id && row.domain_hostname
-          ? `https://${row.domain_hostname}/${row.slug}`
+          ? `https://${row.domain_hostname}/${row.is_domain_root ? '' : row.slug}`
           : `/go/${row.slug}`
         : String(row.source_path ?? ''),
     target: row.target ? String(row.target) : null,
@@ -269,7 +269,7 @@ export async function loadDatabaseInventory(read: ReadInventoryRows) {
         (
           await read(
             'redirects',
-            'id,type,slug,domain_id,domain_hostname,source_path,target,status_code,is_enabled,start_at,end_at,click_limit,click_count,utm_defaults,query_mode,query_override,updated_at',
+            'id,type,slug,domain_id,domain_hostname,is_domain_root,source_path,target,status_code,is_enabled,start_at,end_at,click_limit,click_count,utm_defaults,query_mode,query_override,updated_at',
             'id',
           )
         ).map((r) => manualRedirect(r)),
