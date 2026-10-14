@@ -99,9 +99,9 @@ Deno.test('the word boundary is what refuses cum -> Scafell', () => {
   assertEquals(corroborates('cum', [], 'File:Cumulus_clouds.jpg'), false)
 })
 
-Deno.test('NAMESAKE SURVIVES CORROBORATION — which is why keyword tiers never auto-publish', () => {
+Deno.test('NAMESAKE SURVIVES CORROBORATION — which is why no tier auto-publishes', () => {
   // The honest boundary: "unicorn" really is in the file name, so the gate
-  // cannot refuse it on text. It must still not publish unattended.
+  // cannot refuse it on text. A human decides.
   const v = tagImageVerdict(
     { slug: 'unicorn', name: 'Unicorn' },
     licensed({ sourceRef: 'File:Unicorn_spider_outline.jpg', text: 'A unicorn spider' }),
@@ -187,8 +187,9 @@ Deno.test('the file the lexicon misses is STILL gated, via the adult-tag precaut
       text: '',
     }),
   )
-  // Not published, despite being the auto-publish tier and despite the lexicon
-  // saying nothing. This is the assertion that makes the gap survivable.
+  // Flagged explicit despite the lexicon saying nothing, so the reviewer is
+  // told and the image stays off og:image. This is what makes the gap
+  // survivable now that no tier publishes unattended.
   assertEquals(v, { decision: 'review', explicit: true, why: 'adult_tag_precaution' })
 })
 
@@ -208,29 +209,59 @@ Deno.test('explicit on a non-adult tag is refused, not merely gated', () => {
   assertEquals(v, { decision: 'refuse', why: 'explicit_on_non_adult' })
 })
 
-// ── The three verdicts are distinct ─────────────────────────────────────────
+// ── NOTHING PUBLISHES UNATTENDED ────────────────────────────────────────────
+// Until 2026-10-11 the P18 tier returned `publish`. The first 40-row dry run on
+// prod produced 12 such candidates and ZERO were right (`tucking` -> a Scottish
+// cloth-WAULKING engraving, `metal` -> Métal Hurlant, `love` -> Romeo and
+// Juliet). These tests are the floor: the verdict `publish` must not come back.
 
-Deno.test('P18 publishes unattended; the same candidate from Commons does not', () => {
-  // Non-adult, because the adult precaution above routes every adult candidate
-  // to review regardless of tier.
-  const tag = { slug: 'nudist', name: 'Nudist', is_adult: false }
-  assertEquals(tagImageVerdict(tag, licensed({ source: 'wikidata:p18' })), {
-    decision: 'publish',
-    explicit: false,
-  })
-  const viaSearch = tagImageVerdict(
-    tag,
-    licensed({ source: 'wikimedia', sourceRef: 'File:Nudist_beach.jpg', text: 'A nudist beach' }),
+Deno.test('P18 is REVIEW-GATED and says why — 0 of 12 correct on the first live sample', () => {
+  // Non-adult, so this row is NOT reached by the adult precaution above. Before
+  // the measurement this exact input returned `{decision:'publish'}`, so the
+  // assertion is on the whole object rather than just the decision.
+  const v = tagImageVerdict(
+    { slug: 'nudist', name: 'Nudist', is_adult: false },
+    licensed({ source: 'wikidata:p18' }),
   )
-  assertEquals(viaSearch.decision, 'review')
+  assertEquals(v, { decision: 'review', explicit: false, why: 'p18_review_gated' })
 })
 
-Deno.test('AUTO-PUBLISH IS UNREACHABLE ON AN ADULT TAG — the stated cost of the precaution', () => {
+Deno.test('NO SOURCE PUBLISHES, on an adult tag or a plain one', () => {
+  // Every tier, both gating states, licensed and corroborated — i.e. every
+  // input shape that could reach the end of the ladder. `publish` must appear
+  // nowhere. A `decision !== 'publish'` check on one row would pass against a
+  // guard that still publishes a tier this case did not happen to cover.
+  const sources = ['wikidata:p18', 'wikimedia', 'pexels', 'unsplash'] as const
+  for (const source of sources) {
+    for (const is_adult of [false, true]) {
+      const v = tagImageVerdict(
+        { slug: 'nudist', name: 'Nudist', is_adult },
+        licensed({
+          source,
+          sourceRef: `File:Nudist_beach_${source}.jpg`,
+          text: 'A nudist beach',
+        }),
+      )
+      // refuse is legitimate here (stock on an adult tag); publish is not.
+      assertEquals(
+        v.decision === 'review' || v.decision === 'refuse',
+        true,
+        `${source} adult=${is_adult} returned ${v.decision}`,
+      )
+    }
+  }
+})
+
+Deno.test('the ADULT PRECAUTION is still reachable and still distinguishable', () => {
+  // It no longer narrows auto-publish (there is none), so what it must still do
+  // is flag the row as explicit for the reviewer and keep the image out of
+  // og:image. A `why` of `p18_review_gated` here would mean the precaution was
+  // skipped.
   const v = tagImageVerdict(
     { slug: 'leather', name: 'Leather', is_adult: true },
     licensed({ source: 'wikidata:p18' }),
   )
-  assertEquals(v.decision, 'review')
+  assertEquals(v, { decision: 'review', explicit: true, why: 'adult_tag_precaution' })
 })
 
 Deno.test('review is NOT refuse — a refusal writes the tag off, a review keeps it alive', () => {
