@@ -113,6 +113,12 @@ const rssNewsAdapter: SourceAdapter = {
     const RUN_ITEM_BUDGET = 500
     let skippedForItems = 0
 
+    // Counter-write failures are COUNTED, never swallowed. A per-fetch
+    // bookkeeping write must not lose a successful fetch, but a silent
+    // catch is how articles_fetched came to read 0 on 376 of 397 sources
+    // with nothing anywhere saying so.
+    let counterErrors = 0
+
     // A feed that KILLS the worker never reaches the catch below, so it never
     // increments consecutive_failures and can never auto-pause. That is how one
     // source (queertheology.com, 8.5 MB / 652 episodes) took the pipeline down
@@ -242,6 +248,31 @@ const rssNewsAdapter: SourceAdapter = {
           if (channelMeta?.link) ok.website_url = channelMeta.link
           await supabase.from('news_sources').update(ok).eq('id', source.id)
         }
+
+        // articles_fetched / avg_articles_per_fetch, in the ORIGINAL sense:
+        // items SEEN in this fetch, accumulated. Not rows committed -- dedup
+        // drops most of them, which is why the historical values run far
+        // above news_articles (pink-news 9,910 counted vs 1,777 articles).
+        //
+        // Placed AFTER the if/else and fed `articles.length`, the same
+        // quantity that chose the branch, so the counter and the
+        // empty-fetch streak can never disagree about what this fetch saw.
+        // The empty leg therefore records 0: a no-op on the total, and the
+        // EWMA decays rather than going stale.
+        //
+        // += is not expressible in a PostgREST update body, so this is an
+        // RPC that computes both columns from the stored value -- one
+        // statement, so two concurrent runs cannot lose a fetch.
+        const { error: counterError } = await supabase.rpc('news_source_record_items_seen', {
+          p_source_id: source.id,
+          p_items_seen: articles.length,
+        })
+        if (counterError) {
+          counterErrors++
+          console.warn(
+            `source-rss-news: could not record ${articles.length} item(s) seen for ${source.name}: ${counterError.message}`,
+          )
+        }
       } catch (e) {
         // Failure: exponential backoff (5min * 2^n, capped at 24h),
         // auto-pause after 8 consecutive failures.
@@ -278,6 +309,12 @@ const rssNewsAdapter: SourceAdapter = {
     }
     if (skippedForItems > 0) {
       console.log(`source-rss-news: hit ${RUN_ITEM_BUDGET} item budget at ${allItems.length}, skipped ${skippedForItems} feed(s) — they rotate to next run`)
+    }
+
+    if (counterErrors > 0) {
+      console.warn(
+        `source-rss-news: ${counterErrors} source(s) fetched but their items-seen counters were not recorded`,
+      )
     }
 
     return allItems
