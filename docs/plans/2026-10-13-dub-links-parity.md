@@ -1279,3 +1279,40 @@ pages, customer enrichment, report SDK/team discovery, integrations, outgoing
 webhooks, remaining permissions/account discovery and controlled real-service/
 release verification remain required. No production writes, Storage uploads,
 DNS/provider changes, deployments or package publication occurred.
+
+
+### Hosted QR logo assets and precedence
+
+Use a dedicated public raster bucket with restrictive direct-write/list policies,
+private immutable asset records and versioned preference attachments. Never put
+raster data or caller-supplied image URLs in preference JSON. Owner uploads accept
+bounded PNG/JPG bytes (at most 1.5 MB and 1024px per dimension), derive MIME/dimensions
+and SHA-256 on the server, reserve an immutable UUID object key, then upload with
+no overwrite/redirects and a bounded request. Recheck actor, reservation expiry
+and expected preference version before atomically attaching and versioning it.
+Unknown upload outcomes remain reserved for cleanup; no automatic second upload.
+
+A durable service-only cleanup queue claims expired reservations and unreferenced
+replaced assets, with leases, rechecked references and retries through the Storage
+API. A grace period protects in-flight reads. Retain tombstones and recheck them
+periodically so late uploads cannot become permanent untracked objects. A separate
+internal/admin worker and configured cron drive cleanup. Never delete raw Storage
+metadata with SQL. Domain deletion keeps asset metadata for cleanup.
+
+Owner preferences add logoMode (inherit/none/custom) and a controlled clearLogo
+operation. Hide/inherit can retain the current uploaded logo for reuse; explicit
+clear drops its reference. Effective reads expose only public asset metadata and
+logo source. Domain custom/none overrides workspace; inherited domains use the
+workspace logo. Explicit per-export custom/hide wins over saved choices. Shapes
+remain independent, so a common bulk color/style override must not copy one
+domain's logo to other codes. Client loading uses fixed project Storage URLs,
+bounded body/MIME/digest verification, cancellation, deduplicated assets and a
+bounded aggregate logo budget. Missing saved images require retry or explicit
+hide/custom/standard selection; never silently substitute another brand's logo.
+
+Implement asset lifecycle/API/worker first, then connect the saved-logo editor and
+individual/bulk renderers to it. Hosted QR output image URLs remain a separate
+required follow-up; hosted logos do not complete that output requirement.
+References (retrieved 2026-10-14):
+https://supabase.com/docs/guides/storage/uploads/standard-uploads
+https://supabase.com/docs/guides/storage/management/delete-objects
