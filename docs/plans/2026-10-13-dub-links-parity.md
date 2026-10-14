@@ -732,3 +732,27 @@ lost proof, deletion and API-key denial. Five SDKs/examples still pass. Native
 and mobile wrapping at 390 pixels with no horizontal overflow. Browser tab and
 viewport were cleaned up. All DNS results/registrations in browser proof are
 labelled fixtures; no production DNS, provider or registry state was changed.
+
+### Provider lifecycle design
+
+Use a durable per-domain desired-state job with zone/CNAME-target binding, leased
+claims, bounded retries and a recorded create intent before Cloudflare POST. A
+preflight exact-hostname lookup rejects silent adoption of existing objects.
+GET/DELETE can retry; uncertain POST outcomes enter owner review instead of being
+posted again. A late create receipt records the provider object even if the
+request was cancelled meanwhile, then queues cleanup. Lease/intent guards prevent
+stale status results from activating anything. An explicit reviewed adoption can
+reconcile an exact provider candidate after fresh TXT proof; do not depend on
+Cloudflare Custom Metadata, which is not available to every account.
+
+Connect requires fresh proof, enabled domain and current owner permission. A
+pending connection can be cancelled; a known object is deleted only using its
+stored zone/ID after an exact hostname check. A possibly created but unknown
+object prevents domain registration removal until reconciliation proves absence
+or adopts then disconnects it. Edits/rotation/lost ownership cannot become stale
+TLS readiness. Provider status, certificate status, validation records, attempt
+state and sanitized failure information are visible to owners. The worker is
+internal/admin authorized, configured with dedicated least-privilege provider
+secrets, and remains idle when configuration is absent. No provider/DNS writes
+are performed in local validation. Public hostname routing/namespaces and actual
+controlled-domain deployment remain the following required stage.
