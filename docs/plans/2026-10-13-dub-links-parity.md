@@ -2358,3 +2358,27 @@ recorded SQL is recovered at its already-applied version; it is not renumbered,
 re-applied or replaced with a no-op. This follows the drift job's recovery
 instruction and does not change production. The historical migration adds a
 nullable generated uniqueness discriminator for rejected editorial drafts.
+
+### Owner-session scope context design (2026-10-14)
+
+Shared management functions use NULL as the trusted workspace-owner/internal
+principal. For authenticated browser sessions, the Edge handler will construct
+its own service client with x-qg-redirect-session-actor set solely from the
+verified Auth user; inbound headers/JSON cannot choose it. PostgREST exposes that
+header as a transaction-scoped request.headers setting. The shared scope function
+checks its actual current admin role under the ACL lock before a NULL principal
+receives unrestricted access. Bound user-session principals must match the
+authenticated actor. Server API keys and internal jobs keep explicit key scopes
+or their trusted service-only behavior; public roles cannot invoke this helper.
+
+This avoids rewriting every signature or introducing synthetic owner member IDs
+that existing member/key helpers would misinterpret. Actor-specific domain,
+branding, report and webhook functions continue their explicit current-role
+checks. Direct service table writes outside scope functions (notably credential
+management) remain a separate audit, so this is not a claim all session mutations
+are checked yet. SQL tests and the actual HTTP harness must pass request context
+per SQL statement without leakage between requests and prove stale owner claims,
+wrong member identity and spoofed incoming headers cannot grant access.
+
+Primary request-context reference:
+https://postgrest.org/en/stable/references/transactions.html
