@@ -3359,12 +3359,12 @@ const CITY_SCALAR_DENSITY_REPORTED = 33 // measured 2026-09-08, post-repair. Con
       // on (delta + a horizon on machine revisions) stops holding.
       if (attached > 0 && cr.prune_cron_scheduled === false) {
         console.error('✗ content_revision_prune is not scheduled while the trail is live')
-        console.error('  Machine revisions accumulate at ~5k/day with no horizon.')
+        console.error('  Machine revisions accumulate at ~250k/day (~150 MB/day) with no horizon.')
         FAILED = true
       }
       const oldestSystem = Number(cr.oldest_system_days ?? 0)
-      if (oldestSystem > 120) {
-        console.warn(`⚠ Oldest machine revision is ${oldestSystem}d old (horizon is 90d) — prune is behind`)
+      if (oldestSystem > 35) {
+        console.warn(`⚠ Oldest machine revision is ${oldestSystem}d old (horizon is 21d) — prune is behind`)
       }
 
       // Volume is DESCRIBED, never failed on. A quiet day is legitimate; the
