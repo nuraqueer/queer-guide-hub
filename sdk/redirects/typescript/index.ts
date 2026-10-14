@@ -1,4 +1,32 @@
 export type JsonObject = Record<string, unknown>;
+export interface QrImageOptions {
+  label?: string;
+  expiresAt?: string | null;
+  style?: Partial<{
+    dots: 'square' | 'circle' | 'joined';
+    border: 'square' | 'rounded' | 'circle';
+    center: 'square' | 'circle';
+    foreground: string;
+    background: string;
+  }> | null;
+  logoMode?: 'inherit' | 'none';
+}
+export type QrImageInput = QrImageOptions &
+  ({ linkId: string; url?: never } | { url: string; linkId?: never });
+export interface QrImageLink {
+  id: string;
+  label: string;
+  linkId: string | null;
+  version: string;
+  createdAt: string;
+  expiresAt: string | null;
+  revokedAt: string | null;
+  style: NonNullable<QrImageOptions['style']>;
+  logoMode: 'inherit' | 'none';
+}
+export interface CreatedQrImageLink extends QrImageLink {
+  imageUrls: { png: string; jpg: string; svg: string };
+}
 export interface LinkInput {
   isDomainRoot?: boolean;
   slug?: string;
@@ -219,6 +247,24 @@ export class RedirectsClient {
     return this.request<LinkedDomainsPage>('GET', '/linked-domains', undefined, { limit, cursor });
   }
   getQrStyle(id: string) { return this.request<{id:string;style:{dots:string;border:string;center:string;foreground:string;background:string};source:string;effectiveLogo?:{id:string;key:string;mime:string;bytes:number;width:number;height:number;sha256:string;url:string}|null;logoSource?:string}>('GET','/qr-styles/links/'+encodeURIComponent(id)); }
+  createQrImage(data: QrImageInput) {
+    return this.request<CreatedQrImageLink>('POST', '/qr-images', data);
+  }
+  listQrImages(limit = 100, cursor?: string) {
+    return this.request<Pick<Page<QrImageLink>, 'data' | 'nextCursor'>>(
+      'GET',
+      '/qr-images',
+      undefined,
+      { limit, cursor },
+    );
+  }
+  revokeQrImage(id: string, version: string) {
+    return this.request<QrImageLink>(
+      'DELETE',
+      '/qr-images/' + encodeURIComponent(id),
+      { version },
+    );
+  }
   listDomainChoices(limit = 100, cursor?: string) {
     return this.request<DomainChoices>('GET', '/domain-choices', undefined, { limit, cursor });
   }

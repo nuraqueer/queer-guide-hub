@@ -6,6 +6,7 @@ export async function qrImageResponse(
   allowRequest: (key: string) => Promise<boolean>,
   initialize: () => Promise<void>,
   fetcher: typeof fetch = fetch,
+  resolveProfile?: (token: string, signal: AbortSignal) => Promise<Record<string, string>>,
 ) {
   const headers = {
     'Access-Control-Allow-Origin': '*',
@@ -34,7 +35,7 @@ export async function qrImageResponse(
   try {
     const key = request.headers.get('cf-connecting-ip') || 'unknown';
     if (!(await allowRequest(key))) return failure('QR image request limit reached', 429);
-    const parameters = await parseQrImageRequest(request, storageOrigin, fetcher);
+    const parameters = await parseQrImageRequest(request, storageOrigin, fetcher, resolveProfile);
     await initialize();
     request.signal.throwIfAborted();
     const image = renderHostedQr(

@@ -1,3 +1,4 @@
+import {createQrImageToken,qrImageLinkInput,qrImageRevokeInput,qrImageUrls,publicQrImageRequest} from '../_shared/redirect-qr-images.ts';
 import {qrAssetStorageConfig,qrLogoInput,storeRedirectQrLogo,qrLogoPublicResponse} from '../_shared/redirect-qr-assets.ts';
 import {qrStylePreferenceInput} from '../_shared/redirect-qr-style.ts';
 import {manualRedirectInput} from '../_shared/redirect-manual-records.ts';
@@ -25,6 +26,7 @@ Deno.serve(async (req: Request) => {
  const credential=req.headers.get('Authorization')?.replace(/^Bearer\s+/i,'') ?? '';
  if(!credential)return json({error:'Unauthorized'},401);
  const db=createClient(Deno.env.get('SUPABASE_URL')!,Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
+ if(path==='/public-qr-image')return publicQrImageRequest(req,db,Deno.env.get('SUPABASE_URL')??'',cors);
  if(path==='/public-report')return publicReportRequest(req,db,Deno.env.get('REDIRECT_RELAY_SECRET')??Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,cors);
  const tokenCredential=/^qg_redirect_[a-f0-9]{64}$/.test(credential);
  let user: {id:string;created_at:string;email_confirmed_at?:string;confirmed_at?:string;is_anonymous?:boolean} | null=null;
@@ -60,6 +62,82 @@ Deno.serve(async (req: Request) => {
     values=manualRedirectInput(body.values,!id);expected=body.expectedUpdatedAt??null;
    }else return json({error:'Method not supported'},405);
    const result=await db.rpc('redirect_manual_record',{p_actor:user!.id,p_id:id,p_values:values,p_expected_updated_at:expected});if(result.error)return rpcError(result.error);return json(result.data,id?200:201);
+  }
+  const qrImages = path.match(/^\/qr-images(?:\/([a-f0-9-]{36}))?$/i);
+  if (qrImages) {
+    let principalId: string | null = null;
+    if (tokenCredential) {
+      const auth = await db.rpc('authenticate_redirect_api_token', {
+        p_hash: await tokenDigest(credential),
+        p_scope: 'links:read',
+      });
+      if (auth.error)
+        return json({ error: 'Credential verification unavailable' }, 503);
+      if (!auth.data) return json({ error: 'Read scope is required' }, 403);
+      principalId = auth.data.id;
+    } else {
+      const principal = await sessionPrincipal('links:read');
+      if (principal.failure) return principal.failure;
+      principalId = principal.id;
+    }
+    const id = qrImages[1] ?? null,
+      q = new URL(req.url).searchParams;
+    let action: string,
+      values: unknown = null,
+      token: string | null = null,
+      limit = 100,
+      after: string | null = null;
+    if (req.method === 'POST' && !id && !q.size) {
+      action = 'create';
+      values = qrImageLinkInput(await boundedJson(req, 4096));
+      token = createQrImageToken();
+    } else if (req.method === 'GET' && !id) {
+      action = 'list';
+      limit = Number(q.get('limit') ?? 100);
+      after = q.get('cursor');
+      if (
+        [...q.keys()].some(
+          (key) =>
+            !['limit', 'cursor'].includes(key) || q.getAll(key).length !== 1,
+        ) ||
+        !Number.isInteger(limit) ||
+        limit < 1 ||
+        limit > 100 ||
+        (after && !UUID.test(after))
+      )
+        return json({ error: 'Invalid image link page' }, 400);
+    } else if (req.method === 'DELETE' && id && !q.size) {
+      action = 'revoke';
+      values = qrImageRevokeInput(await boundedJson(req, 1024));
+    } else return json({ error: 'Method not supported' }, 405);
+    const result = await db.rpc('redirect_qr_image_resource', {
+      p_action: action,
+      p_actor: user?.id ?? null,
+      p_principal: principalId,
+      p_id: id,
+      p_values: values,
+      p_hash: token ? await tokenDigest(token) : null,
+      p_limit: limit,
+      p_after: after,
+    });
+    if (result.error) return rpcError(result.error);
+    if (result.data?.retryAfter)
+      return new Response(
+        JSON.stringify({ error: 'QR image link limit reached' }),
+        {
+          status: 429,
+          headers: {
+            ...cors,
+            'Content-Type': 'application/json',
+            'Cache-Control': 'no-store',
+            'Retry-After': String(result.data.retryAfter),
+          },
+        },
+      );
+    return json(
+      token ? { ...result.data, imageUrls: qrImageUrls(token) } : result.data,
+      token ? 201 : 200,
+    );
   }
   const qrStyles=path.match(/^\/qr-styles\/(workspace|domains\/([a-f0-9-]{36})|links(?:\/([a-f0-9-]{36}))?)(\/logo)?$/i);
   if(qrStyles){

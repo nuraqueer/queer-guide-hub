@@ -150,3 +150,40 @@ contains only public raster metadata and its fixed-project hosted URL. Current l
 owner preference endpoints remain unavailable to keys. All five native tests
 exercise these getters. See [saved QR styles](../../docs/guides/redirect-qr-branding.md)
 for precedence, batching, versions and remaining hosted-logo/image work.
+
+
+## Live QR image links
+
+Create an explicitly shared image for a managed link using `createQrImage(data)`
+(TypeScript/PHP), `create_qr_image(data)` (Python/Ruby), or
+`CreateQRImage(ctx, data)` (Go). Data requires `linkId` and can include `label`,
+`expiresAt` (null for no expiry), partial `style` and `logoMode: inherit | none`.
+Defaults follow current workspace/domain branding. Creation requires links:read
+and current folder/ID access. Explicit arbitrary URL publication is restricted to
+an owner account session, rather than server keys.
+
+The creation response contains id/version/metadata plus `imageUrls.png`, `.jpg`
+and `.svg`. Each URL contains a random bearer capability, returned once; save the
+URL if you intend to embed it. The list API does not return the bearer or hash.
+Default lifetime is until revoked. Public retrieval rechecks current creator and
+link access, resolves the canonical short URL (including managed domain roots),
+and never fetches the destination or records a click. Only output format/size may
+be changed on a shared URL. Workspace/domain appearance and logo changes affect
+future image requests; explicit appearance overrides and hidden logos remain.
+
+List with `listQrImages(limit, cursor)` / `list_qr_images` /
+`ListQRImages(ctx, limit, cursor)`. Revoke with `revokeQrImage(id, version)` /
+`revoke_qr_image` / `RevokeQRImage(ctx, id, version)`. Lists contain own publications;
+workspace owners can manage all. Revocation closes future image retrieval; it
+does not erase downloaded images or revoke the ordinary redirect encoded inside.
+
+Creation limits are 100 active image links and 60 creations/hour per principal,
+600 creations/hour globally, with 429/Retry-After 3600. Deleting redirects cannot
+erase the short-lived creation ledger. Clients do not automatically retry writes.
+All five native SDK tests exercise creation, list and versioned revocation against
+the actual API/migrated database. Separate full-path HTTP/Wasm tests verify live
+branding changes and independently decode generated PNG/JPG images.
+
+These endpoints and wrappers are local implementation, not a released package or
+production endpoint. Durable per-export custom-artwork attachment, UI authoring
+and controlled deployment remain required.

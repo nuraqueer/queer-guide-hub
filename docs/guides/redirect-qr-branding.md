@@ -167,6 +167,26 @@ same SVG geometry and scan checks as downloads. See
 [the service contract and verification commands](../../workers/redirect-qr/README.md).
 GET supports explicit appearance and fixed-bucket saved logo references; POST also
 accepts local PNG/JPG artwork. The relay requires a REDIRECT_QR service binding and
-is not deployed. Saved-default lookup, UI hosted-image copying, durable custom-
-artwork URL authoring and SDK URL contracts remain pending. A POST image response
+is not deployed. Revocable saved-default image links and five-SDK contracts are
+implemented locally; UI hosted-image copying and durable custom-artwork attachments
+remain pending. A POST image response
 does not create a durable share URL for its local artwork.
+
+
+Owners/current members/keys can POST `/qr-images` to explicitly publish a live
+image for a visible managed link. Owner sessions can instead provide an explicit
+HTTP(S) URL for inventory exports. The response includes imageUrls for all three
+formats; each opaque capability is returned once and only its hash is stored.
+GET `/qr-images?limit=100&cursor=...` lists scoped metadata without secrets. DELETE
+`/qr-images/:id` with `{version}` revokes future retrieval. Labels, optional expiry,
+appearance overrides and inherit/hide artwork are supported. Default no-expiry
+images remain usable until revoked or the creator loses current link access.
+
+Shared requests use `/api/qr?share=...&format=png&size=512`. The Worker resolves only
+minimal canonical URL/appearance/public logo metadata through the private-record
+capability endpoint. No destination/password/notes/folder or creator data is
+exposed, and image generation does not resolve redirects or consume visits/quota.
+Current role, member/key scope and folder/link access are rechecked every request.
+Creating a QR image does not change workspace defaults; revoked URLs cannot fall
+back to different branding. Retention/creation-ledger cleanup is bounded and uses
+the existing internal cleanup worker; real cron is still unverified.

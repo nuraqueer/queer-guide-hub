@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"os"
+	"strings"
 	"testing"
 )
 
@@ -63,6 +64,22 @@ func TestSDKIntegration(t *testing.T) {
 	id := created["link"].(map[string]any)["id"].(string)
 	if must(api.GetQRStyle(ctx, id))["style"].(map[string]any)["foreground"] != "#111111" {
 		t.Fatal("QR style not readable")
+	}
+	qrImage := must(api.CreateQRImage(ctx, Object{"linkId": id, "logoMode": "none"}))
+	if !strings.HasPrefix(qrImage["imageUrls"].(map[string]any)["png"].(string), "https://queer.guide/api/qr?share=qg_qr_") {
+		t.Fatal("Image URL capability missing")
+	}
+	imageFound := false
+	for _, raw := range must(api.ListQRImages(ctx, 100, ""))["data"].([]any) {
+		if raw.(map[string]any)["id"] == qrImage["id"] {
+			imageFound = true
+		}
+	}
+	if !imageFound {
+		t.Fatal("Image list omitted published image")
+	}
+	if must(api.RevokeQRImage(ctx, qrImage["id"].(string), qrImage["version"].(string)))["revokedAt"] == nil {
+		t.Fatal("Image was not revoked")
 	}
 	art := must(api.UploadPreviewImage(ctx, id, os.Getenv("REDIRECT_TEST_IMAGE")))
 	must(api.UpdatePresentation(ctx, id, Object{"preview": Object{"title": "SDK preview", "image": art["image"], "video": "https://example.com/a.mp4"}, "cloaked": true}))

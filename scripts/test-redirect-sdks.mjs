@@ -17,6 +17,7 @@ const pieces = [
   '_shared/redirect-domain-provider.ts',
   '_shared/redirect-presentation.ts',
   '_shared/redirect-qr-assets.ts',
+  '_shared/redirect-qr-images.ts',
   '_shared/link-policy.ts',
   '_shared/redirect-policy-api.ts',
   '_shared/redirect-links.ts',
@@ -359,6 +360,76 @@ try {
   const domainLogo=logoDomain.logoAsset;
   const effectiveLogo=await reportRequest('/qr-styles/links/'+branded.id,'GET',undefined,token);
   if(effectiveLogo.logoSource!=='domain'||effectiveLogo.effectiveLogo.id!==domainLogo.id||domainLogo.mime!=='image/jpeg')throw new Error('Domain JPEG logo did not take precedence');
+  // Actual owner/key HTTP -> migrated SQL -> bounded Worker profile loading -> real Wasm QR rendering.
+  const {register:registerQrRuntime}=await import('tsx/esm/api');
+  const qrRuntime=registerQrRuntime({namespace:'qr-image-http-fixture'});
+  try {
+    const [{qrImageResponse},{readQrImageProfile},{initWasm},{default:decodeImageQr}]=await Promise.all([
+      qrRuntime.import('../workers/redirect-qr/handler.ts',import.meta.url),
+      qrRuntime.import('../workers/redirect-qr/profile.ts',import.meta.url),
+      qrRuntime.import('@resvg/resvg-wasm',import.meta.url),
+      import('jsqr'),
+    ]);
+    await initWasm(readFileSync('node_modules/@resvg/resvg-wasm/index_bg.wasm'));
+    const imageFetch=async(input,options)=>{
+      const url=new URL(String(input));
+      if(url.href==='https://fixture.supabase.co/functions/v1/redirect-api/public-qr-image')return fetch(base+'/public-qr-image',options);
+      const prefix='https://fixture.supabase.co/storage/v1/object/public/redirect-brand-assets/';
+      if(url.href.startsWith(prefix)){
+        if(options?.credentials!=='omit'||options?.redirect!=='error'||new Headers(options?.headers).has('Authorization'))throw new Error('Image logo read forwarded credentials');
+        const object=logoObjects.get(url.href.slice(prefix.length));return object?new Response(object.bytes,{headers:{'Content-Type':object.mime}}):new Response(null,{status:404});
+      }
+      throw new Error('Unexpected QR external request');
+    };
+    const renderedImage=async(imageUrl,format='png')=>{
+      const url=new URL(imageUrl);url.searchParams.set('format',format);url.searchParams.set('size','512');
+      return qrImageResponse(new Request(url),'https://fixture.supabase.co',async()=>true,async()=>{},imageFetch,
+        (bearer,signal)=>readQrImageProfile(bearer,'https://fixture.supabase.co','fixture-anon',signal,imageFetch));
+    };
+    const capability=(record)=>new URL(record.imageUrls.png).searchParams.get('share');
+    const imageCounters=(await db.query('SELECT (SELECT count(*) FROM public.redirect_events)::integer AS events,(SELECT click_count FROM public.redirects WHERE id=$1) AS clicks',[branded.id])).rows[0];
+    const liveImage=await reportRequest('/qr-images','POST',{linkId:branded.id,label:'Live branded image'},undefined,201);
+    if(!/^qg_qr_[a-f0-9]{64}$/.test(capability(liveImage))||liveImage.token_hash||liveImage.principal_key||liveImage.expiresAt!==null)throw new Error('Image creation leaked private fields or changed default lifetime');
+    let publicImage=await reportRequest('/public-qr-image','GET',undefined,capability(liveImage));
+    if(publicImage.effectiveLogo.id!==domainLogo.id||publicImage.url!==branded.shortUrl||Object.keys(publicImage).sort().join(',')!=='effectiveLogo,logoSource,style,tracked,url'||JSON.stringify(publicImage).includes('example.org/branded'))throw new Error('Public image profile leaked destination or lost logo/canonical URL');
+    const svgImage=await renderedImage(liveImage.imageUrls.svg,'svg');
+    if(svgImage.status!==200||!(await svgImage.text()).includes('data:image/jpeg;base64,'+logoJpg.toString('base64')))throw new Error('Live image failed to render current domain JPEG');
+    logoDomain=await reportRequest('/qr-styles/domains/'+domain.id,'PATCH',{version:logoDomain.version,style:{dots:'joined'},logoMode:'inherit'});
+    publicImage=await reportRequest('/public-qr-image','GET',undefined,capability(liveImage));
+    if(publicImage.effectiveLogo.id!==workspaceLogo.id||publicImage.style.dots!=='joined')throw new Error('Live image failed to follow inherited PNG/appearance changes');
+    for(const format of ['png','jpg']){
+      const response=await renderedImage(liveImage.imageUrls[format],format);if(response.status!==200)throw new Error('Live image rendering failed: '+await response.text());
+      const {data,info}=await sharp(new Uint8Array(await response.arrayBuffer())).ensureAlpha().raw().toBuffer({resolveWithObject:true});
+      if(decodeImageQr(new Uint8ClampedArray(data),info.width,info.height)?.data!==branded.shortUrl+'?qg_qr=1')throw new Error('Live hosted image encoded the wrong redirect');
+    }
+    logoDomain=await reportRequest('/qr-styles/domains/'+domain.id,'PATCH',{version:logoDomain.version,logoMode:'custom'});
+    const keyImage=await reportRequest('/qr-images','POST',{linkId:branded.id,logoMode:'none',style:{dots:'circle'}},token,201);
+    const keyList=await reportRequest('/qr-images?limit=100','GET',undefined,token);
+    if(keyList.data.some(row=>row.id===liveImage.id)||!keyList.data.some(row=>row.id===keyImage.id)||JSON.stringify(keyList).includes(capability(keyImage)))throw new Error('Image list escaped creator scope or exposed capability');
+    await reportRequest('/qr-images','POST',{url:'https://example.org/'},token,403);
+    await reportRequest('/qr-images','POST',{linkId:branded.id,style:{unknown:null}},undefined,400);
+    await reportRequest('/qr-images/'+liveImage.id,'DELETE',{version:liveImage.version},token,404);
+    await db.query('UPDATE public.redirect_api_tokens SET revoked_at=now() WHERE token_hash=$1',[digest]);
+    await reportRequest('/public-qr-image','GET',undefined,capability(keyImage),404);
+    await db.query('UPDATE public.redirect_api_tokens SET revoked_at=NULL WHERE token_hash=$1',[digest]);
+    await db.query('DELETE FROM public.user_roles WHERE user_id=$1',[reportActor]);
+    await reportRequest('/public-qr-image','GET',undefined,capability(liveImage),404);
+    await db.query("INSERT INTO public.user_roles(user_id,role) VALUES($1,'admin')",[reportActor]);
+    await reportRequest('/qr-images/'+liveImage.id,'DELETE',{version:webcrypto.randomUUID()},undefined,409);
+    await reportRequest('/qr-images/'+liveImage.id,'DELETE',{version:liveImage.version});
+    await reportRequest('/public-qr-image','GET',undefined,capability(liveImage),404);
+    if((await renderedImage(liveImage.imageUrls.png)).status!==404)throw new Error('Revoked image silently rendered fallback branding');
+    await reportRequest('/public-qr-image','GET',undefined,token,404);
+    await reportRequest('/qr-images','GET',undefined,capability(keyImage),401);
+    await reportRequest('/public-qr-image?url=https://evil.example','GET',undefined,capability(keyImage),400);
+    const imageCountersAfter=(await db.query('SELECT (SELECT count(*) FROM public.redirect_events)::integer AS events,(SELECT click_count FROM public.redirects WHERE id=$1) AS clicks',[branded.id])).rows[0];
+    if(JSON.stringify(imageCounters)!==JSON.stringify(imageCountersAfter))throw new Error('Hosted image requests recorded visits or consumed quota');
+    await db.query("INSERT INTO public.redirect_qr_image_links(token_hash,creator_user_id,principal_key,encoded_url,label,created_at) SELECT md5('image-quota'||i)||md5('image-quota-hash'||i),$1::uuid,'owner:'||($1::uuid)::text,'https://example.com/','Image quota fixture',now()-interval '2 hours' FROM generate_series(1,100) i",[reportActor]);
+    const imageLimited=await fetch(base+'/qr-images',{method:'POST',headers:{Authorization:'Bearer fixture-account-session','Content-Type':'application/json'},body:JSON.stringify({linkId:branded.id})});
+    if(imageLimited.status!==429||imageLimited.headers.get('Retry-After')!=='3600')throw new Error('Image creation quota did not preserve HTTP Retry-After');
+    await db.query("DELETE FROM public.redirect_qr_image_links WHERE label='Image quota fixture'");
+    console.log('Live QR image links: authenticated HTTP -> migrated SQL -> bounded public profile/asset reads -> real Wasm SVG/PNG/JPG, dynamic branding, exact tracked URL decoding, scoped list/revoke and current owner/key revocation passed without visits.');
+  } finally { await qrRuntime.unregister(); }
   logoDomain=await reportRequest('/qr-styles/domains/'+domain.id,'PATCH',{version:logoDomain.version,logoMode:'inherit'});
   if(logoDomain.logoAsset.id!==domainLogo.id||logoDomain.effectiveLogo.id!==workspaceLogo.id)throw new Error('Inherit discarded retained upload');
   logoDomain=await reportRequest('/qr-styles/domains/'+domain.id,'PATCH',{version:logoDomain.version,logoMode:'custom'});

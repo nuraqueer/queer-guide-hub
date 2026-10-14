@@ -3,14 +3,22 @@
 Local implementation; not deployed. A service binding named `REDIRECT_QR` from the
 Pages project to `qg-redirect-qr` exposes `functions/api/qr.ts` at `/api/qr`.
 The Worker deliberately has no public route or workers.dev/preview URL. Configure
-`SUPABASE_URL` to the same fixed project as the app for saved logo reads. It needs
-no service-role key, API token, destination fetch, database write or click lookup.
+`SUPABASE_URL` and `SUPABASE_ANON_KEY` to the same fixed project/publishable key as
+the app for saved profile/logo reads. It needs no service-role key, destination
+fetch, database write or click lookup.
 The rate-limit namespace ID in wrangler.jsonc is reserved for this service; verify
 it is unused in the deployment account before release.
 
 ## HTTP contract
 
-GET/HEAD `/api/qr?url=<URL>` returns an image. Default format PNG, size 1024,
+GET/HEAD `/api/qr?share=<opaque-capability>` renders an explicitly published live
+profile. Only `format` and `size` may accompany `share`; URL/style/logo overrides
+are rejected. The capability is resolved through the fixed public-QR API endpoint
+with bounded reads, no redirects and no cache, then uses the same render path.
+Creator role/membership/key scope and current folder/link access are checked on
+every retrieval. Expired/revoked/inaccessible profiles return 404 without fallback.
+
+GET/HEAD `/api/qr?url=<URL>` returns an explicitly parameterized image. Default format PNG, size 1024,
 standard appearance, no logo. OPTIONS returns CORS headers. Parameters:
 
 - `url`: absolute HTTP(S), no embedded credentials/whitespace, at most 2048 bytes.
@@ -73,8 +81,14 @@ the local runtime supports it and repeat before release. No remote calls are mad
 Native tests specifically catch pngjs's private synchronous zlib API incompatibility;
 logo decoding uses its supported streaming API instead.
 
-Saved-default resolution, UI hosted-image copying, durable custom-artwork recipes,
-five-SDK URL contracts, real Pages binding/cold starts/resource limits and controlled
-production deployment remain follow-ups. The service alone is not full QR parity.
+Revocable live profiles and five-SDK create/list/revoke methods are implemented
+locally. UI hosted-image authoring/copy, durable local-artwork attachments, real
+Pages binding/cold starts/resource limits and controlled production deployment
+remain follow-ups. The service alone is not full QR parity.
 Dependencies are pinned in the root lockfile. resvg-wasm is MPL-2.0, jpeg-js is
 BSD-3-Clause, pngjs/node-qrcode/jsQR are MIT; retain their distributed license notices.
+
+Creation quotas use a private immutable two-day ledger that survives redirect or
+creator deletion. The existing internal QR cleanup worker prunes bounded batches
+of that ledger and images revoked/expired for 90 days; active permanent image links
+are retained. Real cron throughput remains a controlled release check.

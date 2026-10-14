@@ -15,6 +15,11 @@ check($api->updateResource('tags',$tag['id'],['color'=>'blue'])['color']==='blue
 check($api->getResource('folders',$folder['id'])['name']==='Héllo & + PHP');
 $created=$api->createLink(['target'=>'https://example.com/?q=a%26b#detail','slug'=>'sdk-php','startsAt'=>'2020-01-01T00:00:00Z','clickLimit'=>25,'notes'=>'SDK notes','folderId'=>$folder['id'],'tagIds'=>[$tag['id']]]);$id=$created['link']['id'];
 check($api->getQrStyle($id)['style']['foreground']==='#111111');check($created['link']['clickLimit']===25 && $created['link']['notes']==='SDK notes' && $created['link']['startsAt']);
+check($api->getQrStyle($id)['style']['foreground']==='#111111');
+$qrImage=$api->createQrImage(['linkId'=>$id,'logoMode'=>'none']);
+check(str_starts_with($qrImage['imageUrls']['png'],'https://queer.guide/api/qr?share=qg_qr_'));
+check(count(array_filter($api->listQrImages()['data'],fn($row)=>$row['id']===$qrImage['id']))===1);
+check((bool)$api->revokeQrImage($qrImage['id'],$qrImage['version'])['revokedAt']);
 $art=$api->uploadPreviewImage($id,getenv('REDIRECT_TEST_IMAGE'));$api->updatePresentation($id,['preview'=>['title'=>'SDK preview','image'=>$art['image'],'video'=>'https://example.com/a.mp4'],'cloaked'=>true]);check($api->getPresentation($id)['preview']['title']==='SDK preview');
 $api->updatePolicy($id,['policy'=>['track_conversions'=>true,'geo_targets'=>['CH'=>'/switzerland']],'password'=>'fixture-sdk-password']);
 $policy=$api->getPolicy($id);check($policy['hasPassword']===true);check($policy['policy']['preview']['title']==='SDK preview');check(!str_contains(json_encode($policy),'password_hash'));check(!str_contains(json_encode($policy),'fixture-sdk-password'));

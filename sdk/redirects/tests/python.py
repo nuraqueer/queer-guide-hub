@@ -19,6 +19,10 @@ created=api.create_link({'target':'https://example.com/?q=a%26b#detail','slug':'
 id=created['link']['id']
 assert api.get_qr_style(id)['style']['foreground']=='#111111'
 assert created['link']['clickLimit']==25 and created['link']['notes']=='SDK notes' and created['link']['startsAt']
+qr_image=api.create_qr_image({'linkId':id,'logoMode':'none'})
+assert qr_image['imageUrls']['png'].startswith('https://queer.guide/api/qr?share=qg_qr_')
+assert any(row['id']==qr_image['id'] for row in api.list_qr_images()['data'])
+assert api.revoke_qr_image(qr_image['id'],qr_image['version'])['revokedAt']
 art=api.upload_preview_image(id,os.environ['REDIRECT_TEST_IMAGE']);api.update_presentation(id,{'preview':{'title':'SDK preview','image':art['image'],'video':'https://example.com/a.mp4'},'cloaked':True});assert api.get_presentation(id)['preview']['title']=='SDK preview'
 api.update_policy(id,{'policy':{'track_conversions':True,'geo_targets':{'CH':'/switzerland'}},'password':'fixture-sdk-password'})
 policy=api.get_policy(id);assert policy['hasPassword'] is True;assert policy['policy']['preview']['title']=='SDK preview';assert 'password_hash' not in str(policy);assert 'fixture-sdk-password' not in str(policy)

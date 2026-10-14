@@ -7,7 +7,7 @@
   "workers_dev": false,
   "preview_urls": false,
   "observability": { "enabled": true, "head_sampling_rate": 0.1, "logs": { "enabled": true, "invocation_logs": false } },
-  "vars": { "SUPABASE_URL": "" },
+  "vars": { "SUPABASE_URL": "", "SUPABASE_ANON_KEY": "" },
   "ratelimits": [{ "name": "QR_RATE_LIMITER", "namespace_id": "1780712103", "simple": { "limit": 30, "period": 60 } }],
   "rules": [{ "type": "CompiledWasm", "globs": ["**/*.wasm"], "fallthrough": true }]
 }

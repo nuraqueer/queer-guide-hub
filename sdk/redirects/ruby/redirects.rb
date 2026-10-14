@@ -48,6 +48,9 @@ module QueerGuide
     def delete_link(id); request('DELETE','/links/'+id); end
     def list_linked_domains(limit:100,cursor:nil); request('GET','/linked-domains',nil,{limit:limit,cursor:cursor}); end
     def get_qr_style(id); request('GET','/qr-styles/links/'+URI.encode_www_form_component(id)); end
+    def create_qr_image(data); request('POST','/qr-images',data); end
+    def list_qr_images(limit:100,cursor:nil); request('GET','/qr-images',nil,{limit:limit,cursor:cursor}); end
+    def revoke_qr_image(id,version); request('DELETE','/qr-images/'+URI.encode_www_form_component(id),{version:version}); end
     def list_domain_choices(limit:100,cursor:nil); request('GET','/domain-choices',nil,{limit:limit,cursor:cursor}); end
     def list_links(filters={},limit:100,cursor:nil); request('GET','/links',nil,{filters:filters,limit:limit,cursor:cursor}); end
     def count_links(filters={}); request('GET','/links/count',nil,{filters:filters}); end

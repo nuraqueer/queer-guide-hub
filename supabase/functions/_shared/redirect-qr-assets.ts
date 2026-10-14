@@ -135,6 +135,8 @@ export async function dispatchRedirectQrAssetCleanup(
   fetcher: typeof fetch = fetch,
 ) {
   if (!config) return { configured: false, processed: 0, failed: 0, stale: 0 };
+  const pruned = await db.rpc('prune_redirect_qr_image_history', { p_limit: 1000 });
+  if (pruned.error) throw new Error('Could not prune QR image history');
   const claimed = await db.rpc('claim_redirect_qr_asset_cleanup', { p_limit: 3 });
   if (claimed.error || !Array.isArray(claimed.data) || claimed.data.length > 3)
     throw new Error('Could not claim asset cleanup');

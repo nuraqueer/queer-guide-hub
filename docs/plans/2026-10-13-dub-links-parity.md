@@ -30,7 +30,7 @@ exist. Existing local tools are a foundation, not proof of parity or deployment.
 | Expiration | Date and expired destination URL, live enforcement without stale cached rules | Candidate: date/phrase parser, custom fallback and live enforcement tested |
 | Link cloaking | Explicit iframe mode with accurate iframe limitations, standard redirect fallback | Candidate: HTTPS guarded iframe wrapper and persistent direct fallback; runtime release pending |
 | Branded QR | Dots square/circle/joined; marker center square/circle; border square/rounded/circle; colors | Partial: dot/marker/color controls, saved workspace/domain appearance and logos, scoped individual/bulk defaults and scan verification implemented locally; hosted-image authoring/integration and release pending |
-| QR logos/export | Workspace/domain/logo precedence and hide; SVG/PNG/JPG; clipboard image and image URL | Partial: saved/local logos, PNG/JPG/SVG and clipboard exports, durable logo assets/editor/cleanup implemented locally; server image-rendering service implemented locally; hosted-output authoring/default resolution/SDK/UI/release pending |
+| QR logos/export | Workspace/domain/logo precedence and hide; SVG/PNG/JPG; clipboard image and image URL | Partial: saved/local logos, PNG/JPG/SVG and clipboard exports, durable logo assets/editor/cleanup implemented locally; server image-rendering service implemented locally; revocable live hosted-image profiles and five-SDK methods implemented locally; custom artwork/UI/release pending |
 | Click analytics | Real-time totals/time series, custom date/filter/export, countries/cities/devices/browsers/OS/referrers | Candidate: SQL totals/time series, date/dimension filters, export and bounded live refresh; release pending |
 | Conversion tracking | Click attribution, leads/signup/sale/revenue, trusted conversion ingestion and application hooks | Candidate: scoped ingestion, consented signup and verified Stripe hooks implemented locally |
 | Customer insights | Customer journey across click→lead→sale with private event timeline | Partial: private ID-based cross-link paginated journeys; identity enrichment missing |
@@ -1522,3 +1522,61 @@ Creation has per-principal active/hourly and global-hourly budgets. List/revoke
 remain scoped; owners can manage all workspace image links. Local custom artwork
 still needs a separate reviewed asset attachment that preserves workspace defaults;
 keep that, UI authoring/copy and five-SDK contracts as required follow-ups.
+
+### Revocable live image profiles and five-SDK contracts
+
+Implemented explicit create/list/versioned-revoke APIs and private hash-only QR
+image capability records. Current owner sessions can publish visible managed links
+or explicit inventory URLs; current member/key links:read scopes can publish only
+visible SHORT records. Every public profile lookup rechecks the originating
+owner/member/key, current folder/ID scope and expiry/revocation. Link/user/key/member
+deletion cascades. Only canonical short URL (including custom-domain roots), tracked
+flag, effective appearance and controlled public logo metadata leave the public
+endpoint. Private destinations, passwords, notes, folder and identity data do not.
+Image lookup/rendering does not resolve redirects, consume quotas or record visits.
+
+Each publication returns PNG/JPG/SVG imageUrls containing a random 256-bit bearer
+once; only SHA-256 is persisted. Default lifetime is until revoked, with optional
+expiry within a year. Live workspace/domain branding and inherit/hide choices are
+resolved at retrieval; explicit appearance overrides remain. List metadata never
+returns bearer/hash; authors manage their own publications and owners can manage
+all. Shared Worker requests permit only format/size options, fetch the fixed API
+endpoint with the publishable key and bounded no-redirect/no-store transport, and
+never silently fall back on missing/revoked/broken profiles. TypeScript, Python,
+Ruby, PHP and Go now expose create/list/revoke methods and their native tests.
+
+Creation budgets enforce 100 active records/60 per hour per principal and 600/hour
+globally, with Retry-After 3600. A private creation ledger survives redirect/creator
+cascades, so deletion cannot erase hourly budgets. The existing internal QR cleanup
+worker prunes bounded batches of ledger records older than two days and image
+records revoked/expired for 90 days, preserving active permanent publications.
+Indexes support current-principal, references, hourly budgets and retention scans.
+No raw Storage metadata is deleted. Migration version 99991791996360 was allocated
+with the repository renumber tool; all 2,281 versions and Postgres 17 grammar/body
+checks pass. No production schema, Storage, DNS or provider state was changed.
+
+Evidence: migrated SQL covers canonical roots, dynamic styles, hidden artwork,
+scoped publication/list/revoke, member impersonation denial, folder/key/owner access
+changes, expiry, deletion, stale versions, no visit changes, private grants, active/
+hourly/global budgets, deletion-resistant history and bounded retention. Actual
+owner/key HTTP -> actual edge handler -> migrated SQL -> real bounded Worker profile
+and asset loaders -> real Wasm verifies domain JPEG/workspace PNG inheritance and
+style changes, SVG embedding and independent PNG/JPG decoding of exact tracked
+URLs; revocation returns 404 rather than fallback. HTTP tests prove private API
+access cannot use a public image bearer, only-own list/revoke, stale conflict and
+429/Retry-After. All five native SDK tests/examples pass with the additive methods.
+Eighty-eight focused tests across 13 files pass. The native workerd script passes
+including unconfigured-profile/override denial; its explicit local date is still
+2026-10-13 versus configured 2026-10-14. Worker and SDK strict TS, app ratchet (704
+inherited errors, none new), Pages/function-test TS, targeted lint, format and app
+build pass (21.32s). Wrangler dry-run is about 1.01 MiB gzip with no upload.
+Supabase/Deno deployment, real gateway/Storage/CORS/cron and retention throughput,
+configured-date cold starts/resource budgets and real Pages service binding still
+need controlled release verification; HTTP fixtures are not deployed proof.
+
+Next QR work remains durable local-artwork attachments that preserve workspace
+preferences, complete UI authoring/copy/revoke and controlled release. The full
+remaining domain lifecycle/DNS automation, native/deferred deep links, branded
+password pages, customer enrichment, report SDK/team discovery, integrations,
+outgoing webhooks, permissions/account discovery and publication remain required.
+The overall Dub parity goal remains active.

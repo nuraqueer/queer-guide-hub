@@ -160,6 +160,19 @@ func (c *Client) ListLinkedDomains(ctx context.Context, limit int, cursor string
 func (c *Client) GetQRStyle(ctx context.Context, id string) (Object, error) {
 	return c.Request(ctx, "GET", "/qr-styles/links/"+url.PathEscape(id), nil, nil)
 }
+func (c *Client) CreateQRImage(ctx context.Context, data Object) (Object, error) {
+	return c.Request(ctx, "POST", "/qr-images", data, nil)
+}
+func (c *Client) ListQRImages(ctx context.Context, limit int, cursor string) (Object, error) {
+	q := Object{"limit": limit}
+	if cursor != "" {
+		q["cursor"] = cursor
+	}
+	return c.Request(ctx, "GET", "/qr-images", nil, q)
+}
+func (c *Client) RevokeQRImage(ctx context.Context, id, version string) (Object, error) {
+	return c.Request(ctx, "DELETE", "/qr-images/"+url.PathEscape(id), Object{"version": version}, nil)
+}
 func (c *Client) ListDomainChoices(ctx context.Context, limit int, cursor string) (Object, error) {
 	q := Object{"limit": limit}
 	if cursor != "" {

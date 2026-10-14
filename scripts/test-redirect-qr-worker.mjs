@@ -105,6 +105,16 @@ try {
   assert.equal(await head.text(), '');
   const options = await get({ url }, { method: 'OPTIONS' });
   assert.equal(options.status, 204);
+  assert.equal(
+    (await get({ share: 'qg_qr_' + 'a'.repeat(64) })).status,
+    503,
+    'Missing profile configuration silently fell back',
+  );
+  assert.equal(
+    (await get({ share: 'qg_qr_' + 'a'.repeat(64), url: 'https://evil.example/' })).status,
+    400,
+    'Shared payload override accepted',
+  );
   let limited = false;
   for (let attempt = 0; attempt < 35; attempt++) {
     const response = await get({ url, size: '4096' });

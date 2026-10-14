@@ -19,6 +19,7 @@ const fields = [
   'background',
   'logo',
   'logoHash',
+  'share',
 ];
 export async function boundedBytes(response: Response, max: number) {
   if (!response.body) throw new QrImageError('Image body is missing.');
@@ -45,6 +46,7 @@ export async function parseQrImageRequest(
   request: Request,
   storageOrigin: string,
   fetcher: typeof fetch = fetch,
+  resolveProfile?: (token: string, signal: AbortSignal) => Promise<Record<string, string>>,
 ) {
   const endpoint = new URL(request.url);
   if (endpoint.search.length > 8192) throw new QrImageError('QR image URL is too long.', 414);
@@ -82,6 +84,23 @@ export async function parseQrImageRequest(
     Object.values(values).some((value) => typeof value !== 'string')
   )
     throw new QrImageError('Invalid QR image parameters.');
+  if ('share' in values) {
+    if (
+      !['GET', 'HEAD'].includes(request.method) ||
+      !/^qg_qr_[a-f0-9]{64}$/.test(String(values.share)) ||
+      Object.keys(values).some((key) => !['share', 'format', 'size'].includes(key)) ||
+      (values.format !== undefined && !['png', 'jpg', 'svg'].includes(String(values.format))) ||
+      (values.size !== undefined && !['256', '512', '1024'].includes(String(values.size)))
+    )
+      throw new QrImageError('Invalid shared QR image parameters.');
+    if (!resolveProfile) throw new QrImageError('QR image profile unavailable', 503);
+    const profile = await resolveProfile(String(values.share), request.signal);
+    values = {
+      ...profile,
+      ...(values.format !== undefined ? { format: values.format } : {}),
+      ...(values.size !== undefined ? { size: values.size } : {}),
+    };
+  }
   if (
     typeof values.url !== 'string' ||
     new TextEncoder().encode(values.url).length > 2048 ||
