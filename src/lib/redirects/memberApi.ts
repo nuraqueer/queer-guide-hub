@@ -34,6 +34,7 @@ export interface MemberLink {
   folderId: string | null;
   tagIds: string[];
   comment: string;
+  notes?: string | null;
   isEnabled: boolean;
   isArchived: boolean;
   clicks: number;

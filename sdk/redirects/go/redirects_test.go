@@ -43,7 +43,11 @@ func TestSDKIntegration(t *testing.T) {
 		t.Fatal("Unicode resource detail failed")
 	}
 
-	created := must(api.CreateLink(ctx, Object{"target": "https://example.com/?q=a%26b#detail", "slug": "sdk-go", "folderId": fid, "tagIds": []string{tid}}))
+	created := must(api.CreateLink(ctx, Object{"target": "https://example.com/?q=a%26b#detail", "slug": "sdk-go", "startsAt": "2020-01-01T00:00:00Z", "clickLimit": 25, "notes": "SDK notes", "folderId": fid, "tagIds": []string{tid}}))
+	linkFields := created["link"].(map[string]any)
+	if linkFields["clickLimit"].(interface{ String() string }).String() != "25" || linkFields["notes"] != "SDK notes" || linkFields["startsAt"] == nil {
+		t.Fatal("Full fields lost")
+	}
 	id := created["link"].(map[string]any)["id"].(string)
 	art := must(api.UploadPreviewImage(ctx, id, os.Getenv("REDIRECT_TEST_IMAGE")))
 	must(api.UpdatePresentation(ctx, id, Object{"preview": Object{"title": "SDK preview", "image": art["image"], "video": "https://example.com/a.mp4"}, "cloaked": true}))

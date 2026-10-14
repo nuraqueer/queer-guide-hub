@@ -1,3 +1,4 @@
+import { RedirectDomainField } from './RedirectDomainField';
 import { OrganisationRelationshipsField } from './OrganisationRelationshipsField';
 import React from 'react';
 import { contentKind, preserveStructuredStorage } from './structured/structuredValue';
@@ -35,10 +36,12 @@ export interface FieldProps {
   setFields?: (fields: Record<string, unknown>) => void;
   /** All current form values (used by fields that depend on sibling field values) */
   allValues?: Record<string, unknown>;
+  originalValues?: Record<string, unknown>;
   onPersistedChange?: () => Promise<void>;
 }
 
 const FIELD_COMPONENTS: Record<string, React.ComponentType<FieldProps>> = {
+  redirect_domain: RedirectDomainField,
   organisation_locations: OrganisationLocationsField,
   organisation_relationships: OrganisationRelationshipsField,
   text: TextField,
@@ -80,6 +83,7 @@ export function FieldRenderer({
   disabled,
   setFields,
   allValues,
+  originalValues,
   onPersistedChange,
 }: FieldRendererProps) {
   if (field.hidden) {
@@ -126,6 +130,7 @@ export function FieldRenderer({
       disabled={isDisabled}
       setFields={setFields}
       allValues={allValues}
+      originalValues={originalValues}
       onPersistedChange={onPersistedChange}
     />
   );

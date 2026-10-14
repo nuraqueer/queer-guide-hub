@@ -161,6 +161,7 @@ function CMSEditorBody({
     contentType,
     itemId,
     initialValues,
+    onSaved,
     initialGroup: legacyLocationId ? 'location' : undefined,
   });
 
@@ -242,11 +243,8 @@ function CMSEditorBody({
 
   // Handle save
   const handleSave = useCallback(async () => {
-    const success = await save();
-    if (success && onSaved && state.itemId) {
-      onSaved(state.itemId);
-    }
-  }, [save, onSaved, state.itemId]);
+    await save();
+  }, [save]);
 
   // ── Queue (cockpit) navigation + actions + [/]/⌘Enter loop ───────
   const {
@@ -464,6 +462,7 @@ function CMSEditorBody({
                   >
                     <div className="min-w-0">
                       <FieldRenderer
+                        key={field.type === 'redirect_domain' ? (state.itemId ?? 'new') : undefined}
                         field={field}
                         value={state.data[field.name]}
                         onChange={handleFieldChange(field.name)}
@@ -471,6 +470,7 @@ function CMSEditorBody({
                         disabled={state.isSaving}
                         setFields={setFields}
                         onPersistedChange={refresh}
+                        originalValues={state.originalData}
                         allValues={
                           legacyLocationId
                             ? {

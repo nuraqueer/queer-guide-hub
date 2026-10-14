@@ -42,6 +42,7 @@ interface UseCMSEditorOptions {
   autoSaveInterval?: number;
   initialValues?: Record<string, unknown>;
   initialGroup?: FieldGroup;
+  onSaved?: (id: string) => void;
 }
 
 interface UseCMSEditorReturn {
@@ -70,6 +71,7 @@ export function useCMSEditor({
   autoSaveInterval = 0,
   initialValues,
   initialGroup,
+  onSaved,
 }: UseCMSEditorOptions): UseCMSEditorReturn {
   const { user } = useAuth();
   const config = getContentType(contentType);
@@ -110,13 +112,15 @@ export function useCMSEditor({
 
     try {
       // Fetch content from source table
-      const { data: loaded, error } = config.editorRpc
-        ? await untypedRpc(config.editorRpc.load, { p_id: itemId })
-        : await supabase
-            .from(config.tableName as 'venues')
-            .select('*')
-            .eq(config.primaryKey, itemId)
-            .single();
+      const { data: loaded, error } = config.editorApi
+        ? { data: await config.editorApi.load(itemId), error: null }
+        : config.editorRpc
+          ? await untypedRpc(config.editorRpc.load, { p_id: itemId })
+          : await supabase
+              .from(config.tableName as 'venues')
+              .select('*')
+              .eq(config.primaryKey, itemId)
+              .single();
 
       if (error) throw error;
       if (!loaded) throw new Error('Content not found');
@@ -156,8 +160,13 @@ export function useCMSEditor({
 
   const refresh = useCallback(async () => {
     const id = state.itemId ?? itemId;
-    if (!config?.editorRpc || !id) return;
-    const { data, error } = await untypedRpc(config.editorRpc.load, { p_id: id });
+    if (!config || (!config.editorRpc && !config.editorApi) || !id) return;
+    const { data, error } = config.editorApi
+      ? await config.editorApi.load(id).then(
+          (data) => ({ data, error: null }),
+          (error) => ({ data: null, error }),
+        )
+      : await untypedRpc(config.editorRpc!.load, { p_id: id });
     if (error || !data) {
       setState((prev) => ({
         ...prev,
@@ -284,13 +293,15 @@ export function useCMSEditor({
       const readOnlyFields = new Set(config.fields.filter((f) => f.readOnly).map((f) => f.name));
       const virtualFields = new Set(config.fields.filter((f) => f.virtual).map((f) => f.name));
       const systemFields = new Set(['id', 'created_at', 'created_by', '_cms_metadata']);
-      const saveData: Record<string, unknown> = {};
+      let saveData: Record<string, unknown> = {};
 
       for (const [key, value] of Object.entries(state.data)) {
         if (readOnlyFields.has(key) || virtualFields.has(key) || systemFields.has(key)) continue;
         if ((state.itemId ?? itemId) && !dirtyFieldsRef.current.has(key)) continue;
         saveData[key] = value;
       }
+
+      if (config.editorApi?.prepareSave) saveData = config.editorApi.prepareSave(saveData);
 
       if (
         (state.itemId ?? itemId) &&
@@ -309,7 +320,15 @@ export function useCMSEditor({
       let savedId = effectiveId;
       let serverRow: Record<string, unknown> | null = null;
 
-      if (config.editorRpc) {
+      if (config.editorApi) {
+        serverRow = await config.editorApi.save(
+          effectiveId,
+          saveData,
+          effectiveId ? serverUpdatedAt.current : null,
+        );
+        if (!serverRow?.id) throw new Error('No record returned from save');
+        savedId = serverRow.id as string;
+      } else if (config.editorRpc) {
         const { data: saved, error } = await untypedRpc(config.editorRpc.save, {
           p_id: effectiveId,
           p_data: saveData,
@@ -502,6 +521,7 @@ export function useCMSEditor({
         errors: dropErrors,
       }));
 
+      if (droppedFields.length === 0 && savedId) onSaved?.(savedId);
       return droppedFields.length === 0;
     } catch (error) {
       console.error('Error saving content:', error);
@@ -512,7 +532,16 @@ export function useCMSEditor({
       }));
       return false;
     }
-  }, [config, state.data, state.itemId, state.originalData._locations, itemId, user, metadata]);
+  }, [
+    config,
+    state.data,
+    state.itemId,
+    state.originalData._locations,
+    itemId,
+    user,
+    metadata,
+    onSaved,
+  ]);
 
   // ── Reset ──────────────────────────────────────────────────────
 

@@ -113,3 +113,10 @@ and primary availability. Read scope and current link/member restrictions apply.
 Primary preference writes require an owner account session; keys do not gain
 registry or primary-setting privileges. Interactive builders use the saved
 primary initially, while API omission remains the built-in namespace.
+
+Managed link input/response includes nullable `startsAt`, `clickLimit` and `notes`.
+Dates normalize to UTC; a submitted start/end range must be ordered. Visit limits
+are positive 32-bit integers; null removes the limit. Notes accept up to 10,000
+characters. Omitted update fields are preserved. All five native HTTP test clients
+exercise these fields. Manual CMS type/source conversions are a separate owner-
+session endpoint and are not granted to server keys.

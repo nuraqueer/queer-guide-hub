@@ -4,6 +4,7 @@ import { readRedirectDomainChoices } from '@/lib/redirects/domainChoices';
 export function useRedirectDomainChoices(
   userId: string | undefined,
   existing?: { id: string | null; hostname: string | null },
+  initialValue?: string | null,
 ) {
   const query = useQuery({
     queryKey: ['redirect-domain-choices', userId],
@@ -14,7 +15,9 @@ export function useRedirectDomainChoices(
     refetchOnWindowFocus: 'always',
   });
   const [override, setOverride] = useState<{ userId: string | undefined; value: string } | null>(
-    null,
+    initialValue === undefined || (existing && initialValue === existing.id)
+      ? null
+      : { userId, value: initialValue ?? '' },
   );
   const selected =
     override && override.userId === userId

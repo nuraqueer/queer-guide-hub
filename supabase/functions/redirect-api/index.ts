@@ -1,3 +1,4 @@
+import {manualRedirectInput} from '../_shared/redirect-manual-records.ts';
 import {domainProviderConfig,domainProviderInput} from '../_shared/redirect-domain-provider.ts';
 import {domainInput,checkRedirectDomainDns} from '../_shared/redirect-domains.ts';
 import {savedReportInput,reportShareInput,publicReportRequest} from '../_shared/redirect-reports.ts';
@@ -44,6 +45,20 @@ Deno.serve(async (req: Request) => {
  };
  try {
   if(path==='/session'&&req.method==='GET'){if(tokenCredential)return json({error:'Account session required'},403);const principal=await sessionPrincipal('links:read');if(principal.failure)return principal.failure;return json({role:principal.role,label:principal.label??null});}
+  const manual=path.match(/^\/manual-records(?:\/([a-f0-9-]{36}))?$/i);
+  if(manual){
+   if(tokenCredential)return json({error:'Workspace owner account session required'},403);
+   const principal=await sessionPrincipal('workspace:write');if(principal.failure)return principal.failure;if(principal.id!==null)return json({error:'Workspace owner access required'},403);
+   const id=manual[1]??null;if(id&&!UUID.test(id)||new URL(req.url).search)return json({error:'Invalid manual redirect request'},400);
+   let values=null,expected=null;
+   if(req.method==='GET'&&id){}
+   else if(req.method===(id?'PATCH':'POST')){
+    const body=await boundedJson(req,262144);
+    if(!body||typeof body!=='object'||Array.isArray(body)||Object.keys(body).some(key=>!['values','expectedUpdatedAt'].includes(key))||id&&(typeof body.expectedUpdatedAt!=='string'||!Number.isFinite(Date.parse(body.expectedUpdatedAt)))||!id&&body.expectedUpdatedAt!=null)return json({error:'Provide redirect fields and the current record timestamp'},400);
+    values=manualRedirectInput(body.values,!id);expected=body.expectedUpdatedAt??null;
+   }else return json({error:'Method not supported'},405);
+   const result=await db.rpc('redirect_manual_record',{p_actor:user!.id,p_id:id,p_values:values,p_expected_updated_at:expected});if(result.error)return rpcError(result.error);return json(result.data,id?200:201);
+  }
   if(path==='/domain-choices'){
    if(req.method!=='GET')return json({error:'Method not supported'},405);
    let principalId:string|null=null;

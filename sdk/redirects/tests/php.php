@@ -8,7 +8,7 @@ $template=$api->createResource('templates',['name'=>'PHP template','parameters'=
 check($api->updateResource('folders',$folder['id'],['description'=>'Changed'])['description']==='Changed');
 check($api->updateResource('tags',$tag['id'],['color'=>'blue'])['color']==='blue');check(count($api->listResources('templates')['data'])===1);
 check($api->getResource('folders',$folder['id'])['name']==='Héllo & + PHP');
-$created=$api->createLink(['target'=>'https://example.com/?q=a%26b#detail','slug'=>'sdk-php','folderId'=>$folder['id'],'tagIds'=>[$tag['id']]]);$id=$created['link']['id'];
+$created=$api->createLink(['target'=>'https://example.com/?q=a%26b#detail','slug'=>'sdk-php','startsAt'=>'2020-01-01T00:00:00Z','clickLimit'=>25,'notes'=>'SDK notes','folderId'=>$folder['id'],'tagIds'=>[$tag['id']]]);$id=$created['link']['id'];check($created['link']['clickLimit']===25 && $created['link']['notes']==='SDK notes' && $created['link']['startsAt']);
 $art=$api->uploadPreviewImage($id,getenv('REDIRECT_TEST_IMAGE'));$api->updatePresentation($id,['preview'=>['title'=>'SDK preview','image'=>$art['image'],'video'=>'https://example.com/a.mp4'],'cloaked'=>true]);check($api->getPresentation($id)['preview']['title']==='SDK preview');
 $api->updatePolicy($id,['policy'=>['track_conversions'=>true,'geo_targets'=>['CH'=>'/switzerland']],'password'=>'fixture-sdk-password']);
 $policy=$api->getPolicy($id);check($policy['hasPassword']===true);check($policy['policy']['preview']['title']==='SDK preview');check(!str_contains(json_encode($policy),'password_hash'));check(!str_contains(json_encode($policy),'fixture-sdk-password'));

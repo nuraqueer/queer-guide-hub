@@ -5,7 +5,7 @@ Cloudflare hostname/TLS setup and an explicit branded routing check. Managed
 links have separate hostname namespaces; the default remains
 `https://queer.guide/go/<slug>`. Root, not-found and default expiry destinations
 are resolved on branded hosts. The tracked-link builder and member editor offer domain choices and an owner-set
-primary default. The legacy raw-table creation form still uses the built-in domain. This implementation is local; provisioning a production
+primary default. The active manual CMS editor also supports domain selection and atomic saves. This implementation is local; provisioning a production
 hostname and deploying the dedicated relay remain release work.
 
 ## Registration and ownership
@@ -51,7 +51,7 @@ proof refreshes keep expanded setup panels open.
 Signed branded routing serves these defaults after current readiness checks.
 Domain namespaces, guarded CRUD/bulk, five SDK field contracts, inventory/CSV/QR
 and the tracked/member builders are implemented locally. Remaining domain work
-includes the legacy raw-table creation form, managed root-link policies,
+includes managed root-link policies,
 archive/transfer/subpath workflows, provider validation restart, authorized DNS
 auto-configuration/forwarding setup and production rollout.
 
@@ -196,7 +196,7 @@ Managed CSV includes `domainId` and roundtrips bindings. Blank update cells pres
 the binding; `null` explicitly returns it to the built-in namespace. Duplicate
 checks use domain plus slug. The all-source inventory displays branded URLs and
 its QR export preserves QR attribution on managed links. Ordinary external URLs
-remain unannotated. Tracked-link and member builders select ready domains; owner primary preferences set their interactive defaults.
+remain unannotated. Tracked-link, member and manual CMS builders select ready domains; owner primary preferences set their interactive defaults.
 
 The dedicated `workers/redirect-domains` relay derives scope from the actual HTTPS
 request URL. It forwards neither customer credentials/cookies nor customer-supplied
@@ -284,3 +284,32 @@ readiness and folder/credential permissions in SQL.
 The five local SDKs expose `listDomainChoices` (TypeScript/PHP),
 `list_domain_choices` (Python/Ruby) and `ListDomainChoices` (Go), with limit/cursor
 pagination. Preference management remains an owner-session UI/API action.
+
+## Atomic manual CMS records and complete link fields
+
+The Redirects inventory opens the shared CMS editor, rather than the retired
+standalone dialog. Its registered domain field adopts the primary for new records,
+retains an existing unavailable binding for repairs, preserves draft choices across
+field-group remounts and follows refreshed original values without writing an old
+binding back. The existing CMS panels and metadata behavior remain available.
+Copy/test row actions use the public branded URL, never an unscoped resolver URL.
+
+Owner sessions use `GET /manual-records/:id`, `POST /manual-records` with `{values}`
+and `PATCH /manual-records/:id` with `{values, expectedUpdatedAt}`. Accepted fields
+are the manual type/source/target/status, query settings, starts/ends, visit limit,
+notes and domain ID. Identity, created-by/time, click count and derived hostname
+are not writable. SQL rechecks the owner role and the loaded timestamp, applies
+SHORT/PATH conversion plus binding in one transaction, synchronizes policy expiry
+and returns the actual complete row. Keys and ordinary members cannot use this
+owner endpoint. The CMS normalizes expected conversion clears before comparing
+submitted and stored fields; it does not report a successful type conversion as
+silently rejected fields. Existing IDs, counts, creation metadata, other policy
+fields and unrelated values stay intact. Invalid/stale conversions roll back.
+
+The scoped managed-link API and five SDKs also support nullable `startsAt`,
+`clickLimit` (positive 32-bit integer) and `notes` (up to 10,000 characters) under
+existing link permissions. Omitted fields stay unchanged. Submitted start/end
+ranges must be ordered; clearing expiry updates the policy copy. Managed CSV
+roundtrips these fields and uses `notesJson`, preserving literal null text/empty
+strings/null clearing while preventing spreadsheet formula evaluation. No
+deployment or production schema success is implied by this local implementation.

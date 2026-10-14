@@ -2,6 +2,30 @@ import { describe, it, expect } from 'vitest';
 import { parseRedirectCsv, managedImportCsv, managedLinksCsv } from '../importCsv';
 const id = '00000000-0000-4000-8000-000000000001';
 describe('managed CSV import and export', () => {
+  it('roundtrips scheduling, nullable limits and spreadsheet-safe notes including literal null text', () => {
+    for (const notes of ['=HYPERLINK("https://example.com")', 'null', '', null]) {
+      const csv = managedLinksCsv([
+        {
+          id,
+          slug: 'fields-roundtrip',
+          target: '/events',
+          startsAt: '2020-01-01T00:00:00.000Z',
+          clickLimit: 9,
+          notes,
+        },
+      ]);
+      expect(csv).toContain('notesJson');
+      expect(managedImportCsv(csv, 'update')[0].data).toMatchObject({
+        startsAt: '2020-01-01T00:00:00.000Z',
+        clickLimit: 9,
+        notes,
+      });
+    }
+    expect(
+      managedImportCsv('id,startsAt,clickLimit,notesJson\n' + id + ',null,null,null', 'update')[0]
+        .data,
+    ).toEqual({ startsAt: null, clickLimit: null, notes: null });
+  });
   it('preserves custom-domain identity in roundtrips and permits the same slug on different domains', () => {
     const branded = { id, slug: 'same-link', target: '/events', domainId: id };
     expect(managedImportCsv(managedLinksCsv([branded]), 'update')[0]).toMatchObject({

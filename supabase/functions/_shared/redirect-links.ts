@@ -18,7 +18,7 @@ function stringMap(value: unknown) {
 }
 export function linkInput(value: unknown, operation: 'create' | 'update' | 'upsert') {
   const data = object(value), result: Record<string, unknown> = {};
-  const fields = ['slug','target','statusCode','isEnabled','isArchived','queryMode','queryOverride','utmDefaults','expiresAt','domainId','folderId','tagIds','comment'];
+  const fields = ['slug','target','statusCode','isEnabled','isArchived','queryMode','queryOverride','utmDefaults','expiresAt','startsAt','clickLimit','notes','domainId','folderId','tagIds','comment'];
   if (Object.keys(data).some(key => !fields.includes(key))) throw new Error('Unknown link field');
   if (operation !== 'update' && data.target === undefined) throw new Error('A destination is required');
   if (operation === 'upsert' && data.slug === undefined) throw new Error('Upsert requires a slug');
@@ -39,6 +39,9 @@ export function linkInput(value: unknown, operation: 'create' | 'update' | 'upse
   if (data.isEnabled !== undefined && typeof data.isEnabled !== 'boolean') throw new Error('Invalid enabled state');
   if (data.queryMode !== undefined && !['PRESERVE','DROP','OVERRIDE'].includes(data.queryMode as string)) throw new Error('Invalid query mode');
   if (data.expiresAt !== undefined && data.expiresAt !== null && (typeof data.expiresAt !== 'string' || !Number.isFinite(Date.parse(data.expiresAt)))) throw new Error('Invalid expiration date');
+  if (data.startsAt !== undefined && data.startsAt !== null && (typeof data.startsAt !== 'string' || !Number.isFinite(Date.parse(data.startsAt)))) throw new Error('Invalid start date');
+  if (data.clickLimit !== undefined && data.clickLimit !== null && (!Number.isInteger(data.clickLimit) || (data.clickLimit as number)<1 || (data.clickLimit as number)>2147483647)) throw new Error('Visit limit must be a positive integer');
+  if (data.notes !== undefined && data.notes !== null && (typeof data.notes !== 'string' || data.notes.length>10000)) throw new Error('Notes exceed 10,000 characters');
   if (data.domainId !== undefined && data.domainId !== null && !uuid(data.domainId)) throw new Error('Invalid domain ID');
   if (data.folderId !== undefined && data.folderId !== null && !uuid(data.folderId)) throw new Error('Invalid folder ID');
   if (data.tagIds !== undefined && (!Array.isArray(data.tagIds) || data.tagIds.length > 100 || data.tagIds.some(id => !uuid(id)))) throw new Error('Invalid tag IDs');
@@ -46,7 +49,8 @@ export function linkInput(value: unknown, operation: 'create' | 'update' | 'upse
   for (const field of fields) if (data[field] !== undefined && result[field] === undefined) result[field] = data[field];
   for (const field of ['queryOverride','utmDefaults']) if (data[field] !== undefined && data[field] !== null) result[field] = stringMap(data[field]);
   if (result.utmDefaults && Object.keys(result.utmDefaults as Record<string, unknown>).some(key => !['utm_source','utm_medium','utm_campaign','utm_term','utm_content','ref'].includes(key))) throw new Error('Unknown campaign default');
-  if (typeof result.expiresAt === 'string') result.expiresAt = new Date(result.expiresAt).toISOString();
+  for(const field of ['expiresAt','startsAt'])if(typeof result[field]==='string')result[field]=new Date(result[field] as string).toISOString();
+  if(typeof result.startsAt==='string' && typeof result.expiresAt==='string' && Date.parse(result.startsAt)>=Date.parse(result.expiresAt))throw new Error('Expiration must be after the start date');
   if (Array.isArray(result.tagIds)) result.tagIds = [...new Set(result.tagIds)];
   return result;
 }

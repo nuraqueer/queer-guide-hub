@@ -19,7 +19,7 @@ exist. Existing local tools are a foundation, not proof of parity or deployment.
 | Bulk actions | Create/update/upsert/delete, folder/tag assignment, archive, import/export, QR export | Candidate for managed links: atomic create/update/upsert/deletion API and CSV review/import/export UI, archive/restore, folder/tag assignment and verified QR ZIP; production release pending |
 | Custom previews | Uploaded OG image (1200×630, ≤1.5 MB), title≤120, description≤240, video API, crawler unfurl | Candidate: editor, scoped upload/presentation APIs and crawler HTML; native browser/Storage release pending |
 | AI previews | Generate title/description from destination content using configured AI provider | Candidate: scoped draft generator with spend limits; live provider and browser verification pending |
-| Custom domains | Verify ownership/DNS, multiple domains, primary domain, redirects on branded hostname | Partial: private registry, exact DNS verification, owner UI and stored defaults implemented locally; durable Cloudflare lifecycle/TLS checks implemented locally; hostname namespaces, signed relay/resolver, routing health, background proof renewal and inventory/CSV/QR/API/SDK fields implemented locally; ready choices, owner primary preference and tracked/member builders implemented locally; legacy raw-table creator, real provider proof and release pending |
+| Custom domains | Verify ownership/DNS, multiple domains, primary domain, redirects on branded hostname | Partial: private registry, exact DNS verification, owner UI and stored defaults implemented locally; durable Cloudflare lifecycle/TLS checks implemented locally; hostname namespaces, signed relay/resolver, routing health, background proof renewal and inventory/CSV/QR/API/SDK fields implemented locally; ready choices, owner primary preference and tracked/member builders implemented locally; active manual CMS domain field and atomic owner saves implemented locally; real provider proof and release pending |
 | Domain defaults | Root/not-found redirects, default expiration URL, workspace/domain QR logos | Partial: root/not-found/expiry settings and signed-host resolver implemented locally; managed root-link policies, QR/logo precedence and release pending |
 | Deep links | iOS/Android association files, app page routes, fallback and deferred attribution | Missing |
 | Geo targeting | Country-specific destinations and default fallback | Candidate: country rules and fallback tested |
@@ -952,3 +952,41 @@ management to members or keys. Existing link-ID/folder/credential checks continu
 for scoped managed-link writes. Verify SHORT/PATH conversions, same-slug custom
 namespaces, unavailable bindings, field preservation, expiry synchronization,
 role/key denials and rollback on invalid updates through migrated SQL/real HTTP.
+
+Implemented locally: the active shared CMS editor now uses a registered domain
+field and an owner-only atomic record API. Inspection showed the old standalone
+dialog was retired, so the implementation targets the actual inventory → CMS
+path and preserves its panels/metadata. Fresh owner checks, optimistic timestamps,
+complete SHORT/PATH conversions, current custom bindings, policy-expiry sync and
+actual row returns are enforced in SQL. Expected conversion clears are normalized
+before the CMS compares submitted/stored values. Domain drafts survive group
+remounts; server refresh does not reapply an old binding. Copy/test actions use
+canonical public URLs. The first-save callback now receives the persisted ID so
+the inventory is invalidated for new records too.
+
+Managed APIs, TypeScript types and all five native HTTP test clients cover
+startsAt, clickLimit and notes. Shared validation preserves omitted/null semantics;
+CSV roundtrips scheduling and limits plus spreadsheet-safe notesJson, including
+literal null text and null clearing. The isolated bootstrap now models the
+existing production notes/created_at columns used by these functions.
+
+Evidence: migrated SQL and actual owner HTTP verify full fields, same-slug custom
+conversion without an intermediate builtin collision, role/key/readonly denials,
+stale writes, failed-conversion rollback, unavailable-domain repair, binding clears
+and expiry synchronization without losing other policy settings. Eighty-one
+focused tests across 12 files pass, including the actual CMS hook/registered field,
+ordinary organization-editor regressions, native field validation and CSV. Actual
+CSV → migrated SQL and all five SDKs/examples pass. Native browser exercised the
+real CMSEditorLayout and registry: primary selection, save, visit limit 12, second
+save and tab switching. At 390 pixels client/scroll widths are both 390. Evidence
+in shared workspace outputs: manual-cms-domain-saved-desktop.jpg,
+manual-cms-limit-saved-mobile.jpg, manual-cms-domain-mobile.jpg. Its API/domain
+responses are explicitly simulated and production requests blocked. Temporary
+browser tab/viewport were cleaned up. App types remain 704 inherited errors with
+none new; functions types, lint, build and migration validation pass.
+
+This remains a parity checkpoint. Domain filter UX, managed root-link policies,
+provider validation restart, remaining domain lifecycle/DNS automation and all
+other unfinished ledger features remain required, along with real DNS/TLS,
+controlled-domain, production migration/deployment, release and publication proof.
+No production writes or deployments occurred.

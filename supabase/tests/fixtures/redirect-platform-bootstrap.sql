@@ -22,7 +22,7 @@ CREATE TABLE public.redirects (
  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),type public.redirect_type NOT NULL,slug text UNIQUE,target text NOT NULL,
  source_path text, match_kind text DEFAULT 'EXACT', status_code integer DEFAULT 302,is_enabled boolean DEFAULT true,
  query_mode public.redirect_query_mode DEFAULT 'PRESERVE',preserve_query boolean DEFAULT true,query_override jsonb,utm_defaults jsonb,
- click_count integer DEFAULT 0,click_limit integer,start_at timestamptz,end_at timestamptz,created_by uuid,updated_at timestamptz DEFAULT now()
+ click_count integer DEFAULT 0,click_limit integer,start_at timestamptz,end_at timestamptz,created_by uuid,notes text,created_at timestamptz DEFAULT now(),updated_at timestamptz DEFAULT now()
 );
 ALTER TABLE public.redirects ENABLE ROW LEVEL SECURITY;
 CREATE POLICY redirects_public_read ON public.redirects FOR SELECT TO authenticated USING (is_enabled);

@@ -18,6 +18,9 @@ export const IMPORT_HEADERS = [
   'queryOverride',
   'utmDefaults',
   'expiresAt',
+  'startsAt',
+  'clickLimit',
+  'notes',
   'folderId',
   'tagIds',
   'comment',
@@ -95,9 +98,11 @@ export function managedImportCsv(text: string, mode: ImportMode): ImportOperatio
   const fields = header.map((value) =>
     value.trim().toLowerCase().replace(/_/g, '') === 'commentjson'
       ? 'comment'
-      : IMPORT_HEADERS.find(
-          (field) => field.toLowerCase() === value.trim().toLowerCase().replace(/_/g, ''),
-        ),
+      : value.trim().toLowerCase().replace(/_/g, '') === 'notesjson'
+        ? 'notes'
+        : IMPORT_HEADERS.find(
+            (field) => field.toLowerCase() === value.trim().toLowerCase().replace(/_/g, ''),
+          ),
   );
   if (fields.some((field) => !field))
     throw new Error('Unknown CSV header. Use the managed-link template.');
@@ -112,13 +117,16 @@ export function managedImportCsv(text: string, mode: ImportMode): ImportOperatio
         const raw = values[col];
         if (!raw.trim()) continue;
         if (
-          field === 'comment' &&
-          header[col].trim().toLowerCase().replace(/_/g, '') === 'commentjson'
+          (field === 'comment' &&
+            header[col].trim().toLowerCase().replace(/_/g, '') === 'commentjson') ||
+          (field === 'notes' && header[col].trim().toLowerCase().replace(/_/g, '') === 'notesjson')
         ) {
           const comment = JSON.parse(raw);
-          if (typeof comment !== 'string')
-            throw new Error('commentJson must contain a JSON string');
-          data.comment = comment;
+          if (typeof comment !== 'string' && !(field === 'notes' && comment === null))
+            throw new Error(
+              field + 'Json must contain a JSON string' + (field === 'notes' ? ' or null' : ''),
+            );
+          data[field] = comment;
           continue;
         }
         if (field === 'id') {
@@ -131,12 +139,19 @@ export function managedImportCsv(text: string, mode: ImportMode): ImportOperatio
           if (!['true', 'false', '1', '0'].includes(normalized))
             throw new Error(field + ' must be true or false');
           data[field] = ['true', '1'].includes(normalized);
-        } else if (field === 'statusCode') {
+        } else if (['clickLimit', 'notes'].includes(field) && raw.trim() === 'null')
+          data[field] = null;
+        else if (['statusCode', 'clickLimit'].includes(field)) {
           if (!/^\d+$/.test(raw.trim())) throw new Error('Invalid HTTP status');
           data[field] = Number(raw);
         } else if (['queryOverride', 'utmDefaults', 'tagIds'].includes(field))
           data[field] = JSON.parse(raw);
-        else if (['expiresAt', 'folderId', 'domainId'].includes(field) && raw.trim() === 'null')
+        else if (
+          ['expiresAt', 'startsAt', 'clickLimit', 'notes', 'folderId', 'domainId'].includes(
+            field,
+          ) &&
+          raw.trim() === 'null'
+        )
           data[field] = null;
         else
           data[field] =
@@ -169,12 +184,16 @@ export function managedImportCsv(text: string, mode: ImportMode): ImportOperatio
 }
 export function managedLinksCsv(links: Record<string, unknown>[]) {
   const quote = (value: string) => '"' + value.replace(/"/g, '""') + '"';
-  const headers = IMPORT_HEADERS.map((field) => (field === 'comment' ? 'commentJson' : field));
+  const headers = IMPORT_HEADERS.map((field) =>
+    field === 'comment' ? 'commentJson' : field === 'notes' ? 'notesJson' : field,
+  );
   const lines = [
     headers,
     ...links.map((link) =>
       IMPORT_HEADERS.map((field) => {
         const value = link[field];
+        if (field === 'notes')
+          return value === undefined ? '' : JSON.stringify(value === null ? null : String(value));
         if (field === 'comment') return value === undefined ? '' : JSON.stringify(String(value));
         return value === undefined
           ? ''

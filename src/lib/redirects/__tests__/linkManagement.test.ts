@@ -6,6 +6,28 @@ import {
   randomLinkSlug,
 } from '../../../../supabase/functions/_shared/redirect-links';
 describe('link management input contract', () => {
+  it('validates scheduling, nullable limits and notes without resetting omitted fields', () => {
+    expect(
+      linkInput(
+        { startsAt: '2026-10-14T10:00:00+02:00', clickLimit: 7, notes: 'A note' },
+        'update',
+      ),
+    ).toEqual({ startsAt: '2026-10-14T08:00:00.000Z', clickLimit: 7, notes: 'A note' });
+    expect(linkInput({ startsAt: null, clickLimit: null, notes: null }, 'update')).toEqual({
+      startsAt: null,
+      clickLimit: null,
+      notes: null,
+    });
+    for (const data of [
+      { clickLimit: 0 },
+      { clickLimit: 1.5 },
+      { clickLimit: 2147483648 },
+      { startsAt: 'bad' },
+      { notes: 'a'.repeat(10001) },
+      { startsAt: '2030-01-01', expiresAt: '2029-01-01' },
+    ])
+      expect(() => linkInput(data, 'update')).toThrow();
+  });
   it('accepts explicit domain bindings and default-namespace filters while rejecting malformed IDs', () => {
     const domainId = '00000000-0000-4000-8000-000000000001';
     expect(linkInput({ domainId }, 'update')).toEqual({ domainId });

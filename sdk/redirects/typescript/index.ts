@@ -9,6 +9,9 @@ export interface LinkInput {
   queryOverride?: Record<string, string> | null;
   utmDefaults?: Record<string, string> | null;
   expiresAt?: string | null;
+  startsAt?: string | null;
+  clickLimit?: number | null;
+  notes?: string | null;
   domainId?: string | null;
   folderId?: string | null;
   tagIds?: string[];

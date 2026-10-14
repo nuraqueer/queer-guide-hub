@@ -1,3 +1,8 @@
+import {
+  loadManualRedirect,
+  saveManualRedirect,
+  manualRedirectValues,
+} from '@/lib/redirects/manualRecords';
 import { createElement } from 'react';
 import { Copy, ExternalLink, Link2 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -7,32 +12,42 @@ import { RedirectToolbarActions } from '@/components/admin/redirects/RedirectToo
 import type { ContentTypeConfig, FieldConfig } from '@/types/cms';
 import type { ValidationError } from '@/utils/contentValidation';
 
-/**
- * Redirects on the CMS registry.
- *
- * Replaces the standalone `AdminRedirects` page. Everything it did has a home
- * here: row actions for copy/test, a per-record analytics panel, conditional
- * fields for the two redirect shapes, and the slug + loop validation it ran
- * before saving.
- *
- * The two shapes are the reason `FieldConfig.visibleWhen` exists:
- *   SHORT — a /go/<slug> short link
- *   PATH  — an old path that should forward somewhere
- * Showing both `slug` and `source_path` on every record would be a worse editor
- * than the bespoke dialog this replaces.
+/** Manual record editor used by the all-source Redirects inventory.
+ * Conditional SHORT/PATH fields preserve the original rule controls. Domain
+ * selection and transactional owner API saves keep hostname/type edits atomic.
  */
 
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string;
+const domainIdPattern = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
 
 const isShort = (v: Record<string, unknown>) => v.type === 'SHORT';
 const isPath = (v: Record<string, unknown>) => v.type === 'PATH';
 
 /** `/go/<slug>` for a SHORT link, the source path for a PATH redirect. */
 function requestPathOf(row: Record<string, unknown>): string {
-  return row.type === 'SHORT' ? `/go/${String(row.slug ?? '')}` : String(row.source_path ?? '');
+  return row.type === 'SHORT'
+    ? row.domain_id && row.domain_hostname
+      ? `https://${row.domain_hostname}/${String(row.slug ?? '')}`
+      : `/go/${String(row.slug ?? '')}`
+    : String(row.source_path ?? '');
 }
 
 export const redirectFields: FieldConfig[] = [
+  {
+    name: 'domain_id',
+    label: 'Short-link domain',
+    type: 'redirect_domain',
+    group: 'basic',
+    visibleWhen: isShort,
+  },
+  {
+    name: 'domain_hostname',
+    label: 'Domain',
+    type: 'text',
+    group: 'basic',
+    readOnly: true,
+    hidden: true,
+    listColumn: true,
+  },
   {
     name: 'type',
     label: 'Type',
@@ -46,7 +61,7 @@ export const redirectFields: FieldConfig[] = [
       { value: 'SHORT', label: 'Short Link' },
       { value: 'PATH', label: 'Path Redirect' },
     ],
-    helpText: 'SHORT serves /go/<slug>. PATH forwards an existing URL.',
+    helpText: 'SHORT serves a short link on the selected domain. PATH forwards an existing URL.',
   },
   {
     name: 'slug',
@@ -57,7 +72,7 @@ export const redirectFields: FieldConfig[] = [
     searchable: true,
     listColumn: true,
     visibleWhen: isShort,
-    helpText: 'Served at /go/<slug>. Lowercase, at least 3 characters.',
+    helpText: 'Lowercase, at least 3 characters. The domain above controls the public URL.',
   },
   {
     name: 'source_path',
@@ -157,6 +172,11 @@ export const redirectFields: FieldConfig[] = [
 export const redirectContentType: ContentTypeConfig = {
   id: 'redirects',
   tableName: 'redirects',
+  editorApi: {
+    load: loadManualRedirect,
+    save: saveManualRedirect,
+    prepareSave: manualRedirectValues,
+  },
   primaryKey: 'id',
   titleField: 'target',
   descriptionField: 'notes',
@@ -164,9 +184,11 @@ export const redirectContentType: ContentTypeConfig = {
   label: { singular: 'Redirect', plural: 'Redirects' },
   color: 'hsl(var(--muted-foreground))',
   fields: redirectFields,
-  listSelect: 'id,type,slug,source_path,target,status_code,is_enabled,click_count,notes,updated_at',
+  listSelect:
+    'id,type,slug,domain_id,domain_hostname,source_path,target,status_code,is_enabled,click_count,notes,updated_at',
   defaults: {
     type: 'SHORT',
+    domain_id: 'pending',
     status_code: 301,
     is_enabled: true,
     match_kind: 'EXACT',
@@ -184,6 +206,16 @@ export const redirectContentType: ContentTypeConfig = {
   validate: (data) => {
     const errors: ValidationError[] = [];
 
+    if (
+      data.type === 'SHORT' &&
+      data.domain_id != null &&
+      !domainIdPattern.test(String(data.domain_id))
+    )
+      errors.push({
+        field: 'domain_id',
+        message: 'Choose an available short-link domain.',
+        severity: 'error',
+      });
     if (data.type === 'SHORT') {
       const slug = validateSlug(String(data.slug ?? ''));
       if (!slug.valid) {
@@ -214,7 +246,7 @@ export const redirectContentType: ContentTypeConfig = {
       visible: (row) => row.type === 'SHORT' && !!row.slug,
       onSelect: (row) => {
         void navigator.clipboard
-          .writeText(`${window.location.origin}/go/${String(row.slug)}`)
+          .writeText(new URL(requestPathOf(row), 'https://queer.guide').href)
           .then(() => toast.success('Short URL copied'))
           .catch(() => toast.error('Could not copy'));
       },
@@ -225,11 +257,7 @@ export const redirectContentType: ContentTypeConfig = {
       icon: ExternalLink,
       visible: (row) => row.type === 'SHORT' && !!row.slug,
       onSelect: (row) => {
-        window.open(
-          `${SUPABASE_URL}/functions/v1/redirect-handler?slug=${String(row.slug)}`,
-          '_blank',
-          'noopener',
-        );
+        window.open(new URL(requestPathOf(row), 'https://queer.guide').href, '_blank', 'noopener');
       },
     },
   ],

@@ -18,6 +18,7 @@ const pieces = [
   '_shared/link-policy.ts',
   '_shared/redirect-policy-api.ts',
   '_shared/redirect-links.ts',
+  '_shared/redirect-manual-records.ts',
   '_shared/redirect-analytics.ts',
   '_shared/redirect-relay.ts',
   '_shared/redirect-reports.ts',
@@ -296,8 +297,23 @@ try {
   if(!providerView.routingReady||dnsCalls!==2||Date.parse(providerView.verifiedUntil)-Date.now()<23*3600000)throw new Error('Background ownership renewal or current routing proof failed');
   await reportRequest('/links/'+branded.id,'DELETE');await reportRequest('/links/'+builtinDomainLink.id,'DELETE');
   console.log('Hostname-scoped HTTP links: route-proof gating, canonical URLs, same-slug isolation, domain filters, scoped upsert and background DNS renewal passed.');
+  let manual=await reportRequest('/manual-records','POST',{values:{type:'PATH',source_path:'/manual-http',match_kind:'WILDCARD',target:'/events',notes:'HTTP notes',start_at:'2020-01-01T00:00:00Z',end_at:'2030-01-01T00:00:00Z',click_limit:11,query_mode:'OVERRIDE',query_override:{audience:'friends'},utm_defaults:{utm_source:'print'}}},undefined,201);
+  await reportRequest('/manual-records/'+manual.id,'GET',undefined,token,403);
+  await reportRequest('/manual-records/'+manual.id,'PATCH',{values:{click_count:0},expectedUpdatedAt:manual.updated_at},undefined,400);
+  const oldManualTime=manual.updated_at;
+  manual=await reportRequest('/manual-records/'+manual.id,'PATCH',{values:{type:'SHORT',slug:'manual-http',domain_id:domain.id},expectedUpdatedAt:manual.updated_at});
+  if(manual.type!=='SHORT'||manual.domain_hostname!==domain.hostname||manual.notes!=='HTTP notes'||manual.click_limit!==11||manual.source_path!==null)throw new Error('Atomic manual HTTP conversion lost fields');
+  await reportRequest('/manual-records/'+manual.id,'PATCH',{values:{target:'/stale'},expectedUpdatedAt:oldManualTime},undefined,409);
+  await reportRequest('/links/'+manual.id+'/policy','PATCH',{policy:{track_conversions:true}});
+  manual=await reportRequest('/manual-records/'+manual.id);
+  manual=await reportRequest('/manual-records/'+manual.id,'PATCH',{values:{end_at:null},expectedUpdatedAt:manual.updated_at});
+  const manualPolicy=await reportRequest('/links/'+manual.id+'/policy');if(manualPolicy.policy.expires_at||!manualPolicy.policy.track_conversions)throw new Error('Manual expiry failed to preserve other policy fields');
   const disconnect=await reportRequest('/domains/'+domain.id+'/provider/disconnect','POST',{version:providerView.version});
   if(disconnect.provider.certificateReady||providerObjects.size!==1)throw new Error('Disconnect did not close readiness before cleanup');
+  manual=await reportRequest('/manual-records/'+manual.id,'PATCH',{values:{notes:'Repaired while unavailable'},expectedUpdatedAt:manual.updated_at});
+  manual=await reportRequest('/manual-records/'+manual.id,'PATCH',{values:{type:'PATH',source_path:'/manual-return',domain_id:null},expectedUpdatedAt:manual.updated_at});
+  if(manual.domain_id!==null||manual.domain_hostname!==null||manual.slug!==null||manual.notes!=='Repaired while unavailable')throw new Error('Manual repair/path conversion failed');
+  console.log('Manual owner API: actual HTTP → migrated SQL proves full fields, atomic branded conversions, stale/readonly/key denial, policy-expiry sync and unavailable-domain repair.');
   const unavailablePrimary=await reportRequest('/domain-choices');
   if(!unavailablePrimary.primaryUnavailable||unavailablePrimary.primaryDomainId!==domain.id||unavailablePrimary.count!==0)throw new Error('Disconnected primary silently became builtin');
 

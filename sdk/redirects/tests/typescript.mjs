@@ -8,8 +8,8 @@ assert.equal((await api.updateResource('folders',folder.id,{description:'Changed
 assert.equal((await api.updateResource('tags',tag.id,{color:'blue'})).color,'blue');
 assert.equal((await api.listResources('templates')).data.length,1);
 assert.equal((await api.getResource('folders',folder.id)).name,'Héllo & + TS');
-const created=await api.createLink({target:'https://example.com/?q=a%26b#detail',slug:'sdk-typescript',folderId:folder.id,tagIds:[tag.id]});
-const id=created.link.id;
+const created=await api.createLink({target:'https://example.com/?q=a%26b#detail',slug:'sdk-typescript',startsAt:'2020-01-01T00:00:00Z',clickLimit:25,notes:'SDK notes',folderId:folder.id,tagIds:[tag.id]});
+const id=created.link.id;assert.equal(created.link.clickLimit,25);assert.equal(created.link.notes,'SDK notes');assert.ok(created.link.startsAt);
 const art=await api.uploadPreviewImage(id,process.env.REDIRECT_TEST_IMAGE);await api.updatePresentation(id,{preview:{title:'SDK preview',image:art.image,video:'https://example.com/a.mp4'},cloaked:true});assert.equal((await api.getPresentation(id)).preview.title,'SDK preview');
 await api.updatePolicy(id,{policy:{track_conversions:true,geo_targets:{CH:'/switzerland'}},password:'fixture-sdk-password'});
 let policy=await api.getPolicy(id);assert.equal(policy.hasPassword,true);assert.equal(policy.policy.preview.title,'SDK preview');assert.equal(JSON.stringify(policy).includes('password_hash'),false);assert.equal(JSON.stringify(policy).includes('fixture-sdk-password'),false);
