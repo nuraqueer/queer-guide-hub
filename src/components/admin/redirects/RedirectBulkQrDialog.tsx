@@ -1,3 +1,6 @@
+import { useQrExportStyle } from '@/hooks/useQrExportStyle';
+import { qrAppearance } from '@/lib/redirects/qrLogos';
+import { QrExportLogoChoice } from './QrExportLogoChoice';
 import { useAuth } from '@/hooks/useAuth';
 import { useRedirectBulkQrStyles } from '@/hooks/useRedirectBulkQrStyles';
 import { useEffect, useRef, useState, type SetStateAction } from 'react';
@@ -21,17 +24,16 @@ export function RedirectBulkQrDialog({
   onClose: () => void;
 }) {
   const { user } = useAuth();
-  const presets = useRedirectBulkQrStyles(rows);
   const scope = JSON.stringify([user?.id, rows.map((row) => row.id)]);
   const [standardScope, setStandardScope] = useState<string | null>(null);
-  const [override, setStyle] = useState<{ scope: string; style: QrStyle } | null>(null);
+  const edits = useQrExportStyle(scope);
   const standard = standardScope === scope;
+  const presets = useRedirectBulkQrStyles(rows, standard || edits.skipLogos);
   const ready = standard || (presets.isSuccess && !presets.isFetching);
-  const local = override?.scope === scope ? override : null;
   const baseline = standard
     ? DEFAULT_QR_STYLE
     : (presets.data?.get(rows[0]?.id) ?? DEFAULT_QR_STYLE);
-  const style = local?.style ?? baseline;
+  const style = edits.compose(baseline);
   const [format, setFormat] = useState<QrBundleFormat>('png');
   const [bundle, setBundle] = useState<Awaited<ReturnType<typeof buildQrBundle>> | null>(null),
     [busy, setBusy] = useState(false),
@@ -41,12 +43,18 @@ export function RedirectBulkQrDialog({
     scope,
     format,
     standard,
-    local?.style,
-    presets.data ? [...presets.data] : null,
+    qrAppearance(style),
+    style.logoIdentity,
+    presets.data
+      ? [...presets.data].map(([id, saved]) => [id, qrAppearance(saved), saved.logoIdentity])
+      : null,
   ]);
   const [bundleIdentity, setBundleIdentity] = useState<string | null>(null);
   const activeBundle = bundleIdentity === identity ? bundle : null;
-  const [logoBusy, setLogoBusy] = useState(false);
+  const [logoBusyScope, setLogoBusyScope] = useState<string | null>(null);
+  const logoBusy = logoBusyScope === scope;
+  const setLogoBusy = (busy: boolean) =>
+    setLogoBusyScope((previous) => (busy ? scope : previous === scope ? null : previous));
   const controller = useRef<AbortController | null>(null);
   useEffect(() => () => controller.current?.abort(), []);
   const close = () => {
@@ -56,7 +64,7 @@ export function RedirectBulkQrDialog({
   const changeStyle = (value: SetStateAction<QrStyle>) => {
     setBundle(null);
     setError('');
-    setStyle({ scope, style: typeof value === 'function' ? value(style) : value });
+    edits.change(baseline, value);
   };
   const prepare = async () => {
     if (controller.current || logoBusy || !ready) return;
@@ -69,7 +77,12 @@ export function RedirectBulkQrDialog({
     try {
       const result = await buildQrBundle(rows, style, format, {
         signal: run.signal,
-        stylesById: !standard && !local ? presets.data : undefined,
+        stylesById: new Map(
+          rows.map((row) => [
+            row.id,
+            edits.compose(standard ? DEFAULT_QR_STYLE : presets.data!.get(row.id)!),
+          ]),
+        ),
         onProgress: (completed) => setProgress(completed),
       });
       if (!run.signal.aborted) {
@@ -124,7 +137,7 @@ export function RedirectBulkQrDialog({
             <Button
               variant="outline"
               onClick={() => {
-                setStyle(null);
+                edits.reset();
                 setBundle(null);
                 setStandardScope(scope);
               }}
@@ -134,27 +147,38 @@ export function RedirectBulkQrDialog({
           </div>
         )}
         <p className="text-sm">
-          {local
+          {edits.hasAppearance
             ? 'One custom appearance applies to this selection.'
             : standard
               ? 'Standard appearance applies to this export.'
-              : 'Each code uses its saved domain or workspace appearance. Controls show the first code; editing applies one style to the selection.'}
+              : 'Each code uses its saved domain or workspace appearance. Controls show the first code; editing applies one appearance while preserving each saved logo.'}
         </p>
-        {local && (
+        {(edits.hasAppearance || standard) && (
           <Button
             variant="ghost"
             disabled={busy}
             onClick={() => {
-              setStyle(null);
+              edits.savedAppearance();
               setStandardScope(null);
               setBundle(null);
               void presets.refetch();
             }}
           >
-            Use saved QR styles
+            Use saved appearance
           </Button>
         )}
+        <QrExportLogoChoice
+          mode={standard && edits.logoMode === 'saved' ? 'none' : edits.logoMode}
+          hide={edits.hideLogo}
+          saved={() => {
+            edits.savedLogo();
+            setStandardScope(null);
+            void presets.refetch();
+          }}
+          disabled={busy || logoBusy}
+        />
         <QrStyleFields
+          key={scope}
           style={style}
           setStyle={changeStyle}
           disabled={busy || !ready}

@@ -129,6 +129,23 @@ describe('saved QR preference and export lifecycle', () => {
       expect.objectContaining({ aborted: false }),
     );
   });
+  it('blocks a missing saved logo until explicit hide and still uses the scoped saved appearance', async () => {
+    mocks.api.mockResolvedValue({
+      ...stored,
+      effectiveLogo: { id: 'bad', url: 'https://evil.example/logo.png' },
+    });
+    show(<QrExport url="https://queer.guide/go/logo-failure" />);
+    await screen.findByText(/Could not load saved QR style/);
+    expect(mocks.generate).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByLabelText('Hide logos for this export'));
+    await screen.findByRole('img');
+    expect(mocks.generate.mock.calls.at(-1)?.[1]).toMatchObject({ dots: 'circle' });
+    expect(mocks.generate.mock.calls.at(-1)?.[1].logo).toBeUndefined();
+    fireEvent.click(screen.getByRole('button', { name: 'Use saved logo' }));
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Download PNG' })).toBeDisabled(),
+    );
+  });
   it('requires explicit bulk fallback and can return from it to fresh saved styles', async () => {
     const id = '00000000-0000-4000-8000-000000000001';
     const rows = [
@@ -149,7 +166,7 @@ describe('saved QR preference and export lifecycle', () => {
     mocks.api.mockResolvedValue({
       data: [{ id, style: { ...DEFAULT_QR_STYLE, dots: 'joined' }, source: 'workspace' }],
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Use saved QR styles' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Use saved appearance' }));
     await waitFor(() => expect(screen.getByLabelText('QR dots')).toHaveValue('joined'));
     await waitFor(() =>
       expect(screen.getByRole('button', { name: 'Prepare QR ZIP' })).toBeEnabled(),
@@ -223,6 +240,6 @@ describe('saved QR preference and export lifecycle', () => {
     await waitFor(() => expect(mocks.build).toHaveBeenCalledTimes(2));
     expect(mocks.build.mock.calls[1][2]).toBe('png');
     expect(mocks.build.mock.calls[1][1].dots).toBe('circle');
-    expect(mocks.build.mock.calls[1][3].stylesById).toBeUndefined();
+    expect(mocks.build.mock.calls[1][3].stylesById.get('redirects:' + b).dots).toBe('circle');
   });
 });

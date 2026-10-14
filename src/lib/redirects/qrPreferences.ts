@@ -1,3 +1,4 @@
+import type { QrLogoAsset } from './qrLogos';
 import { memberRedirectApi } from './memberApi';
 import { qrStyleError, type QrStyle } from './qr';
 export type SavedQrAppearance = Omit<QrStyle, 'logo'>;
@@ -6,11 +7,17 @@ export interface QrStylePreference {
   style: Partial<SavedQrAppearance>;
   effectiveStyle: SavedQrAppearance;
   domainId: string | null;
+  logoMode?: 'inherit' | 'none' | 'custom';
+  logoAsset?: QrLogoAsset | null;
+  effectiveLogo?: QrLogoAsset | null;
+  logoSource?: 'default' | 'workspace' | 'domain' | 'hidden';
 }
 export interface EffectiveQrStyle {
   id: string;
   style: SavedQrAppearance;
   source: 'default' | 'workspace' | 'domain';
+  effectiveLogo?: QrLogoAsset | null;
+  logoSource?: 'default' | 'workspace' | 'domain' | 'hidden';
 }
 export function qrStylePreferencePath(domainId?: string | null) {
   return domainId ? '/qr-styles/domains/' + domainId : '/qr-styles/workspace';

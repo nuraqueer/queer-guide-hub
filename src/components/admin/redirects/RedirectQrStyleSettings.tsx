@@ -1,9 +1,10 @@
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/hooks/useAuth';
 import { memberRedirectApi } from '@/lib/redirects/memberApi';
 import { qrStylePreferencePath, type QrStylePreference } from '@/lib/redirects/qrPreferences';
 import { qrStyleError, type QrStyle } from '@/lib/redirects/qr';
+import { RedirectQrLogoSettings } from './RedirectQrLogoSettings';
 import { QrStyleFields } from './QrStyleFields';
 import { Button } from '@/components/ui/button';
 export function RedirectQrStyleSettings({ domainId }: { domainId?: string }) {
@@ -25,6 +26,20 @@ export function RedirectQrStyleSettings({ domainId }: { domainId?: string }) {
     style: QrStyle;
   } | null>(null);
   const draft = rawDraft?.scope === scope ? rawDraft : null;
+  const [logoEditingScope, setLogoEditingScope] = useState<string | null>(null);
+  const onLogoEditing = useCallback(
+    (editing: boolean) =>
+      setLogoEditingScope((previous) => (editing ? scope : previous === scope ? null : previous)),
+    [scope],
+  );
+  const [logoBusyScope, setLogoBusyScope] = useState<string | null>(null);
+  const onLogoBusy = useCallback(
+    (busy: boolean) =>
+      setLogoBusyScope((previous) => (busy ? scope : previous === scope ? null : previous)),
+    [scope],
+  );
+  const [reloadEpoch, setReloadEpoch] = useState(0);
+  const logoEditing = logoEditingScope === scope;
   const [notice, setNotice] = useState<{ scope: string; text: string } | null>(null);
   const save = useMutation({
     mutationFn: (request: {
@@ -39,6 +54,7 @@ export function RedirectQrStyleSettings({ domainId }: { domainId?: string }) {
         style: request.style,
       }),
     onSuccess: async (data, request) => {
+      await client.cancelQueries({ queryKey: request.queryKey, exact: true });
       client.setQueryData(request.queryKey, data);
       setDraft((previous) => (previous?.scope === request.scope ? null : previous));
       setNotice({ scope: request.scope, text: 'Saved QR style.' });
@@ -87,29 +103,34 @@ export function RedirectQrStyleSettings({ domainId }: { domainId?: string }) {
           });
           setNotice(null);
         }}
-        disabled={save.isPending}
+        disabled={save.isPending || logoEditing}
         allowLogo={false}
       />
       {(error || save.isError) && <p role="alert">{error || save.error?.message}</p>}
       {notice?.scope === scope && <p role="status">{notice.text}</p>}
       <div className="flex flex-wrap gap-2">
-        <Button disabled={!draft || !!error || save.isPending} onClick={() => submit(false)}>
+        <Button
+          disabled={!draft || !!error || save.isPending || logoEditing}
+          onClick={() => submit(false)}
+        >
           Save QR style
         </Button>
         <Button
           variant="outline"
-          disabled={save.isPending || !Object.keys(query.data.style).length}
+          disabled={save.isPending || logoEditing || !Object.keys(query.data.style).length}
           onClick={() => submit(true)}
         >
           Reset QR overrides
         </Button>
         <Button
           variant="ghost"
-          disabled={save.isPending}
+          disabled={save.isPending || logoBusyScope === scope}
           onClick={async () => {
             const next = await query.refetch();
             if (!next.isError) {
               setDraft(null);
+              setReloadEpoch((epoch) => epoch + 1);
+              setLogoEditingScope(null);
               save.reset();
               setNotice({ scope, text: 'QR settings reloaded.' });
             }
@@ -118,6 +139,15 @@ export function RedirectQrStyleSettings({ domainId }: { domainId?: string }) {
           Reload QR settings
         </Button>
       </div>
+      <RedirectQrLogoSettings
+        key={scope + ':' + reloadEpoch}
+        preference={query.data}
+        path={path}
+        queryKey={queryKey}
+        disabled={!!draft || save.isPending || query.isFetching}
+        onBusy={onLogoBusy}
+        onEditing={onLogoEditing}
+      />
     </section>
   );
 }

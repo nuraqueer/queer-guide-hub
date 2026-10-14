@@ -1,5 +1,8 @@
 import { useAuth } from '@/hooks/useAuth';
 import { useRedirectQrStyle } from '@/hooks/useRedirectQrStyle';
+import { useQrExportStyle } from '@/hooks/useQrExportStyle';
+import { qrAppearance } from '@/lib/redirects/qrLogos';
+import { QrExportLogoChoice } from './QrExportLogoChoice';
 import { useState } from 'react';
 import {
   DEFAULT_QR_STYLE,
@@ -39,21 +42,31 @@ export function QrExport({
   linkId?: string;
 }) {
   const { user } = useAuth();
-  const defaults = useRedirectQrStyle(linkId);
   const scope = JSON.stringify([user?.id, url, linkId]);
-  const [rawOverride, setOverride] = useState<{ scope: string; style: QrStyle } | null>(null);
+  const edits = useQrExportStyle(scope);
+  const [logoBusyScope, setLogoBusyScope] = useState<string | null>(null);
+  const logoBusy = logoBusyScope === scope;
+  const setLogoBusy = (busy: boolean) =>
+    setLogoBusyScope((previous) => (busy ? scope : previous === scope ? null : previous));
   const [fallbackScope, setFallbackScope] = useState<string | null>(null);
   const standard = fallbackScope === scope;
-  const ready = standard || (defaults.isSuccess && !defaults.isFetching);
+  const defaults = useRedirectQrStyle(linkId, standard || edits.skipLogos);
+  const ready = !logoBusy && (standard || (defaults.isSuccess && !defaults.isFetching));
   const baseline = standard ? DEFAULT_QR_STYLE : (defaults.data?.style ?? DEFAULT_QR_STYLE);
-  const override = rawOverride?.scope === scope ? rawOverride : null;
-  const style = override?.style ?? baseline;
-  const setStyle = (value: React.SetStateAction<QrStyle>) =>
-    setOverride({ scope, style: typeof value === 'function' ? value(style) : value });
+  const style = edits.compose(baseline);
+  const setStyle = (value: React.SetStateAction<QrStyle>) => edits.change(baseline, value);
   const error = qrStyleError(style);
   const qr = useQuery({
-    queryKey: ['redirect-qr', user?.id, url, style, managedShortLink],
+    queryKey: [
+      'redirect-qr',
+      user?.id,
+      url,
+      qrAppearance(style),
+      style.logoIdentity,
+      managedShortLink,
+    ],
     staleTime: Infinity,
+    gcTime: 60000,
     retry: false,
     enabled: ready && !error,
     queryFn: async ({ signal }) => {
@@ -75,7 +88,7 @@ export function QrExport({
           <Button
             variant="outline"
             onClick={() => {
-              setOverride(null);
+              edits.reset();
               setFallbackScope(scope);
             }}
           >
@@ -90,17 +103,33 @@ export function QrExport({
             : `Saved ${defaults.data?.source ?? 'default'} appearance loaded.`}
         </p>
       )}
-      <QrStyleFields style={style} setStyle={setStyle} disabled={!ready} />
-      {override && (
+      <QrExportLogoChoice
+        mode={standard && edits.logoMode === 'saved' ? 'none' : edits.logoMode}
+        hide={edits.hideLogo}
+        saved={() => {
+          edits.savedLogo();
+          setFallbackScope(null);
+          void defaults.refetch();
+        }}
+        disabled={logoBusy}
+      />
+      <QrStyleFields
+        key={scope}
+        style={style}
+        setStyle={setStyle}
+        disabled={!ready}
+        onBusy={setLogoBusy}
+      />
+      {(edits.hasAppearance || standard) && (
         <Button
           variant="ghost"
           onClick={() => {
-            setOverride(null);
+            edits.savedAppearance();
             setFallbackScope(null);
             void defaults.refetch();
           }}
         >
-          Use saved QR style
+          Use saved appearance
         </Button>
       )}
       {error && (

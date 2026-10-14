@@ -83,6 +83,42 @@ describe('bulk verified QR ZIP', () => {
       );
     }
   });
+  it('embeds different saved logos in one scan-verified PNG/JPG/SVG ZIP', async () => {
+    const a = row('logo-a', '/go/logo-a'),
+      b = row('logo-b', '/go/logo-b');
+    const logos = await Promise.all(
+      ['#652895', '#006655'].map(
+        async (color) =>
+          'data:image/png;base64,' +
+          (
+            await sharp({ create: { width: 64, height: 64, channels: 3, background: color } })
+              .png()
+              .toBuffer()
+          ).toString('base64'),
+      ),
+    );
+    const styles = new Map(
+      [a, b].map((item, index) => [
+        item.id,
+        { ...DEFAULT_QR_STYLE, foreground: '#221144', logo: logos[index] },
+      ]),
+    );
+    const result = await buildQrBundle([a, b], DEFAULT_QR_STYLE, 'all', { stylesById: styles });
+    const zip = await JSZip.loadAsync(Buffer.from(result.bytes));
+    expect(await zip.file('001-logo-a.svg')!.async('string')).toContain(logos[0]);
+    expect(await zip.file('002-logo-b.svg')!.async('string')).toContain(logos[1]);
+    for (const file of Object.values(zip.files).filter((file) => /\.(png|jpg)$/.test(file.name))) {
+      const { data, info } = await sharp(await file.async('uint8array'))
+        .ensureAlpha()
+        .raw()
+        .toBuffer({ resolveWithObject: true });
+      expect(jsQR(new Uint8ClampedArray(data), info.width, info.height)?.data).toBe(
+        file.name.startsWith('001')
+          ? 'https://queer.guide/go/logo-a?qg_qr=1'
+          : 'https://queer.guide/go/logo-b?qg_qr=1',
+      );
+    }
+  });
   it('exports scan-verified branded roots and slug links with QR attribution', async () => {
     const root = manualRedirect({
       id: 'root',

@@ -1366,3 +1366,47 @@ native/deferred deep links, branded password pages, customer enrichment, report
 SDK/team discovery, integrations, outgoing webhooks, permissions/account discovery
 and controlled release/publication proof remain intact. No production Storage
 uploads/deletions, DNS/provider changes, deployments or publication occurred.
+
+
+### Saved-logo editor and QR export integration
+
+Connected owner workspace/domain settings to the versioned logo upload/mode/clear
+API. Uploads are locally inspected and decoded before review; saving uses the
+version captured at selection rather than silently rebasing on background GETs.
+Mode edits/clearing capture their observed version too. Hide/inherit retain custom
+artwork for reuse; clearing is reviewed separately and restores inheritance.
+Appearance/logo drafts block conflicting controls. Account/domain changes discard
+logo drafts, late mutation results update only their captured cache, and explicit
+reload resets local state. Public hosting is disclosed beside the upload control.
+
+Individual and bulk exports hydrate effective logos from exact configured bucket
+URLs, bound body/MIME/dimensions/byte length/SHA-256/decode, cancel stale work and
+time out. Asset reads are deduplicated, limited to three concurrent transfers and
+16 MB of unique logo bytes per selection; each image remains capped at 1.5 MB and
+1024px per dimension. Failures require retry or explicit hide/standard fallback.
+Hiding/custom logos skip saved images but still require a fresh scoped style read.
+Common bulk appearance edits preserve each code's saved logo; explicit custom/hide
+applies across the selection. Saved appearance and saved logo resets are separate.
+Cache/fingerprint keys contain appearance and short asset/local identities, never
+repeated base64 images. Account, selection and branding changes hide old prepared
+artifacts. Local file reads also gate download/preparation.
+
+Evidence: 67 focused tests across ten files pass, including real PNG/JPG loaders,
+metadata/URL/digest/size/header/decode rejection, bounded concurrency/sibling abort,
+aggregate budgets, explicit missing-image recovery, owner conflicts/retention/clear,
+account round trips, custom/hide precedence, artifact invalidation and real ZIP
+rasterization/decoding with distinct logos. Native browser fixture uses actual
+components/rendering/scan checks with API/Storage responses simulated and production
+requests blocked: upload and inheritance, hide/restore, bulk common appearance and
+a downloaded two-logo PNG/JPG/SVG ZIP verified; all four downloaded raster files
+decode to canonical URLs with QR attribution. Mobile 390px has no horizontal
+overflow. Evidence: outputs/redirect-dub-parity/saved-qr-logos-{desktop,mobile}.jpg
+in the shared workspace. App ratchet: 704 inherited errors, none new; targeted lint
+passes; production build passes (19.54s).
+
+Hosted QR output image URLs remain the next QR follow-up, alongside real deployed
+Storage/policies/CORS/cron and cleanup-throughput verification. Full remaining
+domain lifecycle/DNS automation, native/deferred deep links, branded password
+pages, customer enrichment, report SDK/team discovery, integrations, outgoing
+webhooks, permissions/account discovery and controlled release/publication remain
+required. No production writes, deployments or package publication occurred.

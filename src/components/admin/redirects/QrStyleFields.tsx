@@ -1,6 +1,7 @@
 import { useId, useState, type Dispatch, type SetStateAction } from 'react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import { readQrLogoFile } from '@/lib/redirects/qrLogos';
 import type { QrStyle } from '@/lib/redirects/qr';
 export function QrStyleFields({
   style,
@@ -23,25 +24,13 @@ export function QrStyleFields({
   const loadLogo = async (file?: File) => {
     setUploadError('');
     if (!file) return;
-    if (!['image/png', 'image/jpeg'].includes(file.type) || file.size > 1.5 * 1024 * 1024) {
-      setUploadError('Use a PNG or JPG logo smaller than 1.5 MB.');
-      return;
-    }
     setReading(true);
     onBusy?.(true);
     try {
-      const data = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(String(reader.result));
-        reader.onerror = () => reject(new Error('Could not read this logo.'));
-        reader.readAsDataURL(file);
-      });
-      const image = new Image();
-      image.src = data;
-      await image.decode();
+      const { data } = await readQrLogoFile(file);
       changeStyle('logo', data);
-    } catch {
-      setUploadError('Could not read this logo. Try another PNG or JPG.');
+    } catch (error) {
+      setUploadError(error instanceof Error ? error.message : 'Could not read this logo.');
     } finally {
       setReading(false);
       onBusy?.(false);

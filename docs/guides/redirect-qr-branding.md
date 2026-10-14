@@ -66,9 +66,13 @@ Each generated code retains its canonical URL and QR attribution. Individual
 field IDs are unique when several settings editors share a page.
 
 The preference JSON deliberately contains no raster data or arbitrary image URLs.
-Existing per-export PNG/JPG logos remain local to that export. The hosted-logo lifecycle/API described below is implemented locally. Connecting
-its inherited/custom/hide behavior to the UI/renderers and adding hosted QR image
-URLs are next, followed by controlled Storage/browser/release validation.
+Saved logos and per-export PNG/JPG uploads now feed individual and bulk exports.
+Owner settings support reviewed uploads, workspace inheritance, explicit hiding,
+reuse of retained custom artwork and reviewed clearing. Each change captures its
+observed preference version; conflicts require reload/reselection. Appearance and
+logo drafts cannot overwrite each other. Uploaded defaults are publicly hosted;
+per-export uploads stay local to that export. Hosted QR output image URLs and
+controlled real Storage/release validation remain pending.
 
 ## Local verification
 
@@ -85,10 +89,20 @@ Product reference: [Dub domain QR logos](https://dub.co/changelog/custom-qr-code
 
 ## Hosted logo asset API (local backend)
 
-The logo lifecycle/API is implemented locally. Connecting the saved-logo editor
-and the individual/bulk renderers to these references remains pending. Existing
-exports currently consume saved appearance plus per-export local logos; this API
-checkpoint does not claim that saved logos already appear in the UI.
+The lifecycle/API, saved-logo editor and individual/bulk renderers are connected
+locally. Effective logos are fetched only from the configured public bucket and
+checked against exact byte length, MIME, dimensions and SHA-256 before decoding.
+Reads have cancellation/time limits, at most three concurrent asset transfers,
+deduplicate repeated references and cap unique logo bytes per batch at 16 MB.
+Missing/invalid images block generation until retry, explicit hiding, or an
+explicit standard fallback. Hiding bypasses image loading while retaining a fresh
+permission-scoped appearance read. A custom per-export logo also takes precedence.
+
+Changing bulk shapes/colors keeps each code's own saved logo. Choosing a custom
+logo or hiding logos explicitly applies that choice to the entire selection.
+Appearance and logo resets are separate. Account, selection, appearance or logo
+changes invalidate prepared artifacts; image bytes are excluded from query keys
+and bulk fingerprints.
 
 Owners POST `{version, image}` to `/qr-styles/workspace/logo` or
 `/qr-styles/domains/:domainId/logo`. Image is bare base64 PNG/JPG bytes, at most
@@ -137,3 +151,10 @@ Local migrated SQL, actual owner HTTP with the real bounded Storage transport,
 and isolated Storage responses verify attachment, precedence, lost receipts,
 permission changes, conflicts, quotas, retries and tombstones. Production Storage
 uploads and deletions have not been exercised by this work.
+
+Native browser verification used a labeled local fixture with production requests
+blocked. Owner upload/inheritance and per-export hide/restore worked. A downloaded
+ZIP retained two distinct SVG logos after a common appearance edit; all four
+PNG/JPG images decoded to their canonical tracked URLs. The 390px layout had no
+horizontal overflow. These checks simulate API/Storage responses and do not
+substitute for a real deployed Storage/CORS/cron check.
