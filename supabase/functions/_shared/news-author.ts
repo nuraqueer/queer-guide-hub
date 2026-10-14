@@ -4,7 +4,7 @@ const COLLECTIVE = /^(?:editors?|editorial(?: team| staff| board)?|staff(?: writ
 const KNOWN_COLLECTIVES = new Set(['pn freelancer', 'lesbian chronicles', 'sodomarama', 'your queer story', 'transadvocate', 'homestead on the corner | realm', 'legal - lgbt bar of new york', 'q 播客製作委員會', 'podbean development', 'foxnews', 'new york post', 'huffpost', 'press room', 'associated press', 'the associated press', 'reuters', 'mim', 'well established lesbian']);
 const creditKey = (value: string) => value.toLowerCase().replace(/[^\p{L}\p{N}]/gu, '');
 const GENERIC_CREDIT = /(?:\b(?:editors?|staff|reporter)\b|^redazione\b)/i;
-const BRAND = /\b(?:podcasts?|pod|network|productions|publishing|news agency|media|radio|studio\d+|collective|church|council|presents)\b/i;
+const BRAND = /\b(?:podcasts?|iheart\s*podcasts|shondaland\s*audio|pod|network|productions|publishing|news agency|media|radio|studio\d+|collective|church|council|presents)\b/i;
 
 export function personAuthorCandidate(
   raw: unknown,

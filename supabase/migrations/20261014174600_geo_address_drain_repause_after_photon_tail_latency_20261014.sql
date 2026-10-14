@@ -1,5 +1,3 @@
--- Recovered from supabase_migrations.schema_migrations.statements.
--- Already applied to production; retain the actual SQL rather than a placeholder.
 do $$
 declare j record;
 begin
