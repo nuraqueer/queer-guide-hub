@@ -1199,3 +1199,33 @@ targeted lint/format pass. App ratchet remains 704 inherited errors with none ne
 the baseline was not regenerated. All 2,278 migration versions and PostgreSQL 17
 grammar/body-balance checks pass. Working changes are limited to this feature and
 its documented branded bulk-QR fix.
+
+
+### Durable QR preferences and branding
+
+Add versioned owner-managed workspace QR preferences and domain overrides;
+resolve effective settings only for currently accessible managed link IDs. Reuse
+the current renderer and scan-before-export guarantees. A separate preference
+record keeps branding edits independent of provider/DNS proof and domain settings
+versions. Domain overrides inherit missing fields from workspace defaults, then
+built-in appearance. Owner changes recheck permissions and optimistic version in
+SQL. Machine/member reads return only effective settings for visible links and
+never enumerate private domain setup. Exports must load defaults before generating,
+retain explicit local edits and provide retry/explicit standard-style fallback
+on read failure instead of silently bypassing saved branding.
+
+First wire saved shape/color preferences through individual and bulk exports and
+provide workspace/domain editors. Reject unknown fields and invalid colors/shapes
+in both API and SQL. Enforce 4.5:1 dark-on-light contrast on effective combinations,
+including every domain override affected by a workspace update; invalid edits
+roll back. Reset removes overrides and restores inheritance. Account-keyed reads
+and cancellation prevent stale-account results. Bulk presets must resolve per
+managed row while preserving one explicit export override for the selection.
+
+Complete this foundation with controlled raster logo uploads, hosted assets,
+domain-over-workspace precedence, explicit per-export custom/hide controls and
+hosted QR image URLs. Do not store unbounded raster data in preference JSON or
+allow arbitrary server-side image fetches. Durable asset cleanup and release proof
+remain required alongside these follow-up pieces; saved styles alone do not
+complete the QR branding requirement.
+Reference: https://dub.co/changelog/custom-qr-code-logo (retrieved 2026-10-14).
