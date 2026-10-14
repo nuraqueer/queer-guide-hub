@@ -248,6 +248,9 @@ Deno.serve(async (req: Request) => {
           if (newCheckCount > 3) newCheckCount = 3
         }
 
+        // Transient failures stay eligible for monthly rechecks, never removal.
+        newCheckCount = Math.min(newCheckCount, 3)
+
         // Update the content_links row
         const updatePayload: Record<string, unknown> = {
           status: result.status,

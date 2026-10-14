@@ -30,3 +30,21 @@ BEGIN
 END;
 $function$
 ;
+
+-- Retained timeouts and bot walls must remain eligible for later recovery.
+CREATE OR REPLACE FUNCTION public.get_links_due_for_recheck(batch_limit integer DEFAULT 50)
+RETURNS SETOF public.content_links
+LANGUAGE sql STABLE SET search_path TO 'public'
+AS $function$
+  SELECT * FROM public.content_links
+  WHERE status IN ('BROKEN', 'TIMEOUT', 'BLOCKED')
+    AND check_count BETWEEN 1 AND 3
+    AND last_checked_at IS NOT NULL
+    AND (
+      (check_count = 1 AND last_checked_at < NOW() - INTERVAL '1 day')
+      OR (check_count = 2 AND last_checked_at < NOW() - INTERVAL '1 week')
+      OR (check_count = 3 AND last_checked_at < NOW() - INTERVAL '1 month')
+    )
+  ORDER BY last_checked_at ASC
+  LIMIT greatest(1, least(coalesce(batch_limit, 50), 50));
+$function$;
