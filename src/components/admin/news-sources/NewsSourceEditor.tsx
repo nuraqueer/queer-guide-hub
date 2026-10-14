@@ -52,6 +52,15 @@ export function NewsSourceEditor({
   const create = useCreateSourcePublisher();
   const publishers = useSourcePublishers(publisherSearch, form.url, canManagePublishers);
   const busy = save.isPending || create.isPending;
+  const originalFrequency = source?.fetch_frequency;
+  const preservingCadence =
+    typeof originalFrequency === 'number' &&
+    originalFrequency > 0 &&
+    form.fetch_frequency === originalFrequency;
+  const legacyCadence =
+    typeof originalFrequency === 'number' &&
+    originalFrequency > 0 &&
+    (originalFrequency < 30 || originalFrequency > 10080);
   const patch = <K extends keyof SourceForm>(key: K, value: SourceForm[K]) =>
     setForm((old) => ({ ...old, [key]: value }));
   const options = publishers.data ?? [];
@@ -174,12 +183,17 @@ export function NewsSourceEditor({
                 id="source-frequency"
                 type="number"
                 required
-                min={30}
-                max={10080}
+                min={preservingCadence ? Math.min(30, originalFrequency) : 30}
+                max={preservingCadence ? Math.max(10080, originalFrequency) : 10080}
                 step={1}
                 value={form.fetch_frequency}
                 onChange={(e) => patch('fetch_frequency', Number(e.target.value))}
               />
+              {legacyCadence && (
+                <p className="text-13 text-muted-foreground">
+                  Keep the existing cadence, or choose 30–10,080 minutes to change it.
+                </p>
+              )}
             </div>
             <div className="flex flex-col justify-center gap-4">
               <label className="flex items-center gap-2">

@@ -31,6 +31,12 @@ begin
  assert (public.admin_news_sources_browse('','all',org,false,0)->>'total')::integer=0, 'Organisation scope follows unlink';
  row_data:=public.admin_news_source_resume(source,(row_data->>'updated_at')::timestamptz);
  assert (row_data->>'is_active')::boolean and not (row_data->>'auto_paused')::boolean and row_data->>'last_error'='Keep diagnostic', 'Explicit resume preserves historical diagnostics';
+ update public.news_sources set fetch_frequency=1 where id=source;
+ select to_jsonb(s) into row_data from public.news_sources s where id=source;
+ row_data:=public.admin_news_source_save(source,row_data||jsonb_build_object('name','Feed One'),(row_data->>'updated_at')::timestamptz);
+ assert (row_data->>'fetch_frequency')::integer=1,'Unchanged legacy cadence retained during metadata save';
+ begin perform public.admin_news_source_save(source,row_data||jsonb_build_object('fetch_frequency',2),(row_data->>'updated_at')::timestamptz);raise exception 'New fast cadence accepted';exception when invalid_parameter_value then null;end;
+ begin perform public.admin_news_source_save(null,row_data||jsonb_build_object('url','https://new-fast.example','fetch_frequency',1),null);raise exception 'New source fast cadence accepted';exception when invalid_parameter_value then null;end;
  insert into public.news_articles(source_id,title,quality_status) select source,'Article '||i,'passed' from generate_series(1,55) i;
  assert (public.admin_news_sources_browse('Feed','all',null,false,0)->'rows'->0->>'article_count')::integer=55,'Article counts';
  assert jsonb_array_length(public.admin_news_source_articles(source,0)->'rows')=50,'First article page';
