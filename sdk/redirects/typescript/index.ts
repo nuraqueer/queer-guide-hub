@@ -218,6 +218,7 @@ export class RedirectsClient {
   listLinkedDomains(limit = 100, cursor?: string) {
     return this.request<LinkedDomainsPage>('GET', '/linked-domains', undefined, { limit, cursor });
   }
+  getQrStyle(id: string) { return this.request<{id:string;style:{dots:string;border:string;center:string;foreground:string;background:string};source:string}>('GET','/qr-styles/links/'+encodeURIComponent(id)); }
   listDomainChoices(limit = 100, cursor?: string) {
     return this.request<DomainChoices>('GET', '/domain-choices', undefined, { limit, cursor });
   }

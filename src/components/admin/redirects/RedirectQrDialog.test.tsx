@@ -4,6 +4,14 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { DEFAULT_QR_STYLE } from '@/lib/redirects/qr';
 import { QrExport } from './RedirectQrDialog';
 
+vi.mock('@/hooks/useAuth', () => ({ useAuth: () => ({ user: { id: 'qr-owner' } }) }));
+vi.mock('@/hooks/useRedirectQrStyle', () => ({
+  useRedirectQrStyle: () => ({
+    isSuccess: true,
+    isError: false,
+    data: { style: DEFAULT_QR_STYLE, source: 'default' },
+  }),
+}));
 vi.mock('@/lib/redirects/qr', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/redirects/qr')>()),
   generateQr: vi.fn(async () => ({

@@ -13,7 +13,8 @@ check(api.update_resource('folders',folder['id'],{description:'Changed'})['descr
 check(api.update_resource('tags',tag['id'],{color:'blue'})['color']=='blue')
 check(api.list_resources('templates')['data'].length==1)
 check(api.get_resource('folders',folder['id'])['name']=='Héllo & + Ruby')
-created=api.create_link({target:'https://example.com/?q=a%26b#detail',slug:'sdk-ruby',startsAt:'2020-01-01T00:00:00Z',clickLimit:25,notes:'SDK notes',folderId:folder['id'],tagIds:[tag['id']]});id=created['link']['id'];check(created['link']['clickLimit']==25 && created['link']['notes']=='SDK notes' && created['link']['startsAt'])
+created=api.create_link({target:'https://example.com/?q=a%26b#detail',slug:'sdk-ruby',startsAt:'2020-01-01T00:00:00Z',clickLimit:25,notes:'SDK notes',folderId:folder['id'],tagIds:[tag['id']]});id=created['link']['id']
+check(api.get_qr_style(id)['style']['foreground']=='#111111');check(created['link']['clickLimit']==25 && created['link']['notes']=='SDK notes' && created['link']['startsAt'])
 art=api.upload_preview_image(id,ENV.fetch('REDIRECT_TEST_IMAGE'));api.update_presentation(id,{preview:{title:'SDK preview',image:art['image'],video:'https://example.com/a.mp4'},cloaked:true});check(api.get_presentation(id)['preview']['title']=='SDK preview')
 api.update_policy(id,{policy:{track_conversions:true,geo_targets:{CH:'/switzerland'}},password:'fixture-sdk-password'})
 policy=api.get_policy(id);check(policy['hasPassword']==true);check(policy['policy']['preview']['title']=='SDK preview');check(!policy.to_s.include?('password_hash'));check(!policy.to_s.include?('fixture-sdk-password'))

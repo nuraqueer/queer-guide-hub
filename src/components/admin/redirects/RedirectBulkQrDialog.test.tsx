@@ -1,8 +1,17 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest';
+import { DEFAULT_QR_STYLE } from '@/lib/redirects/qr';
 import { RedirectBulkQrDialog } from './RedirectBulkQrDialog';
 import { manualRedirect } from '@/lib/redirects/inventory';
 const mocks = vi.hoisted(() => ({ build: vi.fn() }));
+vi.mock('@/hooks/useAuth', () => ({ useAuth: () => ({ user: { id: 'qr-owner' } }) }));
+vi.mock('@/hooks/useRedirectBulkQrStyles', () => ({
+  useRedirectBulkQrStyles: (rows: any[]) => ({
+    isSuccess: true,
+    isError: false,
+    data: new Map(rows.map((row) => [row.id, DEFAULT_QR_STYLE])),
+  }),
+}));
 vi.mock('@/lib/redirects/qrBundle', () => ({ buildQrBundle: mocks.build }));
 const rows = [
   manualRedirect({ id: 'one', type: 'SHORT', slug: 'one', target: '/events', is_enabled: true }),

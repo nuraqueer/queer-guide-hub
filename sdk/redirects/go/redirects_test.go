@@ -61,6 +61,9 @@ func TestSDKIntegration(t *testing.T) {
 		t.Fatal("Full fields lost")
 	}
 	id := created["link"].(map[string]any)["id"].(string)
+	if must(api.GetQRStyle(ctx, id))["style"].(map[string]any)["foreground"] != "#111111" {
+		t.Fatal("QR style not readable")
+	}
 	art := must(api.UploadPreviewImage(ctx, id, os.Getenv("REDIRECT_TEST_IMAGE")))
 	must(api.UpdatePresentation(ctx, id, Object{"preview": Object{"title": "SDK preview", "image": art["image"], "video": "https://example.com/a.mp4"}, "cloaked": true}))
 	if must(api.GetPresentation(ctx, id))["preview"].(map[string]any)["title"] != "SDK preview" {

@@ -76,7 +76,11 @@ export default function AdminRedirects() {
   const [sort, setSort] = useState('updated');
   const [page, setPage] = useState(0);
   const [linkSeed, setLinkSeed] = useState<{ row: InventoryRedirect | null } | null>(null);
-  const [qrUrl, setQrUrl] = useState<{ url: string; managedShortLink: boolean } | null>(null);
+  const [qrUrl, setQrUrl] = useState<{
+    url: string;
+    managedShortLink: boolean;
+    linkId?: string;
+  } | null>(null);
   const [tracking, setTracking] = useState<InventoryRedirect | null>(null);
   const [analyticsLink, setAnalyticsLink] = useState<string | undefined>();
   const [analyticsOpen, setAnalyticsOpen] = useState(false);
@@ -566,7 +570,12 @@ export default function AdminRedirects() {
                           disabled={!publicSourceUrl(row.source, row.domainHostname)}
                           onSelect={() => {
                             const url = publicSourceUrl(row.source, row.domainHostname);
-                            if (url) setQrUrl({ url, managedShortLink: !!row.isShortLink });
+                            if (url)
+                              setQrUrl({
+                                url,
+                                managedShortLink: !!row.isShortLink,
+                                linkId: row.isShortLink ? row.manualId : undefined,
+                              });
                           }}
                         >
                           QR code
@@ -658,6 +667,7 @@ export default function AdminRedirects() {
         <RedirectQrDialog
           url={qrUrl.url}
           managedShortLink={qrUrl.managedShortLink}
+          linkId={qrUrl.linkId}
           onClose={() => setQrUrl(null)}
         />
       )}

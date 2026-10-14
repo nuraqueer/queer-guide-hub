@@ -29,7 +29,7 @@ exist. Existing local tools are a foundation, not proof of parity or deployment.
 | Password links | Password challenge, hashed secret, no disclosure/bypass, scoped access | Partial: hashed protection, atomic attempt throttling and signed IP relay; custom password logo pending |
 | Expiration | Date and expired destination URL, live enforcement without stale cached rules | Candidate: date/phrase parser, custom fallback and live enforcement tested |
 | Link cloaking | Explicit iframe mode with accurate iframe limitations, standard redirect fallback | Candidate: HTTPS guarded iframe wrapper and persistent direct fallback; runtime release pending |
-| Branded QR | Dots square/circle/joined; marker center square/circle; border square/rounded/circle; colors | Candidate: all dot/marker/color controls; scan verification before export |
+| Branded QR | Dots square/circle/joined; marker center square/circle; border square/rounded/circle; colors | Partial: dot/marker/color controls, versioned workspace/domain saved styles and scoped individual/bulk defaults implemented locally; scan verification before export; durable logos/hosted assets and release pending |
 | QR logos/export | Workspace/domain/logo precedence and hide; SVG/PNG/JPG; clipboard image and image URL | Partial: per-export logo, PNG/JPG/SVG, image/data URL copy; workspace/domain precedence pending |
 | Click analytics | Real-time totals/time series, custom date/filter/export, countries/cities/devices/browsers/OS/referrers | Candidate: SQL totals/time series, date/dimension filters, export and bounded live refresh; release pending |
 | Conversion tracking | Click attribution, leads/signup/sale/revenue, trusted conversion ingestion and application hooks | Candidate: scoped ingestion, consented signup and verified Stripe hooks implemented locally |
@@ -1229,3 +1229,53 @@ allow arbitrary server-side image fetches. Durable asset cleanup and release pro
 remain required alongside these follow-up pieces; saved styles alone do not
 complete the QR branding requirement.
 Reference: https://dub.co/changelog/custom-qr-code-logo (retrieved 2026-10-14).
+
+
+Implemented locally: versioned private workspace/domain appearance records,
+owner GET/PATCH/reset controls, scoped single/batch effective reads, and five SDK
+getters. Partial API fields inherit workspace/built-in defaults; null removes
+fields or resets all overrides. SQL validates shape/color fields and effective
+contrast, including every domain affected by a workspace write, with atomic
+rollback and stale-version rejection. Current member/folder/ID/revocation scope
+is checked under the ACL lock; effective responses contain only ID/style/source.
+Settings can be repaired while a linked domain is unavailable.
+
+Workspace and expanded-domain settings expose saved appearance editors. Drafts
+capture their initial version across background refresh and are account scoped;
+conflicts require explicit reload. Unique field IDs support multiple editors.
+Individual exports pass managed IDs through the saved-style hook, wait for fresh
+reads and offer retry or explicit standard fallback on failure. Local overrides
+remain export-only; returning to saved settings refetches current defaults.
+Generation is cancelable. Bulk exports fetch per-link styles once plus owner
+workspace defaults for non-managed rules, render each code's appearance, and let
+one explicit custom style override the selection. Prepared ZIPs are hidden when
+account/selection/settings identity changes. Returning from standard fallback to
+saved styles rechecks the current scoped response.
+
+Evidence: SQL verifies default/inheritance/reset behavior, first-write/version
+conflicts, private grants, unknown fields/shapes, contrast rollback across domain
+overrides, current scoped batches, revoked keys and unavailable-domain reads.
+Actual HTTP/migrated SQL verifies minimal single/batch responses, key denial for
+private settings, write conflicts, invalid methods/duplicate IDs and reset. All
+five native SDKs/examples pass, including their effective-style getters. Forty-
+nine focused tests across nine files pass, including background-refresh conflicts,
+account isolation, explicit individual/bulk fallback, fallback recovery, common
+bulk overrides and prepared-bundle invalidation. Real QR ZIP tests rasterize and
+decode per-row presets and verify their distinct saved colors in SVG outputs.
+Native browser exercises the actual editor and QR generator/scan verifier using
+labeled simulated preference responses with production requests blocked: save
+workspace joined dots, inherit in domain/QR, save a rounded domain override,
+reset to workspace, and 390px client/scroll widths both 390. Screenshots in shared
+outputs: saved-qr-domain-desktop.jpg and saved-qr-inherited-mobile.jpg. Temporary
+browser tab/viewport cleaned up. Build 21.50s; functions types and targeted lint/
+format pass. App ratchet remains 704 inherited errors with none new; no baseline
+regeneration. All 2,279 migration versions and grammar checks pass.
+
+This is the saved-appearance foundation, not full QR branding completion. Hosted
+raster logo assets, workspace/domain logo precedence, explicit custom/hide behavior,
+durable asset cleanup and hosted QR image URLs remain next. The full remaining
+domain lifecycle/DNS automation, native/deferred deep links, branded password
+pages, customer enrichment, report SDK/team discovery, integrations, outgoing
+webhooks, remaining permissions/account discovery and controlled real-service/
+release verification remain required. No production writes, Storage uploads,
+DNS/provider changes, deployments or package publication occurred.

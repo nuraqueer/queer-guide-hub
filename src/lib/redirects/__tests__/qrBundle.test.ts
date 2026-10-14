@@ -51,6 +51,38 @@ const row = (id: string, source: string): InventoryRedirect => ({
   source,
 });
 describe('bulk verified QR ZIP', () => {
+  it('renders each saved domain appearance while verifying every encoded URL', async () => {
+    const a = row('style-a', '/go/style-a'),
+      b = row('style-b', '/go/style-b');
+    const styles = new Map([
+      [
+        a.id,
+        {
+          ...DEFAULT_QR_STYLE,
+          dots: 'joined' as const,
+          border: 'rounded' as const,
+          foreground: '#003366',
+        },
+      ],
+      [b.id, { ...DEFAULT_QR_STYLE, dots: 'circle' as const, foreground: '#660022' }],
+    ]);
+    const result = await buildQrBundle([a, b], DEFAULT_QR_STYLE, 'all', { stylesById: styles });
+    const zip = await JSZip.loadAsync(Buffer.from(result.bytes));
+    expect(await zip.file('001-style-a.svg')!.async('string')).toContain('fill="#003366"');
+    expect(await zip.file('002-style-b.svg')!.async('string')).toContain('fill="#660022"');
+    for (const file of Object.values(zip.files).filter((file) => file.name.endsWith('.png'))) {
+      const bytes = await file.async('uint8array');
+      const { data, info } = await sharp(bytes)
+        .ensureAlpha()
+        .raw()
+        .toBuffer({ resolveWithObject: true });
+      expect(jsQR(new Uint8ClampedArray(data), info.width, info.height)?.data).toBe(
+        file.name.startsWith('001')
+          ? 'https://queer.guide/go/style-a?qg_qr=1'
+          : 'https://queer.guide/go/style-b?qg_qr=1',
+      );
+    }
+  });
   it('exports scan-verified branded roots and slug links with QR attribution', async () => {
     const root = manualRedirect({
       id: 'root',

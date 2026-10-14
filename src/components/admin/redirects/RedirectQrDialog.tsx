@@ -1,3 +1,5 @@
+import { useAuth } from '@/hooks/useAuth';
+import { useRedirectQrStyle } from '@/hooks/useRedirectQrStyle';
 import { useState } from 'react';
 import {
   DEFAULT_QR_STYLE,
@@ -30,39 +32,91 @@ function downloadQr(url: string, name: string) {
 export function QrExport({
   url,
   managedShortLink = false,
+  linkId,
 }: {
   url: string;
   managedShortLink?: boolean;
+  linkId?: string;
 }) {
-  const [style, setStyle] = useState<QrStyle>({ ...DEFAULT_QR_STYLE });
+  const { user } = useAuth();
+  const defaults = useRedirectQrStyle(linkId);
+  const scope = JSON.stringify([user?.id, url, linkId]);
+  const [rawOverride, setOverride] = useState<{ scope: string; style: QrStyle } | null>(null);
+  const [fallbackScope, setFallbackScope] = useState<string | null>(null);
+  const standard = fallbackScope === scope;
+  const ready = standard || (defaults.isSuccess && !defaults.isFetching);
+  const baseline = standard ? DEFAULT_QR_STYLE : (defaults.data?.style ?? DEFAULT_QR_STYLE);
+  const override = rawOverride?.scope === scope ? rawOverride : null;
+  const style = override?.style ?? baseline;
+  const setStyle = (value: React.SetStateAction<QrStyle>) =>
+    setOverride({ scope, style: typeof value === 'function' ? value(style) : value });
   const error = qrStyleError(style);
   const qr = useQuery({
-    queryKey: ['redirect-qr', url, style, managedShortLink],
+    queryKey: ['redirect-qr', user?.id, url, style, managedShortLink],
     staleTime: Infinity,
     retry: false,
-    enabled: !error,
-    queryFn: async () => {
-      return generateQr(qrTrackingUrl(url, managedShortLink), style);
+    enabled: ready && !error,
+    queryFn: async ({ signal }) => {
+      return generateQr(qrTrackingUrl(url, managedShortLink), style, signal);
     },
   });
   return (
     <div className="space-y-4">
       <p className="break-all font-mono text-xs">{url}</p>
-      <QrStyleFields style={style} setStyle={setStyle} />
+      {!ready && !defaults.isError && <p role="status">Loading saved QR style…</p>}
+      {defaults.isError && !standard && (
+        <div className="space-y-2">
+          <p role="alert">
+            Could not load saved QR style. Retry or explicitly use the standard style.
+          </p>
+          <Button variant="outline" onClick={() => void defaults.refetch()}>
+            Retry saved QR style
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => {
+              setOverride(null);
+              setFallbackScope(scope);
+            }}
+          >
+            Use standard style for this export
+          </Button>
+        </div>
+      )}
+      {ready && (
+        <p className="text-sm">
+          {standard
+            ? 'Standard appearance for this export.'
+            : `Saved ${defaults.data?.source ?? 'default'} appearance loaded.`}
+        </p>
+      )}
+      <QrStyleFields style={style} setStyle={setStyle} disabled={!ready} />
+      {override && (
+        <Button
+          variant="ghost"
+          onClick={() => {
+            setOverride(null);
+            setFallbackScope(null);
+            void defaults.refetch();
+          }}
+        >
+          Use saved QR style
+        </Button>
+      )}
       {error && (
         <p role="alert" className="text-sm text-destructive">
           {error}
         </p>
       )}
-      {!error && qr.isPending && <p role="status">Generating QR code…</p>}
-      {!error && qr.isError && (
+      {!error && ready && qr.isPending && <p role="status">Generating QR code…</p>}
+      {!error && ready && qr.isError && (
         <p role="alert" className="text-destructive">
           {qr.error instanceof Error
             ? qr.error.message
             : 'Could not generate this QR code. Try a shorter link.'}
         </p>
       )}
-      {!error && qr.data && (
+      {!error && ready && qr.data && (
         <img
           src={qr.data.png}
           width={256}
@@ -87,7 +141,7 @@ export function QrExport({
         <Button
           variant="outline"
           size="sm"
-          disabled={!!error || !qr.data}
+          disabled={!ready || !!error || !qr.data}
           onClick={() => qr.data && downloadQr(qr.data.png, 'queerguide-qr.png')}
         >
           Download PNG
@@ -95,7 +149,7 @@ export function QrExport({
         <Button
           variant="outline"
           size="sm"
-          disabled={!!error || !qr.data}
+          disabled={!ready || !!error || !qr.data}
           onClick={() => qr.data && downloadQr(qr.data.jpg, 'queerguide-qr.jpg')}
         >
           Download JPG
@@ -103,7 +157,7 @@ export function QrExport({
         <Button
           variant="outline"
           size="sm"
-          disabled={!!error || !qr.data}
+          disabled={!ready || !!error || !qr.data}
           onClick={() => {
             if (!qr.data) return;
             void (async () => {
@@ -124,7 +178,7 @@ export function QrExport({
         <Button
           variant="outline"
           size="sm"
-          disabled={!!error || !qr.data}
+          disabled={!ready || !!error || !qr.data}
           onClick={() =>
             qr.data &&
             void navigator.clipboard
@@ -138,7 +192,7 @@ export function QrExport({
         <Button
           variant="outline"
           size="sm"
-          disabled={!!error || !qr.data}
+          disabled={!ready || !!error || !qr.data}
           onClick={() => {
             if (!qr.data) return;
             const objectUrl = URL.createObjectURL(
@@ -159,10 +213,12 @@ export function RedirectQrDialog({
   url,
   onClose,
   managedShortLink = false,
+  linkId,
 }: {
   url: string;
   onClose: () => void;
   managedShortLink?: boolean;
+  linkId?: string;
 }) {
   return (
     <Dialog
@@ -178,7 +234,7 @@ export function RedirectQrDialog({
             The QR code opens this URL. Create a tracked link to collect visit analytics.
           </DialogDescription>
         </DialogHeader>
-        <QrExport url={url} managedShortLink={managedShortLink} />
+        <QrExport key={url} url={url} managedShortLink={managedShortLink} linkId={linkId} />
       </DialogContent>
     </Dialog>
   );

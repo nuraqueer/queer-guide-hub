@@ -1,3 +1,4 @@
+import { RedirectQrStyleSettings } from './RedirectQrStyleSettings';
 import { RedirectDomains } from './RedirectDomains';
 import { RedirectWorkspaceMembers } from './RedirectWorkspaceMembers';
 import { RedirectFolderAccess } from './RedirectFolderAccess';
@@ -21,6 +22,7 @@ export function RedirectWorkspaceDialog({ onClose }: { onClose: () => void }) {
   const workspace = useRedirectWorkspace();
   const [showMembers, setShowMembers] = useState(false);
   const [showDomains, setShowDomains] = useState(false);
+  const [showQrStyle, setShowQrStyle] = useState(false);
   const [accessFolder, setAccessFolder] = useState<string | null>(null);
   const [kind, setKind] = useState<WorkspaceResource>('folders');
   const [editing, setEditing] = useState<string | null>(null);
@@ -91,6 +93,10 @@ export function RedirectWorkspaceDialog({ onClose }: { onClose: () => void }) {
           {showDomains ? 'Hide domains' : 'Manage custom domains'}
         </Button>
         {showDomains && <RedirectDomains />}
+        <Button variant="outline" onClick={() => setShowQrStyle(!showQrStyle)}>
+          {showQrStyle ? 'Hide saved QR style' : 'Manage saved QR style'}
+        </Button>
+        {showQrStyle && <RedirectQrStyleSettings />}
         {workspace.isError && (
           <div role="alert">
             <p>Could not load the link workspace. {workspace.error.message}</p>

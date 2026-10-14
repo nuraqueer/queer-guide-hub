@@ -157,6 +157,9 @@ func (c *Client) ListLinkedDomains(ctx context.Context, limit int, cursor string
 	}
 	return c.Request(ctx, "GET", "/linked-domains", nil, q)
 }
+func (c *Client) GetQRStyle(ctx context.Context, id string) (Object, error) {
+	return c.Request(ctx, "GET", "/qr-styles/links/"+url.PathEscape(id), nil, nil)
+}
 func (c *Client) ListDomainChoices(ctx context.Context, limit int, cursor string) (Object, error) {
 	q := Object{"limit": limit}
 	if cursor != "" {

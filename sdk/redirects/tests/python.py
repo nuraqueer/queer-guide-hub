@@ -17,6 +17,7 @@ assert len(api.list_resources('templates')['data'])==1
 assert api.get_resource('folders',folder['id'])['name']=='Héllo & + Python'
 created=api.create_link({'target':'https://example.com/?q=a%26b#detail','slug':'sdk-python','startsAt':'2020-01-01T00:00:00Z','clickLimit':25,'notes':'SDK notes','folderId':folder['id'],'tagIds':[tag['id']]})
 id=created['link']['id']
+assert api.get_qr_style(id)['style']['foreground']=='#111111'
 assert created['link']['clickLimit']==25 and created['link']['notes']=='SDK notes' and created['link']['startsAt']
 art=api.upload_preview_image(id,os.environ['REDIRECT_TEST_IMAGE']);api.update_presentation(id,{'preview':{'title':'SDK preview','image':art['image'],'video':'https://example.com/a.mp4'},'cloaked':True});assert api.get_presentation(id)['preview']['title']=='SDK preview'
 api.update_policy(id,{'policy':{'track_conversions':True,'geo_targets':{'CH':'/switzerland'}},'password':'fixture-sdk-password'})

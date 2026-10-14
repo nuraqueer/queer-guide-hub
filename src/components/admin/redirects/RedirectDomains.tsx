@@ -1,3 +1,4 @@
+import { RedirectQrStyleSettings } from './RedirectQrStyleSettings';
 import { RedirectPrimaryDomain } from './RedirectPrimaryDomain';
 import { RedirectDomainProvider, type DomainProviderStatus } from './RedirectDomainProvider';
 import { useState } from 'react';
@@ -199,6 +200,7 @@ function DomainRow({
     body?: Record<string, unknown>,
   ) => void;
 }) {
+  const [showQrStyle, setShowQrStyle] = useState(false);
   const [root, setRoot] = useState(domain.rootUrl ?? ''),
     [missing, setMissing] = useState(domain.notFoundUrl ?? ''),
     [expired, setExpired] = useState(domain.expiredUrl ?? '');
@@ -386,6 +388,10 @@ function DomainRow({
             Remove domain registration
           </Button>
         )}
+        <Button variant="outline" onClick={() => setShowQrStyle(!showQrStyle)}>
+          {showQrStyle ? 'Hide saved QR style' : 'Manage saved QR style'}
+        </Button>
+        {showQrStyle && <RedirectQrStyleSettings domainId={domain.id} />}
       </details>
     </li>
   );

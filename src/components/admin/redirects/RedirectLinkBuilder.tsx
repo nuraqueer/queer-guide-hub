@@ -45,6 +45,7 @@ export function RedirectLinkBuilder({
   );
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
+  const [savedId, setSavedId] = useState<string>();
   const [savedUrl, setSavedUrl] = useState<string | null>(null);
   const workspace = useRedirectWorkspace();
   const seedMetadata = seed ? workspace.data?.metadata.get(seed.id) : undefined;
@@ -91,6 +92,7 @@ export function RedirectLinkBuilder({
         throw new Error(
           'Could not create the link. Check that the slug is available and try again.',
         );
+      setSavedId(result.link.id);
       setSavedUrl(result.link.shortUrl);
       await client.invalidateQueries({ queryKey: ['redirect-link-workspace'] });
       await client.invalidateQueries({ queryKey: ['cms-content-list'] });
@@ -117,7 +119,7 @@ export function RedirectLinkBuilder({
           </DialogDescription>
         </DialogHeader>
         {savedUrl ? (
-          <QrExport url={savedUrl} managedShortLink />
+          <QrExport url={savedUrl} managedShortLink linkId={savedId} />
         ) : (
           <form
             className="space-y-4"

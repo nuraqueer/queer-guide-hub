@@ -22,18 +22,27 @@ export async function buildQrBundle(
   rows: InventoryRedirect[],
   style: QrStyle,
   format: QrBundleFormat,
-  options: { signal?: AbortSignal; onProgress?: (completed: number, total: number) => void } = {},
+  options: {
+    signal?: AbortSignal;
+    onProgress?: (completed: number, total: number) => void;
+    stylesById?: ReadonlyMap<string, QrStyle>;
+  } = {},
 ) {
   if (!rows.length || rows.length > 100 || new Set(rows.map((row) => row.id)).size !== rows.length)
     throw new Error('Select 1–100 distinct redirects');
   if (!['png', 'jpg', 'svg', 'all'].includes(format))
     throw new Error('Choose a supported export format');
-  const error = qrStyleError(style);
-  if (error) throw new Error(error);
   const links = rows.map((row) => {
+    const appearance = options.stylesById?.get(row.id) ?? style;
+    const styleError = qrStyleError(appearance);
+    if (styleError) throw new Error(styleError);
     const source = publicSourceUrl(row.source, row.domainHostname);
     if (!source) throw new Error('No concrete URL for ' + row.source);
-    return { row, url: qrTrackingUrl(source, !!row.domainHostname && !!row.isShortLink) };
+    return {
+      row,
+      style: appearance,
+      url: qrTrackingUrl(source, !!row.domainHostname && !!row.isShortLink),
+    };
   });
   options.signal?.throwIfAborted();
   const { default: JSZip } = await import('jszip');
@@ -44,10 +53,10 @@ export async function buildQrBundle(
   options.onProgress?.(0, rows.length);
   for (let index = 0; index < links.length; index++) {
     options.signal?.throwIfAborted();
-    const { row, url } = links[index];
+    const { row, url, style: appearance } = links[index];
     let images: Awaited<ReturnType<typeof generateQr>>;
     try {
-      images = await generateQr(url, style, options.signal);
+      images = await generateQr(url, appearance, options.signal);
     } catch (err) {
       if (options.signal?.aborted) throw err;
       throw new Error(

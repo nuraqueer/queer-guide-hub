@@ -1,4 +1,4 @@
-import { useState, type Dispatch, type SetStateAction } from 'react';
+import { useId, useState, type Dispatch, type SetStateAction } from 'react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import type { QrStyle } from '@/lib/redirects/qr';
@@ -7,12 +7,15 @@ export function QrStyleFields({
   setStyle,
   disabled = false,
   onBusy,
+  allowLogo = true,
 }: {
   style: QrStyle;
   setStyle: Dispatch<SetStateAction<QrStyle>>;
   disabled?: boolean;
   onBusy?: (busy: boolean) => void;
+  allowLogo?: boolean;
 }) {
+  const id = useId();
   const [uploadError, setUploadError] = useState('');
   const [reading, setReading] = useState(false);
   const changeStyle = <K extends keyof QrStyle>(key: K, value: QrStyle[K]) =>
@@ -85,42 +88,44 @@ export function QrStyleFields({
             <option value="circle">Circle</option>
           </select>
         </label>
-        <label htmlFor="qr-dot-color" className="space-y-1 text-sm">
+        <label htmlFor={id + '-qr-dot-color'} className="space-y-1 text-sm">
           Dot color
           <Input
-            id="qr-dot-color"
+            id={id + '-qr-dot-color'}
             aria-label="QR dot color"
             type="color"
             value={style.foreground}
             onChange={(event) => changeStyle('foreground', event.target.value)}
           />
         </label>
-        <label htmlFor="qr-background-color" className="space-y-1 text-sm">
+        <label htmlFor={id + '-qr-background-color'} className="space-y-1 text-sm">
           Background color
           <Input
-            id="qr-background-color"
+            id={id + '-qr-background-color'}
             aria-label="QR background color"
             type="color"
             value={style.background}
             onChange={(event) => changeStyle('background', event.target.value)}
           />
         </label>
-        <label htmlFor="qr-logo" className="space-y-1 text-sm">
-          Logo (optional)
-          <Input
-            id="qr-logo"
-            aria-label="QR logo"
-            type="file"
-            accept="image/png,image/jpeg"
-            onChange={(event) => {
-              const file = event.target.files?.[0];
-              event.target.value = '';
-              void loadLogo(file);
-            }}
-          />
-        </label>
+        {allowLogo && (
+          <label htmlFor={id + '-qr-logo'} className="space-y-1 text-sm">
+            Logo (optional)
+            <Input
+              id={id + '-qr-logo'}
+              aria-label="QR logo"
+              type="file"
+              accept="image/png,image/jpeg"
+              onChange={(event) => {
+                const file = event.target.files?.[0];
+                event.target.value = '';
+                void loadLogo(file);
+              }}
+            />
+          </label>
+        )}
       </div>
-      {style.logo && (
+      {allowLogo && style.logo && (
         <Button variant="ghost" size="sm" onClick={() => changeStyle('logo', undefined)}>
           Remove logo
         </Button>

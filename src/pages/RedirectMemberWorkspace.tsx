@@ -356,7 +356,7 @@ export function MemberWorkspaceContent({
   const domainOptions = domains.isError ? [] : (domains.data?.data ?? []);
   const [selectedState, setSelected] = useState<string[]>([]);
   const [editor, setEditor] = useState<{ link?: MemberLink; prefill?: MemberLink } | null>(null),
-    [qr, setQr] = useState<string | null>(null),
+    [qr, setQr] = useState<{ url: string; id: string } | null>(null),
     [policy, setPolicy] = useState<MemberLink | null>(null),
     [analytics, setAnalytics] = useState<string | null>(null),
     [importing, setImporting] = useState(false),
@@ -908,7 +908,11 @@ export function MemberWorkspaceContent({
               <Button size="sm" variant="outline" onClick={() => setPolicy(link)}>
                 Link behavior
               </Button>
-              <Button size="sm" variant="outline" onClick={() => setQr(link.shortUrl)}>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setQr({ url: link.shortUrl, id: link.id })}
+              >
                 QR code
               </Button>
               <Button size="sm" variant="outline" onClick={() => setAnalytics(link.id)}>
@@ -969,7 +973,14 @@ export function MemberWorkspaceContent({
           }}
         />
       )}
-      {qr && <RedirectQrDialog url={qr} managedShortLink onClose={() => setQr(null)} />}{' '}
+      {qr && (
+        <RedirectQrDialog
+          url={qr.url}
+          linkId={qr.id}
+          managedShortLink
+          onClose={() => setQr(null)}
+        />
+      )}{' '}
       {policy && (
         <RedirectPolicyDialog
           row={inventory(policy)}

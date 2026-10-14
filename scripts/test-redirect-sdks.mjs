@@ -12,6 +12,7 @@ let handler;
 let policyRuntime;
 const pieces = [
   '_shared/redirect-api.ts',
+  '_shared/redirect-qr-style.ts',
   '_shared/redirect-domains.ts',
   '_shared/redirect-domain-provider.ts',
   '_shared/redirect-presentation.ts',
@@ -304,6 +305,23 @@ try {
   const branded=(await reportRequest('/links','POST',{slug:'same-domain-slug',target:'https://example.org/branded',domainId:domain.id},undefined,201)).link;
   const builtinDomainLink=(await reportRequest('/links','POST',{slug:'same-domain-slug',target:'https://example.org/builtin'},undefined,201)).link;
   if(branded.shortUrl!=='https://links.example.com/same-domain-slug'||branded.id===builtinDomainLink.id)throw new Error('HTTP hostname namespace isolation failed');
+  await reportRequest('/qr-styles/workspace','POST',{},undefined,405);
+  let qrWorkspace=await reportRequest('/qr-styles/workspace');
+  qrWorkspace=await reportRequest('/qr-styles/workspace','PATCH',{version:qrWorkspace.version,style:{dots:'joined'}});
+  await reportRequest('/qr-styles/workspace','PATCH',{version:null,style:{dots:'circle'}},undefined,409);
+  await reportRequest('/qr-styles/workspace','GET',undefined,token,403);
+  let qrDomain=await reportRequest('/qr-styles/domains/'+domain.id);
+  if(qrDomain.effectiveStyle.dots!=='joined')throw new Error('Domain QR did not inherit workspace');
+  qrDomain=await reportRequest('/qr-styles/domains/'+domain.id,'PATCH',{version:qrDomain.version,style:{border:'rounded'}});
+  const qrEffective=await reportRequest('/qr-styles/links/'+branded.id,'GET',undefined,token);
+  if(qrEffective.source!=='domain'||qrEffective.style.dots!=='joined'||qrEffective.style.border!=='rounded'||Object.keys(qrEffective).sort().join(',')!=='id,source,style')throw new Error('Scoped QR style precedence or public fields incorrect');
+  const qrBatch=await reportRequest('/qr-styles/links?ids='+branded.id,'GET',undefined,token);
+  if(qrBatch.data[0].id!==branded.id)throw new Error('Batched QR style lookup failed');
+  await reportRequest('/qr-styles/links?ids='+branded.id+','+branded.id,'GET',undefined,token,400);
+  await reportRequest('/qr-styles/domains/'+domain.id,'PATCH',{version:qrDomain.version,style:null},token,403);
+  await reportRequest('/qr-styles/domains/'+domain.id,'PATCH',{version:qrDomain.version,style:null});
+  await reportRequest('/qr-styles/workspace','PATCH',{version:qrWorkspace.version,style:null});
+  console.log('Saved QR appearance: actual owner HTTP/migrated SQL verifies version conflicts, workspace/domain inheritance, minimal scoped single/batch reads, key write denial and reset.');
   const domainPage=await reportRequest('/links?filters='+encodeURIComponent(JSON.stringify({domainId:domain.id})));
   if(domainPage.count!==1||domainPage.data[0].id!==branded.id)throw new Error('HTTP domain filter mixed namespaces');
   const updatedBranded=(await reportRequest('/links/upsert','PUT',{slug:'same-domain-slug',target:'https://example.org/updated',domainId:domain.id})).link;
