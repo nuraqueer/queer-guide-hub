@@ -105,3 +105,11 @@ provider setup and routing checks are owner-session controls; these SDKs do not
 acquire those privileges. Python/Ruby/PHP dictionaries and Go `Object` pass the
 same fields as TypeScript `LinkInput`. The implementation and SDKs remain local
 sources awaiting production rollout/publication.
+
+Ready domain choices are available through `listDomainChoices(limit, cursor)` in
+TypeScript/PHP, `list_domain_choices` in Python/Ruby and `ListDomainChoices(ctx,
+limit, cursor)` in Go. The page includes public ID/hostname fields, count, cursor
+and primary availability. Read scope and current link/member restrictions apply.
+Primary preference writes require an owner account session; keys do not gain
+registry or primary-setting privileges. Interactive builders use the saved
+primary initially, while API omission remains the built-in namespace.

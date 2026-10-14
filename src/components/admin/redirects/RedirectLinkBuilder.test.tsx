@@ -5,6 +5,13 @@ import { RedirectLinkBuilder } from './RedirectLinkBuilder';
 import type { RedirectWorkspace } from '@/hooks/useRedirectWorkspace';
 const mocks = vi.hoisted(() => ({
   create: vi.fn(),
+  choices: {
+    data: [] as Array<{ id: string; hostname: string }>,
+    count: 0,
+    nextCursor: null,
+    primaryDomainId: null as string | null,
+    primaryUnavailable: false,
+  },
   workspace: {
     data: undefined as RedirectWorkspace | undefined,
     resource: { mutateAsync: vi.fn(), isError: false },
@@ -14,36 +21,124 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@/hooks/useRedirectWorkspace', () => ({
   useRedirectWorkspace: () => mocks.workspace,
 }));
-vi.mock('@/hooks/useRedirects', () => ({ useRedirects: () => ({ createRedirect: mocks.create }) }));
+vi.mock('@/hooks/useAuth', () => ({ useAuth: () => ({ user: { id: 'owner' } }) }));
+vi.mock('@/lib/redirects/memberApi', () => ({
+  memberRedirectApi: async (_path: string, method: string, body: unknown) => {
+    if (method === 'GET') return mocks.choices;
+    const result = await mocks.create(body);
+    return result
+      ? {
+          link: { ...result, shortUrl: result.shortUrl ?? 'https://queer.guide/go/' + result.slug },
+        }
+      : null;
+  },
+}));
 vi.mock('./RedirectQrDialog', () => ({
   QrExport: ({ url }: { url: string }) => <p>Saved QR URL: {url}</p>,
 }));
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.workspace.data = undefined;
+  mocks.choices = {
+    data: [],
+    count: 0,
+    nextCursor: null,
+    primaryDomainId: null,
+    primaryUnavailable: false,
+  };
+  mocks.create.mockResolvedValue({ slug: 'zurich-campaign' });
 });
 function show() {
-  return render(
-    <QueryClientProvider client={new QueryClient()}>
-      <RedirectLinkBuilder
-        onClose={vi.fn()}
-        seed={{
-          id: 'city',
-          source: '/city/old',
-          target: '/city/zurich?view=map#places',
-          origin: 'city_slug_redirects',
-          kind: 'Automatic',
-          statusCode: 301,
-          state: 'Enabled',
-          updatedAt: null,
-          campaign: { utm_source: 'poster' },
-          prefill: { audience: 'friends & family' },
-        }}
-      />
-    </QueryClientProvider>,
-  );
+  const client = new QueryClient();
+  return {
+    client,
+    ...render(
+      <QueryClientProvider client={client}>
+        <RedirectLinkBuilder
+          onClose={vi.fn()}
+          seed={{
+            id: 'city',
+            source: '/city/old',
+            target: '/city/zurich?view=map#places',
+            origin: 'city_slug_redirects',
+            kind: 'Automatic',
+            statusCode: 301,
+            state: 'Enabled',
+            updatedAt: null,
+            campaign: { utm_source: 'poster' },
+            prefill: { audience: 'friends & family' },
+          }}
+        />
+      </QueryClientProvider>,
+    ),
+  };
 }
 describe('tracked link creation', () => {
+  it('does not visually fall back when an explicitly selected domain disappears on refresh', async () => {
+    mocks.choices = {
+      data: [{ id: 'domain-a', hostname: 'links.community.com' }],
+      count: 1,
+      nextCursor: null,
+      primaryDomainId: null,
+      primaryUnavailable: false,
+    };
+    const { client } = show();
+    await waitFor(() => expect(screen.getByLabelText('Short-link domain')).toBeEnabled());
+    fireEvent.change(screen.getByLabelText('Short-link domain'), { target: { value: 'domain-a' } });
+    mocks.choices = { ...mocks.choices, data: [], count: 0 };
+    await client.invalidateQueries({ queryKey: ['redirect-domain-choices', 'owner'] });
+    expect(
+      await screen.findByText(
+        'The selected domain is unavailable. Choose another domain to continue.',
+      ),
+    ).toBeVisible();
+    expect(screen.getByLabelText('Short-link domain')).toHaveValue('domain-a');
+    expect(screen.getByRole('button', { name: 'Create tracked link' })).toBeDisabled();
+    expect(mocks.create).not.toHaveBeenCalled();
+  });
+  it('starts with the ready primary domain and uses the persisted canonical URL', async () => {
+    mocks.choices = {
+      data: [{ id: 'domain-a', hostname: 'links.community.com' }],
+      count: 1,
+      nextCursor: null,
+      primaryDomainId: 'domain-a',
+      primaryUnavailable: false,
+    };
+    mocks.create.mockResolvedValue({
+      slug: 'server-slug',
+      shortUrl: 'https://links.community.com/server-slug',
+    });
+    show();
+    await waitFor(() => expect(screen.getByLabelText('Short-link domain')).toHaveValue('domain-a'));
+    fireEvent.click(screen.getByRole('button', { name: 'Create tracked link' }));
+    await waitFor(() =>
+      expect(mocks.create).toHaveBeenCalledWith(expect.objectContaining({ domainId: 'domain-a' })),
+    );
+    expect(
+      await screen.findByText('Saved QR URL: https://links.community.com/server-slug'),
+    ).toBeVisible();
+  });
+  it('requires an explicit available selection if the primary becomes unavailable', async () => {
+    mocks.choices = {
+      data: [],
+      count: 0,
+      nextCursor: null,
+      primaryDomainId: 'lost-domain',
+      primaryUnavailable: true,
+    };
+    show();
+    expect(
+      await screen.findByText(
+        'The primary domain is unavailable. Choose another domain to continue.',
+      ),
+    ).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Create tracked link' })).toBeDisabled();
+    fireEvent.change(screen.getByLabelText('Short-link domain'), { target: { value: '' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Create tracked link' }));
+    await waitFor(() =>
+      expect(mocks.create).toHaveBeenCalledWith(expect.objectContaining({ domainId: null })),
+    );
+  });
   it('prefills the selected destination/settings, saves the encoded destination, and generates the persisted short URL', async () => {
     mocks.create.mockResolvedValue({ slug: 'zurich-campaign' });
     show();
@@ -53,6 +148,9 @@ describe('tracked link creation', () => {
     fireEvent.change(screen.getByLabelText('Short-link slug'), {
       target: { value: ' zurich-campaign ' },
     });
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Create tracked link' })).toBeEnabled(),
+    );
     fireEvent.click(screen.getByRole('button', { name: 'Create tracked link' }));
     await waitFor(() => expect(mocks.create).toHaveBeenCalledOnce());
     expect(mocks.create.mock.calls[0][0].slug).toBe('zurich-campaign');
@@ -76,6 +174,9 @@ describe('tracked link creation', () => {
   it('keeps entered fields and reports a failed save without displaying an unsaved QR link', async () => {
     mocks.create.mockResolvedValue(null);
     show();
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Create tracked link' })).toBeEnabled(),
+    );
     fireEvent.click(screen.getByRole('button', { name: 'Create tracked link' }));
     expect(await screen.findByRole('alert')).toHaveTextContent('Could not create the link');
     expect(screen.getByLabelText('Destination')).toHaveValue('/city/zurich?view=map#places');
@@ -107,10 +208,13 @@ describe('shared campaign workspace', () => {
     });
     expect(screen.getByLabelText('Source')).toHaveValue('qr');
     expect(screen.getByLabelText('Referral')).toHaveValue('team');
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Create tracked link' })).toBeEnabled(),
+    );
     fireEvent.click(screen.getByRole('button', { name: 'Create tracked link' }));
-    await waitFor(() => expect(mocks.workspace.createLink.mutateAsync).toHaveBeenCalledOnce());
-    expect(mocks.create).not.toHaveBeenCalled();
-    expect(mocks.workspace.createLink.mutateAsync).toHaveBeenCalledWith(
+    await waitFor(() => expect(mocks.create).toHaveBeenCalledOnce());
+    expect(mocks.workspace.createLink.mutateAsync).not.toHaveBeenCalled();
+    expect(mocks.create).toHaveBeenCalledWith(
       expect.objectContaining({ folderId: 'folder', tagIds: ['tag'] }),
     );
     expect(

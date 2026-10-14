@@ -29,6 +29,8 @@ export interface MemberLink {
   slug: string;
   target: string;
   shortUrl: string;
+  domainId?: string | null;
+  domainHostname?: string | null;
   folderId: string | null;
   tagIds: string[];
   comment: string;

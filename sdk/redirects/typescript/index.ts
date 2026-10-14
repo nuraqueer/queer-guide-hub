@@ -23,6 +23,14 @@ export interface Link extends LinkInput {
   domainHostname: string | null;
   updatedAt: string;
 }
+export interface DomainChoice {
+  id: string;
+  hostname: string;
+}
+export interface DomainChoices extends Page<DomainChoice> {
+  primaryDomainId: string | null;
+  primaryUnavailable: boolean;
+}
 export interface LinkPolicy {
   preview?: { title?: string; description?: string; image?: string; video?: string };
   cloaked?: boolean;
@@ -195,6 +203,9 @@ export class RedirectsClient {
   }
   deleteLink(id: string) {
     return this.request<Mutation>('DELETE', '/links/' + id);
+  }
+  listDomainChoices(limit = 100, cursor?: string) {
+    return this.request<DomainChoices>('GET', '/domain-choices', undefined, { limit, cursor });
   }
   listLinks(filters: JsonObject = {}, limit = 100, cursor?: string) {
     return this.request<Page<Link>>('GET', '/links', undefined, { filters, limit, cursor });

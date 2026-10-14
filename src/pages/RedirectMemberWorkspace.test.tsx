@@ -47,6 +47,17 @@ beforeEach(() => {
   mocks.role = 'member';
   mocks.canEdit = true;
   mocks.invoke.mockImplementation(async (path, options) => {
+    if (path.includes('/domain-choices'))
+      return {
+        data: {
+          data: [],
+          count: 0,
+          nextCursor: null,
+          primaryDomainId: null,
+          primaryUnavailable: false,
+        },
+        error: null,
+      };
     if (path === 'redirect-api/session') return { data: { role: mocks.role }, error: null };
     if (path.includes('/folders?'))
       return {
@@ -87,6 +98,49 @@ beforeEach(() => {
   });
 });
 describe('member redirect workspace', () => {
+  it('retains an existing unavailable branded domain while repairing the destination', async () => {
+    const initial = mocks.invoke.getMockImplementation()!;
+    const domainId = '00000000-0000-4000-8000-000000000007';
+    mocks.invoke.mockImplementation(async (path, options) =>
+      path.includes('/links?')
+        ? {
+            data: {
+              data: [
+                {
+                  ...row,
+                  domainId,
+                  domainHostname: 'links.community.com',
+                  shortUrl: 'https://links.community.com/pride',
+                },
+              ],
+              count: 1,
+              nextCursor: null,
+            },
+            error: null,
+          }
+        : initial(path, options),
+    );
+    show();
+    await screen.findByText('https://links.community.com/pride');
+    fireEvent.click(screen.getByRole('button', { name: 'Edit https://links.community.com/pride' }));
+    expect(screen.getByLabelText('Short-link domain')).toHaveValue(domainId);
+    expect(
+      screen.getByRole('option', { name: 'links.community.com (current, unavailable)' }),
+    ).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Destination'), {
+      target: { value: 'https://example.org/repaired' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Save link' }));
+    await waitFor(() =>
+      expect(mocks.invoke).toHaveBeenCalledWith(
+        'redirect-api/links/' + row.id,
+        expect.objectContaining({
+          method: 'PATCH',
+          body: expect.objectContaining({ domainId, target: 'https://example.org/repaired' }),
+        }),
+      ),
+    );
+  });
   it('lets viewers read links and behavior while keeping mutation controls unavailable', async () => {
     mocks.role = 'viewer';
     mocks.canEdit = false;
@@ -168,6 +222,7 @@ describe('member redirect workspace', () => {
       target: { value: 'template' },
     });
     expect(screen.getByLabelText('utm_source')).toHaveValue('email');
+    await waitFor(() => expect(screen.getByLabelText('Short-link domain')).toBeEnabled());
     fireEvent.click(
       screen
         .getAllByRole('button', { name: 'Create link' })

@@ -150,6 +150,13 @@ func (c *Client) UpsertLink(ctx context.Context, data Object) (Object, error) {
 func (c *Client) DeleteLink(ctx context.Context, id string) (Object, error) {
 	return c.Request(ctx, "DELETE", "/links/"+id, nil, nil)
 }
+func (c *Client) ListDomainChoices(ctx context.Context, limit int, cursor string) (Object, error) {
+	q := Object{"limit": limit}
+	if cursor != "" {
+		q["cursor"] = cursor
+	}
+	return c.Request(ctx, "GET", "/domain-choices", nil, q)
+}
 func (c *Client) ListLinks(ctx context.Context, f Object, limit int, cursor string) (Object, error) {
 	query := Object{"filters": filters(f), "limit": limit}
 	if cursor != "" {

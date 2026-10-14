@@ -4,8 +4,8 @@ The Link workspace has owner-only domain registration, ownership checks, durable
 Cloudflare hostname/TLS setup and an explicit branded routing check. Managed
 links have separate hostname namespaces; the default remains
 `https://queer.guide/go/<slug>`. Root, not-found and default expiry destinations
-are resolved on branded hosts. The domain picker and primary-domain preference
-are still pending. This implementation is local; provisioning a production
+are resolved on branded hosts. The tracked-link builder and member editor offer domain choices and an owner-set
+primary default. The legacy raw-table creation form still uses the built-in domain. This implementation is local; provisioning a production
 hostname and deploying the dedicated relay remain release work.
 
 ## Registration and ownership
@@ -48,14 +48,12 @@ challenge replacement require review; removal refuses a record with a provider
 hostname ID, reserving provider cleanup for the provisioning stage. Settings and
 proof refreshes keep expanded setup panels open.
 
-These defaults are stored, not served yet. Durable Cloudflare lifecycle and
-certificate status checks are implemented locally as described below. The next
-stages must implement actual routing readiness, independent hostname/slug
-namespaces, signed public hostname relay, root/not-found/expiry behavior, primary
-selection, domain archive/transfer/subpath workflows and integration into
-CRUD/bulk, five SDKs, builder/QR and the all-source inventory. Provider-authorized
-DNS auto-configuration and forwarding setup instructions remain additional domain
-workflow requirements. Existing `/go/:slug` behavior remains the resolver path.
+Signed branded routing serves these defaults after current readiness checks.
+Domain namespaces, guarded CRUD/bulk, five SDK field contracts, inventory/CSV/QR
+and the tracked/member builders are implemented locally. Remaining domain work
+includes the legacy raw-table creation form, managed root-link policies,
+archive/transfer/subpath workflows, provider validation restart, authorized DNS
+auto-configuration/forwarding setup and production rollout.
 
 ## HTTP contract
 
@@ -72,7 +70,7 @@ Registered owner sessions use `/api/redirects` (or the existing direct edge API)
 The branded proxy forwards DELETE bodies so guarded removal works there too.
 The schema rejects unknown fields; callers cannot set ownership, provider IDs,
 challenge tokens or readiness. API keys deliberately do not manage this account-
-owner registry; later scoped domain SDK/API work remains pending.
+owner registry. Scoped links-read domain choices are a separate public-field API.
 
 ## Evidence and release
 
@@ -150,7 +148,7 @@ minutes; transient failures preserve the old timestamp and back off, respecting
 bounded Retry-After. Twelve consecutive failures stop automatic attempts until
 owner review/retry. Queue/scheduler capacity must be verified for the deployed
 number of domains so checks do not age out under backlog. Certificate readiness
-is not a public routing health check; primary URLs are still unavailable.
+is not a public routing health check; the separate signed route proof gates primary selection.
 
 The internal/admin-authorized `redirect-domain-provisioner` function consumes the
 queue. Its minute cron uses the established project-local Vault `supabase_url`
@@ -198,7 +196,7 @@ Managed CSV includes `domainId` and roundtrips bindings. Blank update cells pres
 the binding; `null` explicitly returns it to the built-in namespace. Duplicate
 checks use domain plus slug. The all-source inventory displays branded URLs and
 its QR export preserves QR attribution on managed links. Ordinary external URLs
-remain unannotated. Builder domain selection and primary preferences remain open.
+remain unannotated. Tracked-link and member builders select ready domains; owner primary preferences set their interactive defaults.
 
 The dedicated `workers/redirect-domains` relay derives scope from the actual HTTPS
 request URL. It forwards neither customer credentials/cookies nor customer-supplied
@@ -253,3 +251,36 @@ never verified automatically. Provider cleanup remains available independently.
 Local SQL, actual HTTP/SDK integration and Worker/resolver fixtures verify the
 implementation. They do not establish real DNS, certificate issuance, deployed
 routing, cron scheduling or production migration success.
+
+## Ready choices and primary defaults
+
+`GET /domain-choices?limit=100&cursor=<UUID>` needs `links:read` and returns only
+ready `{id, hostname}` choices, count, cursor, `primaryDomainId` and
+`primaryUnavailable`. Owner/unrestricted credentials and members able to create
+links receive ready workspace domains. ID-bound keys and non-creating members
+receive only domains used by their currently visible links and no global primary
+preference. No verification token, provider metadata or private registry fields
+are returned. Inactive/revoked principals fail current SQL checks.
+
+Owner sessions use `GET /domain-preference` and
+`PATCH /domain-preference` with `{domainId: UUID | null, version: UUID}`.
+Selecting a custom primary requires fresh ownership/TLS/routing. Optimistic
+versions prevent concurrent edits overwriting each other; deleting a domain
+clears and versions its preference. API keys/members cannot manage the preference.
+Existing link bindings never change. API create/upsert omission continues to
+mean the built-in namespace; interactive builders submit the selected domain
+explicitly.
+
+An unavailable primary blocks automatic selection until the user explicitly
+chooses another available domain. A selected hostname disappearing on refresh
+also stays visibly unavailable instead of looking like a built-in fallback.
+An existing unavailable binding remains selectable for repair without moving the
+link. The builder uses the canonical response URL for QR export; the member list,
+policy tools and CSV preserve branded identity. Domain choice queries are account
+keyed, paginated with loop detection and refreshed on focus. The owner can reload
+primary settings after a conflict. All live create/move operations still recheck
+readiness and folder/credential permissions in SQL.
+
+The five local SDKs expose `listDomainChoices` (TypeScript/PHP),
+`list_domain_choices` (Python/Ruby) and `ListDomainChoices` (Go), with limit/cursor
+pagination. Preference management remains an owner-session UI/API action.

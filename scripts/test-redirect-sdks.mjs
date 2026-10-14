@@ -273,6 +273,15 @@ try {
   if(!providerView.provider.certificateReady||providerCreates!==1)throw new Error('TLS polling recreated the hostname or lost readiness');
   await reportRequest('/links','POST',{slug:'same-domain-slug',target:'https://example.org/branded',domainId:domain.id},undefined,400);
   await db.query('SELECT public.record_redirect_domain_route($1)',[domain.hostname]);
+  let primary=await reportRequest('/domain-preference');
+  await reportRequest('/domain-preference','GET',undefined,token,403);
+  await reportRequest('/domain-preference','PATCH',{domainId:domain.id,version:'invalid'},undefined,400);
+  const originalPrimaryVersion=primary.version;
+  primary=await reportRequest('/domain-preference','PATCH',{domainId:domain.id,version:primary.version});
+  await reportRequest('/domain-preference','PATCH',{domainId:null,version:originalPrimaryVersion},undefined,409);
+  const readyChoices=await reportRequest('/domain-choices?limit=1','GET',undefined,token);
+  if(readyChoices.count!==1||readyChoices.primaryDomainId!==domain.id||readyChoices.primaryUnavailable||Object.keys(readyChoices.data[0]).sort().join(',')!=='hostname,id')throw new Error('Public domain choices leaked setup data or lost primary');
+
   const branded=(await reportRequest('/links','POST',{slug:'same-domain-slug',target:'https://example.org/branded',domainId:domain.id},undefined,201)).link;
   const builtinDomainLink=(await reportRequest('/links','POST',{slug:'same-domain-slug',target:'https://example.org/builtin'},undefined,201)).link;
   if(branded.shortUrl!=='https://links.example.com/same-domain-slug'||branded.id===builtinDomainLink.id)throw new Error('HTTP hostname namespace isolation failed');
@@ -289,6 +298,9 @@ try {
   console.log('Hostname-scoped HTTP links: route-proof gating, canonical URLs, same-slug isolation, domain filters, scoped upsert and background DNS renewal passed.');
   const disconnect=await reportRequest('/domains/'+domain.id+'/provider/disconnect','POST',{version:providerView.version});
   if(disconnect.provider.certificateReady||providerObjects.size!==1)throw new Error('Disconnect did not close readiness before cleanup');
+  const unavailablePrimary=await reportRequest('/domain-choices');
+  if(!unavailablePrimary.primaryUnavailable||unavailablePrimary.primaryDomainId!==domain.id||unavailablePrimary.count!==0)throw new Error('Disconnected primary silently became builtin');
+
   await policyRuntime.dispatchRedirectDomainJobs(service,providerConfig,fixtureDnsFetch);
   defaults=await reportRequest('/domains/'+domain.id);
   if(defaults.providerConnected||providerObjects.size||providerDeletes!==1||defaults.provider.state!=='disconnected')throw new Error('Provider cleanup failed or orphaned an object');
@@ -299,6 +311,10 @@ try {
   if(lost.ownershipState!=='lost'||lost.ownershipVerified)throw new Error('Missing DNS proof preserved ownership');
   await reportRequest('/domains/'+domain.id,'DELETE',{version:lost.version});
   await reportRequest('/domains/'+domain.id,'GET',undefined,undefined,404);
+  const clearedPrimary=await reportRequest('/domain-preference');
+  if(clearedPrimary.domainId!==null||clearedPrimary.version===primary.version||!clearedPrimary.ready)throw new Error('Domain deletion did not version and clear primary reference');
+  console.log('Domain choices/primary: real HTTP proves ready-only public fields, key read scope, owner-only preference, stale-write conflicts, disconnected default warning and FK/version cleanup.');
+
   console.log('Domain registry: real HTTP handler → migrated SQL → isolated DNS response, fresh ownership, cooldown before DNS, lost proof, versioned defaults/deletion and key rejection passed; no DNS/provider writes.');
   const saved=await reportRequest('/reports','POST',{name:'Native HTTP report',filters:{linkIds:[seed.rows[0].id]}},undefined,201);
   const plain=await reportRequest('/reports/'+saved.id+'/shares','POST',{title:'Clicks only',reportVersion:saved.version,expiresAt:null},undefined,201);

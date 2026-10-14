@@ -19,7 +19,7 @@ exist. Existing local tools are a foundation, not proof of parity or deployment.
 | Bulk actions | Create/update/upsert/delete, folder/tag assignment, archive, import/export, QR export | Candidate for managed links: atomic create/update/upsert/deletion API and CSV review/import/export UI, archive/restore, folder/tag assignment and verified QR ZIP; production release pending |
 | Custom previews | Uploaded OG image (1200×630, ≤1.5 MB), title≤120, description≤240, video API, crawler unfurl | Candidate: editor, scoped upload/presentation APIs and crawler HTML; native browser/Storage release pending |
 | AI previews | Generate title/description from destination content using configured AI provider | Candidate: scoped draft generator with spend limits; live provider and browser verification pending |
-| Custom domains | Verify ownership/DNS, multiple domains, primary domain, redirects on branded hostname | Partial: private registry, exact DNS verification, owner UI and stored defaults implemented locally; durable Cloudflare lifecycle/TLS checks implemented locally; hostname namespaces, signed relay/resolver, routing health, background proof renewal and inventory/CSV/QR/API/SDK fields implemented locally; primary/builder choices, real provider proof and release pending |
+| Custom domains | Verify ownership/DNS, multiple domains, primary domain, redirects on branded hostname | Partial: private registry, exact DNS verification, owner UI and stored defaults implemented locally; durable Cloudflare lifecycle/TLS checks implemented locally; hostname namespaces, signed relay/resolver, routing health, background proof renewal and inventory/CSV/QR/API/SDK fields implemented locally; ready choices, owner primary preference and tracked/member builders implemented locally; legacy raw-table creator, real provider proof and release pending |
 | Domain defaults | Root/not-found redirects, default expiration URL, workspace/domain QR logos | Partial: root/not-found/expiry settings and signed-host resolver implemented locally; managed root-link policies, QR/logo precedence and release pending |
 | Deep links | iOS/Android association files, app page routes, fallback and deferred attribution | Missing |
 | Geo targeting | Country-specific destinations and default fallback | Candidate: country rules and fallback tested |
@@ -893,3 +893,41 @@ be preserved when a domain becomes unavailable, so repair remains possible; new
 or moved bindings still require readiness. Account-keyed queries and current SQL
 checks prevent stale client choices granting access. Owner primary controls use
 optimistic versions and re-fetch availability; no DNS/provider writes are added.
+
+Implemented locally: private versioned primary preference with owner-only writes,
+ready-only public-field domain catalog, scoped/cursor-paginated reads, five native
+SDK choice methods, shared accessible selector, tracked-link builder and member
+editor domain selection. Builders preserve campaign/prefill/folder/tag fields,
+submit explicit bindings through scoped atomic APIs and use canonical returned
+URLs. Member list, policy context and QR attribution retain branded identity.
+Existing unavailable bindings can be repaired; unavailable primaries or vanished
+selected choices never silently appear as a built-in fallback. Preference drafts
+retain their editing version across refresh and provide an explicit reload after
+conflict. Account-keyed choices detect pagination loops and changing primaries.
+
+Evidence: migrated SQL tests cover private grants, current role/scope revocation,
+ready-only fields, creator vs viewer/ID-bound visibility, pagination, stale writes,
+disabled primary, explicit clearing and unchanged existing links. Actual HTTP
+handler → migrated PostgreSQL proves public-field choices, owner-only primary,
+version conflicts, disconnected availability and FK/version clearing on domain
+removal. All five SDKs exercise their new choice methods over real local HTTP and
+retain their existing management/policy/tracking examples. Fifty-one focused tests
+across six files pass, including unavailable-domain repair, disappearing explicit
+choices, primary conflicts, canonical builder URLs and paging. A prior report
+assertion was updated to include its existing safe allowIndexing=false default.
+
+Native local-fixture browser proof verifies owner primary save → builder default →
+preserved campaign/prefill → saved branded URL → generated QR. The actual mobile
+screenshot QR decodes to the branded URL plus qg_qr=1. At 390 pixels client and
+scroll widths are both 390. Evidence is in shared workspace outputs:
+primary-domain-saved-desktop.jpg, domain-builder-primary-mobile.jpg and
+domain-builder-saved-qr-mobile.jpg. The preview blocks production requests; its
+ready domain/API responses are explicitly simulated. Temporary tab/viewport were
+cleaned up. App types remain 704 inherited, none new; functions types, lint,
+build and migration validation pass. No production writes or deployments.
+
+Full parity remains open. The legacy raw-table creation form still uses the
+built-in domain; domain filter UX, managed root-link policies, provider validation
+restart, remaining domain lifecycle/DNS automation and all other unfinished ledger
+features remain required, as do controlled real-domain and production release
+verification. This checkpoint does not claim full domain/Dub parity or rollout.

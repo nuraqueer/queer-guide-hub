@@ -661,6 +661,7 @@ describe('actual Redirects API handler', () => {
         p_actor: '00000000-0000-4000-8000-000000000001',
         p_principal: null,
         p_values: {
+          allowIndexing: false,
           title: 'Public campaign',
           reportVersion: version,
           includeConversions: false,

@@ -1,0 +1,45 @@
+BEGIN;
+SET LOCAL ROLE service_role;
+DO $$
+DECLARE actor uuid:=gen_random_uuid();outsider uuid:=gen_random_uuid();a uuid;b uuid;d jsonb;pref jsonb;result jsonb;link_a uuid;link_b uuid;bound uuid;viewer uuid;editor uuid;folder uuid;first_page jsonb;old_version uuid;
+BEGIN
+ INSERT INTO auth.users(id) VALUES(actor),(outsider);INSERT INTO public.user_roles VALUES(actor,'admin');
+ d:=public.redirect_domain_resource('create',actor,p_values=>'{"hostname":"choice-a.example.com"}');a:=(d->>'id')::uuid;
+ d:=public.redirect_domain_resource('create',actor,p_values=>'{"hostname":"choice-b.example.com"}');b:=(d->>'id')::uuid;
+ UPDATE public.redirect_domains SET ownership_state='verified',verified_at=now(),verified_until=now()+interval '1 day',provider_id=gen_random_uuid()::text WHERE id IN(a,b);
+ INSERT INTO public.redirect_domain_jobs(domain_id,zone_id,cname_target,requested_by,state,provider_status,ssl_status,checked_at)
+ SELECT id,repeat('a',32),'links.queer.guide',actor,'ready','active','active',now() FROM public.redirect_domains WHERE id IN(a,b);
+ PERFORM public.record_redirect_domain_route('choice-a.example.com');PERFORM public.record_redirect_domain_route('choice-b.example.com');
+ pref:=public.redirect_domain_preference(actor);
+ IF pref->>'domainId' IS NOT NULL OR NOT(pref->>'ready')::boolean THEN RAISE EXCEPTION 'Default primary is not builtin';END IF;
+ old_version:=(pref->>'version')::uuid;
+ pref:=public.redirect_domain_preference(actor,jsonb_build_object('version',old_version,'domainId',b));
+ IF (pref->>'domainId')::uuid<>b OR pref->>'hostname'<>'choice-b.example.com' OR (pref->>'version')::uuid=old_version THEN RAISE EXCEPTION 'Primary not versioned';END IF;
+ BEGIN PERFORM public.redirect_domain_preference(outsider);RAISE EXCEPTION 'Non-owner read private primary settings';EXCEPTION WHEN insufficient_privilege THEN NULL;END;
+ BEGIN PERFORM public.redirect_domain_preference(actor,jsonb_build_object('version',old_version,'domainId',NULL));RAISE EXCEPTION 'Stale primary overwrote preference';EXCEPTION WHEN unique_violation THEN NULL;END;
+ result:=public.redirect_domain_choices();IF (result->>'count')::integer<>2 OR result->>'primaryDomainId'<>b::text OR (result->>'primaryUnavailable')::boolean THEN RAISE EXCEPTION 'Owner domain choices/primary incorrect';END IF;
+ IF EXISTS(SELECT FROM jsonb_array_elements(result->'data') item WHERE item-ARRAY['id','hostname']::text[]<>'{}') THEN RAISE EXCEPTION 'Private registry fields leaked';END IF;
+ first_page:=public.redirect_domain_choices(p_limit=>1);IF jsonb_array_length(first_page->'data')<>1 OR first_page->>'nextCursor' IS NULL THEN RAISE EXCEPTION 'Choices not paginated';END IF;
+ result:=public.redirect_domain_choices(p_limit=>1,p_after=>(first_page->>'nextCursor')::uuid);IF result#>>'{data,0,id}'=first_page#>>'{data,0,id}' OR result->>'nextCursor' IS NOT NULL THEN RAISE EXCEPTION 'Choice cursor repeated';END IF;
+ result:=public.redirect_management_mutate(jsonb_build_array(jsonb_build_object('operation','create','data',jsonb_build_object('slug','choice-link','target','/events','domainId',a))),NULL,actor);link_a:=(result#>>'{0,link,id}')::uuid;
+ INSERT INTO public.redirect_link_folders(name,default_permission) VALUES('Private domain fixture','none') RETURNING id INTO folder;
+ result:=public.redirect_management_mutate(jsonb_build_array(jsonb_build_object('operation','create','data',jsonb_build_object('slug','choice-link','target','/events','domainId',b,'folderId',folder))),NULL,actor);link_b:=(result#>>'{0,link,id}')::uuid;
+ INSERT INTO public.redirect_api_tokens(name,token_hash,prefix,scopes,redirect_ids,created_by,expires_at) VALUES('Bound domain choices',repeat('c',64),'fixture',ARRAY['links:read','links:write'],ARRAY[link_a],actor,now()+interval '1 day') RETURNING id INTO bound;
+ result:=public.redirect_domain_choices(bound);IF (result->>'count')::integer<>1 OR result#>>'{data,0,id}'<>a::text OR result->>'primaryDomainId' IS NOT NULL THEN RAISE EXCEPTION 'ID-bound key disclosed unrelated domains';END IF;
+ INSERT INTO public.redirect_workspace_members(kind,user_id,label,role) VALUES('user',outsider,'Viewer domain choices','viewer') RETURNING id INTO viewer;
+ result:=public.redirect_domain_choices(viewer);IF (result->>'count')::integer<>1 OR result#>>'{data,0,id}'<>a::text OR result->>'primaryDomainId' IS NOT NULL THEN RAISE EXCEPTION 'Viewer learned inaccessible folder domain';END IF;
+ UPDATE public.redirect_workspace_members SET role='member' WHERE id=viewer;
+ result:=public.redirect_domain_choices(viewer);IF (result->>'count')::integer<>2 OR result->>'primaryDomainId'<>b::text THEN RAISE EXCEPTION 'Creator did not receive ready workspace domains';END IF;
+ UPDATE public.redirect_workspace_members SET active=false WHERE id=viewer;
+ BEGIN PERFORM public.redirect_domain_choices(viewer);RAISE EXCEPTION 'Inactive member obtained choices';EXCEPTION WHEN insufficient_privilege THEN NULL;END;
+ UPDATE public.redirect_domains SET disabled=true WHERE id=b;
+ result:=public.redirect_domain_choices();IF (result->>'count')::integer<>1 OR NOT(result->>'primaryUnavailable')::boolean OR result->>'primaryDomainId'<>b::text THEN RAISE EXCEPTION 'Unavailable primary silently fell back';END IF;
+ IF (public.redirect_domain_preference(actor)->>'ready')::boolean THEN RAISE EXCEPTION 'Disabled primary marked ready';END IF;
+ BEGIN PERFORM public.redirect_domain_preference(actor,jsonb_build_object('version',pref->>'version','domainId',b));RAISE EXCEPTION 'Unready primary saved';EXCEPTION WHEN invalid_parameter_value THEN NULL;END;
+ pref:=public.redirect_domain_preference(actor,jsonb_build_object('version',pref->>'version','domainId',NULL));
+ IF pref->>'domainId' IS NOT NULL OR (public.redirect_management_link(link_a)->>'domainId')::uuid<>a OR (public.redirect_management_link(link_b)->>'domainId')::uuid<>b THEN RAISE EXCEPTION 'Preference rewrote existing links';END IF;
+ UPDATE public.redirect_api_tokens SET revoked_at=now() WHERE id=bound;
+ BEGIN PERFORM public.redirect_domain_choices(bound);RAISE EXCEPTION 'Revoked key obtained choices';EXCEPTION WHEN insufficient_privilege THEN NULL;END;
+ IF has_function_privilege('authenticated','public.redirect_domain_choices(uuid,integer,uuid)','EXECUTE') OR has_table_privilege('authenticated','public.redirect_domain_preferences','SELECT') THEN RAISE EXCEPTION 'Private preference grant leaked';END IF;
+END $$;
+ROLLBACK;

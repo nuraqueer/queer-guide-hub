@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import {RedirectsClient,RedirectApiError} from '../../../tmp/sdk-tests/typescript.mjs';
 const api=new RedirectsClient(process.env.REDIRECT_TEST_TOKEN,{baseUrl:process.env.REDIRECT_TEST_BASE});
+assert.equal((await api.listDomainChoices()).count,0);
 const folder=await api.createResource('folders',{name:'Héllo & + TS'}),tag=await api.createResource('tags',{name:'TS tag',color:'pink'});
 const template=await api.createResource('templates',{name:'TS template',parameters:{utm_campaign:'Launch & +'}});
 assert.equal((await api.updateResource('folders',folder.id,{description:'Changed'})).description,'Changed');

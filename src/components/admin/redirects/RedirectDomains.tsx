@@ -1,3 +1,4 @@
+import { RedirectPrimaryDomain } from './RedirectPrimaryDomain';
 import { RedirectDomainProvider, type DomainProviderStatus } from './RedirectDomainProvider';
 import { useState } from 'react';
 import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -63,7 +64,11 @@ function DomainRegistry({ accountId }: { accountId: string }) {
       setMessage(
         'Domain settings updated. Ownership verification alone does not activate short links.',
       );
-      await client.invalidateQueries({ queryKey: key });
+      await Promise.all([
+        client.invalidateQueries({ queryKey: key }),
+        client.invalidateQueries({ queryKey: ['redirect-domain-choices'] }),
+        client.invalidateQueries({ queryKey: ['redirect-domain-preference'] }),
+      ]);
     },
   });
   return (
@@ -74,6 +79,7 @@ function DomainRegistry({ accountId }: { accountId: string }) {
         are separate requirements. Provider connections run in the background. Check branded routing
         once DNS and the certificate are ready.
       </p>
+      <RedirectPrimaryDomain userId={accountId} />
       <form
         className="space-y-2"
         onSubmit={(event) => {
@@ -129,7 +135,13 @@ function DomainRegistry({ accountId }: { accountId: string }) {
               domain={domain}
               pending={mutation.isPending}
               setup={query.data?.pages[0].providerSetup}
-              onRoutingChecked={() => client.invalidateQueries({ queryKey: key })}
+              onRoutingChecked={() =>
+                Promise.all([
+                  client.invalidateQueries({ queryKey: key }),
+                  client.invalidateQueries({ queryKey: ['redirect-domain-choices'] }),
+                  client.invalidateQueries({ queryKey: ['redirect-domain-preference'] }),
+                ])
+              }
               expanded={expanded.has(domain.id)}
               onExpand={(open) =>
                 setExpanded((current) => {

@@ -11,11 +11,13 @@ import {
   DialogTitle,
   DialogDescription,
 } from '@/components/ui/dialog';
-import { useRedirects } from '@/hooks/useRedirects';
+import { useAuth } from '@/hooks/useAuth';
+import { useRedirectDomainChoices } from '@/hooks/useRedirectDomainChoices';
+import { memberRedirectApi, type MemberLink } from '@/lib/redirects/memberApi';
+import { RedirectDomainSelect } from './RedirectDomainSelect';
 import {
   buildCampaignDestination,
   CAMPAIGN_FIELDS,
-  LINK_ORIGIN,
   suggestCampaignSlug,
   targetWithoutCampaign,
   type CampaignFields,
@@ -50,7 +52,8 @@ export function RedirectLinkBuilder({
   const folderId = folderOverride ?? seedMetadata?.folder_id ?? defaultFolderId ?? '';
   const tagIds = tagOverride ?? seedMetadata?.tagIds ?? [];
   const [templateName, setTemplateName] = useState('');
-  const { createRedirect } = useRedirects();
+  const { user } = useAuth();
+  const domain = useRedirectDomainChoices(user?.id);
   const client = useQueryClient();
   let destination = '';
   let destinationError = '';
@@ -69,28 +72,20 @@ export function RedirectLinkBuilder({
     }
     setSaving(true);
     try {
-      const created =
-        folderId || tagIds.length
-          ? await workspace.createLink.mutateAsync({
-              slug: slug.trim(),
-              target: destination,
-              folderId: folderId || null,
-              tagIds,
-            })
-          : await createRedirect({
-              type: 'SHORT',
-              slug: slug.trim(),
-              target: destination,
-              match_kind: 'EXACT',
-              status_code: 302,
-              is_enabled: true,
-              query_mode: 'PRESERVE',
-            });
-      if (!created)
+      if (!domain.valid) throw new Error('Choose an available domain before creating a link.');
+      const result = await memberRedirectApi<{ link: MemberLink }>('/links', 'POST', {
+        slug: slug.trim(),
+        target: destination,
+        domainId: domain.domainId,
+        folderId: folderId || null,
+        tagIds,
+      });
+      if (!result?.link?.shortUrl)
         throw new Error(
           'Could not create the link. Check that the slug is available and try again.',
         );
-      setSavedUrl(`${LINK_ORIGIN}/go/${created.slug}`);
+      setSavedUrl(result.link.shortUrl);
+      await client.invalidateQueries({ queryKey: ['redirect-link-workspace'] });
       await client.invalidateQueries({ queryKey: ['cms-content-list'] });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not create link');
@@ -115,7 +110,7 @@ export function RedirectLinkBuilder({
           </DialogDescription>
         </DialogHeader>
         {savedUrl ? (
-          <QrExport url={savedUrl} />
+          <QrExport url={savedUrl} managedShortLink />
         ) : (
           <form
             className="space-y-4"
@@ -150,10 +145,8 @@ export function RedirectLinkBuilder({
               >
                 Generate random slug
               </Button>
-              <p className="break-all text-xs text-muted-foreground">
-                {LINK_ORIGIN}/go/{slug}
-              </p>
             </div>
+            <RedirectDomainSelect selection={domain} slug={slug} disabled={saving} />
             <fieldset>
               <legend className="mb-2 font-medium">Campaign tracking</legend>
               {workspace.data && (
@@ -330,7 +323,7 @@ export function RedirectLinkBuilder({
                 {error}
               </p>
             )}
-            <Button type="submit" disabled={saving || !!destinationError}>
+            <Button type="submit" disabled={saving || !!destinationError || !domain.valid}>
               {saving ? 'Creating…' : 'Create tracked link'}
             </Button>
             {target && destinationError && (

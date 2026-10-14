@@ -45,6 +45,7 @@ final class RedirectsClient {
     public function updateLink(string $id,array $data): array {return $this->request('PATCH','/links/'.$id,$data);}
     public function upsertLink(array $data): array {return $this->request('PUT','/links/upsert',$data);}
     public function deleteLink(string $id): array {return $this->request('DELETE','/links/'.$id);}
+    public function listDomainChoices(int $limit=100,?string $cursor=null): array {return $this->request('GET','/domain-choices',null,['limit'=>$limit,'cursor'=>$cursor]);}
     public function listLinks(array $filters=[],int $limit=100,?string $cursor=null): array {return $this->request('GET','/links',null,['filters'=>(object)$filters,'limit'=>$limit,'cursor'=>$cursor]);}
     public function countLinks(array $filters=[]): array {return $this->request('GET','/links/count',null,['filters'=>(object)$filters]);}
     public function bulk(array $operations): array {return $this->request('POST','/links/bulk',['operations'=>$operations]);}

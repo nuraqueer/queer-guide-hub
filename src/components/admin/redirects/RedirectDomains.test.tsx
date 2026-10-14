@@ -5,6 +5,7 @@ import { RedirectDomains } from './RedirectDomains';
 const mocks = vi.hoisted(() => ({ api: vi.fn() }));
 vi.mock('@/hooks/useAuth', () => ({ useAuth: () => ({ user: { id: 'owner' } }) }));
 vi.mock('@/lib/redirects/memberApi', () => ({ memberRedirectApi: mocks.api }));
+vi.mock('./RedirectPrimaryDomain', () => ({ RedirectPrimaryDomain: () => null }));
 const domain = {
   id: 'domain',
   hostname: 'links.example.com',

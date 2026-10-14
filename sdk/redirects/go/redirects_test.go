@@ -22,6 +22,9 @@ func TestSDKIntegration(t *testing.T) {
 		}
 		return result
 	}
+	if must(api.ListDomainChoices(ctx, 100, ""))["count"].(interface{ String() string }).String() != "0" {
+		t.Fatal("Unexpected domain choices")
+	}
 	folder := must(api.CreateResource(ctx, "folders", Object{"name": "Héllo & + Go"}))
 	tag := must(api.CreateResource(ctx, "tags", Object{"name": "Go tag", "color": "pink"}))
 	template := must(api.CreateResource(ctx, "templates", Object{"name": "Go template", "parameters": Object{"utm_campaign": "Launch & +"}}))

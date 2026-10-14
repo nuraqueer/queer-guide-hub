@@ -6,6 +6,8 @@ import { PageContainer } from '@/components/layout/PageContainer';
 import { useState } from 'react';
 import { Navigate, useLocation } from 'react-router';
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { RedirectDomainSelect } from '@/components/admin/redirects/RedirectDomainSelect';
+import { useRedirectDomainChoices } from '@/hooks/useRedirectDomainChoices';
 import { useAuth } from '@/hooks/useAuth';
 import { useMemberRedirectResources } from '@/hooks/useMemberRedirectResources';
 import {
@@ -33,11 +35,16 @@ import { RedirectManagedImportDialog } from '@/components/admin/redirects/Redire
 import { MemberRedirectAnalyticsDialog } from '@/components/admin/redirects/RedirectAnalyticsDialog';
 import { RedirectFolderAccess } from '@/components/admin/redirects/RedirectFolderAccess';
 const CONTROL = 'w-full rounded-element border bg-background p-2 text-sm';
+function linkSource(link: MemberLink) {
+  return link.domainId ? link.shortUrl : '/go/' + link.slug;
+}
 function inventory(link: MemberLink): InventoryRedirect {
   return manualRedirect({
     id: link.id,
     type: 'SHORT',
     slug: link.slug,
+    domain_id: link.domainId,
+    domain_hostname: link.domainHostname,
     target: link.target,
     status_code: link.statusCode,
     is_enabled: link.isEnabled,
@@ -66,18 +73,24 @@ function exportLinks(links: MemberLink[]) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 function LinkEditor({
+  userId,
   link,
   prefill,
   resources,
   onSave,
   onClose,
 }: {
+  userId: string;
   link?: MemberLink;
   prefill?: MemberLink;
   resources: MemberResources;
   onSave: (body: Record<string, unknown>) => Promise<unknown>;
   onClose: () => void;
 }) {
+  const domain = useRedirectDomainChoices(
+    userId,
+    link ? { id: link.domainId ?? null, hostname: link.domainHostname ?? null } : undefined,
+  );
   const initial = link ?? prefill;
   const [slug, setSlug] = useState(link?.slug ?? ''),
     [target, setTarget] = useState(initial?.target ?? ''),
@@ -96,6 +109,7 @@ function LinkEditor({
       onSave({
         ...(slug ? { slug } : {}),
         target,
+        domainId: domain.domainId,
         folderId: folderId || null,
         comment,
         tagIds: tags,
@@ -125,7 +139,7 @@ function LinkEditor({
           className="space-y-4"
           onSubmit={(e) => {
             e.preventDefault();
-            save.mutate();
+            if (domain.valid) save.mutate();
           }}
         >
           <fieldset disabled={save.isPending} className="space-y-4">
@@ -140,6 +154,7 @@ function LinkEditor({
                 placeholder="https://example.com/register"
               />
             </div>
+            <RedirectDomainSelect selection={domain} slug={slug} disabled={save.isPending} />
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
                 <Label htmlFor="member-link-slug">Short path</Label>
@@ -271,7 +286,7 @@ function LinkEditor({
               {save.error.message}
             </p>
           )}
-          <Button type="submit" disabled={save.isPending}>
+          <Button type="submit" disabled={save.isPending || !domain.valid}>
             {save.isPending ? 'Saving…' : link ? 'Save link' : 'Create link'}
           </Button>
         </form>
@@ -713,7 +728,7 @@ export function MemberWorkspaceContent({
             <div className="flex items-start gap-4">
               <input
                 type="checkbox"
-                aria-label={'Select /go/' + link.slug}
+                aria-label={'Select ' + linkSource(link)}
                 className="mt-2"
                 checked={selected.includes(link.id)}
                 disabled={!selected.includes(link.id) && selected.length >= 100}
@@ -732,7 +747,7 @@ export function MemberWorkspaceContent({
                   target="_blank"
                   rel="noopener noreferrer"
                 >
-                  /go/{link.slug}
+                  {linkSource(link)}
                 </a>
                 <p className="break-all text-sm">{link.target}</p>
                 <p className="text-xs text-muted-foreground">
@@ -752,7 +767,7 @@ export function MemberWorkspaceContent({
                 disabled={!link.canEdit || !resources.data}
                 onClick={() => setEditor({ link })}
               >
-                Edit /go/{link.slug}
+                Edit {linkSource(link)}
               </Button>
               {!link.canEdit && link.folderId && (
                 <Button
@@ -819,6 +834,7 @@ export function MemberWorkspaceContent({
       )}
       {editor && resources.data && (
         <LinkEditor
+          userId={userId}
           key={editor.link?.id ?? editor.prefill?.id ?? 'new'}
           {...editor}
           resources={resources.data}
@@ -833,7 +849,7 @@ export function MemberWorkspaceContent({
           }}
         />
       )}
-      {qr && <RedirectQrDialog url={qr} onClose={() => setQr(null)} />}{' '}
+      {qr && <RedirectQrDialog url={qr} managedShortLink onClose={() => setQr(null)} />}{' '}
       {policy && (
         <RedirectPolicyDialog
           row={inventory(policy)}

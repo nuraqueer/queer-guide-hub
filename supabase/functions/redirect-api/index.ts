@@ -44,6 +44,27 @@ Deno.serve(async (req: Request) => {
  };
  try {
   if(path==='/session'&&req.method==='GET'){if(tokenCredential)return json({error:'Account session required'},403);const principal=await sessionPrincipal('links:read');if(principal.failure)return principal.failure;return json({role:principal.role,label:principal.label??null});}
+  if(path==='/domain-choices'){
+   if(req.method!=='GET')return json({error:'Method not supported'},405);
+   let principalId:string|null=null;
+   if(tokenCredential){const {data,error}=await db.rpc('authenticate_redirect_api_token',{p_hash:await tokenDigest(credential),p_scope:'links:read'});if(error)return json({error:'Credential verification unavailable'},503);if(!data)return json({error:'Read scope is required'},403);principalId=data.id;}
+   else{const principal=await sessionPrincipal('links:read');if(principal.failure)return principal.failure;principalId=principal.id;}
+   const q=new URL(req.url).searchParams,limit=Number(q.get('limit')??100),after=q.get('cursor');
+   if([...q.keys()].some(key=>!['limit','cursor'].includes(key))||!Number.isInteger(limit)||limit<1||limit>100||after&&!UUID.test(after))return json({error:'Invalid domain page'},400);
+   const result=await db.rpc('redirect_domain_choices',{p_token_id:principalId,p_limit:limit,p_after:after});if(result.error)return rpcError(result.error);return json(result.data);
+  }
+  if(path==='/domain-preference'){
+   if(tokenCredential)return json({error:'Workspace owner account session required'},403);
+   const principal=await sessionPrincipal('workspace:write');if(principal.failure)return principal.failure;if(principal.id!==null)return json({error:'Workspace owner access required'},403);
+   if(!['GET','PATCH'].includes(req.method))return json({error:'Method not supported'},405);if(new URL(req.url).search)return json({error:'Invalid preference parameters'},400);
+   let values=null;
+   if(req.method==='PATCH'){
+    const body=await boundedJson(req,16384);
+    if(!body||typeof body!=='object'||Array.isArray(body)||Object.keys(body).some(key=>!['domainId','version'].includes(key))||!Object.hasOwn(body,'domainId')||body.domainId!==null&&(typeof body.domainId!=='string'||!UUID.test(body.domainId))||typeof body.version!=='string'||!UUID.test(body.version))return json({error:'Provide a domain ID or null and the current preference version'},400);
+    values=body;
+   }
+   const result=await db.rpc('redirect_domain_preference',{p_actor:user!.id,p_values:values});if(result.error)return rpcError(result.error);return json(result.data);
+  }
   const domains=path.match(/^\/domains(?:\/([a-f0-9-]{36}))?(?:\/(verify|rotate|provider)(?:\/(connect|refresh|disconnect|adopt|confirm-absence))?)?$/i);
   if(domains){
    if(tokenCredential)return json({error:'Workspace owner account session required'},403);
