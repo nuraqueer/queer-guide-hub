@@ -2468,3 +2468,33 @@ invalidates scope/auth checks. Test current/lost/ordinary actors, stale JWT clai
 unknown/hidden bindings, shape/privacy and actual HTTP behavior. Preserve the
 existing current creator checks for unbound keys and current member checks for
 bound keys. This closes the remaining direct service write identified in /tokens.
+
+### Credential administration implementation and evidence (2026-10-15)
+
+Service-only list/create/revoke now validates the actual current owner in the
+same ACL-locked transaction, including scope/expiry/member/SHORT binding checks.
+An explicit metadata projection excludes hashes, secrets and creator identity;
+only the Edge handler returns its generated secret after successful insertion.
+Revocation is idempotent and invalidates subsequent authentication. Unregistered/
+machine callers cannot manage credentials. SQL and actual HTTP -> migrated SQL
+prove current/ordinary/lost-owner checks, stale JWT list/create/revoke denial,
+invalid/inactive bindings, one-time response, private lists and key revocation.
+All five native SDK suites still pass with those owner HTTP tests.
+
+Credential cache keys include account identity; metadata and mutation entries use
+gcTime 0. Unmount aborts requests, creation never automatically retries, and
+account changes remount drafts/secrets. A late old-account response cannot render
+or clear a new draft. Denied refresh hides private rows/secrets and disables
+creation; failed mutations refresh the current account's list to review unknown
+receipts. Eleven UI/hook tests pass, including distinct account caches, physical
+mutation-cache removal for a successful secret, aborted pending creation, denied
+refresh and cross-account late receipts. The selected-link picker now includes
+custom-domain/root SHORT rows and excludes PATH even when its source starts /go/.
+
+Native Deno, lint and PostgreSQL 17 grammar pass (2325 migrations). App ratchet
+remains 702 inherited errors, none new; production build passes (~19 seconds).
+This remains a candidate awaiting controlled publication. No production key,
+member, schema, provider or asset was created or changed. Account/invitation and
+all-source workspace work, remaining domain/app behavior and live release evidence
+remain active scope; the production venue data-quality gate is still recorded
+separately. No overall completion is claimed.

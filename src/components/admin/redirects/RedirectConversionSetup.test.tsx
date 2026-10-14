@@ -1,7 +1,13 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { RedirectConversionSetup } from './RedirectConversionSetup';
-const mocks = vi.hoisted(() => ({ create: vi.fn(), revoke: vi.fn() }));
+const mocks = vi.hoisted(() => ({
+  create: vi.fn(),
+  revoke: vi.fn(),
+  userId: 'owner-a',
+  denied: false,
+}));
+vi.mock('@/hooks/useAuth', () => ({ useAuth: () => ({ user: { id: mocks.userId } }) }));
 vi.mock('@/hooks/useRedirectCredentials', () => ({
   useRedirectCredentials: () => ({
     data: [
@@ -17,7 +23,8 @@ vi.mock('@/hooks/useRedirectCredentials', () => ({
       },
     ],
     isPending: false,
-    isError: false,
+    isError: mocks.denied,
+    error: new Error('Current owner required'),
     create: { mutateAsync: mocks.create, isPending: false, isError: false, reset: vi.fn() },
     revoke: { mutateAsync: mocks.revoke, isPending: false, isError: false },
   }),
@@ -46,6 +53,8 @@ const links = [
 ];
 beforeEach(() => {
   vi.clearAllMocks();
+  mocks.userId = 'owner-a';
+  mocks.denied = false;
   mocks.create.mockResolvedValue({ secret: 'qg_redirect_fixture' });
   mocks.revoke.mockResolvedValue({});
 });
@@ -116,5 +125,65 @@ describe('conversion credential setup', () => {
     expect(mocks.revoke).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole('button', { name: 'Confirm revoke' }));
     await waitFor(() => expect(mocks.revoke).toHaveBeenCalledWith('credential'));
+  });
+  it('clears a one-time secret on account switch and hides it on denied refresh', async () => {
+    const view = render(<RedirectConversionSetup links={links} onClose={vi.fn()} />);
+    fireEvent.change(screen.getByLabelText('Credential name'), {
+      target: { value: 'Private key' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Create server credential' }));
+    await screen.findByLabelText('New server credential', { selector: 'input' });
+    mocks.denied = true;
+    view.rerender(<RedirectConversionSetup links={links} onClose={vi.fn()} />);
+    expect(screen.queryByLabelText('New server credential', { selector: 'input' })).toBeNull();
+    expect(screen.queryByText('Billing')).toBeNull();
+    mocks.userId = 'owner-b';
+    mocks.denied = false;
+    view.rerender(<RedirectConversionSetup links={links} onClose={vi.fn()} />);
+    expect(screen.queryByLabelText('New server credential', { selector: 'input' })).toBeNull();
+    expect(screen.getByLabelText('Credential name')).toHaveValue('');
+  });
+  it('does not expose an old account’s late creation receipt', async () => {
+    let finish: (value: { secret: string }) => void = () => {};
+    mocks.create.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+    );
+    const view = render(<RedirectConversionSetup links={links} onClose={vi.fn()} />);
+    fireEvent.change(screen.getByLabelText('Credential name'), {
+      target: { value: 'Pending key' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Create server credential' }));
+    await waitFor(() => expect(mocks.create).toHaveBeenCalled());
+    mocks.userId = 'owner-b';
+    view.rerender(<RedirectConversionSetup links={links} onClose={vi.fn()} />);
+    fireEvent.change(screen.getByLabelText('Credential name'), { target: { value: 'New draft' } });
+    finish({ secret: 'old-account-secret' });
+    await waitFor(() => expect(screen.getByLabelText('Credential name')).toHaveValue('New draft'));
+    expect(screen.queryByLabelText('New server credential', { selector: 'input' })).toBeNull();
+  });
+  it('allows selected custom-domain and root SHORT links while excluding PATH rules', async () => {
+    const branded = { ...links[0], source: 'https://links.community.com/', isShortLink: true };
+    const path = {
+      ...links[0],
+      manualId: '00000000-0000-4000-8000-000000000002',
+      source: '/go/path-rule',
+      isShortLink: false,
+    };
+    render(<RedirectConversionSetup links={[branded, path]} onClose={vi.fn()} />);
+    fireEvent.change(screen.getByLabelText('Credential name'), {
+      target: { value: 'Domain worker' },
+    });
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Limit to selected managed links' }));
+    fireEvent.click(screen.getByRole('checkbox', { name: 'https://links.community.com/' }));
+    expect(screen.queryByRole('checkbox', { name: '/go/path-rule' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Create server credential' }));
+    await waitFor(() =>
+      expect(mocks.create).toHaveBeenCalledWith(
+        expect.objectContaining({ redirectIds: [branded.manualId] }),
+      ),
+    );
   });
 });

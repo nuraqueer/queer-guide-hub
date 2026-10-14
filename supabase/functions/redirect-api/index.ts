@@ -595,16 +595,15 @@ Deno.serve(async (req: Request) => {
    return json(data,data.duplicate?200:201);
   }
   if(path==='/tokens' || /^\/tokens\/[a-f0-9-]+$/i.test(path)) {
-   if(tokenCredential)return json({error:'Admin session required'},403);
+   if(tokenCredential||user?.is_anonymous)return json({error:'Admin session required'},403);
    const {data:admin,error:roleError}=await identityClient!.rpc('has_role_jwt',{required_role:'admin'});
    if(roleError || !admin)return json({error:'Forbidden'},403);
-   const select='id,name,prefix,scopes,redirect_ids,member_id,created_at,expires_at,revoked_at,last_used_at';
    if(path==='/tokens' && req.method==='GET') {
     const offset=Number(new URL(req.url).searchParams.get('offset') ?? '0');
     if(!Number.isInteger(offset) || offset<0 || offset>1e7)return json({error:'Invalid page offset'},400);
-    const {data,count,error}=await db.from('redirect_api_tokens').select(select,{count:'exact'}).order('created_at',{ascending:false}).order('id',{ascending:false}).range(offset,offset+99);
-    if(error)return json({error:'Could not load credentials'},503);
-    return json({data,count});
+    const {data,error}=await db.rpc('redirect_token_administration',{p_actor:user!.id,p_action:'list',p_offset:offset});
+    if(error)return rpcError(error);
+    return json(data);
    }
    if(path==='/tokens' && req.method==='POST') {
     const body=await boundedJson(req);
@@ -616,19 +615,17 @@ Deno.serve(async (req: Request) => {
     if(!Array.isArray(scopes)||scopes.length<1||scopes.some(scope=>!LINK_SCOPES.includes(scope)))return json({error:'Invalid credential permissions'},400);
     const ids=body.redirectIds? [...new Set(body.redirectIds)] : null;
     if(ids&&scopes.some(scope=>scope.startsWith('workspace:')))return json({error:'Workspace permissions require an unrestricted credential'},400);
-    if(ids){const {data,error}=await db.from('redirects').select('id').in('id',ids).eq('type','SHORT');if(error || data?.length!==ids.length)return json({error:'One or more managed links were not found'},400);}
     if(body.memberId!==undefined&&(typeof body.memberId!=='string'||!UUID.test(body.memberId)))return json({error:'Invalid member binding'},400);
-    if(body.memberId){const member=await db.from('redirect_workspace_members').select('id').eq('id',body.memberId).eq('active',true).maybeSingle();if(member.error)return rpcError(member.error);if(!member.data)return json({error:'Active workspace member required'},400);}
     const secret=createRedirectToken();
-    const {data,error}=await db.from('redirect_api_tokens').insert({name:body.name.trim(),token_hash:await tokenDigest(secret),prefix:secret.slice(0,20),scopes:[...new Set(scopes)],redirect_ids:ids,member_id:body.memberId??null,created_by:user!.id,expires_at:new Date(end).toISOString()}).select(select).single();
-    if(error)return json({error:'Could not create credential'},503);
+    const {data,error}=await db.rpc('redirect_token_administration',{p_actor:user!.id,p_action:'create',p_values:{name:body.name.trim(),token_hash:await tokenDigest(secret),prefix:secret.slice(0,20),scopes:[...new Set(scopes)],redirect_ids:ids,member_id:body.memberId??null,expires_at:new Date(end).toISOString()}});
+    if(error)return rpcError(error);
     return json({...data,secret},201);
    }
    const id=path.slice('/tokens/'.length);
    if(req.method==='DELETE' && UUID.test(id)){
-    const {data,error}=await db.from('redirect_api_tokens').update({revoked_at:new Date().toISOString()}).eq('id',id).is('revoked_at',null).select('id');
-    if(error)return json({error:'Could not revoke credential'},503);
-    return json({revoked:!!data?.length});
+    const {data,error}=await db.rpc('redirect_token_administration',{p_actor:user!.id,p_action:'revoke',p_id:id});
+    if(error)return rpcError(error);
+    return json(data);
    }
    return json({error:'Method not allowed'},405);
   }

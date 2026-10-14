@@ -1,6 +1,7 @@
 import { useRedirectMembers } from '@/hooks/useRedirectMembers';
 import { AdminEmpty } from '@/components/admin/primitives/AdminEmpty';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { useAuth } from '@/hooks/useAuth';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -16,13 +17,20 @@ import { useRedirectCredentials } from '@/hooks/useRedirectCredentials';
 import type { InventoryRedirect } from '@/lib/redirects/inventory';
 import { formatDateTime } from '@/lib/format';
 
-export function RedirectConversionSetup({
-  links,
-  onClose,
-}: {
-  links: InventoryRedirect[];
-  onClose: () => void;
-}) {
+type SetupProps = { links: InventoryRedirect[]; onClose: () => void };
+export function RedirectConversionSetup(props: SetupProps) {
+  const { user } = useAuth();
+  if (!user) return null;
+  return <CredentialSetup key={user.id} {...props} />;
+}
+function CredentialSetup({ links, onClose }: SetupProps) {
+  const alive = useRef(true);
+  useEffect(() => {
+    alive.current = true;
+    return () => {
+      alive.current = false;
+    };
+  }, []);
   const credentials = useRedirectCredentials();
   const members = useRedirectMembers();
   const [memberId, setMemberId] = useState('');
@@ -43,7 +51,7 @@ export function RedirectConversionSetup({
   const managed = links.filter(
     (link) =>
       link.manualId &&
-      link.source.startsWith('/go/') &&
+      (link.isShortLink ?? link.source.startsWith('/go/')) &&
       (link.source + ' ' + link.target).toLowerCase().includes(search.toLowerCase()),
   );
   const create = async () => {
@@ -61,6 +69,7 @@ export function RedirectConversionSetup({
       expiresAt: new Date(Date.now() + Number(days) * 86400000).toISOString(),
       ...(limited ? { redirectIds: ids } : {}),
     });
+    if (!alive.current) return;
     setSecret(result.secret);
     setName('');
     credentials.create.reset();
@@ -114,7 +123,7 @@ export function RedirectConversionSetup({
             </li>
           </ol>
         </details>
-        {secret ? (
+        {secret && !credentials.isError ? (
           <section className="space-y-2" aria-label="New server credential">
             <p className="font-medium">Copy your credential now</p>
             <p className="text-sm text-muted-foreground">
@@ -172,7 +181,7 @@ export function RedirectConversionSetup({
                 disabled={members.isPending || members.isError}
               >
                 <option value="">Workspace administrator</option>
-                {members.data
+                {(!members.isError ? members.data : [])
                   ?.filter((member) => member.active)
                   .map((member) => (
                     <option key={member.id} value={member.id}>
@@ -335,6 +344,8 @@ export function RedirectConversionSetup({
               type="submit"
               disabled={
                 credentials.create.isPending ||
+                credentials.isError ||
+                credentials.isPending ||
                 !name.trim() ||
                 (!writeEvents &&
                   !readEvents &&
@@ -386,7 +397,7 @@ export function RedirectConversionSetup({
             </p>
           )}
           <ul className="space-y-2">
-            {credentials.data?.map((item) => (
+            {(!credentials.isError ? credentials.data : [])?.map((item) => (
               <li
                 className="flex flex-wrap items-center justify-between gap-2 border-t py-2"
                 key={item.id}
@@ -440,7 +451,9 @@ export function RedirectConversionSetup({
               </li>
             ))}
           </ul>
-          {credentials.data?.length === 0 && <AdminEmpty noun="server credentials" />}
+          {!credentials.isError && credentials.data?.length === 0 && (
+            <AdminEmpty noun="server credentials" />
+          )}
         </section>
       </DialogContent>
     </Dialog>

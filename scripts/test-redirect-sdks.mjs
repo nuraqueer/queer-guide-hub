@@ -317,9 +317,20 @@ try {
   await reportRequest('/members','GET',undefined,token,403);
   await reportRequest('/members/'+managedMember.id,'PATCH',{active:false});
   await reportRequest('/members/'+managedMember.id,'PATCH',{userId:reportOtherActor},undefined,400);
+  const ownerCredential=await reportRequest('/tokens','POST',{name:'HTTP current owner',expiresAt:new Date(Date.now()+86400000).toISOString(),scopes:['links:read']},undefined,201);
+  if(!/^qg_redirect_[a-f0-9]{64}$/.test(ownerCredential.secret)||ownerCredential.token_hash||ownerCredential.prefix!==ownerCredential.secret.slice(0,20))throw new Error('Credential one-time creation shape failed');
+  const credentialPage=await reportRequest('/tokens');
+  if(!credentialPage.data.some(row=>row.id===ownerCredential.id)||JSON.stringify(credentialPage).includes(ownerCredential.secret)||credentialPage.data.some(row=>row.token_hash))throw new Error('Credential listing privacy failed');
+  await reportRequest('/links','GET',undefined,ownerCredential.secret);
+  await reportRequest('/tokens','GET',undefined,ownerCredential.secret,403);
+  await reportRequest('/tokens','POST',{name:'Spoof',created_by:reportOtherActor},undefined,400);
   // The identity boundary deliberately still reports admin: SQL must deny a stale claim.
   await db.query('DELETE FROM public.user_roles WHERE user_id=$1',[reportActor]);
   await reportRequest('/members','GET',undefined,undefined,403);
+  await reportRequest('/tokens','GET',undefined,undefined,403);
+  await reportRequest('/tokens/'+ownerCredential.id,'DELETE',undefined,undefined,403);
+  await reportRequest('/tokens','POST',{name:'Denied',expiresAt:new Date(Date.now()+86400000).toISOString(),scopes:['links:read']},undefined,403);
+
   await reportRequest('/links','GET',undefined,undefined,403);
   const spoofedSession=await fetch(base+'/links',{headers:{Authorization:'Bearer fixture-account-session','x-qg-redirect-session-actor':reportOtherActor}});
   if(spoofedSession.status!==403)throw new Error('Inbound actor header bypassed current owner checks');
@@ -327,6 +338,10 @@ try {
   await reportRequest('/members/'+managedMember.id,'DELETE',undefined,undefined,403);
   if(!(await db.query('SELECT id FROM public.redirect_workspace_members WHERE id=$1',[managedMember.id])).rows.length)throw new Error('Stale admin removed member');
   await db.query("INSERT INTO public.user_roles VALUES($1,'admin')",[reportActor]);
+  const credentialRevoked=await reportRequest('/tokens/'+ownerCredential.id,'DELETE');
+  if(!credentialRevoked.revoked)throw new Error('Credential revoke HTTP failed');
+  await reportRequest('/links','GET',undefined,ownerCredential.secret,403);
+  console.log('Credential administration: actual HTTP -> current actor SQL, one-time secret, private metadata, own key scope, stale claims and idempotent revoke passed.');
   const memberRemoved=await reportRequest('/members/'+managedMember.id,'DELETE');
   if(!memberRemoved.deleted)throw new Error('Membership delete failed');
   console.log('Member administration: actual HTTP -> migrated SQL current actor checks, native field shapes, key denial and stale admin-claim read/delete rejection passed.');
