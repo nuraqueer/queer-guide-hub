@@ -2453,3 +2453,18 @@ not a reason to weaken the gate or modify unrelated venue data without a reviewe
 fix. Continue independent Redirects work: authoritative credential administration,
 all-source membership, account discovery/invitations, remaining domain/app features
 and controlled infrastructure/provider/SDK release.
+
+### Authoritative credential administration design (2026-10-15)
+
+Replace /tokens owner-session service-table operations with a service-only RPC
+that checks the verified acting user's current admin role in the same ACL-locked
+transaction as list/create/revoke. Preserve the existing response fields, 100-row
+offset pages and explicit member/selected-link binding. Validate name, expiry,
+scopes, links, active member, digest and prefix again in SQL. The server generates
+the secret and sends only its digest to SQL; return metadata containing neither
+hash nor secret and expose the secret once after a successful creation. Caller
+JSON cannot select actor, hash or prefix. Revoke stays idempotent and immediately
+invalidates scope/auth checks. Test current/lost/ordinary actors, stale JWT claims,
+unknown/hidden bindings, shape/privacy and actual HTTP behavior. Preserve the
+existing current creator checks for unbound keys and current member checks for
+bound keys. This closes the remaining direct service write identified in /tokens.
