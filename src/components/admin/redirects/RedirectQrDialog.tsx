@@ -6,7 +6,7 @@ import {
   qrTrackingUrl,
   type QrStyle,
 } from '@/lib/redirects/qr';
-import { Input } from '@/components/ui/input';
+import { QrStyleFields } from './QrStyleFields';
 import { useQuery } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -29,10 +29,7 @@ function downloadQr(url: string, name: string) {
 
 export function QrExport({ url }: { url: string }) {
   const [style, setStyle] = useState<QrStyle>({ ...DEFAULT_QR_STYLE });
-  const [uploadError, setUploadError] = useState('');
   const error = qrStyleError(style);
-  const changeStyle = <K extends keyof QrStyle>(key: K, value: QrStyle[K]) =>
-    setStyle((previous) => ({ ...previous, [key]: value }));
   const qr = useQuery({
     queryKey: ['redirect-qr', url, style],
     staleTime: Infinity,
@@ -42,112 +39,13 @@ export function QrExport({ url }: { url: string }) {
       return generateQr(qrTrackingUrl(url), style);
     },
   });
-  const loadLogo = async (file?: File) => {
-    setUploadError('');
-    if (!file) return;
-    if (!['image/png', 'image/jpeg'].includes(file.type) || file.size > 1.5 * 1024 * 1024) {
-      setUploadError('Use a PNG or JPG logo smaller than 1.5 MB.');
-      return;
-    }
-    try {
-      const data = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(String(reader.result));
-        reader.onerror = () => reject(new Error('Could not read this logo.'));
-        reader.readAsDataURL(file);
-      });
-      const image = new Image();
-      image.src = data;
-      await image.decode();
-      changeStyle('logo', data);
-    } catch {
-      setUploadError('Could not read this logo. Try another PNG or JPG.');
-    }
-  };
   return (
     <div className="space-y-4">
       <p className="break-all font-mono text-xs">{url}</p>
-      <div className="grid grid-cols-2 gap-4">
-        <label className="space-y-1 text-sm">
-          Dots
-          <select
-            aria-label="QR dots"
-            className="h-10 w-full rounded-element border bg-background px-4"
-            value={style.dots}
-            onChange={(event) => changeStyle('dots', event.target.value as QrStyle['dots'])}
-          >
-            <option value="square">Square</option>
-            <option value="circle">Circle</option>
-            <option value="joined">Joined</option>
-          </select>
-        </label>
-        <label className="space-y-1 text-sm">
-          Marker border
-          <select
-            aria-label="QR marker border"
-            className="h-10 w-full rounded-element border bg-background px-4"
-            value={style.border}
-            onChange={(event) => changeStyle('border', event.target.value as QrStyle['border'])}
-          >
-            <option value="square">Square</option>
-            <option value="rounded">Rounded</option>
-            <option value="circle">Circle</option>
-          </select>
-        </label>
-        <label className="space-y-1 text-sm">
-          Marker center
-          <select
-            aria-label="QR marker center"
-            className="h-10 w-full rounded-element border bg-background px-4"
-            value={style.center}
-            onChange={(event) => changeStyle('center', event.target.value as QrStyle['center'])}
-          >
-            <option value="square">Square</option>
-            <option value="circle">Circle</option>
-          </select>
-        </label>
-        <label htmlFor="qr-dot-color" className="space-y-1 text-sm">
-          Dot color
-          <Input
-            id="qr-dot-color"
-            aria-label="QR dot color"
-            type="color"
-            value={style.foreground}
-            onChange={(event) => changeStyle('foreground', event.target.value)}
-          />
-        </label>
-        <label htmlFor="qr-background-color" className="space-y-1 text-sm">
-          Background color
-          <Input
-            id="qr-background-color"
-            aria-label="QR background color"
-            type="color"
-            value={style.background}
-            onChange={(event) => changeStyle('background', event.target.value)}
-          />
-        </label>
-        <label htmlFor="qr-logo" className="space-y-1 text-sm">
-          Logo (optional)
-          <Input
-            id="qr-logo"
-            aria-label="QR logo"
-            type="file"
-            accept="image/png,image/jpeg"
-            onChange={(event) => void loadLogo(event.target.files?.[0])}
-          />
-        </label>
-      </div>
-      {style.logo && (
-        <Button variant="ghost" size="sm" onClick={() => changeStyle('logo', undefined)}>
-          Remove logo
-        </Button>
-      )}
-      <p className="text-xs text-muted-foreground">
-        Keep strong contrast. Test your downloaded code with a phone before printing.
-      </p>
-      {(error || uploadError) && (
+      <QrStyleFields style={style} setStyle={setStyle} />
+      {error && (
         <p role="alert" className="text-sm text-destructive">
-          {error || uploadError}
+          {error}
         </p>
       )}
       {!error && qr.isPending && <p role="status">Generating QR code…</p>}

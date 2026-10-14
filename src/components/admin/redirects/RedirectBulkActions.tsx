@@ -1,3 +1,5 @@
+import { RedirectBulkQrDialog } from './RedirectBulkQrDialog';
+import { publicSourceUrl } from '@/lib/redirects/linkTools';
 import { useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -24,6 +26,7 @@ export function RedirectBulkActions({
   onExport: () => void;
   onBusy?: (busy: boolean) => void;
 }) {
+  const [qrRows, setQrRows] = useState<InventoryRedirect[] | null>(null);
   const workspace = useRedirectWorkspace(),
     client = useQueryClient();
   const [action, setAction] = useState<'archive' | 'restore' | 'folder' | 'add-tag' | 'remove-tag'>(
@@ -148,6 +151,14 @@ export function RedirectBulkActions({
         <Button
           size="sm"
           variant="outline"
+          disabled={rows.some((row) => !publicSourceUrl(row.source))}
+          onClick={() => setQrRows([...rows])}
+        >
+          Export selected QR codes
+        </Button>
+        <Button
+          size="sm"
+          variant="outline"
           disabled={!deletable}
           onClick={() => {
             setConfirm(true);
@@ -175,6 +186,7 @@ export function RedirectBulkActions({
           {error}
         </p>
       )}
+      {qrRows && <RedirectBulkQrDialog rows={qrRows} onClose={() => setQrRows(null)} />}
       <Dialog
         open={confirm}
         onOpenChange={(open) => {

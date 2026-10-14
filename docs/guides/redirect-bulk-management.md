@@ -33,4 +33,30 @@ listing uses `links:read`; scoped credentials cannot modify other links.
 
 Local SQL, component, inventory selection, and API-input tests cover the changes.
 This candidate still needs production migrations and native browser verification.
-Bulk QR bundles and richer import/upsert editing remain separate open parity work.
+Richer import/upsert editing remains separate open parity work.
+
+## QR ZIP export
+
+Select concrete source URLs and choose Export selected QR codes. Wildcard or route
+placeholder selections disable this action. Choose a shared dot/marker/color/logo
+style and PNG, JPG, SVG, or all three. Prepare QR ZIP verifies the whole selection
+before enabling Download QR ZIP. Preparation uses local raster rendering and
+scan decoding, with at most 100 links and a 64 MB ZIP limit. It does not upload
+images or call destination websites.
+
+The ZIP contains unique numbered image filenames and `manifest.csv`, mapping
+inventory ID and source to the exact encoded URL and corresponding files. QR
+tracking is included for managed queer.guide /go/ short URLs. Comments/destinations
+are not included in the manifest. Any failed verification stops the entire export
+and names the source; change the style or selection and prepare again. A style
+or format change invalidates a prepared ZIP. Logo decoding completes before
+preparation can start. Cancelling or closing stops further image work; a cancel
+during ZIP packaging discards its result once packaging completes. No partial
+bundle is offered.
+
+The production generator and ZIP contents are verified locally with real raster
+images and an independent Python ZIP reader. Local native-browser generation was also checked at desktop and mobile sizes,
+and a completed downloaded fixture ZIP passed scan and CRC inspection. Live
+production behavior and workspace/domain logo precedence remain unverified or unfinished.
+[JSZip generation API](https://stuk.github.io/jszip/documentation/api_jszip/generate_async.html)
+documents the archive format used by this implementation.

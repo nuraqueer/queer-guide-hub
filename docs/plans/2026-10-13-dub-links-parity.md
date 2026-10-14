@@ -16,7 +16,7 @@ exist. Existing local tools are a foundation, not proof of parity or deployment.
 | Tags | Multiple colored tags, create/rename/delete, shareable filtered list and analytics | Candidate: implemented locally; pending release |
 | Comments | Team-visible comment on link card, clickable hyperlinks | Candidate: implemented locally; pending release |
 | Folder permissions | Explicit view/edit permissions for team members, enforced in database/API | Missing |
-| Bulk actions | Create/update/upsert/delete, folder/tag assignment, archive, import/export, QR export | Partial: atomic API batches, archive/restore, cross-page bulk organization/deletion/selected CSV UI; richer import/upsert UI and bulk QR exports pending |
+| Bulk actions | Create/update/upsert/delete, folder/tag assignment, archive, import/export, QR export | Partial: atomic API batches, archive/restore, cross-page bulk organization/deletion/selected CSV and verified QR ZIP UI; richer import/upsert UI pending |
 | Custom previews | Uploaded OG image (1200×630, ≤1.5 MB), title≤120, description≤240, video API, crawler unfurl | Candidate: editor, scoped upload/presentation APIs and crawler HTML; native browser/Storage release pending |
 | AI previews | Generate title/description from destination content using configured AI provider | Candidate: scoped draft generator with spend limits; live provider and browser verification pending |
 | Custom domains | Verify ownership/DNS, multiple domains, primary domain, redirects on branded hostname | Missing |
@@ -357,3 +357,38 @@ metadata preservation and rollback. Five SDK clients and their examples passed
 through the actual HTTP handler and isolated SQL again. Lint and migration-version
 gates pass; typecheck remains at 704 inherited errors with none new. Production
 build passes. These checks do not prove native browser or production behavior.
+
+## Checkpoint: selected QR bundles
+
+Implemented locally: bulk QR export for 1–100 selected concrete source URLs in
+PNG, JPG, SVG, or all formats, with common branded style/logo controls shared with
+the single-code dialog. A prepared ZIP is offered only after every code passes
+actual raster scan verification; unique safe filenames and an ID/source/encoded
+URL/file manifest are included. Managed /go/ URLs carry the QR attribution marker.
+Wildcard/template routes cannot be exported as concrete codes. Any code failure
+rejects the whole bundle and identifies its source. Payload and final ZIP are
+bounded to 64 MB. Closing/cancelling aborts between image steps; cancellation
+during JSZip packaging discards the result after bounded packaging completes.
+Changing format/style invalidates a prepared ZIP; logo loading disables preparing
+until the upload is decoded. Exports are local and make no network requests.
+
+Local evidence: real production generator and decoder run using a Sharp raster
+canvas adapter, all archived SVG/PNG/JPG images decode correctly, and Python's
+standard ZIP reader confirms filenames/count and CRC integrity. This is actual
+artifact verification, not native-browser evidence. UI tests cover ready/download,
+format/style invalidation, verification failures and cancellation, and single-code
+export regressions. Persistent workspace/domain/link style/logo precedence,
+hosted image URLs and production release remain open.
+
+Native browser follow-up for this checkpoint: the local fixture at
+`/tmp/bulk-qr-preview.html` renders the real dialog with two example URLs and
+makes no production reads/writes. Codex IAB generated joined dots/rounded borders/
+circle centers in all three formats, completed the ZIP download, and generated
+again at a 390×844 mobile breakpoint. The downloaded file contains six scannable
+SVG/PNG/JPG files plus the manifest; all exact fixture URLs and CRCs passed both
+JSZip/Sharp/jsQR inspection and an independent Python ZIP reader. Desktop/mobile
+screenshots and the downloaded fixture ZIP are under the workspace's
+`outputs/redirect-dub-parity/bulk-qr-*`. The temporary tab was closed and viewport
+reset. This proves local native-browser export, not live redirect attribution or
+production deployment. 32 focused tests, lint, production build and typecheck
+ratchet (704 inherited errors, none new) pass.

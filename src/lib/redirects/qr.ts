@@ -127,16 +127,20 @@ async function qrCanvas(svg: string) {
 }
 
 /** Try the eight standard masks and verify the actual raster before offering exports. */
-export async function generateQr(url: string, style: QrStyle) {
+export async function generateQr(url: string, style: QrStyle, signal?: AbortSignal) {
+  signal?.throwIfAborted();
   const { default: decode } = await import('jsqr');
   for (let mask = 0; mask < 8; mask++) {
+    signal?.throwIfAborted();
     const svg = renderQrSvg(url, style, mask as 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7);
     const { canvas, context } = await qrCanvas(svg);
+    signal?.throwIfAborted();
     const pixels = context.getImageData(0, 0, canvas.width, canvas.height);
     if (decode(pixels.data, pixels.width, pixels.height)?.data === url) {
       const jpg = canvas.toDataURL('image/jpeg', 0.95);
       const compressed = await qrCanvas(jpg);
       const jpgPixels = compressed.context.getImageData(0, 0, canvas.width, canvas.height);
+      signal?.throwIfAborted();
       if (decode(jpgPixels.data, jpgPixels.width, jpgPixels.height)?.data === url)
         return { svg, png: canvas.toDataURL('image/png'), jpg };
     }
