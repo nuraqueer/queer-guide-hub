@@ -1410,3 +1410,37 @@ domain lifecycle/DNS automation, native/deferred deep links, branded password
 pages, customer enrichment, report SDK/team discovery, integrations, outgoing
 webhooks, permissions/account discovery and controlled release/publication remain
 required. No production writes, deployments or package publication occurred.
+
+### Hosted QR rendering architecture
+
+Use an image-generating service (as Dub does), rather than persist three redundant
+QR rasters for every style edit. A service-only Cloudflare Worker will share the
+existing SVG geometry/contrast/quiet-zone/high-ECC rules and use a bundled, pinned
+Wasm rasterizer; verify actual rendered pixels for each candidate mask and verify
+JPEG after compression. Support SVG/PNG/JPG with bounded output sizes. Free text,
+unsafe protocols, credentials, unbounded inputs and arbitrary remote logo URLs are
+not accepted. Never fetch the encoded destination URL.
+
+GET image URLs carry validated URL/appearance parameters and optionally a fixed-
+bucket immutable logo key plus SHA-256; controlled logo reads are bounded and fully
+decoded. POST generation additionally accepts bounded local PNG/JPG artwork. A
+Pages /api/qr service-binding relay provides the public site URL without exposing
+privileged keys. The Worker has no direct production route, a request/IP limiter,
+no-store/private-image responses, safe CORS and sanitized failures. Public image
+retrieval must never invoke redirect resolution or record a click/consume quota.
+
+First build and verify the rendering/HTTP service and relay. Follow with scoped
+saved-default lookup, UI hosted-image copying and five-SDK image URL contracts.
+Sharing local per-export artwork through a durable hosted URL needs an explicit
+controlled asset/recipe save that does not silently replace workspace defaults;
+preserve this requirement for the authoring integration. A POST returning image
+bytes alone does not satisfy hosted URLs for local custom artwork. Deployment,
+real binding/rate-limit/cold-start/resource validation and public-route proof stay
+required before claiming release. Existing broad implementation approval applies.
+
+References retrieved 2026-10-14:
+https://dub.co/docs/api-reference/endpoint/retrieve-a-qr-code
+https://github.com/dubinc/dub/blob/main/apps/web/app/api/qr/route.tsx
+https://github.com/thx/resvg-js/blob/main/wasm/index.d.ts
+https://developers.cloudflare.com/workers/runtime-apis/webassembly/
+https://developers.cloudflare.com/workers/runtime-apis/bindings/rate-limit/
