@@ -931,3 +931,24 @@ built-in domain; domain filter UX, managed root-link policies, provider validati
 restart, remaining domain lifecycle/DNS automation and all other unfinished ledger
 features remain required, as do controlled real-domain and production release
 verification. This checkpoint does not claim full domain/Dub parity or rollout.
+
+### Legacy form completion and full-field atomic saves
+
+Preserve the existing manual form's SHORT/PATH modes, conversions, scheduling,
+query settings, visit limits and notes while adding the shared domain selector.
+Use an owner-only service RPC/API for its whole raw record so a type/domain change
+and policy-expiry synchronization commit together, with fresh owner authority and
+current custom-domain binding checks. Do not use an intermediate client save to
+convert the type or attach a domain. Path records always clear domain bindings;
+new short links use the interactive primary default, while existing unavailable
+bindings can still be preserved for repair. Reset the form/choice state between
+records. Keep the existing raw row return contract for its caller.
+
+Extend the existing scoped managed-link contract with startsAt, clickLimit and
+notes, validated by the shared input helper and persisted in atomic management
+mutations. The owner manual endpoint maps the same shared validation plus path/
+match-kind constraints, rejects arbitrary row fields and never grants raw record
+management to members or keys. Existing link-ID/folder/credential checks continue
+for scoped managed-link writes. Verify SHORT/PATH conversions, same-slug custom
+namespaces, unavailable bindings, field preservation, expiry synchronization,
+role/key denials and rollback on invalid updates through migrated SQL/real HTTP.
