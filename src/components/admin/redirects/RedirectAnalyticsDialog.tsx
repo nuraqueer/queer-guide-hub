@@ -1,3 +1,4 @@
+import { RedirectSavedReports } from './RedirectSavedReports';
 import { useMemberRedirectResources } from '@/hooks/useMemberRedirectResources';
 import { useMemo, useState } from 'react';
 import {
@@ -215,8 +216,8 @@ function AnalyticsDialogContent({
         </DialogHeader>
         <div className="flex flex-wrap items-center justify-between gap-4">
           <p className="text-sm">
-            {filters.start
-              ? `${filters.start.slice(0, 10)} to ${new Date(new Date(filters.end!).getTime() - 86400000).toISOString().slice(0, 10)} · UTC`
+            {filters.start || filters.end
+              ? `${filters.start ? filters.start.slice(0, 10) : 'first record'} to ${filters.end ? new Date(Date.parse(filters.end) - 1).toISOString().slice(0, 10) : 'now'} · UTC`
               : 'All recorded dates'}{' '}
             ·{' '}
             {filters.linkIds
@@ -464,6 +465,18 @@ function AnalyticsDialogContent({
             )}
           </form>
         )}
+        <RedirectSavedReports
+          principalId={principalId}
+          filters={filters}
+          onLoad={(saved) => {
+            const { start: _start, end: _end, ...dimensions } = saved;
+            setDraft(dimensions);
+            setFilters(saved);
+            setRange(saved.start || saved.end ? 'custom' : 'all');
+            if (saved.start) setStart(day(new Date(saved.start)));
+            if (saved.end) setEnd(day(new Date(Date.parse(saved.end) - 1)));
+          }}
+        />
         {workspace.isError && (
           <p role="alert">Folder and tag options could not load. {workspace.error?.message}</p>
         )}

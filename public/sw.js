@@ -112,6 +112,23 @@ const CACHE_STRATEGIES = {
   images: /\.(png|jpg|jpeg|webp|avif|gif|svg)$/
 };
 
+// Shared reports and authenticated APIs must never survive in an offline cache.
+function isPrivateRedirectPath(pathname) {
+  return pathname.startsWith('/api/redirects/') ||
+    pathname.startsWith('/share/redirect-report/');
+}
+
+async function purgePrivateRedirectCaches() {
+  for (const name of [STATIC_CACHE, DYNAMIC_CACHE]) {
+    const cache = await caches.open(name);
+    const keys = await cache.keys();
+    await Promise.all(keys.filter(key => {
+      const url = new URL(key.url);
+      return url.origin === location.origin && isPrivateRedirectPath(url.pathname);
+    }).map(key => cache.delete(key)));
+  }
+}
+
 // Enable navigation preload if supported
 async function enableNavigationPreload() {
   if (self.registration.navigationPreload) {
@@ -155,6 +172,8 @@ self.addEventListener('activate', event => {
             .map(name => caches.delete(name))
         )
       ),
+      // Remove entries stored by earlier workers before the network-only rule.
+      purgePrivateRedirectCaches(),
       // Enable navigation preload
       enableNavigationPreload(),
       // Take control of all clients
@@ -184,6 +203,9 @@ self.addEventListener('fetch', event => {
     }
     return;
   }
+
+  // Let the browser honor no-store and live authorization/revocation checks.
+  if (isPrivateRedirectPath(url.pathname)) return;
 
   // Navigation requests (HTML pages) — Network First with offline fallback
   if (request.mode === 'navigate') {

@@ -58,7 +58,10 @@ Event pages return `snapshot` and `nextCursor`. Pass the same snapshot and the
 URL-encoded cursor JSON in `cursor` to continue. Page limits are 1–100. Summary
 breakdowns are capped at their top 100 labels; the UI shows top 10. Filter directly
 to investigate labels outside those lists. Signed admin sessions can also read;
-regular user JWTs and write-only credentials cannot use these endpoints.
+registered member sessions are restricted to their current workspace access, and
+write-only credentials cannot use these endpoints. POST filter bodies are also
+supported. Personal saved reports and reviewed public aggregate publications are
+described in [Saved reports](redirect-saved-reports.md).
 
 ## Evidence and remaining scope
 
@@ -69,10 +72,10 @@ QR URL behavior, date/CSV contracts, API permissions, resolver metadata and UI
 filters/live control. Native Stripe regression remains in `test:redirect-stripe`.
 Desktop/mobile screenshots use labelled preview fixtures, not production data.
 
-Shared dashboard tokens, saved report definitions, customer identity enrichment,
-full REST management/SDKs/outgoing webhooks, domain/deep-link configuration and
-provider integrations remain separate parity requirements. These reports do not
-claim those capabilities or strict immutable database snapshots across requests.
+Saved reports and scoped public dashboards are implemented locally with release
+verification pending. Customer identity enrichment, outgoing webhooks, domain/
+deep-link configuration and provider integrations remain separate parity work.
+Reports do not provide strict immutable database snapshots across requests.
 
 References: [Cloudflare request metadata](https://developers.cloudflare.com/workers/runtime-apis/request/),
 [Dub analytics API](https://dub.co/docs/api-reference/analytics/retrieve).

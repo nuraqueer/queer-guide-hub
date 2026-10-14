@@ -617,6 +617,11 @@ export const onRequest: PagesFunction<Env> = async (context) => {
     rewritten.headers.set('Cache-Control', 'public, s-maxage=600, max-age=0, must-revalidate');
   }
 
+  if (basePath.startsWith('/share/redirect-report/')) {
+    rewritten.headers.set('Cache-Control', 'no-store');
+    rewritten.headers.set('Referrer-Policy', 'no-referrer');
+    rewritten.headers.set('X-Robots-Tag', 'noindex, nofollow');
+  }
   return rewritten;
 };
 

@@ -1,3 +1,4 @@
+import { signRedirectRelay } from '../../../supabase/functions/_shared/redirect-relay';
 import type { Env } from '../../_lib/sitemap';
 
 /** Branded API entry point; credentials and authorization remain owned by the resolver API. */
@@ -6,6 +7,8 @@ export const onRequest: PagesFunction<Env> = async ({ request, params, env }) =>
     'Cache-Control': 'no-store',
     'Content-Type': 'application/json',
     'X-Robots-Tag': 'noindex',
+    'Referrer-Policy': 'no-referrer',
+    Vary: 'Authorization',
   };
   const error = (message: string, status: number) =>
     new Response(JSON.stringify({ error: message }), { status, headers });
@@ -21,6 +24,24 @@ export const onRequest: PagesFunction<Env> = async ({ request, params, env }) =>
   for (const name of ['authorization', 'content-type', 'origin']) {
     const value = request.headers.get(name);
     if (value) forwarded.set(name, value);
+  }
+  if (segments.join('/') === 'public-report' && env.REDIRECT_RELAY_SECRET) {
+    const id = request.headers
+      .get('authorization')
+      ?.match(/^Bearer qg_report_([a-f0-9-]{36})$/i)?.[1]
+      ?.toLowerCase();
+    if (id) {
+      const relay = await signRedirectRelay(
+        request.headers.get('cf-connecting-ip') ?? '',
+        'report:' + id,
+        env.REDIRECT_RELAY_SECRET,
+      );
+      if (relay) {
+        forwarded.set('x-qg-relay-ip', relay.ip);
+        forwarded.set('x-qg-relay-time', relay.timestamp);
+        forwarded.set('x-qg-relay-signature', relay.signature);
+      }
+    }
   }
   if (env.SUPABASE_ANON_KEY) forwarded.set('apikey', env.SUPABASE_ANON_KEY);
   try {
@@ -44,6 +65,8 @@ export const onRequest: PagesFunction<Env> = async ({ request, params, env }) =>
       const value = response.headers.get(name);
       if (value) result.set(name, value);
     }
+    if (!result.get('vary')?.toLowerCase().split(/,\s*/).includes('authorization'))
+      result.append('Vary', 'Authorization');
     return new Response(response.body, { status: response.status, headers: result });
   } catch {
     return error('Redirect API unavailable', 502);

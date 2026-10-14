@@ -35,8 +35,8 @@ exist. Existing local tools are a foundation, not proof of parity or deployment.
 | Conversion tracking | Click attribution, leads/signup/sale/revenue, trusted conversion ingestion and application hooks | Candidate: scoped ingestion, consented signup and verified Stripe hooks implemented locally |
 | Customer insights | Customer journey across click→lead→sale with private event timeline | Partial: private ID-based cross-link paginated journeys; identity enrichment missing |
 | Live events | Paginated live click/lead/sale stream, real events rather than demo data | Candidate: private click/lead/sale activity with keyset pages and five-second refresh |
-| Shared dashboards | Revocable scoped sharing, sanitized aggregate-only default | Missing |
-| Custom reports | Custom dates, granular link/folder/tag/domain/geo/device/event filters | Partial: date/dimension report UI and API; saved definitions and sharing missing |
+| Shared dashboards | Revocable scoped sharing, sanitized aggregate-only default | Partial: saved snapshots, explicit dynamic folders, password/expiry/revoke and aggregate-only public UI implemented locally; indexing opt-in, viewer date overrides and runtime release pending |
+| Custom reports | Custom dates, granular link/folder/tag/domain/geo/device/event filters | Partial: date/dimension report UI/API, personal saved definitions and scoped sharing implemented locally; team discovery and runtime release pending |
 | Integrations | Segment and GTM adapters; native configured integrations and provider callbacks | Missing |
 | REST API | Authenticated/scoped link CRUD/upsert/count/list, analytics/events, folders/tags, bulk operations | Partial: scoped link CRUD/upsert/count/list/mixed bulk, conversions and analytics/events; folder/tag/template resource CRUD with workspace scopes; scoped targeting/password/tracking/preview policy endpoints; domain/deep-link fields pending |
 | SDKs | TypeScript, Python, Go, Ruby, PHP wrappers and runnable examples covering management/tracking | Candidate: five native clients verified through actual HTTP handler and isolated DB; publication/release pending |
@@ -566,3 +566,29 @@ simulated approval and empty review queue, with production fetches blocked.
 At 390 pixels the page has no horizontal overflow; the permission select was
 constrained to its 324-pixel parent. Temporary viewport/tab were cleaned up.
 These are fixture and isolated-database results, not live notifications or grants.
+
+
+## Checkpoint: saved reports and public aggregate dashboards
+
+Personal saved reports now preserve named filters and dates, with optimistic
+updates, loading and cascade deletion. Explicit publication review creates a
+separate captured scope. Clicks are public by default; conversion/revenue data
+requires opt-in. Password, expiry, revocation and current owner/member permissions
+are enforced in SQL and the HTTP handler. Workspace owners can explicitly choose
+future matching folder links; ordinary members can share only one editable link.
+
+The public page exposes sanitized aggregates only. Passwords stay out of URLs and
+query-cache keys. Revoked/error refreshes remove cached titles and data. The actual
+service worker now bypasses these pages and redirect APIs, purges prior managed
+cache entries, and preserves unrelated offline data. Response headers additionally
+prevent storage/referrer disclosure and search indexing. See
+[the saved report guide](../guides/redirect-saved-reports.md) for contracts and limits.
+
+Evidence: migrated PostgreSQL suite, actual HTTP handler with real password hash
+verification and revocation, five SDKs/examples, focused UI/API tests, production
+build and targeted checks. Native fixture screenshots are `saved-report-published-
+desktop.jpg` and `shared-report-{desktop,mobile,revoked-mobile}.jpg` under the existing
+outputs directory. The mobile page fits 390 pixels without horizontal overflow.
+No production reports, shares or grants were created. Public indexing opt-in,
+viewer date overrides, team report discovery, report SDK methods and production
+release remain open alongside the full requirements ledger above.

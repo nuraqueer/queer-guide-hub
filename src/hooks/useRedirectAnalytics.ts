@@ -10,15 +10,12 @@ export async function readAnalyticsPage(
   principalId?: string,
 ) {
   if (principalId)
-    return memberRedirectApi<AnalyticsPage>(
-      '/events?' +
-        new URLSearchParams({
-          filters: JSON.stringify(filters),
-          limit: String(limit),
-          ...(snapshot ? { snapshot } : {}),
-          ...(cursor ? { cursor: JSON.stringify(cursor) } : {}),
-        }),
-    );
+    return memberRedirectApi<AnalyticsPage>('/events', 'POST', {
+      filters,
+      limit,
+      ...(snapshot ? { snapshot } : {}),
+      ...(cursor ? { cursor } : {}),
+    });
   const { data, error } = await untypedRpc<AnalyticsPage>('redirect_analytics_page', {
     p_filters: filters,
     p_snapshot: snapshot,
@@ -37,10 +34,7 @@ export function useRedirectAnalytics(
   const report = useQuery({
     queryKey: ['redirect-analytics-report', filters, principalId ?? 'admin'],
     queryFn: async () => {
-      if (principalId)
-        return memberRedirectApi<AnalyticsReport>(
-          '/analytics?' + new URLSearchParams({ filters: JSON.stringify(filters) }),
-        );
+      if (principalId) return memberRedirectApi<AnalyticsReport>('/analytics', 'POST', { filters });
       const { data, error } = await untypedRpc<AnalyticsReport>('redirect_analytics_report', {
         p_filters: filters,
       });

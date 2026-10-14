@@ -1,3 +1,8 @@
+import {
+  savedReportInput,
+  reportShareInput,
+  publicReportRequest,
+} from '../../../../supabase/functions/_shared/redirect-reports';
 import sharp from 'sharp';
 import { readFileSync } from 'node:fs';
 import { webcrypto } from 'node:crypto';
@@ -153,6 +158,9 @@ function runtime() {
     'crypto',
     'generateRedirectPreview',
     'isLlmConfigured',
+    'savedReportInput',
+    'reportShareInput',
+    'publicReportRequest',
     code,
   )(
     {
@@ -167,6 +175,9 @@ function runtime() {
     webcrypto,
     generate,
     () => true,
+    savedReportInput,
+    reportShareInput,
+    publicReportRequest,
   );
   return {
     state,
@@ -599,6 +610,97 @@ describe('actual Redirects API handler', () => {
     expect(
       (await run.invoke('/access-requests?view=all', undefined, 'signed-user', 'GET')).status,
     ).toBe(400);
+  });
+  it('saves reports only for verified account sessions and rejects forged ownership fields', async () => {
+    const run = runtime();
+    expect(
+      (
+        await run.invoke(
+          '/reports',
+          { name: 'Campaign', filters: { country: 'CH' } },
+          'qg_redirect_' + 'a'.repeat(64),
+        )
+      ).status,
+    ).toBe(403);
+    expect(
+      (await run.invoke('/reports', { name: 'Campaign', filters: {}, ownerUserId: 'forged' }))
+        .status,
+    ).toBe(400);
+    expect(
+      (await run.invoke('/reports', { name: 'Campaign', filters: { country: 'CH' } })).status,
+    ).toBe(201);
+    expect(run.rpc).toHaveBeenCalledWith(
+      'redirect_saved_report_resource',
+      expect.objectContaining({
+        p_action: 'create',
+        p_actor: '00000000-0000-4000-8000-000000000001',
+        p_principal: null,
+        p_values: { name: 'Campaign', filters: { country: 'CH' } },
+      }),
+    );
+  });
+  it('captures reviewed publication options and rejects credentials for share management', async () => {
+    const run = runtime(),
+      report = '00000000-0000-4000-8000-000000000005',
+      version = '00000000-0000-4000-8000-000000000006';
+    expect(
+      (
+        await run.invoke('/reports/' + report + '/shares', {
+          title: 'Public campaign',
+          reportVersion: version,
+          includeConversions: false,
+          scopeMode: 'snapshot',
+          expiresAt: null,
+        })
+      ).status,
+    ).toBe(201);
+    expect(run.rpc).toHaveBeenCalledWith(
+      'redirect_report_share_resource',
+      expect.objectContaining({
+        p_report: report,
+        p_actor: '00000000-0000-4000-8000-000000000001',
+        p_principal: null,
+        p_values: {
+          title: 'Public campaign',
+          reportVersion: version,
+          includeConversions: false,
+          scopeMode: 'snapshot',
+          expiresAt: null,
+        },
+        p_password_hash: null,
+      }),
+    );
+    expect(
+      (
+        await run.invoke(
+          '/reports/' + report + '/shares',
+          undefined,
+          'qg_redirect_' + 'a'.repeat(64),
+          'GET',
+        )
+      ).status,
+    ).toBe(403);
+  });
+  it('supports large private analytics filters in a read-scoped POST body', async () => {
+    const run = runtime(),
+      ids = Array.from({ length: 500 }, () => '00000000-0000-4000-8000-000000000005');
+    expect(
+      (
+        await run.invoke(
+          '/analytics',
+          { filters: { linkIds: ids } },
+          'qg_redirect_' + 'a'.repeat(64),
+        )
+      ).status,
+    ).toBe(200);
+    expect(run.rpc).toHaveBeenCalledWith(
+      'authenticate_redirect_api_token',
+      expect.objectContaining({ p_scope: 'events:read' }),
+    );
+    expect(run.rpc).toHaveBeenCalledWith(
+      'redirect_scoped_analytics',
+      expect.objectContaining({ p_action: 'report', p_filters: { linkIds: ids } }),
+    );
   });
   it('applies read scope and credential link boundaries to analytics and paginated activity', async () => {
     const run = runtime(),

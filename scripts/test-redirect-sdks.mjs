@@ -17,6 +17,8 @@ const pieces = [
   '_shared/redirect-policy-api.ts',
   '_shared/redirect-links.ts',
   '_shared/redirect-analytics.ts',
+  '_shared/redirect-relay.ts',
+  '_shared/redirect-reports.ts',
   'redirect-api/index.ts',
 ].map((file) =>
   readFileSync('supabase/functions/' + file, 'utf8')
@@ -79,14 +81,18 @@ const service = {
     }
   },
 };
+const reportActor='00000000-0000-4000-8000-000000000099';
+await db.query('INSERT INTO auth.users(id) VALUES($1)',[reportActor]);
+await db.query("INSERT INTO public.user_roles(user_id,role) VALUES($1,'admin')",[reportActor]);
+const identity={auth:{getUser:async(value)=>({data:{user:value==='fixture-account-session'?{id:reportActor,created_at:'2026-10-01T00:00:00Z',is_anonymous:false}:null},error:null})},rpc:async()=>({data:true,error:null})};
 policyRuntime=new Function('Deno', 'createClient', 'crypto', code+'\nreturn {verifyLinkPassword};')(
   {
-    env: { get: () => 'fixture' },
+    env: { get: (key) => key==='SUPABASE_SERVICE_ROLE_KEY'?'fixture-service':key==='SUPABASE_ANON_KEY'?'fixture-anon':'fixture' },
     serve: (fn) => {
       handler = fn;
     },
   },
-  () => service,
+  (_url,key) => key==='fixture-service'?service:identity,
   webcrypto,
 );
 const token = 'qg_redirect_' + 'a'.repeat(64);
@@ -224,6 +230,22 @@ try {
   );
   if (exampleTotals.rows[0].sales !== 10 || exampleTotals.rows[0].total !== '254.500010')
     throw new Error('Runnable SDK examples lost sale attribution');
+  async function reportRequest(path,method='GET',body,credential='fixture-account-session',expected=200){
+    const response=await fetch(base+path,{method,headers:{Authorization:'Bearer '+credential,...(body?{'Content-Type':'application/json'}:{})},...(body?{body:JSON.stringify(body)}:{})});
+    const data=await response.json();if(response.status!==expected)throw new Error('Report HTTP '+path+' expected '+expected+' received '+response.status+': '+JSON.stringify(data));return data;
+  }
+  const saved=await reportRequest('/reports','POST',{name:'Native HTTP report',filters:{linkIds:[seed.rows[0].id]}},undefined,201);
+  const plain=await reportRequest('/reports/'+saved.id+'/shares','POST',{title:'Clicks only',reportVersion:saved.version,expiresAt:null},undefined,201);
+  const published=await reportRequest('/public-report','GET',undefined,'qg_report_'+plain.id);
+  if(published.report.totals.clicks!==1||'leads' in published.report.totals||published.report.revenue.length||JSON.stringify(published).includes('sdk-attribution'))throw new Error('Public report exposed private/conversion fields');
+  const guarded=await reportRequest('/reports/'+saved.id+'/shares','POST',{title:'Protected conversions',reportVersion:saved.version,includeConversions:true,password:'fixture-report-password',expiresAt:null},undefined,201);
+  await reportRequest('/public-report','GET',undefined,'qg_report_'+guarded.id,401);
+  await reportRequest('/public-report','POST',{password:'incorrect'},'qg_report_'+guarded.id,401);
+  const unlocked=await reportRequest('/public-report','POST',{password:'fixture-report-password'},'qg_report_'+guarded.id);
+  if(unlocked.report.totals.leads!==10||unlocked.report.totals.sales!==10||unlocked.report.revenue[0].amount!=='254.500010')throw new Error('Protected report conversion totals/precision changed');
+  await reportRequest('/reports/'+saved.id+'/shares/'+guarded.id,'DELETE');
+  await reportRequest('/public-report','POST',{password:'fixture-report-password'},'qg_report_'+guarded.id,404);
+  console.log('Saved/share/public reports: real HTTP → edge handler → migrated PostgreSQL, real password verification, sanitized totals and revocation passed');
   console.log(
     'Five SDKs passed; no external API calls, credentials, payments or production schema were used.',
   );

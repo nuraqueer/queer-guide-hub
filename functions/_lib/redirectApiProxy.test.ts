@@ -1,3 +1,5 @@
+import { webcrypto } from 'node:crypto';
+import { redirectClientIp } from '../../supabase/functions/_shared/redirect-relay';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { onRequest } from '../api/redirects/[[path]]';
 afterEach(() => vi.unstubAllGlobals());
@@ -18,10 +20,36 @@ describe('branded Redirects API proxy', () => {
     const response = await invoke();
     expect(response.status).toBe(409);
     expect(response.headers.get('Cache-Control')).toBe('no-store');
+    expect(response.headers.get('Vary')).toContain('Authorization');
     const [url, options] = fetcher.mock.calls[0] as unknown as [URL, RequestInit];
     expect(url.href).toBe('https://fixture.supabase.co/functions/v1/redirect-api/track/sale');
     expect(new Headers(options.headers).get('Authorization')).toBe('Bearer server-fixture');
     expect(options.redirect).toBe('manual');
+  });
+  it('authenticates the visitor relay for public report rate limits and discards forged relay headers', async () => {
+    vi.stubGlobal('crypto', webcrypto);
+    const fetcher = vi.fn(async () => new Response('{}', { headers: { Vary: 'Origin' } }));
+    vi.stubGlobal('fetch', fetcher);
+    const id = '00000000-0000-4000-8000-000000000001',
+      secret = 'fixture-secret-at-least-thirty-two-characters';
+    const result = await onRequest({
+      request: new Request('https://queer.guide/api/redirects/public-report', {
+        headers: {
+          Authorization: 'Bearer qg_report_' + id,
+          'cf-connecting-ip': '203.0.113.5',
+          'x-qg-relay-ip': 'forged',
+          'x-qg-relay-signature': 'forged',
+        },
+      }),
+      params: { path: ['public-report'] },
+      env: { SUPABASE_URL: 'https://fixture.supabase.co', REDIRECT_RELAY_SECRET: secret },
+    } as never);
+    expect(result.headers.get('Referrer-Policy')).toBe('no-referrer');
+    expect(result.headers.get('Vary')).toBe('Origin, Authorization');
+    const options = fetcher.mock.calls[0] as unknown as [URL, RequestInit];
+    expect(await redirectClientIp(new Headers(options[1].headers), 'report:' + id, secret)).toBe(
+      '203.0.113.5',
+    );
   });
   it('preserves retry-after on rate-limited policy writes', async () => {
     vi.stubGlobal(

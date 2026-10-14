@@ -1,3 +1,4 @@
+import {savedReportInput,reportShareInput,publicReportRequest} from '../_shared/redirect-reports.ts';
 import { policyPatchInput } from '../_shared/redirect-policy-api.ts';
 import { generateRedirectPreview } from '../_shared/redirect-preview-generation.ts';
 import { isLlmConfigured } from '../_shared/llm-client.ts';
@@ -19,6 +20,7 @@ Deno.serve(async (req: Request) => {
  const credential=req.headers.get('Authorization')?.replace(/^Bearer\s+/i,'') ?? '';
  if(!credential)return json({error:'Unauthorized'},401);
  const db=createClient(Deno.env.get('SUPABASE_URL')!,Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
+ if(path==='/public-report')return publicReportRequest(req,db,Deno.env.get('REDIRECT_RELAY_SECRET')??Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,cors);
  const tokenCredential=/^qg_redirect_[a-f0-9]{64}$/.test(credential);
  let user: {id:string;created_at:string;email_confirmed_at?:string;confirmed_at?:string;is_anonymous?:boolean} | null=null;
  let identityClient: ReturnType<typeof createClient> | null=null;
@@ -40,6 +42,28 @@ Deno.serve(async (req: Request) => {
  };
  try {
   if(path==='/session'&&req.method==='GET'){if(tokenCredential)return json({error:'Account session required'},403);const principal=await sessionPrincipal('links:read');if(principal.failure)return principal.failure;return json({role:principal.role,label:principal.label??null});}
+  const reports=path.match(/^\/reports(?:\/([a-f0-9-]{36}))?(?:\/(run|shares)(?:\/([a-f0-9-]{36}))?)?$/i);
+  if(reports){
+   if(tokenCredential)return json({error:'Account session required'},403);
+   const principal=await sessionPrincipal('events:read');if(principal.failure)return principal.failure;
+   const [,id,endpoint,shareId]=reports;if(id&&!UUID.test(id)||shareId&&!UUID.test(shareId)||endpoint&&!id)return json({error:'Invalid report ID'},400);
+   if(endpoint==='shares'){
+    let action:string,values:Record<string,unknown>={},passwordHash=null;
+    if(req.method==='GET'&&!shareId)action='list';
+    else if(req.method==='DELETE'&&shareId)action='revoke';
+    else if(req.method==='POST'&&!shareId){action='create';const input=reportShareInput(await boundedJson(req));values=input.values;
+     if(input.password){const reserved=await db.rpc('reserve_redirect_report_password',{p_actor:user!.id,p_principal:principal.id});if(reserved.error)return rpcError(reserved.error);if(reserved.data)return new Response(JSON.stringify({error:'Password update limit reached'}),{status:429,headers:{...cors,'Content-Type':'application/json','Cache-Control':'no-store','Retry-After':String(reserved.data)}});passwordHash=await hashLinkPassword(input.password);}
+    }else return json({error:'Method not supported'},405);
+    const {data,error}=await db.rpc('redirect_report_share_resource',{p_action:action,p_actor:user!.id,p_principal:principal.id,p_report:id,p_id:shareId??null,p_values:values,p_password_hash:passwordHash});if(error)return rpcError(error);return json(data,action==='create'?201:200);
+   }
+   let action:string,values:Record<string,unknown>={},limit=50,after:string|null=null;
+   if(req.method==='GET'&&endpoint==='run')action='run';
+   else if(req.method==='GET'&&!endpoint){action=id?'get':'list';const q=new URL(req.url).searchParams;if([...q.keys()].some(k=>!['limit','cursor'].includes(k)))return json({error:'Invalid report page'},400);limit=Number(q.get('limit')??50);after=q.get('cursor');if(!Number.isInteger(limit)||limit<1||limit>100||after&&!UUID.test(after))return json({error:'Invalid report page'},400);}
+   else if(req.method==='POST'&&!id){action='create';values=savedReportInput(await boundedJson(req),true);}
+   else if(req.method==='PATCH'&&id&&!endpoint){action='patch';values=savedReportInput(await boundedJson(req),false);}
+   else if(req.method==='DELETE'&&id&&!endpoint)action='delete';else return json({error:'Method not supported'},405);
+   const {data,error}=await db.rpc('redirect_saved_report_resource',{p_action:action,p_actor:user!.id,p_principal:principal.id,p_id:id??null,p_values:values,p_limit:limit,p_after:after});if(error)return rpcError(error);return json(data,action==='create'?201:200);
+  }
   const requestMatch=path.match(/^\/access-requests(?:\/([a-f0-9-]{36}))?$/i);
   if(requestMatch){
    if(tokenCredential)return json({error:'Account session required'},403);
@@ -188,17 +212,20 @@ Deno.serve(async (req: Request) => {
    if(path==='/links/bulk')return json({data});
    return json(data[0],data[0]?.created?201:200);
   }
-  if((path==='/analytics'||path==='/events')&&req.method==='GET') {
+  if((path==='/analytics'||path==='/events')&&['GET','POST'].includes(req.method)) {
    const query=new URL(req.url).searchParams;
    if(new URL(req.url).search.length>16384)return json({error:'Filters are too large'},400);
    let tokenId:string|null=null;
    if(tokenCredential){const {data,error}=await db.rpc('authenticate_redirect_api_token',{p_hash:await tokenDigest(credential),p_scope:'events:read'});if(error)return json({error:'Credential verification unavailable'},503);if(!data)return json({error:'Read scope is required'},403);tokenId=data.id;}
    else{const principal=await sessionPrincipal('events:read');if(principal.failure)return principal.failure;tokenId=principal.id;}
-   const filters=analyticsFilters(JSON.parse(query.get('filters')??'{}'));
+   let body:Record<string,unknown>|null=null;
+   if(req.method==='POST'){body=await boundedJson(req);if(!body||typeof body!=='object'||Array.isArray(body)||new URL(req.url).search||Object.keys(body).some(k=>!(path==='/events'?['filters','limit','snapshot','cursor']:['filters']).includes(k)))return json({error:'Invalid analytics body'},400);}
+   if(body&&path==='/events'&&(body.snapshot!==undefined&&body.snapshot!==null&&typeof body.snapshot!=='string'||body.limit!==undefined&&typeof body.limit!=='number'))return json({error:'Invalid event page'},400);
+   const filters=analyticsFilters(body?body.filters??{}:JSON.parse(query.get('filters')??'{}'));
    const name='redirect_scoped_analytics';let args:Record<string,unknown>={p_action:path==='/events'?'events':'report',p_filters:filters,p_token_id:tokenId};
    if(path==='/events'){
-    const limit=Number(query.get('limit')??50),snapshot=query.get('snapshot');
-    const cursor=query.has('cursor')?JSON.parse(query.get('cursor')!):null;
+    const limit=Number(body?body.limit??50:query.get('limit')??50),snapshot=body?(typeof body.snapshot==='string'?body.snapshot:null):query.get('snapshot');
+    const cursor:any=body?body.cursor??null:query.has('cursor')?JSON.parse(query.get('cursor')!):null;
     if(!Number.isInteger(limit)||limit<1||limit>100||snapshot&&!Number.isFinite(Date.parse(snapshot))||cursor&&(!Number.isFinite(Date.parse(cursor.at))||typeof cursor.id!=='string'||cursor.id.length>100))return json({error:'Invalid event page'},400);
     args={...args,p_limit:limit,p_snapshot:snapshot,p_before_at:cursor?.at??null,p_before_id:cursor?.id??null};
    }
