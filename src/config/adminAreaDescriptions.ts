@@ -19,6 +19,9 @@ export const ADMIN_AREA_DESCRIPTIONS: Record<string, string> = {
   '/admin/duplicates':
     'Exact/fuzzy merge power tool across every content type and taxonomy. Nightly-sweep suggestions are reviewed in the inbox.',
   '/admin/content/events': 'Events and festivals. Edit details, check liveness, set featured.',
+  '/admin/news-sources': 'Manage feeds, publisher links and ingestion health.',
+  '/admin/news-authors':
+    'News author bylines. Browse articles, rename authors, and merge duplicate names.',
   '/admin/content/news_articles': 'News articles. Edit, tag, and manage geo and source data.',
   '/admin/content/personalities':
     'LGBTQ+ personalities. Edit profiles, professions, and connections. Freigabe = Visum-Prinzip (5 Stempel) — Info-Karte oben.',
@@ -35,7 +38,8 @@ export const ADMIN_AREA_DESCRIPTIONS: Record<string, string> = {
     'Marketplace products. Edit listings, prices, and affiliate links.',
   '/admin/content/guides': 'Guides. Curate editorial guides, lists, and community quests.',
   '/admin/content/community_groups': 'Community groups. Edit listings and review join requests.',
-  '/admin/content/community_groups/requests': 'Group join requests. Approve or reject pending members.',
+  '/admin/content/community_groups/requests':
+    'Group join requests. Approve or reject pending members.',
   '/admin/content/group-requests': 'Group join requests. Approve or reject pending members.',
   '/admin/governance':
     'Review incoming changes, quality engines, tags, places editorial, and duplicates.',
