@@ -990,3 +990,25 @@ provider validation restart, remaining domain lifecycle/DNS automation and all
 other unfinished ledger features remain required, along with real DNS/TLS,
 controlled-domain, production migration/deployment, release and publication proof.
 No production writes or deployments occurred.
+
+### Domain filter views and scoped linked-domain facets
+
+Add URL-backed domain filters to the all-source inventory and member workspace.
+The inventory derives source hostnames from its complete loaded rows, including
+manual custom hosts and built-in automatic/static/client routes. Changing the
+filter resets pagination and selection; exports and shared views use the same
+filtered rows. Unknown retained filters produce zero matches rather than silently
+showing all domains. Built-in aliases normalize to the canonical site bucket.
+
+Member domain facets come from a new links-read-only paginated endpoint over
+currently visible managed links, not the ready-domain creation catalog or private
+registry. Return public hostname/ID and accessible link counts plus builtin count;
+keep domains with disabled/unverified/archived links, and exclude every inaccessible
+folder/ID. Recheck membership/key scope and revocation under the existing ACL lock.
+The linked-domain catalog must never become a creation-readiness signal.
+Member filters compose domain UUID/null with search/folder/archive server filters,
+are reflected in shareable URLs and reset selections/cursors on change. A domain
+removed from the current facet response stays selected with a neutral label;
+never disclose its hidden hostname or silently replace the filter. Queries are
+account-keyed, cancelable and detect cursor loops. Add equivalent paged SDK reads
+and verify scoped counts, inactive domains, revocation and end-to-end filter UX.
