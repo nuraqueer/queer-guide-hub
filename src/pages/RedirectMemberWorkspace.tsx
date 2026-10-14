@@ -1,3 +1,7 @@
+import {
+  AskRedirectEdit,
+  RedirectAccessRequests,
+} from '@/components/admin/redirects/RedirectAccessRequests';
 import { PageContainer } from '@/components/layout/PageContainer';
 import { useState } from 'react';
 import { Navigate, useLocation } from 'react-router';
@@ -275,7 +279,13 @@ function LinkEditor({
     </Dialog>
   );
 }
-export function MemberWorkspaceContent({ userId }: { userId: string }) {
+export function MemberWorkspaceContent({
+  userId,
+  initialRequestView,
+}: {
+  userId: string;
+  initialRequestView?: 'mine' | 'review';
+}) {
   const client = useQueryClient();
   const resources = useMemberRedirectResources(userId);
   const session = useQuery({
@@ -294,6 +304,10 @@ export function MemberWorkspaceContent({ userId }: { userId: string }) {
     [analytics, setAnalytics] = useState<string | null>(null),
     [importing, setImporting] = useState(false),
     [access, setAccess] = useState<string | null>(null);
+  const [requestFolder, setRequestFolder] = useState<{ id: string; name: string } | null>(null);
+  const [requestView, setRequestView] = useState<'mine' | 'review' | null>(
+    initialRequestView ?? null,
+  );
   const [deletingFolder, setDeletingFolder] = useState(false);
   const [bulkFolder, setBulkFolder] = useState('');
   const [folderName, setFolderName] = useState(''),
@@ -385,6 +399,9 @@ export function MemberWorkspaceContent({ userId }: { userId: string }) {
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
+          <Button variant="outline" onClick={() => setRequestView(requestView ? null : 'mine')}>
+            {requestView ? 'Hide access requests' : 'Access requests'}
+          </Button>
           <Button disabled={!canWrite || !resources.data} onClick={() => setEditor({})}>
             Create link
           </Button>
@@ -406,6 +423,27 @@ export function MemberWorkspaceContent({ userId }: { userId: string }) {
           </Button>
         </div>
       </header>
+      {requestView && (
+        <RedirectAccessRequests
+          key={requestView}
+          userId={userId}
+          initialView={requestView}
+          onViewChange={setRequestView}
+          onChanged={refresh}
+        />
+      )}
+      {requestFolder && (
+        <AskRedirectEdit
+          folderId={requestFolder.id}
+          folderName={requestFolder.name}
+          userId={userId}
+          viewer={session.data?.role === 'viewer'}
+          onClose={() => {
+            setRequestFolder(null);
+            setRequestView('mine');
+          }}
+        />
+      )}
       {resources.isError && (
         <p role="alert">
           {resources.error.message}{' '}
@@ -457,6 +495,17 @@ export function MemberWorkspaceContent({ userId }: { userId: string }) {
           </Button>
         )}
       </div>
+      {folder && resources.data?.folders.find((f) => f.id === folder && !f.canEdit) && (
+        <Button
+          variant="outline"
+          onClick={() => {
+            const current = resources.data!.folders.find((f) => f.id === folder)!;
+            setRequestFolder({ id: current.id, name: current.name });
+          }}
+        >
+          Ask to edit folder
+        </Button>
+      )}
       {canWrite && (
         <form
           className="flex flex-wrap items-end gap-2"
@@ -494,65 +543,68 @@ export function MemberWorkspaceContent({ userId }: { userId: string }) {
           }}
         />
       )}
-      {folder && resources.data?.folders.find((f) => f.id === folder)?.canManage && (
-        <section className="space-y-2" aria-label="Folder management">
-          <form
-            key={folder}
-            className="flex flex-wrap items-end gap-2"
-            onSubmit={(e) => {
-              e.preventDefault();
-              const name = String(new FormData(e.currentTarget).get('name') ?? '');
-              void mutate
-                .mutateAsync({ path: '/folders/' + folder, method: 'PATCH', body: { name } })
-                .catch(() => {});
-            }}
-          >
-            <div className="space-y-2">
-              <Label htmlFor="rename-member-folder">Folder name</Label>
-              <Input
-                id="rename-member-folder"
-                name="name"
-                defaultValue={resources.data.folders.find((f) => f.id === folder)?.name}
-                maxLength={100}
-                required
-              />
-            </div>
-            <Button type="submit" variant="outline" disabled={mutate.isPending}>
-              Rename folder
-            </Button>
-            <Button type="button" variant="ghost" onClick={() => setDeletingFolder(true)}>
-              Delete folder
-            </Button>
-          </form>
-          {deletingFolder && (
-            <div className="space-y-2">
-              <p>
-                {session.data?.role === 'owner'
-                  ? 'Delete this folder and move its links to Unfiled?'
-                  : 'Delete this folder? Move all its links out first.'}
-              </p>
-              <Button
-                variant="destructive"
-                disabled={mutate.isPending}
-                onClick={() =>
-                  void mutate
-                    .mutateAsync({ path: '/folders/' + folder, method: 'DELETE' })
-                    .then(() => {
-                      setFolder('');
-                      setDeletingFolder(false);
-                    })
-                    .catch(() => {})
-                }
-              >
-                Confirm folder deletion
+      {folder &&
+        resources.data?.folders.some((f) => f.id === folder && (f.canRename ?? f.canManage)) && (
+          <section className="space-y-2" aria-label="Folder management">
+            <form
+              key={folder}
+              className="flex flex-wrap items-end gap-2"
+              onSubmit={(e) => {
+                e.preventDefault();
+                const name = String(new FormData(e.currentTarget).get('name') ?? '');
+                void mutate
+                  .mutateAsync({ path: '/folders/' + folder, method: 'PATCH', body: { name } })
+                  .catch(() => {});
+              }}
+            >
+              <div className="space-y-2">
+                <Label htmlFor="rename-member-folder">Folder name</Label>
+                <Input
+                  id="rename-member-folder"
+                  name="name"
+                  defaultValue={resources.data.folders.find((f) => f.id === folder)?.name}
+                  maxLength={100}
+                  required
+                />
+              </div>
+              <Button type="submit" variant="outline" disabled={mutate.isPending}>
+                Rename folder
               </Button>
-              <Button variant="ghost" onClick={() => setDeletingFolder(false)}>
-                Cancel folder deletion
-              </Button>
-            </div>
-          )}
-        </section>
-      )}
+              {resources.data?.folders.find((f) => f.id === folder)?.canManage && (
+                <Button type="button" variant="ghost" onClick={() => setDeletingFolder(true)}>
+                  Delete folder
+                </Button>
+              )}
+            </form>
+            {deletingFolder && (
+              <div className="space-y-2">
+                <p>
+                  {session.data?.role === 'owner'
+                    ? 'Delete this folder and move its links to Unfiled?'
+                    : 'Delete this folder? Move all its links out first.'}
+                </p>
+                <Button
+                  variant="destructive"
+                  disabled={mutate.isPending}
+                  onClick={() =>
+                    void mutate
+                      .mutateAsync({ path: '/folders/' + folder, method: 'DELETE' })
+                      .then(() => {
+                        setFolder('');
+                        setDeletingFolder(false);
+                      })
+                      .catch(() => {})
+                  }
+                >
+                  Confirm folder deletion
+                </Button>
+                <Button variant="ghost" onClick={() => setDeletingFolder(false)}>
+                  Cancel folder deletion
+                </Button>
+              </div>
+            )}
+          </section>
+        )}
       {mutate.isError && (
         <p role="alert" className="text-destructive">
           {mutate.error.message}
@@ -702,6 +754,22 @@ export function MemberWorkspaceContent({ userId }: { userId: string }) {
               >
                 Edit /go/{link.slug}
               </Button>
+              {!link.canEdit && link.folderId && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() =>
+                    setRequestFolder({
+                      id: link.folderId!,
+                      name:
+                        resources.data?.folders.find((f) => f.id === link.folderId)?.name ??
+                        'folder',
+                    })
+                  }
+                >
+                  Ask to edit
+                </Button>
+              )}
               <Button size="sm" variant="outline" onClick={() => setPolicy(link)}>
                 Link behavior
               </Button>
@@ -800,7 +868,17 @@ export default function RedirectMemberWorkspace() {
     );
   return (
     <PageContainer>
-      <MemberWorkspaceContent key={user.id} userId={user.id} />
+      <MemberWorkspaceContent
+        key={user.id}
+        userId={user.id}
+        initialRequestView={
+          new URLSearchParams(location.search).get('accessRequests') === 'review'
+            ? 'review'
+            : new URLSearchParams(location.search).get('accessRequests') === 'mine'
+              ? 'mine'
+              : undefined
+        }
+      />
     </PageContainer>
   );
 }

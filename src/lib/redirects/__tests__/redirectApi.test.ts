@@ -547,6 +547,59 @@ describe('actual Redirects API handler', () => {
     });
     expect((await run.invoke('/session', undefined, token, 'GET')).status).toBe(403);
   });
+  it('keeps access requests behind account sessions and passes only the verified principal', async () => {
+    const run = runtime(),
+      folder = '00000000-0000-4000-8000-000000000005',
+      token = 'qg_redirect_' + 'a'.repeat(64);
+    expect(
+      (await run.invoke('/access-requests', { folderId: folder, message: 'Please review' }, token))
+        .status,
+    ).toBe(403);
+    expect(
+      (
+        await run.invoke(
+          '/access-requests',
+          { folderId: folder, principal: 'forged' },
+          'signed-user',
+        )
+      ).status,
+    ).toBe(400);
+    expect(
+      (
+        await run.invoke(
+          '/access-requests',
+          { folderId: folder, message: 'Please review' },
+          'signed-user',
+        )
+      ).status,
+    ).toBe(201);
+    expect(run.rpc).toHaveBeenCalledWith(
+      'redirect_access_request',
+      expect.objectContaining({
+        p_action: 'create',
+        p_principal: null,
+        p_actor: '00000000-0000-4000-8000-000000000001',
+        p_folder: folder,
+      }),
+    );
+  });
+  it('returns retry-after for rate-limited edit requests and rejects malformed review pages', async () => {
+    const run = runtime(),
+      base = run.rpc.getMockImplementation()!;
+    run.rpc.mockImplementation(async (name, args) =>
+      name === 'redirect_access_request'
+        ? { data: { id: 'rate', duplicate: false, retryAfter: 600 }, error: null }
+        : base(name, args),
+    );
+    const response = await run.invoke('/access-requests', {
+      folderId: '00000000-0000-4000-8000-000000000005',
+    });
+    expect(response.status).toBe(429);
+    expect(response.headers.get('Retry-After')).toBe('600');
+    expect(
+      (await run.invoke('/access-requests?view=all', undefined, 'signed-user', 'GET')).status,
+    ).toBe(400);
+  });
   it('applies read scope and credential link boundaries to analytics and paginated activity', async () => {
     const run = runtime(),
       token = 'qg_redirect_' + 'a'.repeat(64);

@@ -2,9 +2,16 @@ CREATE ROLE anon;
 CREATE ROLE authenticated;
 CREATE ROLE service_role BYPASSRLS;
 CREATE SCHEMA auth;
-CREATE TABLE auth.users(id uuid PRIMARY KEY);
-GRANT SELECT,INSERT,DELETE ON auth.users TO service_role;
+CREATE TABLE auth.users(id uuid PRIMARY KEY,email text,email_confirmed_at timestamptz);
+-- Narrow fixture-only Auth management grants model account creation/deletion.
+-- Runtime service_role must not read Auth email columns directly.
+GRANT INSERT,DELETE ON auth.users TO service_role;
+GRANT SELECT(id),UPDATE(email) ON auth.users TO service_role;
 CREATE TYPE public.app_role AS ENUM ('admin','user','editor','moderator');
+CREATE TABLE public.user_roles(user_id uuid,role public.app_role);
+CREATE TABLE public.notifications(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),user_id uuid NOT NULL,type text NOT NULL,title text NOT NULL,content text,action_url text,related_id uuid,metadata jsonb,created_at timestamptz DEFAULT now());
+GRANT ALL ON public.user_roles,public.notifications TO service_role;
+
 CREATE FUNCTION auth.role() RETURNS text LANGUAGE sql STABLE AS $$ SELECT coalesce(nullif(current_setting('request.jwt.claims',true),'')::jsonb->>'role',current_user::text) $$;
 CREATE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql STABLE AS $$ SELECT nullif(nullif(current_setting('request.jwt.claims',true),'')::jsonb->>'sub','')::uuid $$;
 CREATE FUNCTION public.has_role_jwt(required_role public.app_role) RETURNS boolean LANGUAGE sql STABLE AS $$ SELECT coalesce(nullif(current_setting('request.jwt.claims',true),'')::jsonb->>'user_role'=required_role::text,false) $$;

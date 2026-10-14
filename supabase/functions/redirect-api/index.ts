@@ -40,6 +40,24 @@ Deno.serve(async (req: Request) => {
  };
  try {
   if(path==='/session'&&req.method==='GET'){if(tokenCredential)return json({error:'Account session required'},403);const principal=await sessionPrincipal('links:read');if(principal.failure)return principal.failure;return json({role:principal.role,label:principal.label??null});}
+  const requestMatch=path.match(/^\/access-requests(?:\/([a-f0-9-]{36}))?$/i);
+  if(requestMatch){
+   if(tokenCredential)return json({error:'Account session required'},403);
+   const principal=await sessionPrincipal('workspace:read');if(principal.failure)return principal.failure;
+   const id=requestMatch[1];if(id&&!UUID.test(id))return json({error:'Invalid request ID'},400);
+   if(req.method==='GET'&&!id){
+    const query=new URL(req.url).searchParams,view=query.get('view')??'mine',limit=Number(query.get('limit')??50),cursor=query.get('cursor');
+    if([...query.keys()].some(k=>!['view','limit','cursor'].includes(k))||!['mine','review'].includes(view)||!Number.isInteger(limit)||limit<1||limit>100||cursor&&!UUID.test(cursor))return json({error:'Invalid request page'},400);
+    const {data,error}=await db.rpc('redirect_access_requests_page',{p_principal:principal.id,p_view:view,p_limit:limit,p_after:cursor});if(error)return rpcError(error);return json(data);
+   }
+   let action:string,folder:string|null=null,message='',permission='edit';
+   if(req.method==='POST'&&!id){const body=await boundedJson(req);if(!body||typeof body!=='object'||Array.isArray(body)||Object.keys(body).some(k=>!['folderId','message'].includes(k))||typeof body.folderId!=='string'||!UUID.test(body.folderId)||body.message!==undefined&&(typeof body.message!=='string'||body.message.length>1000))return json({error:'Provide a folder and optional message (up to 1,000 characters)'},400);action='create';folder=body.folderId;message=body.message??'';}
+   else if(req.method==='PATCH'&&id){const body=await boundedJson(req);if(!body||typeof body!=='object'||Array.isArray(body)||Object.keys(body).some(k=>!['action','permission'].includes(k))||!['approve','deny'].includes(body.action)||body.permission!==undefined&&!['edit','owner'].includes(body.permission))return json({error:'Choose approve or deny and edit or owner access'},400);action=body.action;permission=body.permission??'edit';}
+   else if(req.method==='DELETE'&&id)action='cancel';else return json({error:'Method not supported'},405);
+   const {data,error}=await db.rpc('redirect_access_request',{p_action:action,p_principal:principal.id,p_id:id??null,p_folder:folder,p_message:message,p_permission:permission,p_actor:user!.id});if(error)return rpcError(error);
+   if(data.retryAfter)return new Response(JSON.stringify({error:'Please wait before requesting access again',retryAfter:data.retryAfter}),{status:429,headers:{...cors,'Content-Type':'application/json','Cache-Control':'no-store','Retry-After':String(data.retryAfter)}});
+   return json(data,action==='create'&&!data.duplicate?201:200);
+  }
   const memberMatch=path.match(/^\/members(?:\/([a-f0-9-]{36}))?$/i);
   if(memberMatch){
    if(tokenCredential||!user||user.is_anonymous)return json({error:'Admin session required'},403);

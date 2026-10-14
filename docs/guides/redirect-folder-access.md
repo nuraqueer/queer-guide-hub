@@ -19,9 +19,14 @@ paged/searchable accessible links, create/edit, prefill and shared templates,
 folders, tags/comments, bulk folder moves/archive/restore/confirmed deletion,
 CSV import and export of selected/loaded links, QR export, read-only or editable
 behavior settings, and scoped date-filtered analytics/live activity/CSV export.
-Folder owners can rename/delete folders and edit access; nonempty member-owned
-folders must have their links moved before deletion. Edit-access requests and
-owner notifications remain unfinished. Ordinary members cannot enter the admin
+Editors can rename folders; owners can delete folders and edit access. Nonempty member-owned
+folders must have their links moved before deletion. View-only members can ask to edit a folder, include an optional message, inspect
+or withdraw their requests, and check status. Current folder owners/workspace
+administrators review pending requests and explicitly approve editor/owner access
+or deny. Workspace viewers still need an administrator to upgrade their workspace
+role before approval; folder owners cannot bypass that cap. Inbox notifications
+are transactional with the request/decision; email jobs are durable and private.
+Live delivery/configuration verification is pending. Ordinary members cannot enter the admin
 console. UI query caches include the signed-in account ID; changing accounts
 remounts the workspace and never displays the previous account's cached links.
 
@@ -31,6 +36,17 @@ All paths below are relative to `https://queer.guide/api/redirects`. Use a verif
 session bearer token, or an API credential where specified. Responses are private
 and must not be cached.
 
+- `GET /access-requests?view=mine|review&limit=50&cursor=UUID`: account session
+  only. Mine shows the account's requests; review shows pending requests for
+  folders the current principal owns. Returns `{data,count,nextCursor}`.
+- `POST /access-requests`: `{folderId,message?}`; only for a currently view-only
+  folder. One pending request per member/folder; repeats return its ID without
+  another notification. At most one new request per folder/day and ten/member/day;
+  limits return 429 with Retry-After. Messages are limited to 1,000 characters.
+- `PATCH /access-requests/{id}`: `{action:"approve"|"deny",permission?:"edit"|"owner"}`.
+  Current owner session required. Defaults to editor, preserves workspace role,
+  rechecks active membership and grants access atomically with the decision.
+- `DELETE /access-requests/{id}`: withdraw the current account's pending request.
 - `GET /session`: registered account session only. Returns `role` (`owner`,
   `member`, `viewer`) and label after verifying current membership. Not a bearer
   credential discovery endpoint.
@@ -89,3 +105,45 @@ API and component tests cover verified-principal forwarding, absent membership,
 scoped access management, explicit override removal, denied-save recovery,
 membership removal confirmation, machine creation and credential binding.
 No production memberships or credentials are created by these tests.
+
+## Notification delivery and release
+
+No production schema/function/configuration was changed while implementing this
+candidate. Read-only project checks confirmed cron/Vault availability, the
+existing internal invoke secret, and the absence of a Vault `supabase_url` entry.
+Before enabling the scheduled consumer in a target project, configure that
+project's own HTTPS Supabase URL as Vault `supabase_url`, deploy
+`redirect-access-notifications`, and verify `INTERNAL_INVOKE_SECRET`,
+`RESEND_API_KEY` and a verified sender (`REDIRECT_ACCESS_EMAIL_FROM`, default
+`Queer Guide <noreply@queer.guide>`). Never copy another project's invoke secret.
+The five-minute cron makes no request when its project URL or secret is missing.
+
+The worker requires the existing internal-secret/service/admin gate; ordinary
+accounts and user-editable role metadata cannot dispatch mail. Missing provider
+configuration leaves jobs unclaimed. Five jobs per invocation use two-minute
+leases, ten-second provider timeouts, fixed Resend HTTPS delivery with redirect
+following disabled, and stable per-job Idempotency-Key/body/sender values.
+Retries respect provider Retry-After and exponential backoff, with at most eight
+attempts and a 23-hour retry window from first attempt (inside Resend's 24-hour
+idempotency retention). A failed acknowledgement can recover the same job safely;
+a stale lease cannot overwrite a newer claim. Permanent rejections remain failed
+for operator inspection; do not blindly replay uncertain sends after the retry
+window.
+
+Emails intentionally contain generic request/decision text and a sign-in-required
+workspace URL, without folder names, destinations, messages or requester identity.
+Recipient addresses are private. Dispatch rechecks the recipient's current
+ownership, verified address and request status, suppressing obsolete or changed
+recipients. In-app notifications use the existing recipient-only inbox.
+
+Production `service_role` lacks SELECT on Auth users; no broad Auth-table grant
+is introduced. The necessary verified-address lookup is a small service-only
+SECURITY DEFINER function with an empty search path and fully qualified Auth
+reference. Request, decision, queue and claim functions otherwise remain invokers;
+new tables/functions are unavailable to anon/authenticated Data API callers.
+
+Release verification must use controlled accounts, confirm actual inbox routing,
+provider acceptance/delivery, cron activation, role downgrade and approval
+behavior, and inspect failed/queued mail. Current automated tests mock the
+provider and use isolated PostgreSQL; browser screenshots use explicitly labelled
+local simulations. No real email has been sent by verification.

@@ -51,6 +51,7 @@ export interface MemberFolder {
   description: string;
   canEdit: boolean;
   canManage: boolean;
+  canRename?: boolean;
 }
 export interface MemberResources {
   folders: MemberFolder[];

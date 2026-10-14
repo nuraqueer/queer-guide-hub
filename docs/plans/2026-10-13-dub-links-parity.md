@@ -15,7 +15,7 @@ exist. Existing local tools are a foundation, not proof of parity or deployment.
 | Folders | Create/rename/delete/move links, folder-filtered list and analytics | Candidate: implemented locally; pending release |
 | Tags | Multiple colored tags, create/rename/delete, shareable filtered list and analytics | Candidate: implemented locally; pending release |
 | Comments | Team-visible comment on link card, clickable hyperlinks | Candidate: implemented locally; pending release |
-| Folder permissions | Explicit view/edit permissions for team members, enforced in database/API | Partial: member/machine bindings, folder defaults/overrides, scoped SQL/API, admin editors and member workspace; access requests/notifications, all-source semantics and runtime release pending |
+| Folder permissions | Explicit view/edit permissions for team members, enforced in database/API | Partial: member/machine bindings, folder defaults/overrides, scoped SQL/API, admin editors and member workspace; access request/review/inbox/email queue implemented locally; all-source semantics and delivery/runtime release pending |
 | Bulk actions | Create/update/upsert/delete, folder/tag assignment, archive, import/export, QR export | Candidate for managed links: atomic create/update/upsert/deletion API and CSV review/import/export UI, archive/restore, folder/tag assignment and verified QR ZIP; production release pending |
 | Custom previews | Uploaded OG image (1200×630, ≤1.5 MB), title≤120, description≤240, video API, crawler unfurl | Candidate: editor, scoped upload/presentation APIs and crawler HTML; native browser/Storage release pending |
 | AI previews | Generate title/description from destination content using configured AI provider | Candidate: scoped draft generator with spend limits; live provider and browser verification pending |
@@ -524,3 +524,45 @@ updated link count, scoped report, and mobile creation dialog. Workspace and
 dialog scrollWidth=clientWidth=390. Screenshots are `member-workspace-*` under
 `outputs/redirect-dub-parity/`. Temporary viewport and tab were cleaned up.
 Production multi-account/provider/release evidence is still outstanding.
+
+## Checkpoint: edit access requests and durable owner notifications
+
+Implemented locally: Ask to edit for view-only folders, optional message, own
+status/withdrawal and owner review with explicit editor/owner confirmation.
+Current ownership and active membership are checked at decision time; workspace
+viewer caps remain intact. Duplicate pending requests do not notify twice;
+per-folder/member cooldowns bound new requests. Requests, ACL grants, inbox
+notifications and private mail jobs share the same transaction. Editors may now
+rename folders; ownership/deletion/access management remain separate capabilities.
+
+A secured scheduled consumer uses the configured Resend provider, stable job
+idempotency, leases, bounded retries/backoff and a 23-hour ambiguity window.
+Recipient changes, ownership loss and obsolete requests suppress mail. Emails
+contain a generic authenticated review link without folder or requester details.
+A minimal service-only verified-address definer is necessary: read-only actual
+project metadata proves service_role cannot SELECT Auth users; broad Auth-table
+access is not granted. Other new functions remain invokers and private.
+
+No production state or real notifications were changed/sent. Read-only checks
+found cron/Vault and the invoke secret available, but the project-local Vault URL
+missing. Deployment, project URL/provider/sender verification, controlled-account
+inbox/email/cron proof, invitation/account discovery and all-source permission
+semantics remain open. The full original requirements ledger stays in scope.
+
+Validation: 56 tests across nine request/API/mail/worker/member/settings files
+pass. Actual migrated PostgreSQL proves request deduplication, cooldown/actor
+limits, paging/privacy, current-owner decisions, workspace-viewer rejection,
+editor rename, atomic grants/inbox/mail, retry delays, lease recovery/stale
+acknowledgements, idempotency-window limits and recipient suppression. Provider
+calls are mocked; worker tests execute the real shared authorization gate and
+reject ordinary accounts/user-editable metadata. All five SDKs/examples still
+pass through loopback HTTP and migrated SQL. Build, functions types, targeted
+lint, formatting and migration checks pass; app types remain 704 inherited
+errors, none new.
+
+Native browser proof uses `access-request-*` screenshots under
+`outputs/redirect-dub-parity/`: saved request, explicit owner selection/confirmation,
+simulated approval and empty review queue, with production fetches blocked.
+At 390 pixels the page has no horizontal overflow; the permission select was
+constrained to its 324-pixel parent. Temporary viewport/tab were cleaned up.
+These are fixture and isolated-database results, not live notifications or grants.

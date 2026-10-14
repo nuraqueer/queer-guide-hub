@@ -128,6 +128,34 @@ describe('member redirect workspace', () => {
     );
     expect(mocks.invoke.mock.calls.some(([path]) => path === 'save-redirect-policy')).toBe(false);
   });
+  it('allows folder editors to rename while retaining owner-only deletion and access controls', async () => {
+    const base = mocks.invoke.getMockImplementation()!;
+    mocks.invoke.mockImplementation(async (path, options) =>
+      path.includes('/folders?')
+        ? {
+            data: {
+              data: [
+                {
+                  id: 'folder',
+                  name: 'Campaign',
+                  canEdit: true,
+                  canRename: true,
+                  canManage: false,
+                },
+              ],
+              nextCursor: null,
+            },
+            error: null,
+          }
+        : base(path, options),
+    );
+    show();
+    await screen.findByText('/go/pride');
+    fireEvent.change(screen.getByLabelText('Folder filter'), { target: { value: 'folder' } });
+    expect(await screen.findByRole('button', { name: 'Rename folder' })).toBeEnabled();
+    expect(screen.queryByRole('button', { name: 'Delete folder' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Manage folder access' })).toBeNull();
+  });
   it('prefills a new link, applies shared UTM templates and leaves its slug for server allocation', async () => {
     show();
     await screen.findByText('/go/pride');

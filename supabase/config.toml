@@ -657,3 +657,7 @@ verify_jwt = false
 # both checks; scoped tokens are not Supabase JWTs and must reach that check.
 [functions.redirect-api]
 verify_jwt = false
+
+# Scheduled notification consumer validates internal secret or an admin session.
+[functions.redirect-access-notifications]
+verify_jwt = false
