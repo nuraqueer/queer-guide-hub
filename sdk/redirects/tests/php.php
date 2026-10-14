@@ -75,3 +75,21 @@ $page=$api->customerJourney($lead['customerExternalId'],1);check(count($page['da
 $identityVersion=$customer['version'];$customer=$api->clearCustomer($lead['customerExternalId'],$identityVersion);
 check($customer['name']===null&&$customer['email']===null&&$customer['avatarUrl']===null&&$customer['version']!==$identityVersion);
 check(count($api->customerJourney($lead['customerExternalId'])['data'])===3);
+
+$webhook=$account->createWebhook(['name'=>'PHP receiver','url'=>'https://receiver.example.org/events']);check(str_starts_with($webhook['secret'],'whsec_'));
+check(!isset($account->getWebhook($webhook['id'])['secret']));check(count($account->listWebhooks()['data'])>=1);
+$webhook=$account->updateWebhook($webhook['id'],['version'=>$webhook['version'],'name'=>'PHP updated']);
+$webhook=$account->rotateWebhookSecret($webhook['id'],$webhook['version']);check($webhook['previousKeyExpiresAt']);
+$queued=$account->testWebhook($webhook['id'],$webhook['version']);check($queued['queued']);
+$delivery=$account->getWebhookDelivery($webhook['id'],$queued['deliveryId']);check(json_decode($delivery['body'],true)['type']==='webhook.test');
+check($account->listWebhookDeliveries($webhook['id'])['data'][0]['id']===$delivery['id']);check($account->listWebhookAttempts($webhook['id'],$delivery['id'])['data']===[]);
+$webhook=$account->archiveWebhook($webhook['id'],$webhook['version']);check($webhook['deletedAt']);
+$webhook=$account->updateWebhook($webhook['id'],['version'=>$webhook['version'],'restore'=>true,'enabled'=>true]);
+$delivery=$account->getWebhookDelivery($webhook['id'],$delivery['id']);check($account->replayWebhookDelivery($webhook['id'],$delivery['id'],$delivery['version'])['state']==='queued');
+$account->archiveWebhook($webhook['id'],$webhook['version']);
+
+$fixture=json_decode(file_get_contents(__DIR__.'/webhook-fixture.json'),true);
+check(QueerGuide\RedirectsClient::verifyWebhook($fixture['secret'],$fixture['body'],$fixture['id'],$fixture['timestamp'],$fixture['signature'],1700000000));
+check(!QueerGuide\RedirectsClient::verifyWebhook($fixture['secret'],$fixture['body'].' ',$fixture['id'],$fixture['timestamp'],$fixture['signature'],1700000000));
+check(!QueerGuide\RedirectsClient::verifyWebhook($fixture['secret'],$fixture['body'],$fixture['id'],$fixture['timestamp'],$fixture['signature'],1700000301));
+check(QueerGuide\RedirectsClient::verifyWebhook($fixture['secret'],$fixture['body'],$fixture['id'],$fixture['timestamp'],'v1,'.str_repeat('A',43).'= '.$fixture['signature'],1700000000));

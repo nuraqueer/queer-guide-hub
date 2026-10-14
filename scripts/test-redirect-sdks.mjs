@@ -24,6 +24,8 @@ const pieces = [
   '_shared/redirect-manual-records.ts',
   '_shared/redirect-analytics.ts',
   '_shared/redirect-customers.ts',
+  '_shared/redirect-webhook-transport.ts',
+  '_shared/redirect-webhooks.ts',
   '_shared/redirect-relay.ts',
   '_shared/redirect-reports.ts',
   'redirect-api/index.ts',
@@ -243,6 +245,8 @@ try {
     compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext },
   }).outputText;
   writeFileSync('tmp/sdk-tests/typescript.mjs', compiled);
+  writeFileSync('tmp/sdk-tests/webhooks.js',ts.transpileModule(readFileSync('sdk/redirects/typescript/webhooks.ts','utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ESNext}}).outputText);
+  writeFileSync('tmp/sdk-tests/package.json',JSON.stringify({type:'module'}));
   await run(process.execPath, ['sdk/redirects/tests/typescript.mjs']);
   await run('python3', ['sdk/redirects/tests/python.py']);
   await run('ruby', ['sdk/redirects/tests/ruby.rb']);

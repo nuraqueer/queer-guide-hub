@@ -2,10 +2,12 @@ package redirects
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"os"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestSDKIntegration(t *testing.T) {
@@ -259,4 +261,62 @@ func TestSDKIntegration(t *testing.T) {
 		t.Fatal("Identity clear removed events")
 	}
 
+	webhook := must(account.CreateWebhook(ctx, Object{"name": "Go receiver", "url": "https://receiver.example.org/events"}))
+	wid := webhook["id"].(string)
+	if webhook["secret"] == nil || must(account.GetWebhook(ctx, wid))["secret"] != nil {
+		t.Fatal("One-time secret contract failed")
+	}
+	if len(must(account.ListWebhooks(ctx, 50, "", false))["data"].([]any)) == 0 {
+		t.Fatal("Webhook list empty")
+	}
+	webhook = must(account.UpdateWebhook(ctx, wid, Object{"version": webhook["version"], "name": "Go updated"}))
+	webhook = must(account.RotateWebhookSecret(ctx, wid, webhook["version"].(string)))
+	if webhook["previousKeyExpiresAt"] == nil {
+		t.Fatal("Missing rotation overlap")
+	}
+	queued := must(account.TestWebhook(ctx, wid, webhook["version"].(string)))
+	did := queued["deliveryId"].(string)
+	delivery := must(account.GetWebhookDelivery(ctx, wid, did))
+	if delivery["body"] == nil {
+		t.Fatal("Missing delivery body")
+	}
+	if len(must(account.ListWebhookDeliveries(ctx, wid, 50, ""))["data"].([]any)) == 0 || len(must(account.ListWebhookAttempts(ctx, wid, did, 50, ""))["data"].([]any)) != 0 {
+		t.Fatal("Invalid delivery history")
+	}
+	webhook = must(account.ArchiveWebhook(ctx, wid, webhook["version"].(string)))
+	if webhook["deletedAt"] == nil {
+		t.Fatal("Webhook not archived")
+	}
+	webhook = must(account.UpdateWebhook(ctx, wid, Object{"version": webhook["version"], "restore": true, "enabled": true}))
+	delivery = must(account.GetWebhookDelivery(ctx, wid, did))
+	if must(account.ReplayWebhookDelivery(ctx, wid, did, delivery["version"].(string)))["state"] != "queued" {
+		t.Fatal("Webhook replay failed")
+	}
+	must(account.ArchiveWebhook(ctx, wid, webhook["version"].(string)))
+}
+
+func TestWebhookVerification(t *testing.T) {
+	raw, err := os.ReadFile("../tests/webhook-fixture.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var fixture map[string]string
+	if err = json.Unmarshal(raw, &fixture); err != nil {
+		t.Fatal(err)
+	}
+	key := []string{fixture["secret"]}
+	body := []byte(fixture["body"])
+	id, at, sig := fixture["id"], fixture["timestamp"], fixture["signature"]
+	if !VerifyWebhook(key, body, id, at, sig, time.Unix(1700000000, 0)) {
+		t.Fatal("Valid signature rejected")
+	}
+	if VerifyWebhook(key, append(body, ' '), id, at, sig, time.Unix(1700000000, 0)) {
+		t.Fatal("Tampered body accepted")
+	}
+	if VerifyWebhook(key, body, id, at, sig, time.Unix(1700000301, 0)) {
+		t.Fatal("Expired timestamp accepted")
+	}
+	if !VerifyWebhook(key, body, id, at, "v1,"+strings.Repeat("A", 43)+"= "+sig, time.Unix(1700000000, 0)) {
+		t.Fatal("Rotation signatures rejected")
+	}
 }

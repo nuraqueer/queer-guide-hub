@@ -80,4 +80,24 @@ final class RedirectsClient {
     public function createResource(string $kind,array $data): array {return $this->request('POST','/'.$kind,$data);}
     public function updateResource(string $kind,string $id,array $data): array {return $this->request('PATCH','/'.$kind.'/'.$id,$data);}
     public function deleteResource(string $kind,string $id): array {return $this->request('DELETE','/'.$kind.'/'.$id);}
+    public function createWebhook(array $data): array {return $this->request('POST','/webhooks',$data);}
+    public function getWebhook(string $id): array {return $this->request('GET','/webhooks'.'/'.rawurlencode($id));}
+    public function updateWebhook(string $id,array $data): array {return $this->request('PATCH','/webhooks'.'/'.rawurlencode($id),$data);}
+    public function archiveWebhook(string $id,string $version): array {return $this->request('DELETE','/webhooks'.'/'.rawurlencode($id),['version'=>$version]);}
+    public function rotateWebhookSecret(string $id,string $version): array {return $this->request('POST','/webhooks'.'/'.rawurlencode($id).'/rotate',['version'=>$version]);}
+    public function testWebhook(string $id,string $version): array {return $this->request('POST','/webhooks'.'/'.rawurlencode($id).'/test',['version'=>$version]);}
+    public function getWebhookDelivery(string $id,string $deliveryId): array {return $this->request('GET','/webhooks'.'/'.rawurlencode($id).'/deliveries/'.rawurlencode($deliveryId));}
+    public function replayWebhookDelivery(string $id,string $deliveryId,string $version): array {return $this->request('POST','/webhooks'.'/'.rawurlencode($id).'/deliveries/'.rawurlencode($deliveryId).'/replay',['version'=>$version]);}
+    public function listWebhooks(int $limit=50,?string $cursor=null,bool $archived=false): array {return $this->request('GET','/webhooks',null,['limit'=>$limit,'cursor'=>$cursor,'archived'=>$archived]);}
+    public function listWebhookDeliveries(string $id,int $limit=50,?string $cursor=null): array {return $this->request('GET','/webhooks'.'/'.rawurlencode($id).'/deliveries',null,['limit'=>$limit,'cursor'=>$cursor]);}
+    public function listWebhookAttempts(string $id,string $deliveryId,int $limit=50,?string $cursor=null): array {return $this->request('GET','/webhooks'.'/'.rawurlencode($id).'/deliveries'.'/'.rawurlencode($deliveryId).'/attempts',null,['limit'=>$limit,'cursor'=>$cursor]);}
+
+    /** Verify original bytes before parsing JSON; deduplicate the event ID separately. */
+    public static function verifyWebhook(string|array $secret,string $body,string $id,string $timestamp,string $signature,?int $now=null): bool {
+        $secrets=is_array($secret)?$secret:[$secret];$now??=time();
+        if(strlen($body)>32768||count($secrets)<1||count($secrets)>5||!preg_match('/\A[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}\z/i',$id)||!preg_match('/\A[0-9]{1,12}\z/',$timestamp)||abs($now-(int)$timestamp)>300||strlen($signature)>2048)return false;
+        $signatures=array_filter(preg_split('/\s+/',$signature),fn($value)=>preg_match('/\Av1,[A-Za-z0-9+\/]{43}=\z/',$value));if(count($signatures)<1||count($signatures)>20)return false;$valid=false;
+        foreach($secrets as $value){if(!is_string($value)||!preg_match('/\Awhsec_[A-Za-z0-9+\/]{43}=\z/',$value))return false;$key=base64_decode(substr($value,6),true);if($key===false||strlen($key)!==32||base64_encode($key)!==substr($value,6))return false;$expected=hash_hmac('sha256',$id.'.'.$timestamp.'.'.$body,$key,true);foreach($signatures as $candidate){$bytes=base64_decode(substr($candidate,3),true);$valid=($bytes!==false&&hash_equals($expected,$bytes))||$valid;}}
+        return $valid;
+    }
 }

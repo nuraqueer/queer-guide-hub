@@ -1,3 +1,4 @@
+import {createWebhookSecret,webhookInput,webhookVersionInput,webhookPage} from '../_shared/redirect-webhooks.ts';
 import {customerId,customerProfileInput,customerPage} from '../_shared/redirect-customers.ts';
 import {createQrImageToken,qrImageLinkInput,qrImageRevokeInput,qrImageUrls,publicQrImageRequest,storeQrImageArtwork} from '../_shared/redirect-qr-images.ts';
 import {qrAssetStorageConfig,qrLogoInput,storeRedirectQrLogo,qrLogoPublicResponse} from '../_shared/redirect-qr-assets.ts';
@@ -64,6 +65,49 @@ Deno.serve(async (req: Request) => {
    }else return json({error:'Method not supported'},405);
    const result=await db.rpc('redirect_manual_record',{p_actor:user!.id,p_id:id,p_values:values,p_expected_updated_at:expected});if(result.error)return rpcError(result.error);return json(result.data,id?200:201);
   }
+  const webhooks = path.match(/^\/webhooks(?:\/([a-f0-9-]{36}))?(?:\/(rotate|test|deliveries)(?:\/([a-f0-9-]{36})(?:\/(replay|attempts))?)?)?$/i);
+  if (webhooks) {
+    const [, id, endpoint, deliveryId, deliveryAction] = webhooks;
+    if ((id && !UUID.test(id)) || (deliveryId && !UUID.test(deliveryId)) || (endpoint && !id) || (deliveryId && endpoint !== 'deliveries'))
+      return json({error:'Invalid webhook request'},400);
+    const read = req.method === 'GET', scope = read ? 'workspace:read' : 'workspace:write';
+    let principalId: string | null = null;
+    if(tokenCredential){
+      const auth=await db.rpc('authenticate_redirect_api_token',{p_hash:await tokenDigest(credential),p_scope:scope});
+      if(auth.error)return rpcError(auth.error);
+      if(!auth.data)return json({error:'Webhook workspace scope is required'},403);
+      principalId=auth.data.id;
+    }else{
+      const principal=await sessionPrincipal(scope);if(principal.failure)return principal.failure;
+      if(principal.id!==null)return json({error:'Workspace owner access required'},403);
+    }
+    const query=new URL(req.url).searchParams;
+    let action:string, values:Record<string,unknown>={}, limit=50, cursor:string|null=null, archived=false;
+    if(endpoint==='deliveries'){
+      if(read && deliveryAction!=='replay'){
+        action=deliveryAction==='attempts'?'attempts':deliveryId?'get':'list';
+        if(action==='get' && query.size)return json({error:'Delivery details do not accept query fields'},400);
+        const page=webhookPage(query,true);limit=page.limit;cursor=page.cursor;
+      }else if(req.method==='POST' && deliveryId && deliveryAction==='replay' && !query.size){
+        action='replay';values=webhookVersionInput(await boundedJson(req,4096));
+      }else return json({error:'Method not supported'},405);
+      const result=await db.rpc('redirect_webhook_delivery_resource',{p_action:action,p_actor:user?.id??null,p_principal:principalId,p_webhook:id,p_id:deliveryId??null,p_values:values,p_limit:limit,p_after:cursor});
+      if(result.error)return rpcError(result.error);return json(result.data);
+    }
+    if(endpoint){
+      if(req.method!=='POST'||query.size)return json({error:'Method not supported'},405);
+      action=endpoint;values=webhookVersionInput(await boundedJson(req,4096));
+    }else if(read){
+      action=id?'get':'list';
+      if(id&&query.size)return json({error:'Webhook details do not accept query fields'},400);
+      const page=webhookPage(query);limit=page.limit;cursor=page.cursor;archived=page.archived;
+    }else if(req.method==='POST'&&!id&&!query.size){action='create';values=webhookInput(await boundedJson(req,65536),true);}
+    else if(req.method==='PATCH'&&id&&!query.size){action='patch';values=webhookInput(await boundedJson(req,65536));}
+    else if(req.method==='DELETE'&&id&&!query.size){action='archive';values=webhookVersionInput(await boundedJson(req,4096));}
+    else return json({error:'Method not supported'},405);
+    const result=await db.rpc('redirect_webhook_resource',{p_action:action,p_actor:user?.id??null,p_principal:principalId,p_id:id??null,p_values:values,p_secret:['create','rotate'].includes(action)?createWebhookSecret():null,p_limit:limit,p_after:cursor,p_archived:archived});
+    if(result.error)return rpcError(result.error);return json(result.data,action==='create'?201:200);
+  }
   const qrImages = path.match(/^\/qr-images(?:\/([a-f0-9-]{36}))?$/i);
   if (qrImages) {
     let principalId: string | null = null;
@@ -124,7 +168,7 @@ Deno.serve(async (req: Request) => {
       action = 'revoke';
       values = qrImageRevokeInput(await boundedJson(req, 1024));
     } else return json({ error: 'Method not supported' }, 405);
-    let result = await db.rpc('redirect_qr_image_resource', {
+    let result: Awaited<ReturnType<typeof storeQrImageArtwork>> = await db.rpc('redirect_qr_image_resource', {
       p_action: action,
       p_actor: user?.id ?? null,
       p_principal: principalId,
@@ -134,7 +178,7 @@ Deno.serve(async (req: Request) => {
       p_limit: limit,
       p_after: after,
     });
-    if (result.error) return rpcError(result.error);
+    if (result.error) return rpcError({ code: result.error.code, message: result.error.message ?? 'QR image publication failed' });
     if (result.data?.retryAfter)
       return new Response(
         JSON.stringify({ error: 'QR image link limit reached' }),
@@ -160,7 +204,7 @@ Deno.serve(async (req: Request) => {
       if (result.error)
         return result.error.code?.startsWith('QR_')
           ? json({ error: result.error.message }, 503)
-          : rpcError(result.error);
+          : rpcError({ code: result.error.code, message: result.error.message ?? 'QR image publication failed' });
       if (result.data?.retryAfter)
         return new Response(
           JSON.stringify({ error: 'QR image link limit reached' }),

@@ -1,6 +1,7 @@
+import json
 import os, sys
 sys.path.insert(0,os.path.join(os.path.dirname(__file__),'../python'))
-from redirects import RedirectsClient, RedirectApiError
+from redirects import RedirectsClient, RedirectApiError, verify_webhook
 api=RedirectsClient(os.environ['REDIRECT_TEST_TOKEN'],os.environ['REDIRECT_TEST_BASE'])
 assert api.list_domain_choices()['count']==1
 assert api.list_linked_domains()['count']==0
@@ -87,3 +88,22 @@ assert len(api.customer_journey(lead['customerExternalId'],limit=1,cursor=page['
 identity_version=customer['version'];customer=api.clear_customer(lead['customerExternalId'],identity_version)
 assert customer['name'] is None and customer['email'] is None and customer['avatarUrl'] is None and customer['version']!=identity_version
 assert len(api.customer_journey(lead['customerExternalId'])['data'])==3
+
+webhook=account.create_webhook({'name':'Python receiver','url':'https://receiver.example.org/events'});assert webhook['secret'].startswith('whsec_')
+assert 'secret' not in account.get_webhook(webhook['id']);assert any(row['id']==webhook['id'] for row in account.list_webhooks()['data'])
+webhook=account.update_webhook(webhook['id'],{'version':webhook['version'],'name':'Python updated'})
+webhook=account.rotate_webhook_secret(webhook['id'],webhook['version']);assert webhook['previousKeyExpiresAt']
+queued=account.test_webhook(webhook['id'],webhook['version']);assert queued['queued']
+delivery=account.get_webhook_delivery(webhook['id'],queued['deliveryId']);assert json.loads(delivery['body'])['type']=='webhook.test'
+assert account.list_webhook_deliveries(webhook['id'])['data'][0]['id']==delivery['id'];assert account.list_webhook_attempts(webhook['id'],delivery['id'])['data']==[]
+webhook=account.archive_webhook(webhook['id'],webhook['version']);assert webhook['deletedAt']
+webhook=account.update_webhook(webhook['id'],{'version':webhook['version'],'restore':True,'enabled':True})
+delivery=account.get_webhook_delivery(webhook['id'],delivery['id']);assert account.replay_webhook_delivery(webhook['id'],delivery['id'],delivery['version'])['state']=='queued'
+account.archive_webhook(webhook['id'],webhook['version'])
+
+with open(os.path.join(os.path.dirname(__file__),'webhook-fixture.json')) as file: fixture=json.load(file)
+args=(fixture['id'],fixture['timestamp'],fixture['signature'])
+assert verify_webhook(fixture['secret'],fixture['body'],*args,now=1700000000)
+assert not verify_webhook(fixture['secret'],fixture['body']+' ',*args,now=1700000000)
+assert not verify_webhook(fixture['secret'],fixture['body'],*args,now=1700000301)
+assert verify_webhook(fixture['secret'],fixture['body'],fixture['id'],fixture['timestamp'],'v1,'+'A'*43+'= '+fixture['signature'],now=1700000000)

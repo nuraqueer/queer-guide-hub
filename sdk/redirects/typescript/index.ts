@@ -1,3 +1,62 @@
+export { verifyWebhook } from './webhooks.js';
+export type WebhookEvent =
+  | 'link.created'
+  | 'link.updated'
+  | 'link.deleted'
+  | 'link.clicked'
+  | 'lead.created'
+  | 'sale.created';
+export interface WebhookInput {
+  name: string;
+  url: string;
+  eventTypes?: WebhookEvent[];
+  linkIds?: string[] | null;
+  includeCustomerId?: boolean;
+  enabled?: boolean;
+}
+export interface Webhook extends Required<WebhookInput> {
+  id: string;
+  version: string;
+  keyVersion: string;
+  previousKeyExpiresAt: string | null;
+  deletedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+export interface WebhookAttempt {
+  id: string;
+  number: number;
+  keyVersion: string | null;
+  startedAt: string;
+  finishedAt: string | null;
+  httpStatus: number | null;
+  errorCode: string | null;
+  responseExcerpt: string;
+  durationMs: number | null;
+}
+export interface WebhookDelivery {
+  id: string;
+  sequence: string;
+  webhookId: string;
+  eventId: string;
+  eventType: WebhookEvent | 'webhook.test';
+  version: string;
+  state: 'queued' | 'leased' | 'retry' | 'delivered' | 'failed' | 'cancelled';
+  attempts: number;
+  cycleAttempts: number;
+  replays: number;
+  createdAt: string;
+  finishedAt: string | null;
+  nextAttemptAt: string;
+  httpStatus: number | null;
+  errorCode: string | null;
+}
+export interface WebhookReceipt extends WebhookDelivery {
+  body: string;
+  responseExcerpt: string;
+  recentAttempts: WebhookAttempt[];
+}
+export type WebhookMutation<T> = T | { retryAfter: number };
 export type JsonObject = Record<string, unknown>;
 export interface CustomerProfile {
   customerExternalId: string;
@@ -360,7 +419,11 @@ export class RedirectsClient {
   updateLink(id: string, data: LinkInput) {
     return this.request<Mutation>('PATCH', '/links/' + id, data);
   }
-  upsertLink(data: LinkInput & { target: string } & ({slug: string} | {isDomainRoot: true;domainId: string})) {
+  upsertLink(
+    data: LinkInput & { target: string } & (
+        { slug: string } | { isDomainRoot: true; domainId: string }
+      ),
+  ) {
     return this.request<Mutation>('PUT', '/links/upsert', data);
   }
   deleteLink(id: string) {
@@ -369,7 +432,30 @@ export class RedirectsClient {
   listLinkedDomains(limit = 100, cursor?: string) {
     return this.request<LinkedDomainsPage>('GET', '/linked-domains', undefined, { limit, cursor });
   }
-  getQrStyle(id: string) { return this.request<{id:string;style:{dots:string;border:string;center:string;foreground:string;background:string};source:string;effectiveLogo?:{id:string;key:string;mime:string;bytes:number;width:number;height:number;sha256:string;url:string}|null;logoSource?:string}>('GET','/qr-styles/links/'+encodeURIComponent(id)); }
+  getQrStyle(id: string) {
+    return this.request<{
+      id: string;
+      style: {
+        dots: string;
+        border: string;
+        center: string;
+        foreground: string;
+        background: string;
+      };
+      source: string;
+      effectiveLogo?: {
+        id: string;
+        key: string;
+        mime: string;
+        bytes: number;
+        width: number;
+        height: number;
+        sha256: string;
+        url: string;
+      } | null;
+      logoSource?: string;
+    }>('GET', '/qr-styles/links/' + encodeURIComponent(id));
+  }
   createQrImage(data: QrImageInput) {
     return this.request<CreatedQrImageLink>('POST', '/qr-images', data);
   }
@@ -382,11 +468,7 @@ export class RedirectsClient {
     );
   }
   revokeQrImage(id: string, version: string) {
-    return this.request<QrImageLink>(
-      'DELETE',
-      '/qr-images/' + encodeURIComponent(id),
-      { version },
-    );
+    return this.request<QrImageLink>('DELETE', '/qr-images/' + encodeURIComponent(id), { version });
   }
   listDomainChoices(limit = 100, cursor?: string) {
     return this.request<DomainChoices>('GET', '/domain-choices', undefined, { limit, cursor });
@@ -445,6 +527,72 @@ export class RedirectsClient {
       cursor,
     });
   }
+  createWebhook(data: WebhookInput) {
+    return this.request<WebhookMutation<Webhook & { secret: string }>>('POST', '/webhooks', data);
+  }
+  getWebhook(id: string) {
+    return this.request<Webhook>('GET', '/webhooks/' + encodeURIComponent(id));
+  }
+  listWebhooks(limit = 50, cursor?: string, archived = false) {
+    return this.request<Page<Webhook>>('GET', '/webhooks', undefined, { limit, cursor, archived });
+  }
+  updateWebhook(id: string, data: Partial<WebhookInput> & { version: string; restore?: boolean }) {
+    return this.request<Webhook>('PATCH', '/webhooks/' + encodeURIComponent(id), data);
+  }
+  archiveWebhook(id: string, version: string) {
+    return this.request<Webhook>('DELETE', '/webhooks/' + encodeURIComponent(id), { version });
+  }
+  rotateWebhookSecret(id: string, version: string) {
+    return this.request<WebhookMutation<Webhook & { secret: string }>>(
+      'POST',
+      '/webhooks/' + encodeURIComponent(id) + '/rotate',
+      { version },
+    );
+  }
+  testWebhook(id: string, version: string) {
+    return this.request<WebhookMutation<{ eventId: string; deliveryId: string; queued: true }>>(
+      'POST',
+      '/webhooks/' + encodeURIComponent(id) + '/test',
+      { version },
+    );
+  }
+  listWebhookDeliveries(id: string, limit = 50, cursor?: string) {
+    return this.request<Page<WebhookDelivery>>(
+      'GET',
+      '/webhooks/' + encodeURIComponent(id) + '/deliveries',
+      undefined,
+      { limit, cursor },
+    );
+  }
+  getWebhookDelivery(id: string, deliveryId: string) {
+    return this.request<WebhookReceipt>(
+      'GET',
+      '/webhooks/' + encodeURIComponent(id) + '/deliveries/' + encodeURIComponent(deliveryId),
+    );
+  }
+  listWebhookAttempts(id: string, deliveryId: string, limit = 50, cursor?: string) {
+    return this.request<{ data: WebhookAttempt[]; nextCursor: string | null }>(
+      'GET',
+      '/webhooks/' +
+        encodeURIComponent(id) +
+        '/deliveries/' +
+        encodeURIComponent(deliveryId) +
+        '/attempts',
+      undefined,
+      { limit, cursor },
+    );
+  }
+  replayWebhookDelivery(id: string, deliveryId: string, version: string) {
+    return this.request<WebhookMutation<WebhookDelivery>>(
+      'POST',
+      '/webhooks/' +
+        encodeURIComponent(id) +
+        '/deliveries/' +
+        encodeURIComponent(deliveryId) +
+        '/replay',
+      { version },
+    );
+  }
   createReport(data: { name: string; filters: ReportFilters }) {
     return this.request<SavedReport>('POST', '/reports', data);
   }
@@ -486,11 +634,7 @@ export class RedirectsClient {
     );
   }
   readPublicReport(data?: PublicReportInput) {
-    return this.request<PublicReport>(
-      data === undefined ? 'GET' : 'POST',
-      '/public-report',
-      data,
-    );
+    return this.request<PublicReport>(data === undefined ? 'GET' : 'POST', '/public-report', data);
   }
   getResource(kind: ResourceKind, id: string) {
     return this.request<JsonObject>('GET', '/' + kind + '/' + id);

@@ -29,13 +29,13 @@ These sources have not been published to package registries. Copy the relevant
 source into server code or use the local package/module. No third-party runtime
 libraries are required. TypeScript compilation uses the repository's TypeScript.
 
-| Language | Source | Minimum runtime | Example command (from repository root) |
-| --- | --- | --- | --- |
-| TypeScript/JavaScript | `typescript/index.ts` | Node 22+ | `npx tsc -p sdk/redirects/typescript/tsconfig.json` then `node sdk/redirects/typescript/example.mjs` |
-| Python | `python/redirects.py` | Python 3.8+ | `python3 sdk/redirects/python/example.py` |
-| Go | `go/redirects.go` | Go 1.23+ | From `sdk/redirects/go`: `go run ./cmd/example` |
-| Ruby | `ruby/redirects.rb` | Ruby 2.6+ | `ruby sdk/redirects/ruby/example.rb` |
-| PHP | `php/RedirectsClient.php` | PHP 8.1+, HTTPS streams | `php sdk/redirects/php/example.php` |
+| Language              | Source                    | Minimum runtime         | Example command (from repository root)                                                               |
+| --------------------- | ------------------------- | ----------------------- | ---------------------------------------------------------------------------------------------------- |
+| TypeScript/JavaScript | `typescript/index.ts`     | Node 22+                | `npx tsc -p sdk/redirects/typescript/tsconfig.json` then `node sdk/redirects/typescript/example.mjs` |
+| Python                | `python/redirects.py`     | Python 3.8+             | `python3 sdk/redirects/python/example.py`                                                            |
+| Go                    | `go/redirects.go`         | Go 1.23+                | From `sdk/redirects/go`: `go run ./cmd/example`                                                      |
+| Ruby                  | `ruby/redirects.rb`       | Ruby 2.6+               | `ruby sdk/redirects/ruby/example.rb`                                                                 |
+| PHP                   | `php/RedirectsClient.php` | PHP 8.1+, HTTPS streams | `php sdk/redirects/php/example.php`                                                                  |
 
 Set `REDIRECT_API_TOKEN` and optionally `REDIRECT_API_BASE` and `REDIRECT_TARGET`.
 Each example creates a random short link and prints its short URL. To exercise
@@ -77,12 +77,11 @@ provider or schema is touched.
 Go must be available on PATH or configured via `REDIRECT_GO_BIN`; the local agent's
 verified vendor runtime was kept under ignored `tmp/go-runtime`. The test command
 does not download runtimes. Production migrations/release, package publication,
-remaining domain/deep-link methods, webhooks and external integrations remain pending.
+remaining domain/deep-link methods and external integrations remain pending; outgoing webhook methods are implemented locally and await deployment validation.
 
 Presentation APIs are documented in `docs/guides/redirect-presentations.md`.
 The SDK integration suite checks all five presentation/upload wrappers with real
 encoded raster bytes; file storage uses a fixture adapter.
-
 
 Policy management is available through getPolicy/updatePolicy (TypeScript/PHP),
 get_policy/update_policy (Python/Ruby), and GetPolicy/UpdatePolicy (Go). Use
@@ -122,7 +121,6 @@ characters. Omitted update fields are preserved. All five native HTTP test clien
 exercise these fields. Manual CMS type/source conversions are a separate owner-
 session endpoint and are not granted to server keys.
 
-
 Linked-domain management facets are available through `listLinkedDomains(limit,
 cursor)` (TypeScript/PHP), `list_linked_domains` (Python/Ruby), and
 `ListLinkedDomains(ctx, limit, cursor)` (Go). Pages contain accessible domain
@@ -131,7 +129,6 @@ revision. They include inactive domains used by visible SHORT links and exclude
 inaccessible folders/IDs. These facets do not establish creation readiness; use
 listDomainChoices for that. When combining pages, reject a changed revision and
 restart the read. Domain UUID/null filters on list/count continue to apply.
-
 
 For a managed domain homepage, create/upsert with `isDomainRoot: true`, a ready
 custom `domainId` and `target`. Root upsert identifies the existing root by domain
@@ -151,7 +148,6 @@ contains only public raster metadata and its fixed-project hosted URL. Current l
 owner preference endpoints remain unavailable to keys. All five native tests
 exercise these getters. See [saved QR styles](../../docs/guides/redirect-qr-branding.md)
 for precedence, batching, versions and remaining hosted-logo/image work.
-
 
 ## Live QR image links
 
@@ -201,7 +197,6 @@ for cleanup; do not blindly retry writes. List/revoke can manage failed drafts.
 Uploaded raster artwork is public, with a read grace before physical cleanup after
 revocation/deletion. Downloaded/previously fetched images cannot be erased.
 
-
 ## Personal saved reports and shared dashboards
 
 Report methods use a **current account-session access token**, passed as the
@@ -212,18 +207,18 @@ supplies a current token and creates a new client after refreshing it.
 
 All five languages expose the same operations, using their usual naming:
 
-| Operation | TypeScript / PHP | Python / Ruby | Go |
-| --- | --- | --- | --- |
-| Create personal report | `createReport(data)` | `create_report(data)` | `CreateReport(ctx, data)` |
-| Get report | `getReport(id)` | `get_report(id)` | `GetReport(ctx, id)` |
-| Cursor page | `listReports(limit, cursor)` | `list_reports(limit, cursor)` | `ListReports(ctx, limit, cursor)` |
-| Versioned edit | `updateReport(id, data)` | `update_report(id, data)` | `UpdateReport(ctx, id, data)` |
-| Delete report | `deleteReport(id)` | `delete_report(id)` | `DeleteReport(ctx, id)` |
-| Run saved filters | `runReport(id)` | `run_report(id)` | `RunReport(ctx, id)` |
-| Explicit publication | `createReportShare(id, data)` | `create_report_share(id, data)` | `CreateReportShare(ctx, id, data)` |
-| List publications | `listReportShares(id)` | `list_report_shares(id)` | `ListReportShares(ctx, id)` |
-| Revoke publication | `revokeReportShare(id, shareId)` | `revoke_report_share(id, share_id)` | `RevokeReportShare(ctx, id, shareID)` |
-| Read public aggregates | `readPublicReport(data?)` | `read_public_report(data)` | `ReadPublicReport(ctx, data)` |
+| Operation              | TypeScript / PHP                 | Python / Ruby                       | Go                                    |
+| ---------------------- | -------------------------------- | ----------------------------------- | ------------------------------------- |
+| Create personal report | `createReport(data)`             | `create_report(data)`               | `CreateReport(ctx, data)`             |
+| Get report             | `getReport(id)`                  | `get_report(id)`                    | `GetReport(ctx, id)`                  |
+| Cursor page            | `listReports(limit, cursor)`     | `list_reports(limit, cursor)`       | `ListReports(ctx, limit, cursor)`     |
+| Versioned edit         | `updateReport(id, data)`         | `update_report(id, data)`           | `UpdateReport(ctx, id, data)`         |
+| Delete report          | `deleteReport(id)`               | `delete_report(id)`                 | `DeleteReport(ctx, id)`               |
+| Run saved filters      | `runReport(id)`                  | `run_report(id)`                    | `RunReport(ctx, id)`                  |
+| Explicit publication   | `createReportShare(id, data)`    | `create_report_share(id, data)`     | `CreateReportShare(ctx, id, data)`    |
+| List publications      | `listReportShares(id)`           | `list_report_shares(id)`            | `ListReportShares(ctx, id)`           |
+| Revoke publication     | `revokeReportShare(id, shareId)` | `revoke_report_share(id, share_id)` | `RevokeReportShare(ctx, id, shareID)` |
+| Read public aggregates | `readPublicReport(data?)`        | `read_public_report(data)`          | `ReadPublicReport(ctx, data)`         |
 
 Python and Ruby page options are keyword arguments. Go always takes an explicit
 limit and uses an empty cursor for the first page; the others default to 50.
@@ -244,14 +239,17 @@ report edit does not silently change the published filters.
 ```ts
 const account = new RedirectsClient(currentAccountAccessToken);
 let report = await account.createReport({
-  name: 'Newsletter', filters: { linkIds: [linkId], qr: true, interval: 'day' },
+  name: 'Newsletter',
+  filters: { linkIds: [linkId], qr: true, interval: 'day' },
 });
 const aggregates = await account.runReport(report.id);
 report = await account.updateReport(report.id, {
-  version: report.version, name: 'Reviewed newsletter',
+  version: report.version,
+  name: 'Reviewed newsletter',
 });
 const share = await account.createReportShare(report.id, {
-  title: 'Newsletter clicks', reportVersion: report.version,
+  title: 'Newsletter clicks',
+  reportVersion: report.version,
 });
 // Separate capability client: never substitute an account credential here.
 const reader = new RedirectsClient('qg_report_' + share.id);
@@ -274,7 +272,6 @@ PHP additionally checks empty filter/date objects. Report records are cleaned
 before the rest of the suite runs. These remain local SDK sources and require
 controlled API rollout and package publication before release.
 
-
 ## Customer identity and journeys
 
 All five clients expose getCustomer(id), updateCustomer(id, data),
@@ -294,7 +291,9 @@ Profiles and journeys remain private; public dashboard DTOs never include them.
 ```ts
 let customer = await api.getCustomer(externalCustomerId);
 customer = await api.updateCustomer(externalCustomerId, {
-  version: customer.version, name: 'Avery', email: 'avery@example.com',
+  version: customer.version,
+  name: 'Avery',
+  email: 'avery@example.com',
 });
 const page = await api.customerJourney(externalCustomerId, 50);
 await api.clearCustomer(externalCustomerId, customer.version);
@@ -307,3 +306,75 @@ pages, identity-only clearing and preserved journeys against the real API/SQL.
 The HTTP fixture additionally proves partial-grant edit denial, hidden-source
 exclusion and public-report identity isolation. See the conversion guide for the
 service-only table, deletion lifecycle, profile limits and UI behavior.
+
+## Signed outgoing webhooks
+
+Owner account sessions and unrestricted owner-created server keys can manage
+webhooks. Keys require `events:read` and `workspace:read` for reads, or
+`events:read` and `workspace:write` for mutations. Member and link-limited keys
+cannot subscribe to workspace events. The creator must remain an owner.
+
+All five clients expose create/get/list/update/archive, rotate-secret/test,
+list/get deliveries, list attempts, and replay methods (`createWebhook` in
+TypeScript/PHP, `CreateWebhook` in Go, `create_webhook` in Python/Ruby).
+Pause uses an update with `enabled: false`; restore uses `restore: true` and an
+explicit enabled state. Writes require the current `version`. A stale version
+returns 409. Paginated history cursors are decimal **strings**, not JavaScript
+numbers. Throttled creation, rotation, testing, or replay returns `{retryAfter}`;
+check this union before using a returned record. Clients never retry mutations.
+
+```typescript
+const result = await owner.createWebhook({
+  name: 'Conversion receiver',
+  url: 'https://your-domain.com/webhooks',
+  eventTypes: ['lead.created', 'sale.created'],
+  includeCustomerId: false,
+});
+if ('retryAfter' in result) throw new Error(`Wait ${result.retryAfter} seconds`);
+// Store result.secret in your receiver's secret manager now. Reads never return it.
+```
+
+Supported events are `link.created`, `link.updated`, `link.deleted`,
+`link.clicked`, `lead.created`, and `sale.created`. Tests emit `webhook.test`.
+Payloads contain event ID/type/timestamp and bounded event data. Destination
+URLs, passwords, query/referrer parameters, IP addresses, private customer
+names/email/avatar, and notes are excluded. Customer external IDs are an explicit
+subscription option. Sale amounts remain decimal strings.
+
+Verify the **original request bytes before JSON parsing** with the SDK helper:
+
+```typescript
+import { verifyWebhook } from './typescript/index.js';
+const valid = await verifyWebhook(secret, rawRequestBytes, {
+  id: request.headers.get('webhook-id') ?? '',
+  timestamp: request.headers.get('webhook-timestamp') ?? '',
+  signature: request.headers.get('webhook-signature') ?? '',
+});
+if (!valid) return new Response('Invalid signature', { status: 401 });
+// Atomically deduplicate webhook-id and process the event, then acknowledge 2xx.
+```
+
+Python exports `verify_webhook`; Ruby uses `QueerGuide.verify_webhook`; PHP uses
+`RedirectsClient::verifyWebhook`; Go uses `VerifyWebhook(secrets, body, id,
+timestamp, signature, now)`. Helpers accept rotation signatures, compare complete
+MACs without an early byte mismatch exit, reject timestamps beyond five minutes,
+and enforce a 32 KiB body limit. Keep receiver clocks synchronized. Verification
+alone does not deduplicate events.
+
+A delivery succeeds only on HTTP 2xx. Other responses/network failures retry up
+to eight times with exponential backoff and bounded Retry-After. Redirects are
+never followed. Retries and manual replay retain event ID and exact body; replay
+may therefore resend the original customer-ID choice. Rotation signs with both
+current and previous secrets during a 24-hour overlap. Pause/archive/routing
+changes cancel pending and leased work; a request already in flight cannot be
+recalled. Completed payloads, bounded response excerpts, and attempts remain
+inspectable for 30 days. New signing secrets appear once on creation/rotation.
+
+The isolated verification suite runs with
+`REDIRECT_DENO_BIN=/path/to/deno npm run test:redirect-webhooks`. It generates a
+local test CA, proves pinned TCP/TLS delivery and wrong-hostname rejection, and
+never alters production trust roots or sends foreign callbacks. Deployment of
+`redirect-webhooks-dispatch`, the migration, and Vault-backed minute cron remains
+necessary. Set the existing `supabase_url`/`internal_invoke_secret` Vault records
+and matching Edge `INTERNAL_INVOKE_SECRET`; verify real scheduled receipts before
+claiming production availability. No webhook secrets belong in browser storage.

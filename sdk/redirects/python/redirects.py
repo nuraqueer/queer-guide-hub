@@ -93,3 +93,33 @@ class RedirectsClient:
     def create_resource(self, kind, data): return self.request('POST','/'+kind,data)
     def update_resource(self, kind, resource_id, data): return self.request('PATCH','/'+kind+'/'+resource_id,data)
     def delete_resource(self, kind, resource_id): return self.request('DELETE','/'+kind+'/'+resource_id)
+    def create_webhook(self, data): return self.request('POST','/webhooks',data)
+    def get_webhook(self, webhook_id): return self.request('GET','/webhooks'+'/'+quote(webhook_id,safe=''))
+    def update_webhook(self, webhook_id, data): return self.request('PATCH','/webhooks'+'/'+quote(webhook_id,safe=''),data)
+    def archive_webhook(self, webhook_id, version): return self.request('DELETE','/webhooks'+'/'+quote(webhook_id,safe=''),{'version':version})
+    def rotate_webhook_secret(self, webhook_id, version): return self.request('POST','/webhooks'+'/'+quote(webhook_id,safe='')+'/rotate',{'version':version})
+    def test_webhook(self, webhook_id, version): return self.request('POST','/webhooks'+'/'+quote(webhook_id,safe='')+'/test',{'version':version})
+    def get_webhook_delivery(self, webhook_id, delivery_id): return self.request('GET','/webhooks'+'/'+quote(webhook_id,safe='')+'/deliveries/'+quote(delivery_id,safe=''))
+    def replay_webhook_delivery(self, webhook_id, delivery_id, version): return self.request('POST','/webhooks'+'/'+quote(webhook_id,safe='')+'/deliveries/'+quote(delivery_id,safe='')+'/replay',{'version':version})
+    def list_webhooks(self, limit=50, cursor=None, archived=False): return self.request('GET','/webhooks',query={'limit':limit,'cursor':cursor,'archived':archived})
+    def list_webhook_deliveries(self, webhook_id, limit=50, cursor=None): return self.request('GET','/webhooks'+ '/' + quote(webhook_id,safe='') + '/deliveries',query={'limit':limit,'cursor':cursor})
+    def list_webhook_attempts(self, webhook_id, delivery_id, limit=50, cursor=None): return self.request('GET','/webhooks'+ '/' + quote(webhook_id,safe='') + '/deliveries'+'/'+quote(delivery_id,safe='')+'/attempts',query={'limit':limit,'cursor':cursor})
+
+
+def verify_webhook(secret, raw_body, webhook_id, timestamp, signature, now=None):
+    """Verify original bytes before parsing; deduplicate webhook_id separately."""
+    import base64, hashlib, hmac, re, time
+    secrets = secret if isinstance(secret,list) else [secret]
+    body = raw_body.encode('utf-8') if isinstance(raw_body,str) else raw_body
+    now = int(time.time()) if now is None else now
+    if not isinstance(body,bytes) or len(body)>32768 or not 1<=len(secrets)<=5 or not re.fullmatch(r'[a-fA-F0-9]{8}(?:-[a-fA-F0-9]{4}){3}-[a-fA-F0-9]{12}',webhook_id) or not re.fullmatch(r'\d{1,12}',timestamp) or abs(now-int(timestamp))>300 or len(signature)>2048: return False
+    signatures=[value[3:] for value in signature.split() if re.fullmatch(r'v1,[A-Za-z0-9+/]{43}=',value)]
+    if not 1<=len(signatures)<=20:return False
+    valid=False
+    for value in secrets:
+        if not isinstance(value,str) or not re.fullmatch(r'whsec_[A-Za-z0-9+/]{43}=',value):return False
+        key=base64.b64decode(value[6:],validate=True)
+        if len(key)!=32 or base64.b64encode(key).decode()!=value[6:]:return False
+        expected=hmac.new(key,(webhook_id+'.'+timestamp+'.').encode()+body,hashlib.sha256).digest()
+        for encoded in signatures:valid=hmac.compare_digest(expected,base64.b64decode(encoded,validate=True)) or valid
+    return valid

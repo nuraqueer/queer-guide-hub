@@ -50,6 +50,7 @@
     "test:redirect-roots": "node scripts/test-redirect-root-links.mjs",
     "test:redirect-stripe": "node scripts/test-redirect-stripe.mjs",
     "test:redirect-sdks": "node scripts/test-redirect-sdks.mjs",
+    "test:redirect-webhooks": "node scripts/test-redirect-webhooks.mjs",
     "test:redirect-qr": "node scripts/test-redirect-qr-worker.mjs"
   },
   "lint-staged": {

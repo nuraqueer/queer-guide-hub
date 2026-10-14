@@ -1,3 +1,4 @@
+import { RedirectWebhooks } from './RedirectWebhooks';
 import { RedirectQrStyleSettings } from './RedirectQrStyleSettings';
 import { RedirectDomains } from './RedirectDomains';
 import { RedirectWorkspaceMembers } from './RedirectWorkspaceMembers';
@@ -23,6 +24,7 @@ export function RedirectWorkspaceDialog({ onClose }: { onClose: () => void }) {
   const [showMembers, setShowMembers] = useState(false);
   const [showDomains, setShowDomains] = useState(false);
   const [showQrStyle, setShowQrStyle] = useState(false);
+  const [showWebhooks, setShowWebhooks] = useState(false);
   const [accessFolder, setAccessFolder] = useState<string | null>(null);
   const [kind, setKind] = useState<WorkspaceResource>('folders');
   const [editing, setEditing] = useState<string | null>(null);
@@ -97,6 +99,10 @@ export function RedirectWorkspaceDialog({ onClose }: { onClose: () => void }) {
           {showQrStyle ? 'Hide saved QR style' : 'Manage saved QR style'}
         </Button>
         {showQrStyle && <RedirectQrStyleSettings />}
+        <Button variant="outline" onClick={() => setShowWebhooks(!showWebhooks)}>
+          {showWebhooks ? 'Hide webhooks' : 'Manage outgoing webhooks'}
+        </Button>
+        {showWebhooks && <RedirectWebhooks />}
         {workspace.isError && (
           <div role="alert">
             <p>Could not load the link workspace. {workspace.error.message}</p>

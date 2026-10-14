@@ -1,0 +1,7 @@
+{
+  "secret": "whsec_BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc=",
+  "id": "00000000-0000-4000-8000-000000000007",
+  "timestamp": "1700000000",
+  "body": "{\"amount\":\"1.123456\",\"text\":\"ü\"}",
+  "signature": "v1,KOByqI84Ma303+GUL12oc2zVkMJ303NxM2u4bqRQtVk="
+}

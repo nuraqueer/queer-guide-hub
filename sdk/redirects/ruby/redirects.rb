@@ -1,3 +1,5 @@
+require 'openssl'
+require 'base64'
 require 'json'
 require 'net/http'
 require 'uri'
@@ -87,5 +89,33 @@ module QueerGuide
     def create_resource(kind,data); request('POST','/'+kind,data); end
     def update_resource(kind,id,data); request('PATCH','/'+kind+'/'+id,data); end
     def delete_resource(kind,id); request('DELETE','/'+kind+'/'+id); end
+    def create_webhook(data); request('POST','/webhooks',data); end
+    def get_webhook(id); request('GET','/webhooks'+'/'+URI.encode_www_form_component(id)); end
+    def update_webhook(id,data); request('PATCH','/webhooks'+'/'+URI.encode_www_form_component(id),data); end
+    def archive_webhook(id,version); request('DELETE','/webhooks'+'/'+URI.encode_www_form_component(id),{version:version}); end
+    def rotate_webhook_secret(id,version); request('POST','/webhooks'+'/'+URI.encode_www_form_component(id)+'/rotate',{version:version}); end
+    def test_webhook(id,version); request('POST','/webhooks'+'/'+URI.encode_www_form_component(id)+'/test',{version:version}); end
+    def get_webhook_delivery(id,delivery_id); request('GET','/webhooks'+'/'+URI.encode_www_form_component(id)+'/deliveries/'+URI.encode_www_form_component(delivery_id)); end
+    def replay_webhook_delivery(id,delivery_id,version); request('POST','/webhooks'+'/'+URI.encode_www_form_component(id)+'/deliveries/'+URI.encode_www_form_component(delivery_id)+'/replay',{version:version}); end
+    def list_webhooks(limit:50,cursor:nil,archived:false); request('GET','/webhooks',nil,{limit:limit,cursor:cursor,archived:archived}); end
+    def list_webhook_deliveries(id,limit:50,cursor:nil); request('GET','/webhooks'+'/'+URI.encode_www_form_component(id)+'/deliveries',nil,{limit:limit,cursor:cursor}); end
+    def list_webhook_attempts(id,delivery_id,limit:50,cursor:nil); request('GET','/webhooks'+'/'+URI.encode_www_form_component(id)+'/deliveries'+'/'+URI.encode_www_form_component(delivery_id)+'/attempts',nil,{limit:limit,cursor:cursor}); end
+  end
+
+  def self.verify_webhook(secret,body,id,timestamp,signature,now:Time.now.to_i)
+    secrets=secret.is_a?(Array) ? secret : [secret]
+    return false unless body.is_a?(String) && body.bytesize<=32768 && (1..5).include?(secrets.length) && id.match?(/\A[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}\z/i) && timestamp.match?(/\A[0-9]{1,12}\z/) && (now-timestamp.to_i).abs<=300 && signature.bytesize<=2048
+    signatures=signature.split.select{|value|value.match?(/\Av1,[A-Za-z0-9+\/]{43}=\z/)}
+    return false unless (1..20).include?(signatures.length)
+    valid=false
+    secrets.each do |value|
+      return false unless value.is_a?(String)&&value.match?(/\Awhsec_[A-Za-z0-9+\/]{43}=\z/)
+      key=Base64.strict_decode64(value[6..]);return false unless key.bytesize==32 && Base64.strict_encode64(key)==value[6..]
+      expected=OpenSSL::HMAC.digest('SHA256',key,id+'.'+timestamp+'.'+body)
+      signatures.each{|candidate|bytes=Base64.strict_decode64(candidate[3..]);difference=0;32.times{|index|difference|=expected.getbyte(index)^bytes.getbyte(index)};valid=(difference==0)||valid}
+    end
+    valid
+  rescue ArgumentError
+    false
   end
 end

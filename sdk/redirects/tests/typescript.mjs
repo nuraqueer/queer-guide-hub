@@ -1,5 +1,6 @@
+import {readFileSync} from 'node:fs';
 import assert from 'node:assert/strict';
-import {RedirectsClient,RedirectApiError} from '../../../tmp/sdk-tests/typescript.mjs';
+import {RedirectsClient,RedirectApiError,verifyWebhook} from '../../../tmp/sdk-tests/typescript.mjs';
 const api=new RedirectsClient(process.env.REDIRECT_TEST_TOKEN,{baseUrl:process.env.REDIRECT_TEST_BASE});
 assert.equal((await api.listDomainChoices()).count,1);
 assert.equal((await api.listLinkedDomains()).count,0);
@@ -78,3 +79,23 @@ assert.equal((await api.customerJourney(lead.customerExternalId,1,customerPage.n
 const identityVersion=customer.version;customer=await api.clearCustomer(lead.customerExternalId,identityVersion);
 assert.equal(customer.name,null);assert.equal(customer.email,null);assert.equal(customer.avatarUrl,null);assert.notEqual(customer.version,identityVersion);
 assert.equal((await api.customerJourney(lead.customerExternalId)).data.length,3);
+
+let webhook=await account.createWebhook({name:'TS receiver',url:'https://receiver.example.org/events'});assert.match(webhook.secret,/^whsec_/);
+assert.equal((await account.getWebhook(webhook.id)).secret,undefined);assert.ok((await account.listWebhooks(50)).data.some(row=>row.id===webhook.id));
+const webhookVersion=webhook.version;webhook=await account.updateWebhook(webhook.id,{version:webhook.version,name:'TS updated'});
+await assert.rejects(account.updateWebhook(webhook.id,{version:webhookVersion,name:'Stale'}),error=>error.status===409);
+webhook=await account.rotateWebhookSecret(webhook.id,webhook.version);assert.ok(webhook.previousKeyExpiresAt);
+const webhookTest=await account.testWebhook(webhook.id,webhook.version);assert.equal(webhookTest.queued,true);
+assert.equal((await account.listWebhookDeliveries(webhook.id)).data[0].id,webhookTest.deliveryId);
+let delivery=await account.getWebhookDelivery(webhook.id,webhookTest.deliveryId);assert.equal(JSON.parse(delivery.body).type,'webhook.test');assert.equal((await account.listWebhookAttempts(webhook.id,delivery.id)).data.length,0);
+webhook=await account.archiveWebhook(webhook.id,webhook.version);assert.ok(webhook.deletedAt);
+webhook=await account.updateWebhook(webhook.id,{version:webhook.version,restore:true,enabled:true});
+delivery=await account.getWebhookDelivery(webhook.id,delivery.id);assert.equal(delivery.state,'cancelled');assert.equal((await account.replayWebhookDelivery(webhook.id,delivery.id,delivery.version)).state,'queued');
+await account.archiveWebhook(webhook.id,webhook.version);
+
+const signatureFixture=JSON.parse(readFileSync(new URL('./webhook-fixture.json',import.meta.url),'utf8'));
+const signatureHeaders={id:signatureFixture.id,timestamp:signatureFixture.timestamp,signature:signatureFixture.signature};
+assert.equal(await verifyWebhook(signatureFixture.secret,signatureFixture.body,signatureHeaders,1700000000),true);
+assert.equal(await verifyWebhook(signatureFixture.secret,signatureFixture.body+' ',signatureHeaders,1700000000),false);
+assert.equal(await verifyWebhook(signatureFixture.secret,signatureFixture.body,signatureHeaders,1700000301),false);
+assert.equal(await verifyWebhook(signatureFixture.secret,signatureFixture.body,{...signatureHeaders,signature:'v1,'+'A'.repeat(43)+'= '+signatureFixture.signature},1700000000),true);

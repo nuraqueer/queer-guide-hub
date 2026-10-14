@@ -4,12 +4,16 @@ package redirects
 import (
 	"bytes"
 	"context"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"net/url"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -322,4 +326,91 @@ func (c *Client) CustomerJourney(ctx context.Context, id string, limit int, curs
 		query["cursor"] = cursor
 	}
 	return c.Request(ctx, "GET", "/customers/journey", nil, query)
+}
+
+func (c *Client) CreateWebhook(ctx context.Context, data Object) (Object, error) {
+	return c.Request(ctx, "POST", "/webhooks", data, nil)
+}
+func (c *Client) GetWebhook(ctx context.Context, id string) (Object, error) {
+	return c.Request(ctx, "GET", "/webhooks"+"/"+url.PathEscape(id), nil, nil)
+}
+func (c *Client) UpdateWebhook(ctx context.Context, id string, data Object) (Object, error) {
+	return c.Request(ctx, "PATCH", "/webhooks"+"/"+url.PathEscape(id), data, nil)
+}
+func (c *Client) ArchiveWebhook(ctx context.Context, id string, version string) (Object, error) {
+	return c.Request(ctx, "DELETE", "/webhooks"+"/"+url.PathEscape(id), Object{"version": version}, nil)
+}
+func (c *Client) RotateWebhookSecret(ctx context.Context, id string, version string) (Object, error) {
+	return c.Request(ctx, "POST", "/webhooks"+"/"+url.PathEscape(id)+"/rotate", Object{"version": version}, nil)
+}
+func (c *Client) TestWebhook(ctx context.Context, id string, version string) (Object, error) {
+	return c.Request(ctx, "POST", "/webhooks"+"/"+url.PathEscape(id)+"/test", Object{"version": version}, nil)
+}
+func (c *Client) GetWebhookDelivery(ctx context.Context, id string, deliveryID string) (Object, error) {
+	return c.Request(ctx, "GET", "/webhooks"+"/"+url.PathEscape(id)+"/deliveries/"+url.PathEscape(deliveryID), nil, nil)
+}
+func (c *Client) ReplayWebhookDelivery(ctx context.Context, id string, deliveryID string, version string) (Object, error) {
+	return c.Request(ctx, "POST", "/webhooks"+"/"+url.PathEscape(id)+"/deliveries/"+url.PathEscape(deliveryID)+"/replay", Object{"version": version}, nil)
+}
+func (c *Client) ListWebhooks(ctx context.Context, limit int, cursor string, archived bool) (Object, error) {
+	q := Object{"limit": limit, "archived": archived}
+	if cursor != "" {
+		q["cursor"] = cursor
+	}
+	return c.Request(ctx, "GET", "/webhooks", nil, q)
+}
+func (c *Client) ListWebhookDeliveries(ctx context.Context, id string, limit int, cursor string) (Object, error) {
+	q := Object{"limit": limit}
+	if cursor != "" {
+		q["cursor"] = cursor
+	}
+	return c.Request(ctx, "GET", "/webhooks"+"/"+url.PathEscape(id)+"/deliveries", nil, q)
+}
+func (c *Client) ListWebhookAttempts(ctx context.Context, id string, deliveryID string, limit int, cursor string) (Object, error) {
+	q := Object{"limit": limit}
+	if cursor != "" {
+		q["cursor"] = cursor
+	}
+	return c.Request(ctx, "GET", "/webhooks"+"/"+url.PathEscape(id)+"/deliveries"+"/"+url.PathEscape(deliveryID)+"/attempts", nil, q)
+}
+
+// VerifyWebhook verifies exact request bytes before JSON parsing. Deduplicate id separately.
+func VerifyWebhook(secrets []string, body []byte, id, timestamp, signature string, now time.Time) bool {
+	if len(body) > 32768 || len(secrets) < 1 || len(secrets) > 5 || !regexp.MustCompile(`(?i)^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$`).MatchString(id) || !regexp.MustCompile(`^[0-9]{1,12}$`).MatchString(timestamp) || len(signature) > 2048 {
+		return false
+	}
+	at, err := strconv.ParseInt(timestamp, 10, 64)
+	if err != nil || now.Unix()-at > 300 || at-now.Unix() > 300 {
+		return false
+	}
+	signatures := []string{}
+	for _, value := range strings.Fields(signature) {
+		if regexp.MustCompile(`^v1,[A-Za-z0-9+/]{43}=$`).MatchString(value) {
+			signatures = append(signatures, value[3:])
+		}
+	}
+	if len(signatures) < 1 || len(signatures) > 20 {
+		return false
+	}
+	valid := false
+	for _, value := range secrets {
+		if !regexp.MustCompile(`^whsec_[A-Za-z0-9+/]{43}=$`).MatchString(value) {
+			return false
+		}
+		key, err := base64.StdEncoding.Strict().DecodeString(value[6:])
+		if err != nil || len(key) != 32 || base64.StdEncoding.EncodeToString(key) != value[6:] {
+			return false
+		}
+		mac := hmac.New(sha256.New, key)
+		mac.Write([]byte(id + "." + timestamp + "."))
+		mac.Write(body)
+		expected := mac.Sum(nil)
+		for _, candidate := range signatures {
+			bytes, err := base64.StdEncoding.Strict().DecodeString(candidate)
+			if err == nil {
+				valid = hmac.Equal(expected, bytes) || valid
+			}
+		}
+	}
+	return valid
 }

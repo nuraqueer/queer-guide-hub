@@ -1942,3 +1942,63 @@ Sources: https://dub.co/blog/introducing-webhooks,
 https://github.com/standard-webhooks/standard-webhooks/blob/main/spec/standard-webhooks.md,
 https://docs.deno.com/api/deno/network/ and
 https://supabase.com/docs/guides/functions/connect-to-postgres.
+
+### Outgoing webhook implementation and local evidence (2026-10-14)
+
+Migration `99991792003234_redirect_webhooks.sql` adds service-only subscriptions,
+transactional event/outbox capture, one lease per endpoint, bounded retry and
+retention, versioned routing cancellation, test/replay, secret rotation overlap,
+and a Vault-backed minutely dispatch job when pg_cron is available. Lifecycle,
+click, lead, and sale triggers exclude private destinations/profile identity;
+customer IDs are subscription opt-in. Current-owner and unrestricted-owner-key
+checks run in SQL. Native Edge management/history endpoints and the private
+dispatcher are implemented; the gateway configuration delegates authentication
+to their existing internal-secret/account guards.
+
+The dispatcher resolves fixed DoH A/AAAA queries, refuses any private/mixed DNS
+answer, connects to the selected numeric address, verifies the peer, and upgrades
+TLS against the original hostname with normal trust roots. It never follows
+receiver redirects or forwards caller credentials. It rechecks the lease after
+DNS and before signing. Parallel acknowledgements settle before returning an
+error. Rounds stop after 40 seconds before starting further work; each delivery
+has a 20-second bound. SQL cleanup and leases remain durable on process failure.
+No optional per-insert pg_net wakeup was added: the durable minute schedule is
+used to avoid creating network jobs inside high-volume click transactions.
+
+Owner controls in Link workspace include version-preserving prefill, filtered
+subscriptions, customer-ID opt-in, pause/archive confirmation, restore paused,
+explicit tests, one-time signing secret copy, rotation, payload/response/attempt
+history and explicit same-payload replay. Account/selection remounts abort late
+requests and remove secret state. All five SDKs expose eleven management/history
+methods plus raw-body verification helpers with five-minute timestamp tolerance
+and bounded dual rotation signatures.
+
+Evidence: complete platform SQL passes with real capture, lifecycle coalescing,
+no click-counter lifecycle events, payload privacy, scoped key denial, current
+owner loss, rotation, stable retry body, eight-attempt exhaustion, paginated
+attempts, stale mutation/replay rejection and 30-day pruning. Nine native Deno
+transport tests pass, including a real trusted local CA/TCP/TLS handshake and a
+wrong-hostname rejection. Four admin interaction tests pass (prefill/version,
+secret erasure on account switch, no /null history reads, stale draft reload).
+Five SDK native runtimes pass all management methods over HTTP -> actual handler
+-> migrated isolated PostgreSQL, and share independent HMAC fixtures for valid,
+tampered, expired and rotation verification. Strict TypeScript SDK checks pass;
+app ratchet remains 704 inherited errors, none new. All 2284 migration versions
+are unique and migration PostgreSQL 17 grammar checks pass.
+
+Actual browser controls were exercised in a local API-simulated preview with
+production fetches blocked: edit/save, receipt inspection, explicit replay,
+desktop/mobile layout. Screenshots at
+`outputs/redirect-dub-parity/webhook-management-desktop.png` and
+`webhook-management-mobile.png` document local layout, not live queue delivery.
+Native test CA files remain disposable ignored tmp artifacts. Production Edge
+TCP/TLS, cron/Vault invocation, gateway auth, multiaccount role revocation,
+rate/resource budgets and controlled receiver receipts still require release
+proof. No production webhook receiver, schema, Worker or site was changed.
+
+This feature is a local release candidate. The overall Dub parity goal remains
+active: Segment/GTM, native/deferred deep links, branded password pages, domain
+archive/transfer/subpaths and authorized DNS automation, team/account discovery
+and invitations/all-source folder permissions, plus controlled infrastructure
+release and SDK publication are still required. Existing QR/customer/report
+candidates also retain their documented production verification requirements.

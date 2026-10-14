@@ -669,3 +669,7 @@ verify_jwt = false
 # Durable orphan/replaced-logo cleanup validates internal secret or admin session.
 [functions.redirect-qr-assets-cleanup]
 verify_jwt = false
+
+# Signed outgoing webhook queue validates an internal secret or owner account.
+[functions.redirect-webhooks-dispatch]
+verify_jwt = false

@@ -72,3 +72,22 @@ page=api.customer_journey(lead[:customerExternalId],limit:1);check(page['data'].
 identity_version=customer['version'];customer=api.clear_customer(lead[:customerExternalId],identity_version)
 check(customer['name'].nil?&&customer['email'].nil?&&customer['avatarUrl'].nil?&&customer['version']!=identity_version)
 check(api.customer_journey(lead[:customerExternalId])['data'].length==3)
+
+webhook=account.create_webhook({name:'Ruby receiver',url:'https://receiver.example.org/events'});check(webhook['secret'].start_with?('whsec_'))
+check(!account.get_webhook(webhook['id']).key?('secret'));check(account.list_webhooks()['data'].any?{|row|row['id']==webhook['id']})
+webhook=account.update_webhook(webhook['id'],{version:webhook['version'],name:'Ruby updated'})
+webhook=account.rotate_webhook_secret(webhook['id'],webhook['version']);check(webhook['previousKeyExpiresAt'])
+queued=account.test_webhook(webhook['id'],webhook['version']);check(queued['queued'])
+delivery=account.get_webhook_delivery(webhook['id'],queued['deliveryId']);check(JSON.parse(delivery['body'])['type']=='webhook.test')
+check(account.list_webhook_deliveries(webhook['id'])['data'][0]['id']==delivery['id']);check(account.list_webhook_attempts(webhook['id'],delivery['id'])['data']==[])
+webhook=account.archive_webhook(webhook['id'],webhook['version']);check(webhook['deletedAt'])
+webhook=account.update_webhook(webhook['id'],{version:webhook['version'],restore:true,enabled:true})
+delivery=account.get_webhook_delivery(webhook['id'],delivery['id']);check(account.replay_webhook_delivery(webhook['id'],delivery['id'],delivery['version'])['state']=='queued')
+account.archive_webhook(webhook['id'],webhook['version'])
+
+fixture=JSON.parse(File.read(File.join(__dir__,'webhook-fixture.json')))
+args=[fixture['secret'],fixture['body'],fixture['id'],fixture['timestamp'],fixture['signature']]
+check(QueerGuide.verify_webhook(*args,now:1700000000))
+check(!QueerGuide.verify_webhook(fixture['secret'],fixture['body']+' ',fixture['id'],fixture['timestamp'],fixture['signature'],now:1700000000))
+check(!QueerGuide.verify_webhook(*args,now:1700000301))
+check(QueerGuide.verify_webhook(fixture['secret'],fixture['body'],fixture['id'],fixture['timestamp'],'v1,'+'A'*43+'= '+fixture['signature'],now:1700000000))
