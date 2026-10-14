@@ -35,7 +35,7 @@ exist. Existing local tools are a foundation, not proof of parity or deployment.
 | Conversion tracking | Click attribution, leads/signup/sale/revenue, trusted conversion ingestion and application hooks | Candidate: scoped ingestion, consented signup and verified Stripe hooks implemented locally |
 | Customer insights | Customer journey across click→lead→sale with private event timeline | Partial: private ID-based cross-link paginated journeys; identity enrichment missing |
 | Live events | Paginated live click/lead/sale stream, real events rather than demo data | Candidate: private click/lead/sale activity with keyset pages and five-second refresh |
-| Shared dashboards | Revocable scoped sharing, sanitized aggregate-only default | Partial: saved snapshots, explicit dynamic folders, password/expiry/revoke and aggregate-only public UI implemented locally; indexing opt-in, viewer date overrides and runtime release pending |
+| Shared dashboards | Revocable scoped sharing, sanitized aggregate-only default | Partial: saved snapshots, explicit dynamic folders, password/expiry/revoke and aggregate-only public UI implemented locally; indexing opt-in and runtime release pending |
 | Custom reports | Custom dates, granular link/folder/tag/domain/geo/device/event filters | Partial: date/dimension report UI/API, personal saved definitions and scoped sharing implemented locally; team discovery and runtime release pending |
 | Integrations | Segment and GTM adapters; native configured integrations and provider callbacks | Missing |
 | REST API | Authenticated/scoped link CRUD/upsert/count/list, analytics/events, folders/tags, bulk operations | Partial: scoped link CRUD/upsert/count/list/mixed bulk, conversions and analytics/events; folder/tag/template resource CRUD with workspace scopes; scoped targeting/password/tracking/preview policy endpoints; domain/deep-link fields pending |
@@ -52,6 +52,7 @@ exist. Existing local tools are a foundation, not proof of parity or deployment.
 - [Device priority](https://dub.co/help/article/device-targeting)
 - [A/B rules and winner selection](https://dub.co/help/article/ab-testing)
 - [Comments](https://dub.co/help/article/link-comments)
+- [Public dashboards and sharing controls](https://dub.co/help/article/share-analytics)
 
 ## Implementation order
 
@@ -590,7 +591,7 @@ build and targeted checks. Native fixture screenshots are `saved-report-publishe
 desktop.jpg` and `shared-report-{desktop,mobile,revoked-mobile}.jpg` under the existing
 outputs directory. The mobile page fits 390 pixels without horizontal overflow.
 No production reports, shares or grants were created. Public indexing opt-in,
-viewer date overrides, team report discovery, report SDK methods and production
+team report discovery, report SDK methods and production
 release remain open alongside the full requirements ledger above.
 
 ### Next extension: viewer date selection
@@ -606,3 +607,26 @@ Date inputs stay in a bounded POST body with passwords; none enter public URLs.
 The existing aggregate grain stays fixed to the published report. Invalid dates
 produce an actionable error without displaying stale metrics. This increment
 does not settle the separate search-indexing option or production release.
+
+
+## Checkpoint: viewer-controlled reporting dates
+
+Public dashboards now offer 7/30-day presets, custom UTC instants and reset to the
+published dates. The server accepts a closed date-only override object and rejects
+widening of either saved boundary. Captured link scope, country/dimension filters,
+conversion visibility, current permissions, password budgets, version gates and
+revocation all remain enforced. Only date selection/bounds are added to public
+metadata; private filters stay private. Invalid date responses remove stale
+metrics while preserving a correction/reset control; unavailable dashboards also
+remove the date controls.
+
+Evidence: actual migrated PostgreSQL verifies seeded half-open date boundaries,
+zero results, unchanged link/country filters, rejected widening/forged filters and
+lost access. The real HTTP handler verifies date-only and password-plus-date reads
+against that database, alongside all five native SDK/example runs. Fourteen focused
+UI/API tests pass, production build and targeted lint pass, and application types
+remain 704 inherited errors with none new. Native desktop/mobile fixture checks
+confirm 61 → 21 clicks for the preset, a zero custom interval, reset to 61 and
+removal on revocation. At 390 pixels client and scroll widths are both 390. The
+`shared-report-dates-*` screenshots retain explicit fixture labels. Temporary
+browser tab and viewport were cleaned up. No production state was changed.

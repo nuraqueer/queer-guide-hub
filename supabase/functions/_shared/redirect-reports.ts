@@ -28,6 +28,23 @@ export function reportShareInput(value:unknown) {
 function record(value:unknown):Record<string,unknown> {if(!value||typeof value!=='object'||Array.isArray(value))throw new Error('Invalid report response');return value as Record<string,unknown>;}
 function count(value:unknown):number {if(typeof value!=='number'||!Number.isSafeInteger(value)||value<0)throw new Error('Invalid aggregate count');return value;}
 const labelSets:Record<string,string[]>={device:['Desktop','Mobile','Tablet','Bot','Unknown'],browser:['Chrome','Safari','Firefox','Edge','Opera','Samsung Internet','Unknown'],os:['iOS','Android','Windows','macOS','Linux','Chrome OS','Unknown'],qr:['QR','Link']};
+export function publicReportDates(value:unknown):Record<string,string> {
+ const body=record(value),result:Record<string,string>={};
+ if(Object.keys(body).some(k=>!['start','end'].includes(k)))throw new Error('Invalid public dates');
+ for(const key of ['start','end'])if(key in body){
+  const date=body[key];
+  if(typeof date!=='string'||!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?Z$/.test(date)||!Number.isFinite(Date.parse(date)))throw new Error('Invalid public dates');
+  const normalized=new Date(date).toISOString();if(normalized.slice(0,10)!==date.slice(0,10))throw new Error('Invalid public dates');result[key]=normalized;
+ }
+ if(result.start&&result.end&&result.start>=result.end)throw new Error('Invalid public dates');
+ return result;
+}
+function publicDateRange(value:unknown) {
+ if(value===undefined)return undefined;
+ const input=record(value),result:Record<'start'|'end'|'earliest'|'latest',string|null>={start:null,end:null,earliest:null,latest:null};
+ for(const key of ['start','end','earliest','latest'] as const){const date=input[key];if(date===null)continue;if(typeof date!=='string'||!Number.isFinite(Date.parse(date)))throw new Error('Invalid public date range');result[key]=new Date(date).toISOString();}
+ return result;
+}
 export function publicReportResult(value:unknown) {
  const root=record(value),report=record(root.report),totals=record(report.totals),conversions=root.includeConversions===true;
  if(typeof root.title!=='string'||root.title.length>100||!['hour','day','week','month'].includes(report.interval as string)||typeof report.snapshot!=='string'||!Number.isFinite(Date.parse(report.snapshot)))throw new Error('Invalid public report metadata');
@@ -43,7 +60,7 @@ export function publicReportResult(value:unknown) {
  }
  const revenue:{currency:string;amount:string}[]=[];
  if(conversions){if(!Array.isArray(report.revenue)||report.revenue.length>200)throw new Error('Invalid revenue summary');for(const raw of report.revenue){const row=record(raw);if(typeof row.currency!=='string'||!/^[A-Z]{3}$/.test(row.currency)||typeof row.amount!=='string'||!/^\d+(?:\.\d{1,6})?$/.test(row.amount))throw new Error('Invalid revenue amount');revenue.push({currency:row.currency,amount:row.amount});}}
- return {title:root.title,includeConversions:conversions,linkCount:count(root.linkCount),scopeMode:root.scopeMode==='folder'?'folder':'snapshot',expiresAt:typeof root.expiresAt==='string'?root.expiresAt:null,report:{snapshot:new Date(report.snapshot).toISOString(),interval:report.interval as string,totals:resultTotals,revenue,series,breakdowns}};
+ return {dateRange:publicDateRange(root.dateRange),title:root.title,includeConversions:conversions,linkCount:count(root.linkCount),scopeMode:root.scopeMode==='folder'?'folder':'snapshot',expiresAt:typeof root.expiresAt==='string'?root.expiresAt:null,report:{snapshot:new Date(report.snapshot).toISOString(),interval:report.interval as string,totals:resultTotals,revenue,series,breakdowns}};
 }
 export type PublicRedirectReport=ReturnType<typeof publicReportResult>;
 export interface ReportDb {rpc(name:string,args:Record<string,unknown>):PromiseLike<{data:any;error:{code?:string;message?:string}|null}>;}
@@ -53,16 +70,21 @@ export async function publicReportRequest(req:Request,db:ReportDb,secret:string,
  const id=req.headers.get('Authorization')?.match(/^Bearer qg_report_([a-f0-9-]{36})$/i)?.[1]?.toLowerCase();
  if(!id||!UUID.test(id))return json({error:'Dashboard unavailable'},404);
  if(new URL(req.url).search)return json({error:'Public dashboards do not accept filter overrides'},400);
- let password:string|undefined;
+ let password:string|undefined;let dates:Record<string,string>={};
  try {
-  if(req.method==='POST'){const body=await boundedJson(req,4096);if(!body||typeof body!=='object'||Array.isArray(body)||Object.keys(body).some(k=>k!=='password')||typeof body.password!=='string'||!body.password||body.password.length>256)return json({error:'Provide a dashboard password'},400);password=body.password;}
+  if(req.method==='POST'){
+   const body=await boundedJson(req,4096);if(!body||typeof body!=='object'||Array.isArray(body)||Object.keys(body).some(k=>!['password','dates'].includes(k)))return json({error:'Provide only dashboard password and dates'},400);
+   if(body.password!==undefined){if(typeof body.password!=='string'||!body.password||body.password.length>256)return json({error:'Provide a dashboard password'},400);password=body.password;}
+   try{dates=publicReportDates(body.dates===undefined?{}:body.dates);}catch{return json({error:'Provide valid UTC start and end dates, with start before end'},400);}
+  }
   const ip=await redirectClientIp(req.headers,'report:'+id,secret),clientHash=await tokenDigest(secret+':report:'+id+':'+ip);
   const check=await db.rpc('redirect_public_report_check',{p_id:id,p_client_hash:clientHash,p_password_attempt:password!==undefined});
   if(check.error)return json({error:check.error.code==='P0002'?'Dashboard unavailable':'Dashboard temporarily unavailable'},check.error.code==='P0002'?404:503);
   if(check.data.retryAfter)return json({error:'Please wait before refreshing or trying another password'},429,{'Retry-After':String(check.data.retryAfter)});
   let verified=false;
   if(check.data.passwordHash){if(!password)return json({error:'Password required',passwordRequired:true},401);verified=await verifyLinkPassword(password,check.data.passwordHash as PasswordHash);if(!verified)return json({error:'Incorrect password',passwordRequired:true},401);}
-  const report=await db.rpc('redirect_public_report_read',{p_id:id,p_version:check.data.version,p_password_verified:verified});
+  const report=await db.rpc('redirect_public_report_read',{p_id:id,p_version:check.data.version,p_password_verified:verified,p_dates:dates});
+  if(report.error&&['22023','22007','22008'].includes(report.error.code??''))return json({error:'Choose a shorter date range within the published reporting period, with start before end'},400);
   if(report.error)return json({error:report.error.code==='42501'?'Dashboard access changed; unlock again':'Dashboard unavailable',...(report.error.code==='42501'?{passwordRequired:true}:{})},report.error.code==='42501'?401:report.error.code==='P0002'?404:503);
   return json(publicReportResult(report.data));
  }catch(error){const invalid=error instanceof SyntaxError||error instanceof Error&&/Use application\/json|Missing request body|Request body exceeds/.test(error.message);return json({error:invalid?'Invalid dashboard request':'Dashboard temporarily unavailable'},invalid?400:503);}

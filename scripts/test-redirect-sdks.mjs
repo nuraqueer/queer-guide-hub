@@ -238,11 +238,17 @@ try {
   const plain=await reportRequest('/reports/'+saved.id+'/shares','POST',{title:'Clicks only',reportVersion:saved.version,expiresAt:null},undefined,201);
   const published=await reportRequest('/public-report','GET',undefined,'qg_report_'+plain.id);
   if(published.report.totals.clicks!==1||'leads' in published.report.totals||published.report.revenue.length||JSON.stringify(published).includes('sdk-attribution'))throw new Error('Public report exposed private/conversion fields');
+  const zeroDates={start:'2000-01-01T00:00:00.000Z',end:'2000-01-02T00:00:00.000Z'};
+  const narrowed=await reportRequest('/public-report','POST',{dates:zeroDates},'qg_report_'+plain.id);
+  if(narrowed.report.totals.clicks!==0||narrowed.dateRange.start!==zeroDates.start)throw new Error('Public date selection ignored or failed normalization');
+  await reportRequest('/public-report','POST',{dates:{linkIds:[seed.rows[0].id]}},'qg_report_'+plain.id,400);
   const guarded=await reportRequest('/reports/'+saved.id+'/shares','POST',{title:'Protected conversions',reportVersion:saved.version,includeConversions:true,password:'fixture-report-password',expiresAt:null},undefined,201);
   await reportRequest('/public-report','GET',undefined,'qg_report_'+guarded.id,401);
   await reportRequest('/public-report','POST',{password:'incorrect'},'qg_report_'+guarded.id,401);
   const unlocked=await reportRequest('/public-report','POST',{password:'fixture-report-password'},'qg_report_'+guarded.id);
   if(unlocked.report.totals.leads!==10||unlocked.report.totals.sales!==10||unlocked.report.revenue[0].amount!=='254.500010')throw new Error('Protected report conversion totals/precision changed');
+  const protectedDates=await reportRequest('/public-report','POST',{password:'fixture-report-password',dates:zeroDates},'qg_report_'+guarded.id);
+  if(protectedDates.report.totals.sales!==0)throw new Error('Password-protected date filtering failed');
   await reportRequest('/reports/'+saved.id+'/shares/'+guarded.id,'DELETE');
   await reportRequest('/public-report','POST',{password:'fixture-report-password'},'qg_report_'+guarded.id,404);
   console.log('Saved/share/public reports: real HTTP → edge handler → migrated PostgreSQL, real password verification, sanitized totals and revocation passed');

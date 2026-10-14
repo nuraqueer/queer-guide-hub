@@ -4,6 +4,7 @@ import {
   savedReportInput,
   reportShareInput,
   publicReportResult,
+  publicReportDates,
   publicReportRequest,
   type ReportDb,
 } from '../../../../supabase/functions/_shared/redirect-reports';
@@ -64,6 +65,54 @@ describe('saved reports and aggregate-only publication', () => {
     expect(() => savedReportInput({ name: 'Name', ownerUserId: id, filters: {} }, true)).toThrow();
     expect(() => savedReportInput({ name: 'Changed' }, false)).toThrow('Reload');
     expect(() => savedReportInput({ name: 'Name', filters: { start: 'invalid' } }, true)).toThrow();
+  });
+  it('accepts only real UTC dates and never caller-supplied scope filters', () => {
+    expect(publicReportDates({ start: '2026-01-01T00:00:00Z' })).toEqual({
+      start: '2026-01-01T00:00:00.000Z',
+    });
+    for (const value of [
+      { start: '2026-02-30T00:00:00Z' },
+      { start: null },
+      { event: 'sale' },
+      { linkIds: [id] },
+      { start: '2026-02-01T00:00:00Z', end: '2026-01-01T00:00:00Z' },
+      { start: '2026-01-01' },
+    ])
+      expect(() => publicReportDates(value)).toThrow();
+  });
+  it('passes date-only POST bodies through the live gate without enabling conversions', async () => {
+    const db = database();
+    const response = await publicReportRequest(
+      new Request('https://queer.guide/api/redirects/public-report', {
+        method: 'POST',
+        headers: { Authorization: 'Bearer qg_report_' + id, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ dates: { start: '2026-01-01T00:00:00Z' } }),
+      }),
+      db,
+      'secret',
+      {},
+    );
+    expect(response.status).toBe(200);
+    expect(db.rpc).toHaveBeenCalledWith(
+      'redirect_public_report_check',
+      expect.objectContaining({ p_password_attempt: false }),
+    );
+    expect(db.rpc).toHaveBeenCalledWith(
+      'redirect_public_report_read',
+      expect.objectContaining({
+        p_dates: { start: '2026-01-01T00:00:00.000Z' },
+        p_password_verified: false,
+      }),
+    );
+    expect((await response.json()).report.totals).toEqual({ clicks: 2 });
+    db.rpc.mockImplementation(async (name) =>
+      name === 'redirect_public_report_check'
+        ? { data: { id, version }, error: null }
+        : { data: null, error: { code: '22023', message: 'PRIVATE SQL DETAIL' } },
+    );
+    const invalid = await publicReportRequest(request(), db, 'secret', {});
+    expect(invalid.status).toBe(400);
+    expect(await invalid.text()).not.toContain('PRIVATE');
   });
   it('defaults to click-only snapshots and requires explicit share settings', () => {
     const input = reportShareInput({ title: ' Dashboard ', reportVersion: version });
@@ -127,6 +176,7 @@ describe('saved reports and aggregate-only publication', () => {
       p_id: id,
       p_version: version,
       p_password_verified: true,
+      p_dates: {},
     });
     db.rpc.mockImplementation(async (name) =>
       name === 'redirect_public_report_check'

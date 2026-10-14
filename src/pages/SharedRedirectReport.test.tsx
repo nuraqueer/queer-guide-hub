@@ -9,6 +9,12 @@ const data = {
   linkCount: 1,
   scopeMode: 'snapshot',
   expiresAt: null,
+  dateRange: {
+    start: '2026-10-01T00:00:00.000Z',
+    end: '2026-10-15T00:00:00.000Z',
+    earliest: '2026-10-01T00:00:00.000Z',
+    latest: '2026-10-15T00:00:00.000Z',
+  },
   report: {
     snapshot: '2026-10-14T00:00:00Z',
     interval: 'day',
@@ -64,6 +70,60 @@ describe('public aggregate dashboard', () => {
     expect(screen.queryByText('Revenue by currency')).toBeNull();
     expect(screen.queryByText('Event activity')).toBeNull();
   });
+  it('narrows UTC dates in POST bodies, resets to published dates, and keeps date errors recoverable', async () => {
+    const fetcher = vi.fn<typeof fetch>().mockImplementation(async (_input, options) => {
+      const body = options?.body ? JSON.parse(String(options.body)) : {};
+      if (body.dates?.start === '2026-10-03T00:00:00.000Z')
+        return new Response('{"error":"Choose a shorter date range"}', { status: 400 });
+      return new Response(
+        JSON.stringify({ ...data, dateRange: { ...data.dateRange, ...body.dates } }),
+      );
+    });
+    vi.stubGlobal('fetch', fetcher);
+    show();
+    await screen.findByRole('region', { name: 'Reporting dates' });
+    fireEvent.click(screen.getByRole('button', { name: 'Last 7 days' }));
+    await waitFor(() =>
+      expect(fetcher).toHaveBeenLastCalledWith(
+        '/api/redirects/public-report',
+        expect.objectContaining({
+          method: 'POST',
+          body: '{"dates":{"start":"2026-10-07T00:00:00.000Z","end":"2026-10-14T00:00:00.000Z"}}',
+        }),
+      ),
+    );
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Apply dates' })).toBeEnabled());
+    fireEvent.change(screen.getByLabelText('Start (UTC)'), {
+      target: { value: '2026-10-03T00:00:00' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Apply dates' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Choose a shorter date range');
+    expect(screen.queryByText('Public campaign')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Published dates' })).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Published dates' }));
+    await screen.findByText('Public campaign');
+    expect(fetcher).toHaveBeenLastCalledWith(
+      '/api/redirects/public-report',
+      expect.objectContaining({ method: 'GET' }),
+    );
+  });
+  it('rejects a reversed custom range without a request', async () => {
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockImplementation(async () => new Response(JSON.stringify(data)));
+    vi.stubGlobal('fetch', fetcher);
+    show();
+    await screen.findByRole('region', { name: 'Reporting dates' });
+    fireEvent.change(screen.getByLabelText('Start (UTC)'), {
+      target: { value: '2026-10-14T00:00:00' },
+    });
+    fireEvent.change(screen.getByLabelText('End (UTC, exclusive)'), {
+      target: { value: '2026-10-13T00:00:00' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Apply dates' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Start must be before end');
+    expect(fetcher).toHaveBeenCalledTimes(1);
+  });
   it('removes the rendered data when a refresh reports revocation', async () => {
     const fetcher = vi
       .fn<typeof fetch>()
@@ -75,5 +135,6 @@ describe('public aggregate dashboard', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Refresh dashboard' }));
     await waitFor(() => expect(screen.queryByText('Public campaign')).toBeNull());
     expect(await screen.findByRole('alert')).toHaveTextContent('Dashboard unavailable');
+    expect(screen.queryByRole('region', { name: 'Reporting dates' })).toBeNull();
   });
 });

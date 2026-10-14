@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useParams } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
 import { PageContainer } from '@/components/layout/PageContainer';
@@ -7,13 +7,153 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { amountMicros, formatRevenue } from '@/lib/redirects/conversions';
 import { DashboardError, readSharedRedirectReport } from '@/lib/redirects/publicReport';
+type DateRange = {
+  start: string | null;
+  end: string | null;
+  earliest: string | null;
+  latest: string | null;
+};
+const inputDate = (value: string | null) =>
+  value ? new Date(value).toISOString().slice(0, -1) : '';
+function PublicReportDates({
+  range,
+  snapshot,
+  pending,
+  onApply,
+}: {
+  range: DateRange;
+  snapshot: string;
+  pending: boolean;
+  onApply: (dates: { start?: string; end?: string }) => void;
+}) {
+  const [start, setStart] = useState(() => inputDate(range.start));
+  const [end, setEnd] = useState(() => inputDate(range.end));
+  const [validation, setValidation] = useState('');
+  const apply = (days?: number) => {
+    setValidation('');
+    if (!days) {
+      setStart(inputDate(range.earliest));
+      setEnd(inputDate(range.latest));
+      onApply({});
+      return;
+    }
+    const finish = Math.min(
+      Date.parse(snapshot),
+      range.latest ? Date.parse(range.latest) : Infinity,
+    );
+    const begin = Math.max(
+      finish - days * 86400000,
+      range.earliest ? Date.parse(range.earliest) : -Infinity,
+    );
+    if (begin >= finish) {
+      setValidation(
+        'No time in this preset falls within the published period. Choose custom dates.',
+      );
+      return;
+    }
+    const dates = { start: new Date(begin).toISOString(), end: new Date(finish).toISOString() };
+    setStart(inputDate(dates.start));
+    setEnd(inputDate(dates.end));
+    onApply(dates);
+  };
+  return (
+    <section aria-label="Reporting dates" className="space-y-4 border-y py-4">
+      <h2 className="text-lg font-semibold">Reporting dates</h2>
+      <p className="text-sm text-muted-foreground">
+        Dates use UTC. Start is inclusive; end is exclusive. Selection stays within the published
+        period.
+      </p>
+      <div className="flex flex-wrap gap-2">
+        <Button variant="outline" disabled={pending} onClick={() => apply(7)}>
+          Last 7 days
+        </Button>
+        <Button variant="outline" disabled={pending} onClick={() => apply(30)}>
+          Last 30 days
+        </Button>
+        <Button variant="outline" disabled={pending} onClick={() => apply()}>
+          Published dates
+        </Button>
+      </div>
+      <form
+        className="grid gap-4 sm:grid-cols-2"
+        onSubmit={(event) => {
+          event.preventDefault();
+          setValidation('');
+          const dates = {
+            ...(start ? { start: new Date(start + 'Z').toISOString() } : {}),
+            ...(end ? { end: new Date(end + 'Z').toISOString() } : {}),
+          };
+          if (dates.start && dates.end && dates.start >= dates.end) {
+            setValidation('Start must be before end.');
+            return;
+          }
+          onApply(dates);
+        }}
+      >
+        <div className="min-w-0 space-y-2">
+          <Label htmlFor="report-start">Start (UTC)</Label>
+          <Input
+            className="min-w-0 max-w-full text-base"
+            id="report-start"
+            type="datetime-local"
+            step="0.001"
+            min={inputDate(range.earliest)}
+            max={inputDate(range.latest)}
+            value={start}
+            disabled={pending}
+            onChange={(event) => setStart(event.target.value)}
+          />
+        </div>
+        <div className="min-w-0 space-y-2">
+          <Label htmlFor="report-end">End (UTC, exclusive)</Label>
+          <Input
+            className="min-w-0 max-w-full text-base"
+            id="report-end"
+            type="datetime-local"
+            step="0.001"
+            min={inputDate(range.earliest)}
+            max={inputDate(range.latest)}
+            value={end}
+            disabled={pending}
+            onChange={(event) => setEnd(event.target.value)}
+          />
+        </div>
+        <div className="sm:col-span-2">
+          <Button type="submit" disabled={pending}>
+            {pending ? 'Updating dates…' : 'Apply dates'}
+          </Button>
+        </div>
+      </form>
+      {validation && (
+        <p role="alert" className="text-sm">
+          {validation}
+        </p>
+      )}
+      <p className="text-sm">
+        Showing{' '}
+        {range.start
+          ? new Date(range.start).toLocaleString(undefined, { timeZone: 'UTC' })
+          : 'all published history'}{' '}
+        to{' '}
+        {range.end
+          ? new Date(range.end).toLocaleString(undefined, { timeZone: 'UTC' })
+          : 'the latest data'}{' '}
+        (UTC).
+      </p>
+    </section>
+  );
+}
 export function SharedReportView({ id }: { id: string }) {
-  const [password, setPassword] = useState(''),
-    [submitted, setSubmitted] = useState({ password: '', attempt: 0 });
+  const [password, setPassword] = useState('');
+  const request = useRef<{ password: string; dates: { start?: string; end?: string } }>({
+    password: '',
+    dates: {},
+  });
   const [viewKey] = useState(() => crypto.randomUUID());
   const query = useQuery({
-    queryKey: ['redirect-public-report', id, viewKey, submitted.attempt],
-    queryFn: ({ signal }) => readSharedRedirectReport(id, submitted.password, signal),
+    queryKey: ['redirect-public-report', id, viewKey],
+    queryFn: ({ signal }) =>
+      readSharedRedirectReport(id, request.current.password, signal, request.current.dates),
     retry: false,
     gcTime: 0,
     refetchOnWindowFocus: false,
@@ -48,7 +188,8 @@ export function SharedReportView({ id }: { id: string }) {
                 className="space-y-4"
                 onSubmit={(e) => {
                   e.preventDefault();
-                  setSubmitted((current) => ({ password, attempt: current.attempt + 1 }));
+                  request.current = { ...request.current, password };
+                  void query.refetch();
                 }}
               >
                 <div className="space-y-2">
@@ -77,6 +218,17 @@ export function SharedReportView({ id }: { id: string }) {
               </Button>
             )}
           </div>
+        )}
+        {query.data?.dateRange && (!query.isError || error?.status === 400) && (
+          <PublicReportDates
+            range={query.data.dateRange}
+            snapshot={query.data.report.snapshot}
+            pending={query.isFetching}
+            onApply={(dates) => {
+              request.current = { ...request.current, dates };
+              void query.refetch();
+            }}
+          />
         )}
         {data && !query.isError && (
           <>

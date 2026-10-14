@@ -17,7 +17,11 @@ Public URLs use `/share/redirect-report/<opaque UUID>`. Click aggregates are the
 default. Conversion counts and exact per-currency revenue require explicit opt-in.
 Only country, device, browser, OS and QR breakdowns are published. Raw events,
 customer IDs, destination URLs, private filters, city and referrer data are never
-part of the public payload. The page has no account or private analytics controls.
+part of the public payload. Viewers can use 7/30-day presets or custom UTC dates,
+then reset to the published dates. A selection can only narrow a captured start/
+end boundary; it cannot change link scope or other saved filters. Unbounded sides
+remain selectable. Start is inclusive and end is exclusive. The published report
+grain is preserved. The page has no account or private analytics controls.
 
 An optional password is hashed server-side using the existing PBKDF2 password
 helper. Passwords travel only in a POST body, never URLs or query-cache keys.
@@ -48,7 +52,14 @@ operations require verified account identity; API keys cannot manage reports.
 
 Public clients call `GET /public-report` with
 `Authorization: Bearer qg_report_<UUID>`. Password-protected reads use POST with
-`{"password":"…"}`. No public filter overrides are accepted. SQL report/share
+`{"password":"…"}`. Date selections also use POST, with
+`{"dates":{"start":"2026-10-01T00:00:00.000Z","end":"2026-10-08T00:00:00.000Z"}}`;
+password and dates can be supplied together. Only real UTC ISO instants are
+accepted. Clearing either field restores that side of the captured period.
+Out-of-bounds/reversed dates return 400 and the page offers date correction/reset
+without retaining stale metrics. The response exposes only the selected dates
+and published boundaries, alongside sanitized aggregates. Other public filter
+overrides are rejected. SQL report/share
 functions and tables are service-only; anonymous clients cannot bypass the
 sanitizing edge handler. Private analytics and event endpoints also accept POST
 filter bodies, avoiding URL limits for larger saved selections.
@@ -66,5 +77,14 @@ actual worker and verifies network-only routing and targeted cache cleanup.
 Native desktop/mobile evidence under `outputs/redirect-dub-parity/` uses labelled
 local fixtures with production fetches blocked. No live reports or shares were
 created. Production migrations/deployment and controlled-account checks remain
-pending. Search indexing opt-in, public date overrides, report SDK methods and
+pending. Search indexing opt-in, report SDK methods and
 team discovery remain open parity work.
+
+
+The public date extension is verified with seeded clicks on both half-open date
+boundaries, private country/link filters, widening attempts, empty results and
+current access loss in PostgreSQL. Actual HTTP tests additionally read date-only
+and password-plus-date bodies. Native browser proof covers presets, keyboard-edited
+custom dates, reset, mobile layout and revocation (`shared-report-dates-*` images).
+The browser automation fill helper did not commit native segmented date changes;
+keyboard input verified the actual user interaction. These remain local fixtures.
