@@ -15,7 +15,7 @@ exist. Existing local tools are a foundation, not proof of parity or deployment.
 | Folders | Create/rename/delete/move links, folder-filtered list and analytics | Candidate: implemented locally; pending release |
 | Tags | Multiple colored tags, create/rename/delete, shareable filtered list and analytics | Candidate: implemented locally; pending release |
 | Comments | Team-visible comment on link card, clickable hyperlinks | Candidate: implemented locally; pending release |
-| Folder permissions | Explicit view/edit permissions for team members, enforced in database/API | Missing |
+| Folder permissions | Explicit view/edit permissions for team members, enforced in database/API | Partial: member/machine bindings, folder defaults/overrides, scoped SQL/API and admin editors; member workspace page, access requests/notifications and runtime release pending |
 | Bulk actions | Create/update/upsert/delete, folder/tag assignment, archive, import/export, QR export | Candidate for managed links: atomic create/update/upsert/deletion API and CSV review/import/export UI, archive/restore, folder/tag assignment and verified QR ZIP; production release pending |
 | Custom previews | Uploaded OG image (1200×630, ≤1.5 MB), title≤120, description≤240, video API, crawler unfurl | Candidate: editor, scoped upload/presentation APIs and crawler HTML; native browser/Storage release pending |
 | AI previews | Generate title/description from destination content using configured AI provider | Candidate: scoped draft generator with spend limits; live provider and browser verification pending |
@@ -452,3 +452,39 @@ and migration versions pass. App typecheck remains 704 inherited errors, none
 new. Pages production/test types now have separate configurations; the existing
 `typecheck:functions` gate runs both so test coverage is retained. No production
 migration/provider changes or package publication were performed.
+
+## Checkpoint: folder access foundation and admin controls
+
+Implemented locally: explicit existing-account/machine workspace membership;
+member/viewer roles and active status; folder edit/view/none defaults with
+owner/edit/view/none overrides; admin membership and folder access editors;
+optional API credential binding with live folder access intersection. Removing a
+member (including Auth-account deletion) deletes bound keys rather than upgrading
+them to unrestricted credentials. Workspace viewers remain capped at read.
+
+Verified sessions resolve their membership server-side without app admin roles.
+Scoped SQL now applies live access to management, targeting/presentation,
+analytics/events and server conversion attribution. Member folder creation grants
+creator ownership. Moves require both folders to be editable; member deletion of
+a nonempty folder is rejected. Global tag/template mutation stays with workspace
+owners. Legacy unbound API credentials retain explicit scope semantics.
+
+The full permissions requirement is still partial: a dedicated member workspace
+route, member-aware settings/analytics UI, Ask to edit and owner notifications,
+all-source inventory access semantics and native runtime/release proof remain.
+Administrators can configure candidate access controls now; non-admin members
+have scoped API access but cannot use the admin console. Existing production
+schema, memberships, credentials and provider state are unchanged.
+
+Validation: 32 focused API/permission-control tests pass. The complete migrated
+SQL suite includes real tracked-click analytics, denied conversion writes after
+access removal, policy denial, membership deletion cascades and unchanged legacy
+workspace/selected-key semantics. All five native SDKs and examples still pass
+through actual loopback HTTP → edge handler → isolated PostgreSQL. Build,
+functions types, targeted lint and migration versions pass. App typecheck stays
+at 704 inherited errors, none new. Browser screenshots `folder-access-desktop.jpg`
+and `folder-access-mobile.jpg` use a local fixture with production fetches
+blocked and simulated changes. Saving folder defaults/overrides and the mobile
+machine form were verified; mobile scrollWidth=clientWidth=390. Temporary viewport
+and tab were cleaned up. See `docs/guides/redirect-folder-access.md` for current
+API semantics and explicit remaining permissions work.

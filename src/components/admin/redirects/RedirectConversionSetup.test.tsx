@@ -22,6 +22,15 @@ vi.mock('@/hooks/useRedirectCredentials', () => ({
     revoke: { mutateAsync: mocks.revoke, isPending: false, isError: false },
   }),
 }));
+vi.mock('@/hooks/useRedirectMembers', () => ({
+  useRedirectMembers: () => ({
+    data: [
+      { id: 'machine-id', label: 'Automation', kind: 'machine', role: 'member', active: true },
+    ],
+    isPending: false,
+    isError: false,
+  }),
+}));
 const links = [
   {
     id: 'link',
@@ -58,6 +67,19 @@ describe('conversion credential setup', () => {
     ).toHaveValue('qg_redirect_fixture');
     fireEvent.click(screen.getByRole('button', { name: 'Done' }));
     expect(screen.queryByLabelText('New server credential', { selector: 'input' })).toBeNull();
+  });
+  it('binds credentials to a workspace member without removing scope restrictions', async () => {
+    render(<RedirectConversionSetup links={links} onClose={vi.fn()} />);
+    fireEvent.change(screen.getByLabelText('Credential name'), { target: { value: 'Bound' } });
+    fireEvent.change(screen.getByLabelText('Act as workspace member'), {
+      target: { value: 'machine-id' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Create server credential' }));
+    await waitFor(() =>
+      expect(mocks.create).toHaveBeenCalledWith(
+        expect.objectContaining({ memberId: 'machine-id', scopes: ['conversions:write'] }),
+      ),
+    );
   });
   it('creates management-only credentials and explains selected-link creation limits', async () => {
     render(<RedirectConversionSetup links={links} onClose={vi.fn()} />);

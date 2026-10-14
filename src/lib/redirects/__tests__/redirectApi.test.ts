@@ -59,7 +59,7 @@ function runtime() {
     admin: true,
     validIdentity: true,
     validToken: true,
-    allowedIds: ['00000000-0000-4000-8000-000000000002'],
+    allowedIds: ['00000000-0000-4000-8000-000000000002'] as string[] | null,
     confirmed: true,
     conversionError: null as { code: string; message: string } | null,
   };
@@ -267,7 +267,7 @@ describe('actual Redirects API handler', () => {
     const run = runtime(),
       token = 'qg_redirect_' + 'a'.repeat(64);
     expect((await run.invoke('/folders', { name: 'Campaigns' }, token)).status).toBe(403);
-    run.state.allowedIds = null as unknown as string[];
+    run.state.allowedIds = null;
     expect((await run.invoke('/folders', { name: 'Campaigns' }, token)).status).toBe(201);
     expect(
       run.rpc.mock.calls.find(([name]) => name === 'authenticate_redirect_api_token')?.[1]?.p_scope,
@@ -445,20 +445,109 @@ describe('actual Redirects API handler', () => {
     ).toBe(400);
     expect(run.rpc).not.toHaveBeenCalled();
   });
+  it('uses verified workspace membership for non-admin sessions and rechecks analytics in SQL', async () => {
+    const run = runtime();
+    run.state.admin = false;
+    const memberId = '00000000-0000-4000-8000-000000000009';
+    const base = run.rpc.getMockImplementation()!;
+    run.rpc.mockImplementation(async (name, args) =>
+      name === 'redirect_session_principal'
+        ? { data: { id: memberId, duplicate: false }, error: null }
+        : base(name, args),
+    );
+    expect((await run.invoke('/links', undefined, 'signed-user', 'GET')).status).toBe(200);
+    expect(run.rpc).toHaveBeenCalledWith('redirect_session_principal', {
+      p_user_id: '00000000-0000-4000-8000-000000000001',
+      p_scope: 'links:read',
+    });
+    expect(run.rpc).toHaveBeenCalledWith(
+      'redirect_management_list',
+      expect.objectContaining({ p_token_id: memberId }),
+    );
+    expect((await run.invoke('/analytics', undefined, 'signed-user', 'GET')).status).toBe(200);
+    expect(run.rpc).toHaveBeenCalledWith(
+      'redirect_scoped_analytics',
+      expect.objectContaining({ p_token_id: memberId, p_action: 'report' }),
+    );
+    expect((await run.invoke('/members', undefined, 'signed-user', 'GET')).status).toBe(403);
+    expect((await run.invoke('/track/lead', lead, 'signed-user')).status).toBe(403);
+  });
+  it('fails closed on an absent membership instead of treating it as an administrator', async () => {
+    const run = runtime();
+    run.state.admin = false;
+    run.rpc.mockResolvedValue({ data: null, error: null });
+    expect((await run.invoke('/links', undefined, 'signed-user', 'GET')).status).toBe(403);
+    expect(run.rpc).not.toHaveBeenCalledWith('redirect_management_list', expect.anything());
+  });
+  it('passes access-management principals to SQL and rejects selected-link keys', async () => {
+    const run = runtime(),
+      folder = '00000000-0000-4000-8000-000000000005';
+    expect(
+      (
+        await run.invoke(
+          '/folders/' + folder + '/access',
+          { defaultPermission: 'none' },
+          'signed-user',
+          'PATCH',
+        )
+      ).status,
+    ).toBe(200);
+    expect(run.rpc).toHaveBeenCalledWith('redirect_folder_access', {
+      p_folder: folder,
+      p_values: { defaultPermission: 'none' },
+      p_token_id: null,
+    });
+    run.rpc.mockClear();
+    expect(
+      (
+        await run.invoke(
+          '/folders/' + folder + '/access',
+          undefined,
+          'qg_redirect_' + 'a'.repeat(64),
+          'GET',
+        )
+      ).status,
+    ).toBe(403);
+    expect(run.rpc).not.toHaveBeenCalledWith('redirect_folder_access', expect.anything());
+  });
+  it('accepts workspace-scoped machine keys for folder ownership checks in SQL', async () => {
+    const run = runtime();
+    run.state.allowedIds = null;
+    const folder = '00000000-0000-4000-8000-000000000005';
+    expect(
+      (
+        await run.invoke(
+          '/folders/' + folder + '/access',
+          { defaultPermission: 'view' },
+          'qg_redirect_' + 'a'.repeat(64),
+          'PATCH',
+        )
+      ).status,
+    ).toBe(200);
+    expect(run.rpc).toHaveBeenCalledWith(
+      'authenticate_redirect_api_token',
+      expect.objectContaining({ p_scope: 'workspace:write' }),
+    );
+    expect(run.rpc).toHaveBeenCalledWith('redirect_folder_access', {
+      p_folder: folder,
+      p_values: { defaultPermission: 'view' },
+      p_token_id: 'token-id',
+    });
+  });
   it('applies read scope and credential link boundaries to analytics and paginated activity', async () => {
     const run = runtime(),
       token = 'qg_redirect_' + 'a'.repeat(64);
     expect((await run.invoke('/analytics', undefined, token, 'GET')).status).toBe(200);
     expect(run.rpc.mock.calls[0][1]).toMatchObject({ p_scope: 'events:read' });
     expect(run.rpc.mock.calls[1]).toMatchObject([
-      'redirect_analytics_report',
-      { p_allowed_ids: run.state.allowedIds, p_filters: {} },
+      'redirect_scoped_analytics',
+      { p_action: 'report', p_token_id: 'token-id', p_filters: {} },
     ]);
     expect((await run.invoke('/events?limit=101', undefined, token, 'GET')).status).toBe(400);
     expect((await run.invoke('/events?limit=50', undefined, token, 'GET')).status).toBe(200);
     expect(run.rpc.mock.calls.at(-1)).toMatchObject([
-      'redirect_analytics_page',
-      { p_allowed_ids: run.state.allowedIds, p_limit: 50 },
+      'redirect_scoped_analytics',
+      { p_action: 'events', p_token_id: 'token-id', p_limit: 50 },
     ]);
     run.state.validToken = false;
     expect((await run.invoke('/analytics', undefined, token, 'GET')).status).toBe(403);
@@ -636,12 +725,10 @@ describe('scoped policy endpoints', () => {
 describe('policy revocation during password hashing', () => {
   it('honors the final database authorization check after a reservation succeeds', async () => {
     const app = runtime();
-    app.rpc
-      .mockResolvedValueOnce({ data: 0, error: null } as never)
-      .mockResolvedValueOnce({
-        data: null,
-        error: { code: '42501', message: 'Credential revoked' },
-      } as never);
+    app.rpc.mockResolvedValueOnce({ data: 0, error: null } as never).mockResolvedValueOnce({
+      data: null,
+      error: { code: '42501', message: 'Credential revoked' },
+    } as never);
     const response = await app.invoke(
       '/links/' + click + '/policy',
       { password: 'fixture-password' },

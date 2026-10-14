@@ -28,12 +28,55 @@ Deno.serve(async (req: Request) => {
   if(error || !data.user)return json({error:'Unauthorized'},401);
   user=data.user;
  }
+ const sessionPrincipal=async(scope:string):Promise<{id:string|null;failure?:Response}>=>{
+  if(!user||user.is_anonymous)return {id:null,failure:json({error:'A registered account is required'},403)};
+  const role=await identityClient!.rpc('has_role_jwt',{required_role:'admin'});
+  if(role.error)return {id:null,failure:json({error:'Authorization unavailable'},503)};
+  if(role.data)return {id:null};
+  const membership=await db.rpc('redirect_session_principal',{p_user_id:user.id,p_scope:scope});
+  if(membership.error)return {id:null,failure:rpcError(membership.error)};
+  if(!membership.data||typeof membership.data.id!=='string'||!UUID.test(membership.data.id))return {id:null,failure:json({error:'Redirects workspace access is required'},403)};
+  return {id:membership.data.id};
+ };
  try {
+  const memberMatch=path.match(/^\/members(?:\/([a-f0-9-]{36}))?$/i);
+  if(memberMatch){
+   if(tokenCredential||!user||user.is_anonymous)return json({error:'Admin session required'},403);
+   const role=await identityClient!.rpc('has_role_jwt',{required_role:'admin'});if(role.error)return json({error:'Authorization unavailable'},503);if(!role.data)return json({error:'Forbidden'},403);
+   const id=memberMatch[1],select='id,user_id,kind,label,role,active,created_at';if(id&&!UUID.test(id))return json({error:'Invalid member ID'},400);
+   if(req.method==='GET'&&!id){
+    const query=new URL(req.url).searchParams,offset=Number(query.get('offset')??0);if([...query.keys()].some(k=>k!=='offset')||!Number.isInteger(offset)||offset<0||offset>1e7)return json({error:'Invalid member page'},400);
+    const {data,count,error}=await db.from('redirect_workspace_members').select(select,{count:'exact'}).order('id').range(offset,offset+99);if(error)return rpcError(error);return json({data,count});
+   }
+   if(req.method==='DELETE'&&id){const {data,error}=await db.from('redirect_workspace_members').delete().eq('id',id).select('id');if(error)return rpcError(error);return json({deleted:!!data?.length,id});}
+   if(req.method==='POST'&&!id||req.method==='PATCH'&&id){
+    const body=await boundedJson(req),create=req.method==='POST',allowed=create?['label','role','active','kind','userId']:['label','role','active'];
+    if(!body||typeof body!=='object'||Array.isArray(body)||!Object.keys(body).length||Object.keys(body).some(k=>!allowed.includes(k)))return json({error:'Invalid membership fields'},400);
+    if((create||body.label!==undefined)&&(typeof body.label!=='string'||!body.label.trim()||body.label.trim().length>100))return json({error:'Member label must be 1–100 characters'},400);
+    if(body.role!==undefined&&!['member','viewer'].includes(body.role)||body.active!==undefined&&typeof body.active!=='boolean')return json({error:'Invalid membership role or status'},400);
+    if(create&&(!['user','machine'].includes(body.kind)||body.kind==='user'&&(typeof body.userId!=='string'||!UUID.test(body.userId))||body.kind==='machine'&&body.userId!=null))return json({error:'Choose an existing account UUID or a machine member'},400);
+    const values={...(body.label!==undefined?{label:body.label.trim()}:{}),...(body.role!==undefined?{role:body.role}:{}),...(body.active!==undefined?{active:body.active}:{}),...(create?{kind:body.kind,user_id:body.kind==='user'?body.userId:null}:{})};
+    const table=db.from('redirect_workspace_members'),change=create?table.insert(values):table.update(values).eq('id',id!);
+    const {data,error}=await change.select(select).single();if(error)return rpcError(error);return json(data,create?201:200);
+   }
+   return json({error:'Method not supported'},405);
+  }
+  const accessMatch=path.match(/^\/folders\/([a-f0-9-]{36})\/access$/i);
+  if(accessMatch){
+   if(!UUID.test(accessMatch[1]))return json({error:'Invalid folder ID'},400);
+   if(!['GET','PATCH'].includes(req.method))return json({error:'Method not supported'},405);
+   const accessScope=req.method==='GET'?'workspace:read':'workspace:write';let principalId:string|null=null;
+   if(tokenCredential){const {data,error}=await db.rpc('authenticate_redirect_api_token',{p_hash:await tokenDigest(credential),p_scope:accessScope});if(error)return json({error:'Credential verification unavailable'},503);if(!data||data.redirect_ids!==null)return json({error:'Unrestricted workspace scope is required'},403);principalId=data.id;}
+   else{const principal=await sessionPrincipal(accessScope);if(principal.failure)return principal.failure;principalId=principal.id;}
+   const values=req.method==='PATCH'?await boundedJson(req):null;
+   if(req.method==='PATCH'&&(!values||typeof values!=='object'||Array.isArray(values)))return json({error:'Provide access settings'},400);
+   const {data,error}=await db.rpc('redirect_folder_access',{p_folder:accessMatch[1],p_values:values,p_token_id:principalId});if(error)return rpcError(error);return json(data);
+  }
   const resourceMatch=path.match(/^\/(folders|tags|templates)(?:\/([a-f0-9-]+))?$/i);
   if(resourceMatch){
    const [,kind,id]=resourceMatch, read=req.method==='GET';let tokenId:string|null=null;
    if(tokenCredential){const {data,error}=await db.rpc('authenticate_redirect_api_token',{p_hash:await tokenDigest(credential),p_scope:read?'workspace:read':'workspace:write'});if(error)return json({error:'Credential verification unavailable'},503);if(!data)return json({error:'Workspace scope is required'},403);if(data.redirect_ids!==null)return json({error:'Workspace permissions require an unrestricted credential'},403);tokenId=data.id;}
-   else{const {data,error}=await identityClient!.rpc('has_role_jwt',{required_role:'admin'});if(error)return json({error:'Authorization unavailable'},503);if(!data)return json({error:'Forbidden'},403);}
+   else{const principal=await sessionPrincipal(read?'workspace:read':'workspace:write');if(principal.failure)return principal.failure;tokenId=principal.id;}
    if(id&&!UUID.test(id))return json({error:'Invalid resource ID'},400);
    let action:string,values:Record<string,unknown>={},limit=50,after:string|null=null;
    if(read&&!id){const query=new URL(req.url).searchParams;if([...query.keys()].some(key=>!['limit','cursor'].includes(key)))return json({error:'Unknown resource page parameter'},400);limit=Number(query.get('limit')??50);after=query.get('cursor');if(!Number.isInteger(limit)||limit<1||limit>100||after&&!UUID.test(after))return json({error:'Invalid resource page'},400);action='list';}
@@ -48,7 +91,7 @@ Deno.serve(async (req: Request) => {
    const read=req.method==='GET', scope=read?'links:read':'links:write';
    let tokenId:string|null=null;
    if(tokenCredential){const {data,error}=await db.rpc('authenticate_redirect_api_token',{p_hash:await tokenDigest(credential),p_scope:scope});if(error)return json({error:'Credential verification unavailable'},503);if(!data)return json({error:'Required link scope is missing'},403);tokenId=data.id;}
-   else{const {data,error}=await identityClient!.rpc('has_role_jwt',{required_role:'admin'});if(error)return json({error:'Authorization unavailable'},503);if(!data)return json({error:'Forbidden'},403);}
+   else{const principal=await sessionPrincipal(scope);if(principal.failure)return principal.failure;tokenId=principal.id;}
    const policyMatch=path.match(/^\/links\/([a-f0-9-]{36})\/policy$/i);
    if(policyMatch){
     const linkId=policyMatch[1];if(!UUID.test(linkId))return json({error:'Invalid link ID'},400);
@@ -127,16 +170,16 @@ Deno.serve(async (req: Request) => {
   if((path==='/analytics'||path==='/events')&&req.method==='GET') {
    const query=new URL(req.url).searchParams;
    if(new URL(req.url).search.length>16384)return json({error:'Filters are too large'},400);
-   let ids:string[]|null=null;
-   if(tokenCredential){const {data,error}=await db.rpc('authenticate_redirect_api_token',{p_hash:await tokenDigest(credential),p_scope:'events:read'});if(error)return json({error:'Credential verification unavailable'},503);if(!data)return json({error:'Read scope is required'},403);ids=data.redirect_ids;}
-   else{const {data,error}=await identityClient!.rpc('has_role_jwt',{required_role:'admin'});if(error)return json({error:'Authorization unavailable'},503);if(!data)return json({error:'Forbidden'},403);}
+   let tokenId:string|null=null;
+   if(tokenCredential){const {data,error}=await db.rpc('authenticate_redirect_api_token',{p_hash:await tokenDigest(credential),p_scope:'events:read'});if(error)return json({error:'Credential verification unavailable'},503);if(!data)return json({error:'Read scope is required'},403);tokenId=data.id;}
+   else{const principal=await sessionPrincipal('events:read');if(principal.failure)return principal.failure;tokenId=principal.id;}
    const filters=analyticsFilters(JSON.parse(query.get('filters')??'{}'));
-   let name='redirect_analytics_report',args:Record<string,unknown>={p_filters:filters,p_allowed_ids:ids};
+   const name='redirect_scoped_analytics';let args:Record<string,unknown>={p_action:path==='/events'?'events':'report',p_filters:filters,p_token_id:tokenId};
    if(path==='/events'){
     const limit=Number(query.get('limit')??50),snapshot=query.get('snapshot');
     const cursor=query.has('cursor')?JSON.parse(query.get('cursor')!):null;
     if(!Number.isInteger(limit)||limit<1||limit>100||snapshot&&!Number.isFinite(Date.parse(snapshot))||cursor&&(!Number.isFinite(Date.parse(cursor.at))||typeof cursor.id!=='string'||cursor.id.length>100))return json({error:'Invalid event page'},400);
-    name='redirect_analytics_page';args={...args,p_limit:limit,p_snapshot:snapshot,p_before_at:cursor?.at??null,p_before_id:cursor?.id??null};
+    args={...args,p_limit:limit,p_snapshot:snapshot,p_before_at:cursor?.at??null,p_before_id:cursor?.id??null};
    }
    const {data,error}=await db.rpc(name,args);if(error)return rpcError(error);return json(data);
   }
@@ -169,7 +212,7 @@ Deno.serve(async (req: Request) => {
    if(tokenCredential)return json({error:'Admin session required'},403);
    const {data:admin,error:roleError}=await identityClient!.rpc('has_role_jwt',{required_role:'admin'});
    if(roleError || !admin)return json({error:'Forbidden'},403);
-   const select='id,name,prefix,scopes,redirect_ids,created_at,expires_at,revoked_at,last_used_at';
+   const select='id,name,prefix,scopes,redirect_ids,member_id,created_at,expires_at,revoked_at,last_used_at';
    if(path==='/tokens' && req.method==='GET') {
     const offset=Number(new URL(req.url).searchParams.get('offset') ?? '0');
     if(!Number.isInteger(offset) || offset<0 || offset>1e7)return json({error:'Invalid page offset'},400);
@@ -179,7 +222,7 @@ Deno.serve(async (req: Request) => {
    }
    if(path==='/tokens' && req.method==='POST') {
     const body=await boundedJson(req);
-    if(!body || typeof body!=='object' || Object.keys(body).some(key=>!['name','expiresAt','redirectIds','scopes'].includes(key)) || typeof body.name!=='string' || !body.name.trim() || body.name.length>100)return json({error:'Provide a credential name (1–100 characters)'},400);
+    if(!body || typeof body!=='object' || Object.keys(body).some(key=>!['name','expiresAt','redirectIds','scopes','memberId'].includes(key)) || typeof body.name!=='string' || !body.name.trim() || body.name.length>100)return json({error:'Provide a credential name (1–100 characters)'},400);
     const end=typeof body.expiresAt==='string'?Date.parse(body.expiresAt):NaN;
     if(!Number.isFinite(end) || end<=Date.now() || end>Date.now()+366*86400000)return json({error:'Credentials must expire within one year'},400);
     if(body.redirectIds!==undefined && (!Array.isArray(body.redirectIds) || body.redirectIds.length<1 || body.redirectIds.length>100 || body.redirectIds.some((id:unknown)=>typeof id!=='string' || !UUID.test(id))))return json({error:'Invalid link scope'},400);
@@ -188,8 +231,10 @@ Deno.serve(async (req: Request) => {
     const ids=body.redirectIds? [...new Set(body.redirectIds)] : null;
     if(ids&&scopes.some(scope=>scope.startsWith('workspace:')))return json({error:'Workspace permissions require an unrestricted credential'},400);
     if(ids){const {data,error}=await db.from('redirects').select('id').in('id',ids).eq('type','SHORT');if(error || data?.length!==ids.length)return json({error:'One or more managed links were not found'},400);}
+    if(body.memberId!==undefined&&(typeof body.memberId!=='string'||!UUID.test(body.memberId)))return json({error:'Invalid member binding'},400);
+    if(body.memberId){const member=await db.from('redirect_workspace_members').select('id').eq('id',body.memberId).eq('active',true).maybeSingle();if(member.error)return rpcError(member.error);if(!member.data)return json({error:'Active workspace member required'},400);}
     const secret=createRedirectToken();
-    const {data,error}=await db.from('redirect_api_tokens').insert({name:body.name.trim(),token_hash:await tokenDigest(secret),prefix:secret.slice(0,20),scopes:[...new Set(scopes)],redirect_ids:ids,created_by:user!.id,expires_at:new Date(end).toISOString()}).select(select).single();
+    const {data,error}=await db.from('redirect_api_tokens').insert({name:body.name.trim(),token_hash:await tokenDigest(secret),prefix:secret.slice(0,20),scopes:[...new Set(scopes)],redirect_ids:ids,member_id:body.memberId??null,created_by:user!.id,expires_at:new Date(end).toISOString()}).select(select).single();
     if(error)return json({error:'Could not create credential'},503);
     return json({...data,secret},201);
    }

@@ -2,6 +2,8 @@ CREATE ROLE anon;
 CREATE ROLE authenticated;
 CREATE ROLE service_role BYPASSRLS;
 CREATE SCHEMA auth;
+CREATE TABLE auth.users(id uuid PRIMARY KEY);
+GRANT SELECT,INSERT,DELETE ON auth.users TO service_role;
 CREATE TYPE public.app_role AS ENUM ('admin','user','editor','moderator');
 CREATE FUNCTION auth.role() RETURNS text LANGUAGE sql STABLE AS $$ SELECT coalesce(nullif(current_setting('request.jwt.claims',true),'')::jsonb->>'role',current_user::text) $$;
 CREATE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql STABLE AS $$ SELECT nullif(nullif(current_setting('request.jwt.claims',true),'')::jsonb->>'sub','')::uuid $$;

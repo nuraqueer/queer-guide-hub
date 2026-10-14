@@ -7,6 +7,7 @@ export interface RedirectCredential {
   prefix: string;
   scopes: string[];
   redirect_ids: string[] | null;
+  member_id?: string | null;
   created_at: string;
   expires_at: string;
   revoked_at: string | null;
@@ -31,6 +32,7 @@ export function useRedirectCredentials() {
       name: string;
       expiresAt: string;
       redirectIds?: string[];
+      memberId?: string;
       scopes?: string[];
     }) => {
       const { data, error } = await supabase.functions.invoke('redirect-api/tokens', { body });

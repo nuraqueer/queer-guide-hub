@@ -1,3 +1,5 @@
+import { RedirectWorkspaceMembers } from './RedirectWorkspaceMembers';
+import { RedirectFolderAccess } from './RedirectFolderAccess';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -16,6 +18,8 @@ const TAG_COLORS = ['gray', 'red', 'orange', 'yellow', 'green', 'blue', 'purple'
 
 export function RedirectWorkspaceDialog({ onClose }: { onClose: () => void }) {
   const workspace = useRedirectWorkspace();
+  const [showMembers, setShowMembers] = useState(false);
+  const [accessFolder, setAccessFolder] = useState<string | null>(null);
   const [kind, setKind] = useState<WorkspaceResource>('folders');
   const [editing, setEditing] = useState<string | null>(null);
   const [name, setName] = useState('');
@@ -23,6 +27,7 @@ export function RedirectWorkspaceDialog({ onClose }: { onClose: () => void }) {
   const [campaign, setCampaign] = useState<CampaignFields>({});
   const [deleting, setDeleting] = useState<string | null>(null);
   const reset = () => {
+    setAccessFolder(null);
     setName('');
     setEditing(null);
     setDeleting(null);
@@ -73,6 +78,10 @@ export function RedirectWorkspaceDialog({ onClose }: { onClose: () => void }) {
             </Button>
           ))}
         </div>
+        <Button variant="outline" onClick={() => setShowMembers(!showMembers)}>
+          {showMembers ? 'Hide members' : 'Manage members'}
+        </Button>
+        {showMembers && <RedirectWorkspaceMembers />}
         {workspace.isError && (
           <div role="alert">
             <p>Could not load the link workspace. {workspace.error.message}</p>
@@ -156,6 +165,13 @@ export function RedirectWorkspaceDialog({ onClose }: { onClose: () => void }) {
                 )}
               </div>
             </form>
+            {accessFolder && (
+              <RedirectFolderAccess
+                key={accessFolder}
+                folderId={accessFolder}
+                onClose={() => setAccessFolder(null)}
+              />
+            )}
             <ul className="space-y-2">
               {rows.map((row) => (
                 <li
@@ -164,6 +180,11 @@ export function RedirectWorkspaceDialog({ onClose }: { onClose: () => void }) {
                 >
                   <span className="font-medium">{row.name}</span>
                   <div className="flex flex-wrap gap-2">
+                    {kind === 'folders' && (
+                      <Button variant="ghost" size="sm" onClick={() => setAccessFolder(row.id)}>
+                        Access
+                      </Button>
+                    )}
                     <Button
                       variant="ghost"
                       size="sm"

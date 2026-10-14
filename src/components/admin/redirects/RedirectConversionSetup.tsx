@@ -1,3 +1,4 @@
+import { useRedirectMembers } from '@/hooks/useRedirectMembers';
 import { AdminEmpty } from '@/components/admin/primitives/AdminEmpty';
 import { useState } from 'react';
 import { toast } from 'sonner';
@@ -23,6 +24,8 @@ export function RedirectConversionSetup({
   onClose: () => void;
 }) {
   const credentials = useRedirectCredentials();
+  const members = useRedirectMembers();
+  const [memberId, setMemberId] = useState('');
   const [name, setName] = useState(''),
     [days, setDays] = useState('30'),
     [limited, setLimited] = useState(false);
@@ -46,6 +49,7 @@ export function RedirectConversionSetup({
   const create = async () => {
     const result = await credentials.create.mutateAsync({
       name,
+      ...(memberId ? { memberId } : {}),
       scopes: [
         ...(writeEvents ? ['conversions:write'] : []),
         ...(readEvents ? ['events:read'] : []),
@@ -157,6 +161,43 @@ export function RedirectConversionSetup({
                   <option value="365">1 year</option>
                 </select>
               </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="credential-member">Act as workspace member</Label>
+              <select
+                id="credential-member"
+                className="block w-full rounded-element border bg-background p-2"
+                value={memberId}
+                onChange={(e) => setMemberId(e.target.value)}
+                disabled={members.isPending || members.isError}
+              >
+                <option value="">Workspace administrator</option>
+                {members.data
+                  ?.filter((member) => member.active)
+                  .map((member) => (
+                    <option key={member.id} value={member.id}>
+                      {member.label} ({member.kind}, {member.role})
+                    </option>
+                  ))}
+              </select>
+              <p className="text-sm text-muted-foreground">
+                A bound credential inherits the member’s current folder permissions, intersected
+                with the permissions and selected links below. Removing the member deletes its
+                credentials.
+              </p>
+              {members.isError && (
+                <p role="alert">
+                  Could not load member bindings.{' '}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => void members.refetch()}
+                  >
+                    Retry members
+                  </Button>
+                </p>
+              )}
             </div>
             <div className="flex flex-wrap gap-4">
               <label className="flex items-center gap-2 text-sm">
@@ -278,8 +319,12 @@ export function RedirectConversionSetup({
               ]
                 .filter(Boolean)
                 .join(', ') || 'none selected'}
-              {limited ? ' for selected links' : ' for all managed links'}. Credentials cannot
-              create or revoke other credentials.
+              {limited
+                ? ' for selected links'
+                : memberId
+                  ? ' within member folder access'
+                  : ' for all managed links'}
+              . Credentials cannot create or revoke other credentials.
             </p>
             {credentials.create.isError && (
               <p role="alert" className="text-destructive">
@@ -351,6 +396,9 @@ export function RedirectConversionSetup({
                     {item.name} · <code className="text-xs">{item.prefix}…</code>
                   </p>
                   <p className="text-xs text-muted-foreground">
+                    {item.member_id
+                      ? `Member ${members.data?.find((member) => member.id === item.member_id)?.label ?? item.member_id} · `
+                      : ''}
                     {item.revoked_at
                       ? 'Revoked'
                       : Date.parse(item.expires_at) <= openedAt
