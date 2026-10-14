@@ -2129,3 +2129,44 @@ requested real iOS Team/bundle ID and Android package/signing fingerprints.
 Other independent work continues: branded password pages, domain lifecycle/DNS
 automation, invitations/account/all-source permissions, plus controlled
 infrastructure release, provider debugger tests and SDK publication.
+
+### Branded password page design (2026-10-14)
+
+Add per-managed-link password-page branding, independently of social preview and
+QR preferences. A simple HTTPS image URL would allow third-party tracking and
+uncontrolled changes; embedding preview images would conflate distinct features.
+Choose immutable controlled PNG/JPG uploads through the existing public
+redirect-brand-assets bucket and durable reservation/cleanup infrastructure.
+A new private versioned branding record references its own asset. A short plain
+brand label and custom logo are explicitly public decoration; no destination,
+password/hash, customer identity or owner notes appear before unlock.
+
+Expose scoped GET/PATCH and upload for `/links/{id}/password-branding`. Read uses
+links:read, edit/upload requires links:write plus current folder edit and selected
+IDs. Owner sessions are verified against current role; member sessions must match
+the principal. Keys are scoped server callers. Store the original principal in a
+15-minute immutable upload reservation; finish rechecks current grants, link,
+version, exact scope and reservation. Bound PNG/JPG to 1.5 MB and 1024 px, use
+SHA-256 metadata, no SVG/remote URL/logo ID selection, one Storage POST without
+blind unknown-outcome retry, existing actor/global/per-link pending budgets and
+late-object tombstone cleanup. Add branding references to every cleanup guard;
+replaced/cleared/deleted-link assets get the existing one-hour cleanup grace.
+
+The public resolver looks up only minimal published brand label/asset after the
+valid managed link is found. Password challenges, incorrect-password and
+throttled pages show the same branding; errors fail to the generic page when
+branding cannot be read rather than disclosing destinations or bypassing the
+password. Renderer accepts only the fixed bucket/UUID image URL, escapes the
+plain label, gives logo dimensions/alt text, uses anonymous no-referrer images,
+and restricts img-src to the configured Storage origin. A failed logo decode
+keeps the usable password form. HEAD remains empty. Password hashing, POST-only
+secret handling, attempt quotas and signed relay remain unchanged.
+
+The policy dialog includes a separate branding editor with version-preserving
+prefill, upload/progress, clear-logo, explicit saved public preview, conflict
+reload and account/link remount/cancellation. All five SDKs expose branding read,
+versioned label/clear and controlled upload. Verify migrated SQL grants/current
+revocation/version/cascade/cleanup, actual HTTP reservation -> Storage -> finish,
+public resolver challenge/throttle/header isolation, malformed images/URLs, native
+SDKs and desktop/mobile public/editor UI. Actual Storage/cleanup/gateway release
+proof remains required; a preview-only image is not feature completion.
