@@ -158,3 +158,15 @@ ZIP retained two distinct SVG logos after a common appearance edit; all four
 PNG/JPG images decoded to their canonical tracked URLs. The 390px layout had no
 horizontal overflow. These checks simulate API/Storage responses and do not
 substitute for a real deployed Storage/CORS/cron check.
+
+
+## Hosted image service foundation
+
+A local Worker/Pages relay now implements GET/HEAD/POST image generation using the
+same SVG geometry and scan checks as downloads. See
+[the service contract and verification commands](../../workers/redirect-qr/README.md).
+GET supports explicit appearance and fixed-bucket saved logo references; POST also
+accepts local PNG/JPG artwork. The relay requires a REDIRECT_QR service binding and
+is not deployed. Saved-default lookup, UI hosted-image copying, durable custom-
+artwork URL authoring and SDK URL contracts remain pending. A POST image response
+does not create a durable share URL for its local artwork.

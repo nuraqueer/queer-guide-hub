@@ -1,0 +1,13 @@
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "qg-redirect-qr",
+  "main": "index.ts",
+  "compatibility_date": "2026-10-14",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": false,
+  "preview_urls": false,
+  "observability": { "enabled": true, "head_sampling_rate": 0.1, "logs": { "enabled": true, "invocation_logs": false } },
+  "vars": { "SUPABASE_URL": "" },
+  "ratelimits": [{ "name": "QR_RATE_LIMITER", "namespace_id": "1780712103", "simple": { "limit": 30, "period": 60 } }],
+  "rules": [{ "type": "CompiledWasm", "globs": ["**/*.wasm"], "fallthrough": true }]
+}

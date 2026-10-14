@@ -29,8 +29,8 @@ exist. Existing local tools are a foundation, not proof of parity or deployment.
 | Password links | Password challenge, hashed secret, no disclosure/bypass, scoped access | Partial: hashed protection, atomic attempt throttling and signed IP relay; custom password logo pending |
 | Expiration | Date and expired destination URL, live enforcement without stale cached rules | Candidate: date/phrase parser, custom fallback and live enforcement tested |
 | Link cloaking | Explicit iframe mode with accurate iframe limitations, standard redirect fallback | Candidate: HTTPS guarded iframe wrapper and persistent direct fallback; runtime release pending |
-| Branded QR | Dots square/circle/joined; marker center square/circle; border square/rounded/circle; colors | Partial: dot/marker/color controls, versioned workspace/domain saved styles and scoped individual/bulk defaults implemented locally; scan verification before export; durable logos/hosted assets and release pending |
-| QR logos/export | Workspace/domain/logo precedence and hide; SVG/PNG/JPG; clipboard image and image URL | Partial: per-export logo and PNG/JPG/SVG, image/data URL copy, hosted-logo asset API/precedence/cleanup implemented locally; saved-logo editor/renderer integration, hosted QR output URLs and release pending |
+| Branded QR | Dots square/circle/joined; marker center square/circle; border square/rounded/circle; colors | Partial: dot/marker/color controls, saved workspace/domain appearance and logos, scoped individual/bulk defaults and scan verification implemented locally; hosted-image authoring/integration and release pending |
+| QR logos/export | Workspace/domain/logo precedence and hide; SVG/PNG/JPG; clipboard image and image URL | Partial: saved/local logos, PNG/JPG/SVG and clipboard exports, durable logo assets/editor/cleanup implemented locally; server image-rendering service implemented locally; hosted-output authoring/default resolution/SDK/UI/release pending |
 | Click analytics | Real-time totals/time series, custom date/filter/export, countries/cities/devices/browsers/OS/referrers | Candidate: SQL totals/time series, date/dimension filters, export and bounded live refresh; release pending |
 | Conversion tracking | Click attribution, leads/signup/sale/revenue, trusted conversion ingestion and application hooks | Candidate: scoped ingestion, consented signup and verified Stripe hooks implemented locally |
 | Customer insights | Customer journey across click→lead→sale with private event timeline | Partial: private ID-based cross-link paginated journeys; identity enrichment missing |
@@ -1444,3 +1444,51 @@ https://github.com/dubinc/dub/blob/main/apps/web/app/api/qr/route.tsx
 https://github.com/thx/resvg-js/blob/main/wasm/index.d.ts
 https://developers.cloudflare.com/workers/runtime-apis/webassembly/
 https://developers.cloudflare.com/workers/runtime-apis/bindings/rate-limit/
+
+
+### Hosted QR rendering service checkpoint
+
+Implemented a private-route Worker and public Pages /api/qr service-binding relay.
+GET/HEAD produces SVG/PNG/JPG from validated URL/appearance parameters at 256, 512
+or 1024 pixels; POST additionally accepts bounded inline PNG/JPG artwork. Shared
+browser/server SVG geometry keeps contrast, high ECC, positioning modules and
+quiet zones consistent. A pinned bundled resvg Wasm rasterizer tries masks and
+verifies actual pixels; JPEG is checked after compression too. Wasm allocations
+are freed per mask. No destination fetch, redirect lookup, click/quota recording,
+remote fonts or runtime Wasm downloads occur.
+
+Saved-logo keys are restricted to the fixed project/public bucket, require a
+SHA-256 and use bounded/no-redirect/no-credential reads. PNG CRC/full decode uses
+the supported streaming API; JPEG full decode has resolution/memory limits. Real
+workerd testing exposed pngjs's private synchronous zlib API incompatibility; the
+streaming path resolves it and preserves validation of truncated/corrupt artwork.
+Bodies, URL/query lengths, shapes/colors, sizes, MIME and logo dimensions are
+bounded. Unknown/duplicate parameters and unsafe URL schemes/credentials fail.
+A real binding limits requests per edge IP (30/60s, not a global quota). Responses
+are no-store, no-referrer, nosniff, noindex and CORS-safe. SVG CSP permits only
+embedded data artwork. Errors are sanitized; Pages strips cookies/API credentials
+and untrusted forwarding headers. Worker invocation logs are disabled.
+
+Evidence: 71 focused tests across ten files pass, including all 18 supported shape
+combinations through real Wasm, independent raster decoding, controlled logo URLs/
+SHA/MIME, bounded bodies and unsafe inputs, truncated PNGs, excessive QR density,
+HEAD/OPTIONS, rate-limit and relay contracts, plus existing owner/export/bulk
+lifecycles. Native npm run test:redirect-qr starts/stops its own fresh workerd
+instance and verifies HTTP SVG/PNG/JPG, inline PNG/JPG logos, exact canonical QR
+attribution, validation, HEAD/OPTIONS and the actual local rate-limit binding.
+An additional branded native PNG independently decoded and is saved in shared
+outputs/redirect-dub-parity/hosted-qr-worker.png. The installed runtime only supports
+2026-10-13, so native tests explicitly override that date; configured 2026-10-14
+runtime proof remains required. Worker strict TS, Pages/function-test TS, targeted
+lint and app build pass (18.19s); app ratchet remains 704 inherited errors, none new. Wrangler dry-run bundles the Wasm module at about
+1.01 MiB gzip with no remote upload.
+
+This completes the rendering/HTTP foundation, not complete hosted QR parity. Next:
+scoped saved-default resolution, UI image URL copying, durable URL authoring for
+local custom artwork without replacing defaults, and five-SDK URL contracts.
+Real Pages binding, configured-date cold starts/resource limits, Storage/CORS and
+controlled deployment remain required. Full remaining domain lifecycle/DNS
+automation, native/deferred deep links, branded password pages, customer enrichment,
+report SDK/team discovery, integrations, outgoing webhooks, permissions/account
+discovery and controlled release/publication stay in scope. No production writes
+or deployments occurred.
