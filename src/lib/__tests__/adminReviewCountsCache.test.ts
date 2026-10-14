@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 
-const MIGRATION = '99991792000371_admin_review_counts_cache.sql';
+const MIGRATION = '99991792000410_admin_review_counts_cache.sql';
 const MIGRATIONS = join(process.cwd(), 'supabase', 'migrations');
 const HEALTH = join(process.cwd(), 'scripts', 'check-pipeline-health.mjs');
 
