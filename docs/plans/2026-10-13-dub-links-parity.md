@@ -2349,3 +2349,12 @@ in test assertions: password-page destination absence and HTML escaping. Those
 assertions now reject any matching destination host and check tags regardless of
 case. Seven report-page tests and 25 focused resolver/password/member tests pass;
 new CodeQL/CI results remain to be checked after push.
+
+Latest draft CI now clears lint, CodeQL and local-version ordering; its migration
+job still fails because production history contains an unrelated applied migration
+20261014210405_editorial_rejection_history absent from the repository. Read-only
+Supabase history confirmed its name and sole 867-byte statement. That exact
+recorded SQL is recovered at its already-applied version; it is not renumbered,
+re-applied or replaced with a no-op. This follows the drift job's recovery
+instruction and does not change production. The historical migration adds a
+nullable generated uniqueness discriminator for rejected editorial drafts.
