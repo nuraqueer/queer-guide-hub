@@ -1,9 +1,11 @@
 BEGIN;
+INSERT INTO auth.users(id) VALUES('00000000-0000-4000-8000-000000000001');
+INSERT INTO public.user_roles VALUES('00000000-0000-4000-8000-000000000001','admin');
 INSERT INTO public.redirects(type,slug,target) VALUES('SHORT','generation-fixture','https://example.com');
 SET LOCAL ROLE service_role;
 DO $$ DECLARE link_id uuid; token_id uuid; result jsonb; BEGIN
  SELECT id INTO link_id FROM public.redirects WHERE slug='generation-fixture';
- INSERT INTO public.redirect_api_tokens(name,token_hash,prefix,scopes,redirect_ids,created_by,expires_at) VALUES('generator',repeat('e',64),'fixture',ARRAY['links:write'],ARRAY[link_id],gen_random_uuid(),now()+interval '1 day') RETURNING id INTO token_id;
+ INSERT INTO public.redirect_api_tokens(name,token_hash,prefix,scopes,redirect_ids,created_by,expires_at) VALUES('generator',repeat('e',64),'fixture',ARRAY['links:write'],ARRAY[link_id],'00000000-0000-4000-8000-000000000001',now()+interval '1 day') RETURNING id INTO token_id;
  FOR i IN 1..5 LOOP
   result:=public.reserve_redirect_preview(link_id,token_id);
   IF result->>'target'<>'https://example.com' OR (result->>'retryAfter')::int<>0 THEN RAISE EXCEPTION 'Premature generation denial'; END IF;

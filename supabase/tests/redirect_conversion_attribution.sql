@@ -1,4 +1,6 @@
 BEGIN;
+INSERT INTO auth.users(id) VALUES('00000000-0000-4000-8000-000000000001');
+INSERT INTO public.user_roles VALUES('00000000-0000-4000-8000-000000000001','admin');
 INSERT INTO public.redirects(type,slug,target) VALUES('SHORT','conversion-a','https://example.com/a'),('SHORT','conversion-b','https://example.com/b');
 SET LOCAL ROLE service_role;
 SET LOCAL request.jwt.claims='{"role":"service_role"}';

@@ -1,4 +1,6 @@
 BEGIN;
+INSERT INTO auth.users(id) VALUES('00000000-0000-4000-8000-000000000001');
+INSERT INTO public.user_roles VALUES('00000000-0000-4000-8000-000000000001','admin');
 INSERT INTO public.redirect_link_folders(id,name) VALUES('00000000-0000-4000-8000-000000000020','API folder');
 INSERT INTO public.redirect_link_tags(id,name) VALUES('00000000-0000-4000-8000-000000000021','API tag');
 SET LOCAL ROLE service_role;
@@ -12,7 +14,7 @@ BEGIN
  second_id:=(result->0->'link'->>'id')::uuid;
  IF result->0->'link'->>'slug' !~ '^[0-9a-f]{12}$' THEN RAISE EXCEPTION 'Random slug missing'; END IF;
  INSERT INTO public.redirect_api_tokens(name,token_hash,prefix,scopes,redirect_ids,created_by,expires_at)
- VALUES('API limited',repeat('e',64),'fixture',ARRAY['links:read','links:write'],ARRAY[link_id],gen_random_uuid(),now()+interval '1 day') RETURNING id INTO token_id;
+ VALUES('API limited',repeat('e',64),'fixture',ARRAY['links:read','links:write'],ARRAY[link_id],'00000000-0000-4000-8000-000000000001',now()+interval '1 day') RETURNING id INTO token_id;
  result:=public.redirect_management_list('{}',50,NULL,token_id);
  IF (result->>'count')::integer<>1 OR jsonb_array_length(result->'data')<>1 THEN RAISE EXCEPTION 'Selected-link read escaped scope'; END IF;
  IF result->'data'->0 ? 'password_hash' OR result->'data'->0 ? 'ip_hash' THEN RAISE EXCEPTION 'Secret projection exposed'; END IF;

@@ -1,4 +1,6 @@
 BEGIN;
+INSERT INTO auth.users(id) VALUES('00000000-0000-4000-8000-000000000001');
+INSERT INTO public.user_roles VALUES('00000000-0000-4000-8000-000000000001','admin');
 SET LOCAL ROLE service_role;
 DO $$
 DECLARE folder jsonb; tag jsonb; template jsonb; token_id uuid; link_id uuid; result jsonb; page jsonb; next_id uuid;
@@ -9,7 +11,7 @@ BEGIN
  result:=public.redirect_workspace_resource('folders','update',(folder->>'id')::uuid,'{"description":"changed"}');
  IF result->>'name'<>'SDK folder' OR result->>'description'<>'changed' THEN RAISE EXCEPTION 'Patch erased omitted resource fields'; END IF;
  IF public.redirect_workspace_resource('folders','get',(folder->>'id')::uuid)->>'description'<>'changed' THEN RAISE EXCEPTION 'Resource detail failed'; END IF;
- INSERT INTO public.redirect_api_tokens(name,token_hash,prefix,scopes,created_by,expires_at) VALUES('workspace',repeat('f',64),'fixture',ARRAY['workspace:read','workspace:write'],gen_random_uuid(),now()+interval '1 day') RETURNING id INTO token_id;
+ INSERT INTO public.redirect_api_tokens(name,token_hash,prefix,scopes,created_by,expires_at) VALUES('workspace',repeat('f',64),'fixture',ARRAY['workspace:read','workspace:write'],'00000000-0000-4000-8000-000000000001',now()+interval '1 day') RETURNING id INTO token_id;
  result:=public.redirect_workspace_resource('folders','list',p_limit=>1,p_token_id=>token_id);
  IF (result->>'count')::int<>1 OR jsonb_array_length(result->'data')<>1 THEN RAISE EXCEPTION 'Resource list failed'; END IF;
  INSERT INTO public.redirect_utm_templates(name) SELECT 'paged template '||seq FROM generate_series(1,103) AS fixtures(seq);

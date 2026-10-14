@@ -1,4 +1,6 @@
 BEGIN;
+INSERT INTO auth.users(id) VALUES('00000000-0000-4000-8000-000000000001');
+INSERT INTO public.user_roles VALUES('00000000-0000-4000-8000-000000000001','admin');
 SET LOCAL ROLE authenticated;
 SET LOCAL request.jwt.claims = '{"role":"authenticated","user_role":"admin"}';
 DO $$ DECLARE folder uuid; tag_a uuid; tag_b uuid; saved jsonb; key text; count_before integer; BEGIN
@@ -32,7 +34,7 @@ RESET ROLE;
 SET LOCAL ROLE service_role;
 DO $$ DECLARE link_id uuid; token uuid; result jsonb; BEGIN
  INSERT INTO public.redirects(type,slug,target) VALUES('SHORT','api-archive-fixture','/events') RETURNING id INTO link_id;
- INSERT INTO public.redirect_api_tokens(name,token_hash,prefix,scopes,redirect_ids,created_by,expires_at) VALUES('archive',repeat('f',64),'fixture',ARRAY['links:read','links:write'],ARRAY[link_id],gen_random_uuid(),now()+interval '1 day') RETURNING id INTO token;
+ INSERT INTO public.redirect_api_tokens(name,token_hash,prefix,scopes,redirect_ids,created_by,expires_at) VALUES('archive',repeat('f',64),'fixture',ARRAY['links:read','links:write'],ARRAY[link_id],'00000000-0000-4000-8000-000000000001',now()+interval '1 day') RETURNING id INTO token;
  result:=public.redirect_management_mutate(jsonb_build_array(jsonb_build_object('operation','update','id',link_id,'data',jsonb_build_object('isArchived',true))),token);
  IF NOT(result->0->'link'->>'isArchived')::boolean THEN RAISE EXCEPTION 'Archive API response missing'; END IF;
  result:=public.redirect_management_list('{"isArchived":false}',p_token_id=>token);

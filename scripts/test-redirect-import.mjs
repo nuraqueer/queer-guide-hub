@@ -21,9 +21,14 @@ const { managedImportCsv, managedLinksCsv } = new Function(
 const db = await createRedirectTestDb();
 try {
   await db.exec('SET ROLE service_role; SET request.jwt.claims = \'{"role":"service_role"}\'');
+  const keyOwner = (
+    await db.query('INSERT INTO auth.users(id) VALUES(gen_random_uuid()) RETURNING id')
+  ).rows[0].id;
+  await db.query("INSERT INTO public.user_roles VALUES($1,'admin')", [keyOwner]);
   const token = (
     await db.query(
-      "INSERT INTO public.redirect_api_tokens(name,token_hash,prefix,scopes,created_by,expires_at) VALUES('CSV fixture',repeat('a',64),'fixture',ARRAY['links:read','links:write'],gen_random_uuid(),now()+interval '1 day') RETURNING id",
+      "INSERT INTO public.redirect_api_tokens(name,token_hash,prefix,scopes,created_by,expires_at) VALUES('CSV fixture',repeat('a',64),'fixture',ARRAY['links:read','links:write'],$1,now()+interval '1 day') RETURNING id",
+      [keyOwner],
     )
   ).rows[0].id;
   const folder = (
@@ -103,7 +108,9 @@ try {
     ).rows[0].count,
     0,
   );
-  const actor = (await db.query('INSERT INTO auth.users(id) VALUES(gen_random_uuid()) RETURNING id')).rows[0].id;
+  const actor = (
+    await db.query('INSERT INTO auth.users(id) VALUES(gen_random_uuid()) RETURNING id')
+  ).rows[0].id;
   await db.query("INSERT INTO public.user_roles VALUES($1,'admin')", [actor]);
   const domain = (
     await db.query(

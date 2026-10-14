@@ -2255,3 +2255,29 @@ owner-session actor propagation and all-source discovery are a separate pending
 audit. Test role removal/restoration, no nonexistent owner, current member scope,
 unchanged selected-ID limitations and effective public table/RPC denial. Update
 older fixtures to create real owners instead of impossible random creator IDs.
+
+### Current-owner keys implementation and evidence (2026-10-14)
+
+Migration 99991792013725 checks the current creator admin role for unbound owner
+keys in the common management scope and runs current scope validation during
+credential authentication. Role mutations acquire the established ACL statement
+lock before rows; authentication acquires ACL then locks its token for update,
+so concurrent last-used writes do not upgrade shared token locks. Bound keys
+retain active member/folder/selected-ID checks. Scope helpers remain service-only.
+Old impossible random-creator SQL/CSV fixtures now create actual current owners.
+
+Full platform SQL, actual CSV -> migrated PostgreSQL, and all five native SDK ->
+HTTP -> Edge handler -> migrated SQL suites pass. Regression checks deny both new
+authentication and subsequent resource operations after creator role loss,
+reject an existing ordinary creator, retain selected IDs and permit restored
+roles. Effective ordered-schema checks confirm legacy public SELECT is absent,
+raw resolver execution denied to anon/authenticated, and ordinary accounts cannot
+read SHORT targets. All 2286 migration versions are unique; Postgres 17 grammar
+checks pass. No production schema or provider configuration was changed.
+
+Remaining work includes current owner-session actor propagation, all-source
+member listing/organization, account discovery/invitations, domain transfer/archive
+and automated DNS, native/deferred deep links with real application identities,
+controlled infrastructure release, provider installation/runtime evidence and
+SDK publication. The implementation branch is prepared for draft review; this is
+not full completion or a claim these candidates are deployed.

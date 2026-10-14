@@ -1,8 +1,10 @@
 BEGIN;
+INSERT INTO auth.users(id) VALUES('00000000-0000-4000-8000-000000000001');
+INSERT INTO public.user_roles VALUES('00000000-0000-4000-8000-000000000001','admin');
 SET LOCAL ROLE service_role;
 DO $$ DECLARE link_id uuid; token_id uuid; result jsonb; hash jsonb:='{"algorithm":"fixture","hash":"private"}'; BEGIN
  INSERT INTO public.redirects(type,slug,target,end_at) VALUES('SHORT','policy-api-fixture','https://example.com','2030-01-01') RETURNING id INTO link_id;
- INSERT INTO public.redirect_api_tokens(name,token_hash,prefix,scopes,redirect_ids,created_by,expires_at) VALUES('policy',repeat('f',64),'fixture',ARRAY['links:read','links:write'],ARRAY[link_id],gen_random_uuid(),now()+interval '1 day') RETURNING id INTO token_id;
+ INSERT INTO public.redirect_api_tokens(name,token_hash,prefix,scopes,redirect_ids,created_by,expires_at) VALUES('policy',repeat('f',64),'fixture',ARRAY['links:read','links:write'],ARRAY[link_id],'00000000-0000-4000-8000-000000000001',now()+interval '1 day') RETURNING id INTO token_id;
  result:=public.redirect_policy_resource(link_id,'patch','{"track_conversions":true,"device_targets":{"ios":"/ios"}}',hash,true,token_id);
  IF NOT(result->>'hasPassword')::boolean OR result::text LIKE '%private%' OR result::text LIKE '%password_hash%' THEN RAISE EXCEPTION 'Password state or disclosure failure'; END IF;
  IF NOT(result->'policy'?'expires_at') THEN RAISE EXCEPTION 'Policy patch erased pre-existing expiry'; END IF;

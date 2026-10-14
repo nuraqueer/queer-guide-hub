@@ -1,4 +1,6 @@
 BEGIN;
+INSERT INTO auth.users(id) VALUES('00000000-0000-4000-8000-000000000001');
+INSERT INTO public.user_roles VALUES('00000000-0000-4000-8000-000000000001','admin');
 INSERT INTO public.redirects(type,slug,target,end_at) VALUES('SHORT','presentation-fixture','/events','2030-01-01');
 SET LOCAL ROLE service_role;
 DO $$
@@ -6,7 +8,7 @@ DECLARE link_id uuid; token_id uuid; result jsonb;
 BEGIN
  SELECT id INTO link_id FROM public.redirects WHERE slug='presentation-fixture';
  PERFORM public.set_redirect_link_policy(link_id,'{"expires_at":"2030-01-01T00:00:00Z","track_conversions":true}','{"algorithm":"fixture"}',true);
- INSERT INTO public.redirect_api_tokens(name,token_hash,prefix,scopes,redirect_ids,created_by,expires_at) VALUES('presentation',repeat('a',64),'fixture',ARRAY['links:read','links:write'],ARRAY[link_id],gen_random_uuid(),now()+interval '1 day') RETURNING id INTO token_id;
+ INSERT INTO public.redirect_api_tokens(name,token_hash,prefix,scopes,redirect_ids,created_by,expires_at) VALUES('presentation',repeat('a',64),'fixture',ARRAY['links:read','links:write'],ARRAY[link_id],'00000000-0000-4000-8000-000000000001',now()+interval '1 day') RETURNING id INTO token_id;
  result:=public.redirect_presentation(link_id,'patch','{"preview":{"title":"Community","description":"Join us","video":"https://example.com/preview.mp4"},"cloaked":true}',token_id);
  IF result->'preview'->>'title'<>'Community' OR NOT(result->>'cloaked')::boolean THEN RAISE EXCEPTION 'Presentation patch lost fields'; END IF;
  IF NOT EXISTS(SELECT FROM public.redirect_link_policies WHERE redirect_id=link_id AND has_password AND (policy->>'track_conversions')::boolean) THEN RAISE EXCEPTION 'Presentation overwrote password or targeting'; END IF;
