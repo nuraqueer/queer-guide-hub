@@ -1,5 +1,5 @@
 import { assertEquals } from 'https://deno.land/std@0.168.0/testing/asserts.ts'
-import { cleanText, excerptOf, extractChannelImage, extractChannelMeta, extractMediaUrl, parseRssItems, stripLoneSurrogates } from './rss-parse.ts'
+import { cleanText, excerptOf, extractChannelImage, extractChannelMeta, extractMediaUrl, isShowHomepage, parseRssItems, stripLoneSurrogates } from './rss-parse.ts'
 
 // Regression: parseRssItems used to build EVERY item in the feed, and the
 // caller sliced to maxArticles afterwards. Each item runs cleanText (a 4-pass
@@ -370,4 +370,96 @@ Deno.test('extractChannelImage still behaves exactly as before', () => {
   const feed = '<rss><channel><itunes:image href="https://cdn.example/show.jpg"/>' +
     '<item><title>E</title><link>https://x/1</link></item></channel></rss>'
   assertEquals(extractChannelImage(feed), 'https://cdn.example/show.jpg')
+})
+
+Deno.test('podcast brand credits are preserved as provenance, never person authors', () => {
+  const xml = '<rss><channel><title>Dyking Out</title><item><title>Episode</title><itunes:author>Big Money Players Network and iHeartPodcasts</itunes:author><enclosure url="https://example.com/episode.mp3" type="audio/mpeg"/></item></channel></rss>'
+  const item = parseRssItems(xml, true)[0]
+  assertEquals(item.author, null)
+  assertEquals(item.original_author, 'Big Money Players Network and iHeartPodcasts')
+})
+Deno.test('RSS tries the next person credit after an invalid creator', () => {
+  const xml = '<rss><channel><title>Example</title><item><title>Story</title><link>https://example.com/story</link><dc:creator>Editors</dc:creator><author>José Muñoz</author></item></channel></rss>'
+  assertEquals(parseRssItems(xml)[0].author, 'José Muñoz')
+})
+
+// ---------------------------------------------------------------------------
+// A `<link>` that is the SHOW HOMEPAGE, not the episode (2026-10-14).
+//
+// SiriusXM/Simplecast feeds stamp the channel's own link on every item. It is a
+// perfectly valid http URL, so firstHttpUrl accepts it and the whole archive
+// comes out with ONE url — and index.ts keys the staging row on `article.url`,
+// so the feed collapses to a single row and never produces an episode. Measured
+// live: `The Bald and the Beautiful with Trixie and Katya` and `Vibe Check`,
+// 40 items each, 1 distinct url, 40 distinct enclosures, both sitting at 0
+// episodes while every source-health field read green.
+// ---------------------------------------------------------------------------
+
+/** Two items whose <link> is byte-identical to the channel <link>. */
+const HOMEPAGE_LINK_FEED =
+  '<rss><channel><title>The Show</title><link>https://www.siriusxm.com</link>' +
+  '<item><title>Ep 2</title><link>https://www.siriusxm.com</link>' +
+  '<enclosure url="https://cdn.example/ep2.mp3" type="audio/mpeg"/></item>' +
+  '<item><title>Ep 1</title><link>https://www.siriusxm.com</link>' +
+  '<enclosure url="https://cdn.example/ep1.mp3" type="audio/mpeg"/></item>' +
+  '</channel></rss>'
+
+Deno.test('a <link> equal to the channel link is the show homepage — the audio wins', () => {
+  const out = parseRssItems(HOMEPAGE_LINK_FEED, true)
+  assertEquals(out.map((i) => i.url), [
+    'https://cdn.example/ep2.mp3',
+    'https://cdn.example/ep1.mp3',
+  ])
+})
+
+Deno.test('…and that is the point: the urls are now DISTINCT per episode', () => {
+  // The staging key is the url. One distinct url for the whole feed is what
+  // made two real shows ingest nothing, so assert the property, not the value.
+  const out = parseRssItems(HOMEPAGE_LINK_FEED, true)
+  assertEquals(new Set(out.map((i) => i.url)).size, out.length)
+})
+
+Deno.test('a trailing slash is the same page — normalised before comparing', () => {
+  const feed = HOMEPAGE_LINK_FEED.replace(
+    '<link>https://www.siriusxm.com</link><item>',
+    '<link>https://www.siriusxm.com/</link><item>',
+  )
+  assertEquals(parseRssItems(feed, true)[0].url, 'https://cdn.example/ep2.mp3')
+})
+
+Deno.test('a PER-EPISODE link is untouched — this must not swallow real links', () => {
+  // The control. Hide & Seek publishes real episode permalinks under the same
+  // channel host; judged by host alone this would wrongly discard all of them.
+  const feed =
+    '<rss><channel><title>S</title><link>https://joy.example/hideandseek/</link>' +
+    '<item><title>243</title><link>https://joy.example/hideandseek/2026/10/243/</link>' +
+    '<enclosure url="https://cdn.example/243.mp3" type="audio/mpeg"/></item>' +
+    '</channel></rss>'
+  assertEquals(parseRssItems(feed, true)[0].url, 'https://joy.example/hideandseek/2026/10/243/')
+})
+
+Deno.test('a channel with no usable link leaves item links alone', () => {
+  // extractChannelMeta returns null for a bare domain, and a null channel link
+  // must never make every item fall through to its audio.
+  const feed =
+    '<rss><channel><title>S</title><link>show.example</link>' +
+    '<item><title>E</title><link>https://show.example/e/1</link>' +
+    '<enclosure url="https://cdn.example/1.mp3" type="audio/mpeg"/></item>' +
+    '</channel></rss>'
+  assertEquals(extractChannelMeta(feed).link, null)
+  assertEquals(parseRssItems(feed, true)[0].url, 'https://show.example/e/1')
+})
+
+Deno.test('the NEWS branch is untouched by this — it has no audio to fall back to', () => {
+  const feed =
+    '<rss><channel><title>S</title><link>https://news.example</link>' +
+    '<item><title>A</title><link>https://news.example</link>' +
+    '<description>body</description></item></channel></rss>'
+  assertEquals(parseRssItems(feed, false)[0].url, 'https://news.example')
+})
+
+Deno.test('isShowHomepage: null on either side is never a match', () => {
+  assertEquals(isShowHomepage(null, 'https://x.example'), false)
+  assertEquals(isShowHomepage('https://x.example', null), false)
+  assertEquals(isShowHomepage(null, null), false)
 })
