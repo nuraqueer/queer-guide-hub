@@ -95,11 +95,12 @@ describe('AdminSimpleTable', () => {
     expect(container.querySelectorAll('th')[1]).toHaveClass('w-20');
   });
 
-  it('shows a skeleton on first load, not bare text', () => {
+  it('shows a skeleton on first load with an accessible status label', () => {
     const { container } = renderTable({ isLoading: true, rows: [] });
     // Skeleton rows live in the tbody so the table shape is preserved.
     expect(container.querySelectorAll('tbody tr').length).toBeGreaterThan(0);
-    expect(screen.queryByText(/loading/i)).toBeNull();
+    expect(screen.getByRole('status')).toHaveClass('sr-only');
+    expect(screen.getByRole('status')).toHaveTextContent(/loading/i);
     expect(screen.queryByText('No definitions yet.')).toBeNull();
   });
 
