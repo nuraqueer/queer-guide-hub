@@ -53,15 +53,16 @@ run('openssl', [
   '-extfile',
   'tmp/webhook-tls/extensions.cnf',
 ]);
-execFileSync(
-  process.env.REDIRECT_DENO_BIN ?? 'deno',
-  [
-    'test',
-    '--no-config',
-    '--node-modules-dir=none',
-    '--allow-net=127.0.0.1',
-    '--allow-read=tmp/webhook-tls',
-    'supabase/functions/redirect-webhooks-dispatch/tests',
-  ],
-  { stdio: 'inherit' },
-);
+if (!process.argv.includes('--prepare-only'))
+  execFileSync(
+    process.env.REDIRECT_DENO_BIN ?? 'deno',
+    [
+      'test',
+      '--no-config',
+      '--node-modules-dir=none',
+      '--allow-net=127.0.0.1',
+      '--allow-read=tmp/webhook-tls',
+      'supabase/functions/redirect-webhooks-dispatch/tests',
+    ],
+    { stdio: 'inherit' },
+  );

@@ -2281,3 +2281,26 @@ and automated DNS, native/deferred deep links with real application identities,
 controlled infrastructure release, provider installation/runtime evidence and
 SDK publication. The implementation branch is prepared for draft review; this is
 not full completion or a claim these candidates are deployed.
+
+### Review branch and current-main release checks (2026-10-14)
+
+Draft PR https://github.com/tmaeder/queer-guide-hub/pull/4417 is attached to this
+chat; feature/redirects-dub-parity is pushed independently of the other owner's
+release branch. Current origin/main is merged, including its target normalization
+fix. Three regression cases preserve relative, uppercase absolute and normalized
+single-slash HTTPS targets with query/fragment and HEAD/GET visit semantics;
+the newer live policy/domain/password resolver remains intact.
+
+After integration: 18 resolver tests, actual root Worker/signed resolver/SQL,
+full platform SQL and five SDK HTTP suites pass. Native Deno API/resolver checks,
+2320 unique migration versions/PostgreSQL 17 grammar and build (~20 seconds)
+pass. App ratchet is 702 inherited errors, none new (current baseline 782); no
+baseline was expanded. Fixture screenshots remain local QA, not release proof.
+
+Both CI and deploy Edge-test jobs now generate disposable certificate fixtures
+before Deno discovery. TLS tests resolve fixture URLs relative to their module,
+so they work from both repository root and the workflows' supabase/functions
+working directory. Nine transport/TLS tests pass from both locations without
+relaxing TLS validation. Fixture generation uses no dependencies or credentials;
+private test keys remain ignored under tmp and are freshly generated each run.
+The draft remains incomplete; no merge/deploy is claimed.

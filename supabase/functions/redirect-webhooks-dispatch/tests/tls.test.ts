@@ -10,9 +10,13 @@ const assert = (ok: unknown) => {
 Deno.test(
   'native pinned TCP upgrade validates original TLS hostname with a trusted fixture CA',
   async () => {
-    const cert = await Deno.readTextFile('tmp/webhook-tls/cert.pem'),
-      key = await Deno.readTextFile('tmp/webhook-tls/key.pem'),
-      ca = await Deno.readTextFile('tmp/webhook-tls/ca.pem');
+    const cert = await Deno.readTextFile(
+        new URL('../../../../tmp/webhook-tls/cert.pem', import.meta.url),
+      ),
+      key = await Deno.readTextFile(
+        new URL('../../../../tmp/webhook-tls/key.pem', import.meta.url),
+      ),
+      ca = await Deno.readTextFile(new URL('../../../../tmp/webhook-tls/ca.pem', import.meta.url));
     const server = Deno.listenTls({
       hostname: '127.0.0.1',
       port: 0,
@@ -72,9 +76,11 @@ Deno.test(
   },
 );
 Deno.test('native TLS rejects a trusted certificate for the wrong original hostname', async () => {
-  const cert = await Deno.readTextFile('tmp/webhook-tls/cert.pem'),
-    key = await Deno.readTextFile('tmp/webhook-tls/key.pem'),
-    ca = await Deno.readTextFile('tmp/webhook-tls/ca.pem');
+  const cert = await Deno.readTextFile(
+      new URL('../../../../tmp/webhook-tls/cert.pem', import.meta.url),
+    ),
+    key = await Deno.readTextFile(new URL('../../../../tmp/webhook-tls/key.pem', import.meta.url)),
+    ca = await Deno.readTextFile(new URL('../../../../tmp/webhook-tls/ca.pem', import.meta.url));
   const server = Deno.listenTls({ hostname: '127.0.0.1', port: 0, cert, key });
   const port = (server.addr as Deno.NetAddr).port;
   const serving = (async () => {
