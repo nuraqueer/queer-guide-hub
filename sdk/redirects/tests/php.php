@@ -9,6 +9,9 @@ check($api->updateResource('tags',$tag['id'],['color'=>'blue'])['color']==='blue
 check($api->getResource('folders',$folder['id'])['name']==='Héllo & + PHP');
 $created=$api->createLink(['target'=>'https://example.com/?q=a%26b#detail','slug'=>'sdk-php','folderId'=>$folder['id'],'tagIds'=>[$tag['id']]]);$id=$created['link']['id'];
 $art=$api->uploadPreviewImage($id,getenv('REDIRECT_TEST_IMAGE'));$api->updatePresentation($id,['preview'=>['title'=>'SDK preview','image'=>$art['image'],'video'=>'https://example.com/a.mp4'],'cloaked'=>true]);check($api->getPresentation($id)['preview']['title']==='SDK preview');
+$api->updatePolicy($id,['policy'=>['track_conversions'=>true,'geo_targets'=>['CH'=>'/switzerland']],'password'=>'fixture-sdk-password']);
+$policy=$api->getPolicy($id);check($policy['hasPassword']===true);check($policy['policy']['preview']['title']==='SDK preview');check(!str_contains(json_encode($policy),'password_hash'));check(!str_contains(json_encode($policy),'fixture-sdk-password'));
+$api->updatePolicy($id,['policy'=>['geo_targets'=>null],'password'=>null]);$policy=$api->getPolicy($id);check($policy['hasPassword']===false);check($policy['policy']['track_conversions']===true);check(!array_key_exists('geo_targets',$policy['policy']));
 $api->updateLink($id,['comment'=>'SDK update','isEnabled'=>false]);check($api->getLink($id)['folderId']===$folder['id']);
 check($api->upsertLink(['slug'=>'sdk-php','target'=>'/updated'])['created']===false);check($api->countLinks(['ids'=>[$id]])['count']===1);
 check(count(iterator_to_array($api->iterateLinks(['search'=>'sdk-page-']),false))===101);

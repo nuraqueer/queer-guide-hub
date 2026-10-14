@@ -36,6 +36,8 @@ module QueerGuide
       raise RedirectApiError.new(status,data['error'] || 'Redirect API request failed',retry_after) unless (200...300).include?(status)
       data
     end
+    def get_policy(id); request('GET','/links/'+id+'/policy'); end
+    def update_policy(id,data); request('PATCH','/links/'+id+'/policy',data); end
     def get_presentation(id); request('GET','/links/'+id+'/presentation'); end
     def update_presentation(id,data); request('PATCH','/links/'+id+'/presentation',data); end
     def upload_preview_image(id,image_base64); request('POST','/links/'+id+'/preview-image',{image:image_base64}); end

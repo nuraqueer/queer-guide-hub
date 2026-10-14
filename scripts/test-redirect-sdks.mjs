@@ -9,10 +9,12 @@ import { createRedirectTestDb } from './lib/redirect-test-db.mjs';
 const db = await createRedirectTestDb();
 await db.exec('SET ROLE service_role; SET request.jwt.claims = \'{"role":"service_role"}\'');
 let handler;
+let policyRuntime;
 const pieces = [
   '_shared/redirect-api.ts',
   '_shared/redirect-presentation.ts',
   '_shared/link-policy.ts',
+  '_shared/redirect-policy-api.ts',
   '_shared/redirect-links.ts',
   '_shared/redirect-analytics.ts',
   'redirect-api/index.ts',
@@ -24,7 +26,7 @@ const pieces = [
 const code = ts.transpileModule(pieces.join('\n'), {
   compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext },
 }).outputText;
-const jsonArgs = new Set(['p_event', 'p_filters', 'p_values', 'p_operations']);
+const jsonArgs = new Set(['p_event', 'p_filters', 'p_values', 'p_operations','p_patch','p_password_hash']);
 const artwork = await sharp({
   create: { width: 1200, height: 630, channels: 3, background: 'white' },
 })
@@ -67,13 +69,17 @@ const service = {
         entries.map(([key], index) => key + '=> $' + (index + 1)).join(',') +
         ') AS result';
       const result = await db.query(sql, params);
+      if(name==='redirect_policy_resource'&&args.p_change_password===true&&args.p_password_hash){
+        const stored=(await db.query('SELECT password_hash FROM public.redirect_link_policies WHERE redirect_id=$1',[args.p_redirect_id])).rows[0].password_hash;
+        if(!await policyRuntime.verifyLinkPassword('fixture-sdk-password',stored))throw new Error('Persisted SDK password hash did not verify');
+      }
       return { data: result.rows[0].result, error: null };
     } catch (error) {
       return { data: null, error: { code: error.code, message: error.message } };
     }
   },
 };
-new Function('Deno', 'createClient', 'crypto', code)(
+policyRuntime=new Function('Deno', 'createClient', 'crypto', code+'\nreturn {verifyLinkPassword};')(
   {
     env: { get: () => 'fixture' },
     serve: (fn) => {

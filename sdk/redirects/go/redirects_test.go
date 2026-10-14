@@ -47,6 +47,16 @@ func TestSDKIntegration(t *testing.T) {
 	if must(api.GetPresentation(ctx, id))["preview"].(map[string]any)["title"] != "SDK preview" {
 		t.Fatal("Presentation round trip failed")
 	}
+	must(api.UpdatePolicy(ctx, id, Object{"policy": Object{"track_conversions": true, "geo_targets": Object{"CH": "/switzerland"}}, "password": "fixture-sdk-password"}))
+	policy := must(api.GetPolicy(ctx, id))
+	if policy["hasPassword"] != true || policy["password_hash"] != nil || policy["policy"].(map[string]any)["preview"].(map[string]any)["title"] != "SDK preview" {
+		t.Fatal("Policy privacy/merge failed")
+	}
+	must(api.UpdatePolicy(ctx, id, Object{"policy": Object{"geo_targets": nil}, "password": nil}))
+	policy = must(api.GetPolicy(ctx, id))
+	if policy["hasPassword"] != false || policy["policy"].(map[string]any)["track_conversions"] != true || policy["policy"].(map[string]any)["geo_targets"] != nil {
+		t.Fatal("Policy clearing failed")
+	}
 	must(api.UpdateLink(ctx, id, Object{"comment": "SDK update", "isEnabled": false}))
 	if must(api.GetLink(ctx, id))["folderId"] != fid {
 		t.Fatal("Metadata lost")

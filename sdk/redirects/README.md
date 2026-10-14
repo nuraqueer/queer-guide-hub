@@ -81,3 +81,11 @@ policy/domain/deep-link fields, webhooks and external integrations remain pendin
 Presentation APIs are documented in `docs/guides/redirect-presentations.md`.
 The SDK integration suite checks all five presentation/upload wrappers with real
 encoded raster bytes; file storage uses a fixture adapter.
+
+
+Policy management is available through getPolicy/updatePolicy (TypeScript/PHP),
+get_policy/update_policy (Python/Ruby), and GetPolicy/UpdatePolicy (Go). Use
+links:read for reads and links:write for patches. The response exposes policy and
+hasPassword only; top-level null policy fields remove a setting, and password:null
+removes protection. See [the policy API guide](../../docs/guides/redirect-policy-api.md)
+for fields, complete examples, hash limits and expiry/merge semantics.

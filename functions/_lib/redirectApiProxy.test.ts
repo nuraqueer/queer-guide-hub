@@ -23,6 +23,18 @@ describe('branded Redirects API proxy', () => {
     expect(new Headers(options.headers).get('Authorization')).toBe('Bearer server-fixture');
     expect(options.redirect).toBe('manual');
   });
+  it('preserves retry-after on rate-limited policy writes', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        async () =>
+          new Response('{"error":"limit"}', { status: 429, headers: { 'Retry-After': '600' } }),
+      ),
+    );
+    const response = await invoke('PATCH');
+    expect(response.status).toBe(429);
+    expect(response.headers.get('Retry-After')).toBe('600');
+  });
   it.each(['PUT', 'PATCH'])('forwards %s request bodies unchanged', async (method) => {
     const fetcher = vi.fn(async () => new Response('{}'));
     vi.stubGlobal('fetch', fetcher);

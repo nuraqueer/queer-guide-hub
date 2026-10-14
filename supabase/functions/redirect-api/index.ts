@@ -1,7 +1,8 @@
+import { policyPatchInput } from '../_shared/redirect-policy-api.ts';
 import { generateRedirectPreview } from '../_shared/redirect-preview-generation.ts';
 import { isLlmConfigured } from '../_shared/llm-client.ts';
 import { previewImageInfo } from "../_shared/redirect-presentation.ts";
-import { policyErrors } from "../_shared/link-policy.ts";
+import { policyErrors, hashLinkPassword } from "../_shared/link-policy.ts";
 import { bulkLinkInput, linkInput, linkListInput, workspaceInput, LINK_SCOPES } from "../_shared/redirect-links.ts";
 import { analyticsFilters } from "../_shared/redirect-analytics.ts";
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
@@ -48,6 +49,19 @@ Deno.serve(async (req: Request) => {
    let tokenId:string|null=null;
    if(tokenCredential){const {data,error}=await db.rpc('authenticate_redirect_api_token',{p_hash:await tokenDigest(credential),p_scope:scope});if(error)return json({error:'Credential verification unavailable'},503);if(!data)return json({error:'Required link scope is missing'},403);tokenId=data.id;}
    else{const {data,error}=await identityClient!.rpc('has_role_jwt',{required_role:'admin'});if(error)return json({error:'Authorization unavailable'},503);if(!data)return json({error:'Forbidden'},403);}
+   const policyMatch=path.match(/^\/links\/([a-f0-9-]{36})\/policy$/i);
+   if(policyMatch){
+    const linkId=policyMatch[1];if(!UUID.test(linkId))return json({error:'Invalid link ID'},400);
+    if(req.method!=='GET'&&req.method!=='PATCH')return json({error:'Method not supported'},405);
+    const input=req.method==='PATCH'?policyPatchInput(await boundedJson(req)):{patch:{},changePassword:false,password:null};
+    let passwordHash=null;
+    if(input.changePassword&&typeof input.password==='string'){
+     const reserved=await db.rpc('reserve_redirect_policy_password',{p_redirect_id:linkId,p_token_id:tokenId,p_actor_id:user?.id??null});if(reserved.error)return rpcError(reserved.error);
+     if(reserved.data)return new Response(JSON.stringify({error:'Password update limit reached'}),{status:429,headers:{...cors,'Content-Type':'application/json','Cache-Control':'no-store','Retry-After':String(reserved.data)}});
+     passwordHash=await hashLinkPassword(input.password);
+    }
+    const {data,error}=await db.rpc('redirect_policy_resource',{p_redirect_id:linkId,p_action:req.method==='GET'?'get':'patch',p_patch:input.patch,p_password_hash:passwordHash,p_change_password:input.changePassword,p_token_id:tokenId});if(error)return rpcError(error);return json(data);
+   }
    const presentationMatch=path.match(/^\/links\/([a-f0-9-]{36})\/(presentation|preview-image|preview-generate)$/i);
    if(presentationMatch){
     const [,linkId,endpoint]=presentationMatch;if(!UUID.test(linkId))return json({error:'Invalid link ID'},400);

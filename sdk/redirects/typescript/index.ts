@@ -21,6 +21,29 @@ export interface Link extends LinkInput {
   shortUrl: string;
   updatedAt: string;
 }
+export interface LinkPolicy {
+  preview?: { title?: string; description?: string; image?: string; video?: string };
+  cloaked?: boolean;
+  track_conversions?: boolean;
+  device_targets?: Partial<Record<'ios' | 'android', string>>;
+  geo_targets?: Record<string, string>;
+  experiment?: {
+    starts_at: string;
+    ends_at: string;
+    variants: Array<{ id: string; url: string; weight: number }>;
+    completed_target?: string;
+  };
+  expires_at?: string;
+  expired_target?: string;
+}
+export interface PolicyResponse {
+  policy: LinkPolicy;
+  hasPassword: boolean;
+}
+export interface PolicyUpdate {
+  policy?: { [K in keyof LinkPolicy]?: LinkPolicy[K] | null };
+  password?: string | null;
+}
 export interface Page<T> {
   count: number;
   data: T[];
@@ -136,6 +159,12 @@ export class RedirectsClient {
         response.headers.get('Retry-After'),
       );
     return data as T;
+  }
+  getPolicy(id: string) {
+    return this.request<PolicyResponse>('GET', '/links/' + id + '/policy');
+  }
+  updatePolicy(id: string, data: PolicyUpdate) {
+    return this.request<PolicyResponse>('PATCH', '/links/' + id + '/policy', data);
   }
   getPresentation(id: string) {
     return this.request<JsonObject>('GET', '/links/' + id + '/presentation');

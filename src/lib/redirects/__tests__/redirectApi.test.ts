@@ -30,8 +30,26 @@ function runtime() {
     new URL(root + '_shared/redirect-presentation.ts', import.meta.url),
     'utf8',
   ).replace(/^export\s+/gm, '');
+  const policyApi = readFileSync(
+    new URL(root + '_shared/redirect-policy-api.ts', import.meta.url),
+    'utf8',
+  )
+    .replace(/^import .*;\s*$/gm, '')
+    .replace(/^export\s+/gm, '');
   const code = ts.transpileModule(
-    shared + '\n' + analytics + '\n' + policy + '\n' + links + '\n' + presentation + '\n' + source,
+    shared +
+      '\n' +
+      analytics +
+      '\n' +
+      policy +
+      '\n' +
+      links +
+      '\n' +
+      presentation +
+      '\n' +
+      policyApi +
+      '\n' +
+      source,
     {
       compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext },
     },
@@ -525,5 +543,112 @@ describe('bulk import payload size', () => {
     const response = await app.invoke('/links/bulk', { operations });
     expect(response.status).toBe(200);
     expect((await response.json()).data).toHaveLength(100);
+  });
+});
+
+describe('scoped policy endpoints', () => {
+  it('gets and patches only through the scoped policy RPC', async () => {
+    const app = runtime();
+    app.rpc.mockResolvedValue({
+      data: { policy: { track_conversions: true }, hasPassword: false },
+      error: null,
+    } as never);
+    const get = await app.invoke('/links/' + click + '/policy', undefined, 'signed-user', 'GET');
+    expect(get.status).toBe(200);
+    const patch = await app.invoke(
+      '/links/' + click + '/policy',
+      { policy: { geo_targets: null } },
+      'signed-user',
+      'PATCH',
+    );
+    expect(patch.status).toBe(200);
+    expect(app.rpc).toHaveBeenLastCalledWith('redirect_policy_resource', {
+      p_redirect_id: click,
+      p_action: 'patch',
+      p_patch: { geo_targets: null },
+      p_password_hash: null,
+      p_change_password: false,
+      p_token_id: null,
+    });
+  });
+  it('reserves before hashing and never forwards plaintext to SQL', async () => {
+    const app = runtime();
+    app.rpc.mockImplementation(
+      async (name) =>
+        ({
+          data: name === 'reserve_redirect_policy_password' ? 0 : { policy: {}, hasPassword: true },
+          error: null,
+        }) as never,
+    );
+    const response = await app.invoke(
+      '/links/' + click + '/policy',
+      { password: 'fixture-password' },
+      'signed-user',
+      'PATCH',
+    );
+    expect(response.status).toBe(200);
+    expect(app.rpc.mock.calls.map((call) => call[0])).toEqual([
+      'reserve_redirect_policy_password',
+      'redirect_policy_resource',
+    ]);
+    const args = app.rpc.mock.calls[1][1]!;
+    expect(args.p_password_hash).toMatchObject({ algorithm: 'PBKDF2-SHA256', iterations: 600000 });
+    expect(JSON.stringify(args)).not.toContain('fixture-password');
+  });
+  it('returns retry-after without hashing or writing when password budget is exhausted', async () => {
+    const app = runtime();
+    app.rpc.mockResolvedValue({ data: 123, error: null } as never);
+    const response = await app.invoke(
+      '/links/' + click + '/policy',
+      { password: 'fixture-password' },
+      'signed-user',
+      'PATCH',
+    );
+    expect(response.status).toBe(429);
+    expect(response.headers.get('Retry-After')).toBe('123');
+    expect(app.rpc.mock.calls.map((call) => call[0])).toEqual(['reserve_redirect_policy_password']);
+  });
+  it('removes passwords explicitly and rejects unrecognized fields before writes', async () => {
+    const app = runtime();
+    app.rpc.mockResolvedValue({ data: { policy: {}, hasPassword: false }, error: null } as never);
+    expect(
+      (
+        await app.invoke(
+          '/links/' + click + '/policy',
+          { password_hash: 'bad' },
+          'signed-user',
+          'PATCH',
+        )
+      ).status,
+    ).toBe(400);
+    expect(app.rpc).not.toHaveBeenCalled();
+    expect(
+      (await app.invoke('/links/' + click + '/policy', { password: null }, 'signed-user', 'PATCH'))
+        .status,
+    ).toBe(200);
+    expect(app.rpc.mock.calls[0][1]).toMatchObject({
+      p_change_password: true,
+      p_password_hash: null,
+    });
+  });
+});
+
+describe('policy revocation during password hashing', () => {
+  it('honors the final database authorization check after a reservation succeeds', async () => {
+    const app = runtime();
+    app.rpc
+      .mockResolvedValueOnce({ data: 0, error: null } as never)
+      .mockResolvedValueOnce({
+        data: null,
+        error: { code: '42501', message: 'Credential revoked' },
+      } as never);
+    const response = await app.invoke(
+      '/links/' + click + '/policy',
+      { password: 'fixture-password' },
+      'signed-user',
+      'PATCH',
+    );
+    expect(response.status).toBe(403);
+    expect(await response.json()).toEqual({ error: 'Credential revoked' });
   });
 });

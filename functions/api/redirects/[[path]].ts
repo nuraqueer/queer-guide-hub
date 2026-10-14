@@ -39,6 +39,7 @@ export const onRequest: PagesFunction<Env> = async ({ request, params, env }) =>
       'access-control-allow-methods',
       'access-control-allow-headers',
       'vary',
+      'retry-after',
     ]) {
       const value = response.headers.get(name);
       if (value) result.set(name, value);

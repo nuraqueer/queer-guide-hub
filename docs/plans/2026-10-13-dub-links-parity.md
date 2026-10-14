@@ -38,7 +38,7 @@ exist. Existing local tools are a foundation, not proof of parity or deployment.
 | Shared dashboards | Revocable scoped sharing, sanitized aggregate-only default | Missing |
 | Custom reports | Custom dates, granular link/folder/tag/domain/geo/device/event filters | Partial: date/dimension report UI and API; saved definitions and sharing missing |
 | Integrations | Segment and GTM adapters; native configured integrations and provider callbacks | Missing |
-| REST API | Authenticated/scoped link CRUD/upsert/count/list, analytics/events, folders/tags, bulk operations | Partial: scoped link CRUD/upsert/count/list/mixed bulk, conversions and analytics/events; folder/tag/template resource CRUD with workspace scopes; full policy fields pending |
+| REST API | Authenticated/scoped link CRUD/upsert/count/list, analytics/events, folders/tags, bulk operations | Partial: scoped link CRUD/upsert/count/list/mixed bulk, conversions and analytics/events; folder/tag/template resource CRUD with workspace scopes; scoped targeting/password/tracking/preview policy endpoints; domain/deep-link fields pending |
 | SDKs | TypeScript, Python, Go, Ruby, PHP wrappers and runnable examples covering management/tracking | Candidate: five native clients verified through actual HTTP handler and isolated DB; publication/release pending |
 | Webhooks | Signed click/lead/sale events, retries, delivery history, replay and secret rotation | Missing |
 
@@ -422,3 +422,33 @@ scrollWidth=clientWidth=390; only the 340-pixel review region scrolls to hold it
 576-pixel table. Viewport was reset and temporary tab closed. Production API
 import/export and remaining policy/domain/permissions/report/integration work
 remain outstanding; the complete goal remains active.
+
+## Checkpoint: scoped policy API and five SDKs
+
+Implemented locally: GET/PATCH managed-link policy endpoints with links:read/write
+and selected-link scope enforcement, partial top-level atomic merge/null removal,
+expiry synchronization, password set/remove/flag-only responses and bounded hash
+reservations. The existing admin writer now shares the row-lock order used by
+presentation and policy writers. Merged framing rules retain their HTTPS guard.
+The policy validator rejects malformed/falsy dates/maps/experiments and unknown
+nested A/B fields. All five SDKs expose policy methods; TypeScript exports policy
+DTO/nullable-patch types. The branded proxy preserves Retry-After.
+
+Evidence: actual migrated SQL proves scope/revocation, preserved fields/passwords,
+explicit clearing, failed-expiry rollback and independent password budgets. Native
+clients exercise the real HTTP edge handler/SQL, set/remove protection, verify
+stored hashes using the real PBKDF2 verifier and preserve other settings. Target
+selection remains unchanged; its regression checks accompany validator changes.
+See the policy API guide for the wire contract and limits. Production migrations,
+release, domain/deep-link API fields and other ledger requirements remain open.
+
+Final validation for this checkpoint: 42 API/save/proxy tests and 31 policy/
+resolver/validation regressions pass, including revocation after password work
+and malformed experiment weights without incidental coercion exceptions. All
+five SDK clients and examples pass via real loopback HTTP and migrated SQL;
+stored hashes verify with the real password verifier. SQL includes expiry-failure
+rollback and independent actor/link/global budget checks. Build, lint, SDK types,
+and migration versions pass. App typecheck remains 704 inherited errors, none
+new. Pages production/test types now have separate configurations; the existing
+`typecheck:functions` gate runs both so test coverage is retained. No production
+migration/provider changes or package publication were performed.

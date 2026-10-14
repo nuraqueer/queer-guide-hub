@@ -35,6 +35,8 @@ final class RedirectsClient {
             return $data;
         } finally {fclose($stream);}
     }
+    public function getPolicy(string $id): array {return $this->request('GET','/links/'.$id.'/policy');}
+    public function updatePolicy(string $id,array $data): array {return $this->request('PATCH','/links/'.$id.'/policy',$data);}
     public function getPresentation(string $id): array {return $this->request('GET','/links/'.$id.'/presentation');}
     public function updatePresentation(string $id,array $data): array {return $this->request('PATCH','/links/'.$id.'/presentation',$data);}
     public function uploadPreviewImage(string $id,string $imageBase64): array {return $this->request('POST','/links/'.$id.'/preview-image',['image'=>$imageBase64]);}

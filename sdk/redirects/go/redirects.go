@@ -120,6 +120,12 @@ func filters(value Object) Object {
 	}
 	return value
 }
+func (c *Client) GetPolicy(ctx context.Context, id string) (Object, error) {
+	return c.Request(ctx, "GET", "/links/"+id+"/policy", nil, nil)
+}
+func (c *Client) UpdatePolicy(ctx context.Context, id string, data Object) (Object, error) {
+	return c.Request(ctx, "PATCH", "/links/"+id+"/policy", data, nil)
+}
 func (c *Client) GetPresentation(ctx context.Context, id string) (Object, error) {
 	return c.Request(ctx, "GET", "/links/"+id+"/presentation", nil, nil)
 }

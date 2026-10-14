@@ -32,10 +32,11 @@ export function validPublicTarget(target: string): boolean {
   } catch { return false; }
 }
 
+export const LINK_POLICY_FIELDS = ['preview','cloaked','track_conversions','device_targets','geo_targets','experiment','expires_at','expired_target'];
 export function policyErrors(policy: LinkPolicy): string[] {
   const errors: string[] = [];
   if (!policy || typeof policy !== 'object' || Array.isArray(policy)) return ['Policy must be an object'];
-  const allowed = ['preview','cloaked','track_conversions','device_targets','geo_targets','experiment','expires_at','expired_target'];
+  const allowed = LINK_POLICY_FIELDS;
   if (Object.keys(policy).some((key) => !allowed.includes(key))) errors.push('Unknown policy setting');
   if(policy.cloaked!==undefined&&typeof policy.cloaked!=='boolean')errors.push('Invalid cloaking setting');
   if(policy.preview!==undefined){
@@ -49,31 +50,35 @@ export function policyErrors(policy: LinkPolicy): string[] {
   }
   if (policy.track_conversions !== undefined && typeof policy.track_conversions !== 'boolean') errors.push('Conversion tracking must be enabled or disabled');
   for (const [kind, targets] of [['device',policy.device_targets], ['country',policy.geo_targets]] as const) {
-    if (!targets) continue;
-    if (typeof targets !== 'object' || Array.isArray(targets)) { errors.push('Invalid ' + kind + ' rules'); continue; }
+    if (targets===undefined) continue;
+    if (!targets || typeof targets !== 'object' || Array.isArray(targets)) { errors.push('Invalid ' + kind + ' rules'); continue; }
     for (const [key, target] of Object.entries(targets)) {
       if (kind === 'device' ? !['ios','android'].includes(key) : !/^[A-Z]{2}$/.test(key)) errors.push('Invalid ' + kind + ' ' + key);
       if (!validPublicTarget(target)) errors.push('Invalid destination for ' + key);
       if(policy.cloaked&&typeof target==='string'&&target.toLowerCase().startsWith('http:'))errors.push('Framed destinations require HTTPS');
     }
   }
-  if (policy.expires_at && !Number.isFinite(Date.parse(policy.expires_at))) errors.push('Invalid expiration date');
-  if (policy.expired_target && !validPublicTarget(policy.expired_target)) errors.push('Invalid expiration destination');
+  if (policy.expires_at !== undefined && (typeof policy.expires_at !== 'string' || !Number.isFinite(Date.parse(policy.expires_at)))) errors.push('Invalid expiration date');
+  if (policy.expired_target !== undefined && !validPublicTarget(policy.expired_target)) errors.push('Invalid expiration destination');
   const experiment = policy.experiment;
-  if (experiment) {
+  if (experiment !== undefined) {
+    if(!experiment || typeof experiment!=='object' || Array.isArray(experiment)) return [...errors,'Invalid A/B experiment'];
+    if(Object.keys(experiment).some(key=>!['starts_at','ends_at','variants','completed_target'].includes(key))) errors.push('Unknown A/B setting');
     if (!Array.isArray(experiment.variants) || experiment.variants.length < 2 || experiment.variants.length > 5) errors.push('An A/B test needs 2–5 destinations');
+    else if(experiment.variants.some(variant=>!variant||typeof variant!=='object'||Array.isArray(variant))) errors.push('Invalid A/B destination');
     else {
       if (new Set(experiment.variants.map((variant) => variant.id)).size !== experiment.variants.length) errors.push('Variant IDs must be unique');
-      if (experiment.variants.reduce((sum, variant) => sum + variant.weight, 0) !== 100) errors.push('Traffic weights must total 100%');
+      if (experiment.variants.reduce((sum, variant) => sum + (typeof variant.weight==='number'?variant.weight:NaN), 0) !== 100) errors.push('Traffic weights must total 100%');
       for (const variant of experiment.variants) {
+        if(Object.keys(variant).some(key=>!['id','url','weight'].includes(key)))errors.push('Unknown A/B destination field');
         if (typeof variant.id !== 'string' || !/^[a-zA-Z0-9_-]{1,64}$/.test(variant.id) || !validPublicTarget(variant.url)) errors.push('Invalid A/B destination');
         if(policy.cloaked&&typeof variant.url==='string'&&variant.url.toLowerCase().startsWith('http:'))errors.push('Framed destinations require HTTPS');
         if (!Number.isInteger(variant.weight) || variant.weight < 10 || variant.weight > 90) errors.push('Each A/B destination must receive at least 10%');
       }
     }
-    const duration = Date.parse(experiment.ends_at) - Date.parse(experiment.starts_at);
+    const duration = typeof experiment.ends_at==='string'&&typeof experiment.starts_at==='string'?Date.parse(experiment.ends_at)-Date.parse(experiment.starts_at):NaN;
     if (!Number.isFinite(duration) || duration <= 0 || duration > 42 * 86400000) errors.push('A/B tests must end within 6 weeks of their start');
-    if (experiment.completed_target && !validPublicTarget(experiment.completed_target)) errors.push('Invalid A/B winner destination');
+    if (experiment.completed_target !== undefined && !validPublicTarget(experiment.completed_target)) errors.push('Invalid A/B winner destination');
   }
   return errors;
 }
