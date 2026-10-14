@@ -1300,6 +1300,22 @@ async function processPostalQueue(
   return { processed: jobs.length, filled, extras, parked, failed, remaining: count ?? 0 }
 }
 
+async function processPostalQueueWithLease(
+  supabase: ReturnType<typeof getServiceClient>,
+  batchSize: number,
+) {
+  const { data: claimedAt, error } = await supabase.rpc('claim_postal_geocoder_lease')
+  if (error) throw error
+  if (!claimedAt) return { processed: 0, filled: 0, extras: 0, parked: 0, failed: 0, remaining: null, lease_busy: true }
+
+  try {
+    return await processPostalQueue(supabase, batchSize)
+  } finally {
+    const { error: releaseError } = await supabase.rpc('release_entity_location_lease', { p_claimed_at: claimedAt })
+    if (releaseError) throw releaseError
+  }
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return corsResponse(req)
 
@@ -1333,7 +1349,7 @@ Deno.serve(async (req) => {
     // modes below because it speaks Photon, not Nominatim, and returns its own
     // shape — see processPostalQueue.
     if (mode === 'postal') {
-      const postal = await processPostalQueue(supabase, batchSize)
+      const postal = await processPostalQueueWithLease(supabase, batchSize)
       return jsonResponse({ success: true, mode: 'postal', ...postal }, 200, req)
     }
 
