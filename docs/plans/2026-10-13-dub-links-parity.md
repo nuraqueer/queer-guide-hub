@@ -675,3 +675,29 @@ validation pass; app types remain 704 inherited errors, none new. Native fixture
 proof includes default-off, password restriction, explicit review, saved status,
 index→noindex on revocation and 390-pixel layout without overflow. Temporary tab
 and viewport were cleaned up. No production publication/settings were changed.
+
+### Custom domains: architecture and implementation sequence
+
+Current evidence: managed short URLs and the public resolver use a global slug,
+and the Pages relay serves only `/go/:slug`. Existing Cloudflare admin tooling
+supports read operations; it is not a SaaS-hostname provisioner. Custom domains
+therefore require coordinated registration/ownership, provider TLS/routing,
+hostname-scoped slug allocation, resolver/API/SDK and builder/QR/inventory changes.
+A TXT proof cannot stand in for working branded routing.
+
+Use a workspace-owned domain registry with private challenges, owner-only settings,
+versioned edits and disabled-first lifecycle. Verify exact `_qg-redirect.<hostname>`
+TXT challenges via a fixed HTTPS DNS resolver with bounded responses, real DNS
+name/type/status checks, attempt budgets and optimistic result application.
+Hostnames are normalized to ASCII and reject URLs, IPs, private/reserved suffixes
+and the site's own infrastructure. Domain/root/not-found/expiry defaults are
+public HTTP(S) destinations, never arbitrary internal URLs. Missing or expired
+ownership/provider checks must not imply readiness.
+
+Implement in dependency order: (1) registry, real ownership verifier, owner UI and
+stored defaults; (2) durable Cloudflare custom-hostname lifecycle plus TLS/routing
+checks and deprovisioning; (3) hostname-scoped slug namespace, public worker/relay,
+primary-domain selection and defaults in resolver, CRUD/bulk/SDK, builder/QR and
+all-source inventory. DNS controls remain explicit; do not alter existing DNS or
+provision paid external resources during local verification. Preserve all phases
+in the parity ledger until native provider and controlled-domain evidence exists.
