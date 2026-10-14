@@ -163,39 +163,17 @@ Deno.serve(async (req) => {
       return !recoveredIds.has(r.id) && !i18n._enhanced_at && String(r.description ?? '').trim().length > 20
     }).slice(0, batchSize)
     if (pending.length === 0) return json({ success: true, items: recovered, items_examined: (rows || []).length, items_changed: recovered, items_terminal: recovered + recoveryMisses, items_failed: 0, recovered, recovery_misses: recoveryMisses, message: 'source recovery complete' })
-    // Central daily cap (llm_budget, seeded 500/day — migration 20260817090000):
-    // this fn previously ran the */5 cron with NO cap. One consume for the whole
-    // batch (one LLM call per pending row). If the RPC is missing (fn deployed
-    // ahead of the migration), consumeLlmBudget warns and we run uncapped, as
-    // before.
-    const budget = await consumeLlmBudget(supabase, 'marketplace-description-enhance', pending.length)
-    if (!budget.allowed) {
-      return json({
-        success: true,
-        items: recovered,
-        items_examined: (rows || []).length,
-        items_changed: recovered,
-        // The queue claim is terminal for this dispatch even though inference
-        // is deferred to a later UTC budget window. Refill makes the rows
-        // eligible again; this avoids treating an intentional spend ceiling as
-        // a broken worker and auto-pausing it for the following day.
-        items_terminal: (rows || []).length,
-        items_failed: 0,
-        skipped: pending.length,
-        recovered,
-        recovery_misses: recoveryMisses,
-        message: 'llm_budget_deferred',
-        daily_cap: budget.cap,
-        merchant_domain: merchantDomain,
-        dry_run: dryRun,
-      })
-    }
+    let budgetDeferral: { cap: number | null } | null = null
     let done = 0, skipped = 0, failed = 0, firstErr: string | null = null
     for (const row of pending) {
       // One provider call may take 45s; return completed work before the gateway deadline.
       if (!budgetClock.canStart(48_000)) break
       const original = (row.description as string) || ''
       try {
+        // Charge only the inference about to run, never rows deferred by the
+        // deadline. The shared helper retains its existing degraded fallback.
+        const budget = await consumeLlmBudget(supabase, 'marketplace-description-enhance', 1)
+        if (!budget.allowed) { budgetDeferral = budget; break }
         const r = await enhance(String(row.title || ''), original, modelOverride)
         if (!r.description || r.description.length < 25 || r.description.length > 900) { skipped++; continue }
         if (dryRun) { done++; continue }
@@ -209,6 +187,10 @@ Deno.serve(async (req) => {
         await new Promise((res) => setTimeout(res, 150))
       } catch (err) { if (!firstErr) firstErr = (err as Error).message; failed++ }
     }
-    return json({ success: failed === 0, items: done + recovered, items_examined: (rows || []).length, items_changed: done + recovered, items_terminal: done + recovered + recoveryMisses + skipped, items_processed: done + skipped + failed + recovered + recoveryMisses, items_succeeded: done + recovered, items_skipped: skipped, items_failed: failed, recovered, recovery_misses: recoveryMisses, deferred: pending.length - done - skipped - failed, generator_version: 'marketplace-description-v3', first_error: firstErr, merchant_domain: merchantDomain, dry_run: dryRun })
+    const deferred = pending.length - done - skipped - failed
+    // Daily-cap deferral is terminal for this dispatch; refill makes the rows
+    // eligible in the next budget window without pausing a healthy worker.
+    const quotaSkipped = budgetDeferral ? deferred : 0
+    return json({ success: failed === 0, items: done + recovered, items_examined: (rows || []).length, items_changed: done + recovered, items_terminal: done + recovered + recoveryMisses + skipped + quotaSkipped, items_processed: done + skipped + failed + recovered + recoveryMisses, items_succeeded: done + recovered, items_skipped: skipped + quotaSkipped, items_failed: failed, recovered, recovery_misses: recoveryMisses, deferred, generator_version: 'marketplace-description-v3', first_error: firstErr, merchant_domain: merchantDomain, dry_run: dryRun, ...(budgetDeferral ? { message: 'llm_budget_deferred', daily_cap: budgetDeferral.cap, skipped: quotaSkipped } : {}) })
   } catch (error) { return json({ success: false, error: (error as Error).message }, 500) }
 })

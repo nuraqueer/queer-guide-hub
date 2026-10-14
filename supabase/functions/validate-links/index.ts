@@ -1,6 +1,6 @@
 import { getCorsHeaders, getServiceClient, requireAdmin } from '../_shared/supabase-client.ts'
 import { assertPublicHttpUrl } from '../_shared/ssrf-guard.ts'
-import { contentLinkHttpStatus, mayRemoveContentLink } from '../_shared/content-link-state.ts'
+import { contentLinkHttpStatus, mayRemoveContentLink, nextContentLinkCheckCount } from '../_shared/content-link-state.ts'
 import { boundedBatch, workBudget } from '../_shared/work-budget.ts'
 
 const HEAD_TIMEOUT = 5_000
@@ -129,7 +129,7 @@ Deno.serve(async (req: Request) => {
 
     batchLimit = boundedBatch(batchLimit, DEFAULT_BATCH_LIMIT, 50)
     const budget = workBudget(75_000)
-    let links: Array<{ id: string; original_url: string; status: string; check_count: number | null }>
+    let links: Array<{ id: string; original_url: string; status: string; http_status: number | null; check_count: number | null }>
 
     if (mode === 'single' && linkIds?.length) {
       // Validate specific links by ID
@@ -201,8 +201,10 @@ Deno.serve(async (req: Request) => {
         console.log(`[validate-links] Result: status=${result.status} http=${result.httpStatus} final=${result.finalUrl ?? 'none'}`)
 
         // Determine new check_count
-        let newCheckCount = previousCheckCount
-        const wasBroken = previousStatus === 'BROKEN' || previousStatus === 'TIMEOUT'
+        let newCheckCount = nextContentLinkCheckCount(
+          previousStatus, link.http_status, previousCheckCount, result.status, result.httpStatus,
+        )
+        const wasBroken = ['BROKEN', 'TIMEOUT', 'BLOCKED'].includes(previousStatus)
 
         if (result.status === 'OK' || result.status === 'REDIRECT') {
           // Link recovered — reset check_count
@@ -210,10 +212,8 @@ Deno.serve(async (req: Request) => {
             recovered++
             console.log(`[validate-links] RECOVERED: ${link.original_url} (was check_count=${previousCheckCount})`)
           }
-          newCheckCount = 0
         } else if (result.status === 'BROKEN' || result.status === 'TIMEOUT') {
-          // Still broken — increment check_count
-          newCheckCount = previousCheckCount + 1
+          // Transient history cannot count toward confirmed-dead removal.
           console.log(`[validate-links] Still broken: ${link.original_url} check_count ${previousCheckCount} → ${newCheckCount}`)
 
           // If check_count reaches 4 after 3 failed rechecks → auto-remove
@@ -241,11 +241,6 @@ Deno.serve(async (req: Request) => {
           }
 
           stillBroken++
-        } else if (result.status === 'BLOCKED') {
-          // BLOCKED: increment check_count but do NOT auto-remove
-          newCheckCount = previousCheckCount + 1
-          // Cap at 3 — blocked links don't escalate to removal
-          if (newCheckCount > 3) newCheckCount = 3
         }
 
         // Transient failures stay eligible for monthly rechecks, never removal.

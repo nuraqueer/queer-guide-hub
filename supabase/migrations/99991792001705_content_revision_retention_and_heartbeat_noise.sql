@@ -99,20 +99,20 @@ BEGIN
 
   SELECT command INTO v_cron FROM cron.job WHERE jobname = 'content_revision_prune';
   SELECT action->>'command' INTO v_reg FROM public.admin_automations WHERE slug = 'content_revision_prune';
-  IF v_cron IS DISTINCT FROM v_reg OR v_cron NOT LIKE '%(50000, 21)%' THEN
+  IF v_cron IS NULL OR v_cron IS DISTINCT FROM v_reg OR v_cron NOT LIKE '%(50000, 21)%' THEN
     RAISE EXCEPTION 'live cron and registry disagree or not updated: cron=% registry=%', v_cron, v_reg;
   END IF;
-  IF (SELECT schedule FROM cron.job WHERE jobname = 'content_revision_prune') <> '20 * * * *' THEN
+  IF (SELECT schedule FROM cron.job WHERE jobname = 'content_revision_prune') IS DISTINCT FROM '20 * * * *' THEN
     RAISE EXCEPTION 'live cron schedule not hourly';
   END IF;
 
   SELECT ignore_columns INTO v_ml FROM public.content_versioned_tables WHERE table_name = 'marketplace_listings';
   SELECT ignore_columns INTO v_ev FROM public.content_versioned_tables WHERE table_name = 'events';
-  IF NOT ('quality_dimensions_at' = ANY (v_ml)) OR NOT ('last_verified_at' = ANY (v_ev)) THEN
+  IF ('quality_dimensions_at' = ANY (v_ml)) IS NOT TRUE OR ('last_verified_at' = ANY (v_ev)) IS NOT TRUE THEN
     RAISE EXCEPTION 'heartbeat columns not in ignore_columns: ml=% ev=%', v_ml, v_ev;
   END IF;
   -- The rest of the derived-column list must survive the array rewrite.
-  IF NOT ('updated_at' = ANY (v_ml) AND 'title_normalized' = ANY (v_ml) AND 'updated_at' = ANY (v_ev)) THEN
+  IF ('updated_at' = ANY (v_ml) AND 'title_normalized' = ANY (v_ml) AND 'updated_at' = ANY (v_ev)) IS NOT TRUE THEN
     RAISE EXCEPTION 'existing ignore_columns lost: ml=% ev=%', v_ml, v_ev;
   END IF;
 END $verify$;
