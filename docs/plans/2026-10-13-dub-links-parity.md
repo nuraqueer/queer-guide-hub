@@ -2067,3 +2067,65 @@ https://www.twilio.com/docs/segment/connections/functions/source-functions
 https://github.com/segmentio/functions-library/blob/master/buildpack/boreal/window.js
 https://developers.google.com/tag-platform/tag-manager/server-side/api
 https://developers.google.com/tag-platform/tag-manager/datalayer
+
+### Native Segment/GTM implementation and evidence (2026-10-14)
+
+Provider-specific downloadable artifacts are implemented in
+`public/integrations/redirects/`: native Segment Destination/Source Functions,
+an importable Google server-container template and a consented browser attribution
+helper. The setup panel in Link workspace presents both Segment directions,
+scoped secret settings, event/amount mappings and an explicit outbound webhook
+prefill/review using the existing one-time secret/version/receipt controls.
+Setup/form state is remounted on account changes; create review is a dedicated
+editor, so it does not duplicate the full webhook list. Webhook field IDs are
+unique when multiple editors appear. Provider installation status remains
+explicitly unverified. No API key is collected in the browser setup form.
+
+Native Segment inbound mapping rejects unsafe numeric revenue, preserves exact
+major-unit decimal strings, requires stable IDs, avoids arbitrary profile traits
+and skips our outbound origin marker. Ten-second handler/transport receipt
+bounds and stable event IDs make unknown outcomes safely deduplicable at the API;
+only provider temporary/429/5xx failures request Segment retries. Response bodies
+are released without reading private fields. Native outbound mapping verifies
+raw-body Standard Webhooks signatures and rotation/timestamps using Node crypto,
+then emits allowlisted `Segment.track` events with stable message ID and source
+marker. Customer IDs require the subscription opt-in.
+
+The Google template uses sanctioned sandbox APIs (including RE2), a SERVER-only
+container context, explicit trusted-backend and analytics-consent gates, typed
+bounded fields, and exactly two permitted HTTPS conversion destinations. It
+reports one receipt and keeps server credentials out of web tags. The browser
+helper makes no network/API writes, validates UUID/30-day attribution, preserves
+dataLayer, supports explicit CMP grants/revocation and handles cookie-disabled
+storage without uncaught errors. Its attribution event is not a payment proof.
+
+Evidence: provider-like sandbox assertions pass for exact decimal limits,
+loop prevention, private-field omission, rotated/tampered/expired signatures,
+fixed URLs/permission declarations, timeout and receipt failures, invalid tag
+fields, consent/trust gates and cookie/attribution erasure. Six React tests across
+integration/webhook controls pass. The five-SDK HTTP suite adds a full adapter
+fixture: limited server key -> actual HTTP/handler -> migrated conversion SQL,
+duplicate Segment lead, exact Segment/GTM sale amounts -> signed real transactional
+outbox bodies -> native Segment.track, followed by origin-loop suppression. No
+foreign API is called. App ratchet stays at 704 inherited errors, none new;
+targeted lint passes and the production build passes (~20 seconds).
+
+Actual desktop/mobile browser setup was exercised in the isolated API-simulated
+preview with production fetches blocked: native Segment download links,
+source-URL review with exact prefill and privacy default, review close, provider
+switch and Google downloads/helper. Evidence images:
+`outputs/redirect-dub-parity/segment-setup-desktop.png` and
+`gtm-setup-mobile.png`. Test tabs closed and viewport reset. This confirms local
+UI behavior; actual Segment runtime raw-body/dedup, secret redaction, Google
+native import/sandbox/runtime permissions/redirect behavior, real consent wiring
+and provider debugger installation remain required release evidence. The global
+provider catalog has not been submitted or claimed. Local artifacts are not yet
+published to the live site.
+
+PR4378 (tracking/prefill/QR original work) was rechecked and is MERGED from
+feature/redirect-link-tools; it does not contain this parity branch's later
+candidates. The overall goal remains active. Native/deferred deep links need the
+requested real iOS Team/bundle ID and Android package/signing fingerprints.
+Other independent work continues: branded password pages, domain lifecycle/DNS
+automation, invitations/account/all-source permissions, plus controlled
+infrastructure release, provider debugger tests and SDK publication.

@@ -1,5 +1,5 @@
 import { AdminEmpty } from '@/components/admin/primitives/AdminEmpty';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useId } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
@@ -13,9 +13,39 @@ import {
   type WebhookDelivery,
   type WebhookEvent,
 } from '@/lib/redirects/webhooks';
+export type WebhookPreset = Pick<
+  RedirectWebhook,
+  'name' | 'url' | 'eventTypes' | 'includeCustomerId'
+>;
 export function RedirectWebhooks() {
   const { user } = useAuth();
   return user ? <WebhookWorkspace key={user.id} account={user.id} /> : null;
+}
+export function RedirectWebhookCreate({
+  preset,
+  onClose,
+}: {
+  preset: WebhookPreset;
+  onClose: () => void;
+}) {
+  const { user } = useAuth();
+  const client = useQueryClient();
+  if (!user) return null;
+  const account = user.id;
+  const refresh = async () => {
+    await client.cancelQueries({ queryKey: ['redirect-webhooks', account] });
+    await client.invalidateQueries({ queryKey: ['redirect-webhooks', account] });
+  };
+  return (
+    <WebhookEditor
+      key={account + ':' + preset.url + ':' + preset.includeCustomerId}
+      row={null}
+      defaults={preset}
+      account={account}
+      refresh={refresh}
+      close={onClose}
+    />
+  );
 }
 function WebhookWorkspace({ account }: { account: string }) {
   const client = useQueryClient();
@@ -145,20 +175,25 @@ function WebhookEditor({
   account,
   refresh,
   close,
+  defaults,
 }: {
+  defaults?: WebhookPreset;
   row: RedirectWebhook | null;
   account: string;
   refresh: () => Promise<void>;
   close: () => void;
 }) {
+  const formId = useId();
   const [current, setCurrent] = useState(row),
-    [name, setName] = useState(row?.name ?? ''),
-    [url, setUrl] = useState(row?.url ?? ''),
+    [name, setName] = useState(row?.name ?? defaults?.name ?? ''),
+    [url, setUrl] = useState(row?.url ?? defaults?.url ?? ''),
     [events, setEvents] = useState<WebhookEvent[]>(
-      row?.eventTypes ?? ['link.clicked', 'lead.created', 'sale.created'],
+      row?.eventTypes ?? defaults?.eventTypes ?? ['link.clicked', 'lead.created', 'sale.created'],
     ),
     [linkIds, setLinkIds] = useState(row?.linkIds?.join('\n') ?? ''),
-    [includeCustomerId, setIncludeCustomerId] = useState(row?.includeCustomerId ?? false),
+    [includeCustomerId, setIncludeCustomerId] = useState(
+      row?.includeCustomerId ?? defaults?.includeCustomerId ?? false,
+    ),
     [busy, setBusy] = useState(false),
     [notice, setNotice] = useState(''),
     [secret, setSecret] = useState<string | null>(null),
@@ -278,9 +313,9 @@ function WebhookEditor({
       >
         <fieldset disabled={busy || !!current?.deletedAt} className="space-y-4">
           <div>
-            <Label htmlFor="webhook-name">Name</Label>
+            <Label htmlFor={formId + '-name'}>Name</Label>
             <Input
-              id="webhook-name"
+              id={formId + '-name'}
               value={name}
               maxLength={100}
               required
@@ -288,9 +323,9 @@ function WebhookEditor({
             />
           </div>
           <div>
-            <Label htmlFor="webhook-url">HTTPS endpoint</Label>
+            <Label htmlFor={formId + '-url'}>HTTPS endpoint</Label>
             <Input
-              id="webhook-url"
+              id={formId + '-url'}
               type="url"
               required
               value={url}
@@ -320,15 +355,15 @@ function WebhookEditor({
             </div>
           </fieldset>
           <div>
-            <Label htmlFor="webhook-links">Link IDs (optional)</Label>
+            <Label htmlFor={formId + '-links'}>Link IDs (optional)</Label>
             <textarea
-              id="webhook-links"
+              id={formId + '-links'}
               className="min-h-20 w-full rounded-element border bg-background p-2 text-sm"
               value={linkIds}
               onChange={(event) => setLinkIds(event.target.value)}
-              aria-describedby="webhook-links-help"
+              aria-describedby={formId + '-links-help'}
             />
-            <p id="webhook-links-help" className="text-xs text-muted-foreground">
+            <p id={formId + '-links-help'} className="text-xs text-muted-foreground">
               Leave empty for all managed links. Separate IDs with commas or new lines.
             </p>
           </div>

@@ -378,3 +378,71 @@ never alters production trust roots or sends foreign callbacks. Deployment of
 necessary. Set the existing `supabase_url`/`internal_invoke_secret` Vault records
 and matching Edge `INTERNAL_INVOKE_SECRET`; verify real scheduled receipts before
 claiming production availability. No webhook secrets belong in browser storage.
+
+## Native Segment and Google Tag Manager adapters
+
+The Link workspace includes provider setup and downloads. These are local
+implementation candidates; the UI does not claim that an external account is
+installed or verified. Published assets are under `/integrations/redirects/`:
+
+| Artifact                        | Native provider context                                  | Credential                                                           |
+| ------------------------------- | -------------------------------------------------------- | -------------------------------------------------------------------- |
+| `segment-destination.js`        | Segment Destination Function, `onTrack`                  | Secret `apiKey` setting with a scoped `conversions:write` server key |
+| `segment-source.js`             | Segment Source Function, `onRequest` and `Segment.track` | Secret `signingSecret`, optional `previousSigningSecret`             |
+| `google-server-conversions.tpl` | Google Tag Manager **server** container template         | Server variable holding a scoped conversion key                      |
+| `browser-attribution.js`        | Optional Google **web** container / destination website  | No private credential                                                |
+
+Segment inbound settings `leadEvent` / `saleEvent` default to `Sign Up` / `Order
+Completed`. Map `userId`, stable `messageId`, optional `qg_click_id` in properties
+or context.traits, and an optional valid timestamp. Sales require uppercase
+`currency` and `properties.amount_decimal` in **major currency units**, with at
+most six decimals. Prefer a decimal string; unsafe numeric revenue is rejected.
+Retries use `segment:` plus the same messageId. Unrelated events and
+`qg_redirects_origin: 'redirects'` events are ignored. Only trusted backend events
+should enter the conversion destination. No arbitrary traits/profile identity
+are imported. Temporary/429/5xx failures throw Segment RetryError; permanent
+permission/input/redirect responses fail without leaking their response body.
+A ten-second handler deadline and transport timeout bound receipt waiting;
+unknown outcomes can be retried by Segment with the stable ID.
+
+For outbound events, install the Source Function, then use its HTTPS URL in the
+setup form to review/create a webhook. The one-time returned signing secret goes
+in Segment's **secret** setting. The adapter verifies exact raw body bytes and a
+five-minute timestamp tolerance before mapping allowlisted properties to native
+`Segment.track`. It preserves amounts as strings and sets a stable `qg:` message
+ID and origin marker. Anonymous event/click IDs are used unless the subscription
+explicitly includes customer external IDs. During rotation, put the previous key
+in `previousSigningSecret` for the 24-hour overlap. Verify actual raw text and
+message-ID deduplication in Segment's debugger before production use; local
+sandboxes do not establish the provider's runtime behavior.
+
+Import the `.tpl` under Templates in a Google **server** container running image
+2.0.0 or newer. Set kind, server key, opaque customer ID, stable event ID, event
+name, optional click ID, and exact sale amount/currency. The tag requires both
+analytics consent and trusted backend validation. It uses a bounded POST to one
+of two fixed conversion URLs; its only permission is those URLs. It emits one
+success or failure callback. Use Preview to verify permissions, redirect handling
+and real API receipts before publishing the container. Checkout starts or
+unverified browser amounts are not verified payment events.
+
+The optional browser helper never writes conversions or sends network requests.
+After your consent manager resolves analytics consent, call:
+
+```javascript
+qgRedirects.setConsent(true); // captures a valid qg_click_id from the current URL
+const clickId = qgRedirects.getClickId(); // pass to your trusted backend event
+qgRedirects.setConsent(false); // clears attribution storage and the host-only cookie
+```
+
+It shares the app's validated 30-day attribution storage format, writes a
+host-only `qg_click_id` cookie (Secure on HTTPS, SameSite=Lax), and pushes one
+`qg_redirect_attribution` dataLayer event per attributed click per page. It
+preserves the existing dataLayer. Trigger tracking tags only while consent is
+granted, and call the deny path on revocation. Storage/cookie restrictions fail
+safely. No email/amount/order details are scraped from URL or page fields.
+
+`npm run test:redirect-integrations` verifies provider-like sandbox behavior.
+`npm run test:redirect-sdks` additionally drives these same adapters through
+actual local HTTP, scoped API authentication, migrated PostgreSQL, signed real
+outbox payloads, and native source mapping. It performs no Segment/Google account
+writes and cannot replace provider account installation/debugger proof.

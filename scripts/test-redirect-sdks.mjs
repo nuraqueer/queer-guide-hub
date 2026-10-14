@@ -1,3 +1,4 @@
+import { verifyRedirectIntegrationHttp } from './lib/redirect-integration-fixtures.mjs';
 import sharp from 'sharp';
 import { createServer } from 'node:http';
 import { spawn } from 'node:child_process';
@@ -636,6 +637,7 @@ try {
   if(clearedIdentity.name!==null||clearedIdentity.email!==null||clearedIdentity.version===privateIdentityVersion)throw new Error('HTTP identity clear failed');
   console.log('Private customer profiles: five native SDK methods, opaque UTF-8 IDs, scoped chronological pages, partial-grant edit denial, stale writes, private public-report boundary and identity-only clear passed.');
   console.log('Saved/share/public reports: real HTTP → edge handler → migrated PostgreSQL, real password verification, sanitized totals and revocation passed');
+  await verifyRedirectIntegrationHttp(db,base,reportActor);
   console.log(
     'Five SDKs passed; no external API calls, credentials, payments or production schema were used.',
   );

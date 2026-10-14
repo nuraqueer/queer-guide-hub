@@ -1,3 +1,4 @@
+import { RedirectIntegrationSetup } from './RedirectIntegrationSetup';
 import { RedirectWebhooks } from './RedirectWebhooks';
 import { RedirectQrStyleSettings } from './RedirectQrStyleSettings';
 import { RedirectDomains } from './RedirectDomains';
@@ -25,6 +26,7 @@ export function RedirectWorkspaceDialog({ onClose }: { onClose: () => void }) {
   const [showDomains, setShowDomains] = useState(false);
   const [showQrStyle, setShowQrStyle] = useState(false);
   const [showWebhooks, setShowWebhooks] = useState(false);
+  const [showIntegrations, setShowIntegrations] = useState(false);
   const [accessFolder, setAccessFolder] = useState<string | null>(null);
   const [kind, setKind] = useState<WorkspaceResource>('folders');
   const [editing, setEditing] = useState<string | null>(null);
@@ -103,6 +105,12 @@ export function RedirectWorkspaceDialog({ onClose }: { onClose: () => void }) {
           {showWebhooks ? 'Hide webhooks' : 'Manage outgoing webhooks'}
         </Button>
         {showWebhooks && <RedirectWebhooks />}
+        <Button variant="outline" onClick={() => setShowIntegrations(!showIntegrations)}>
+          {showIntegrations
+            ? 'Hide conversion integrations'
+            : 'Set up Segment or Google Tag Manager'}
+        </Button>
+        {showIntegrations && <RedirectIntegrationSetup />}
         {workspace.isError && (
           <div role="alert">
             <p>Could not load the link workspace. {workspace.error.message}</p>
