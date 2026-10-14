@@ -124,6 +124,25 @@ describe('News source workspace', () => {
       '/admin/content/news_articles?edit=article-1',
     );
   });
+  it('keeps a legacy cadence when saving unrelated feed edits', async () => {
+    mocks.rows = [{ ...source, fetch_frequency: 1 }];
+    mount();
+    fireEvent.click(screen.getByRole('button', { name: 'Edit Feed One' }));
+    const frequency = screen.getByLabelText('Fetch frequency (minutes)');
+    expect(frequency).toHaveAttribute('min', '1');
+    fireEvent.change(screen.getByLabelText('Feed name'), { target: { value: 'Renamed feed' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save source' }));
+    await waitFor(() => expect(mocks.save).toHaveBeenCalled());
+    expect(mocks.save.mock.calls[0][0].form.fetch_frequency).toBe(1);
+  });
+  it('requires the normal limits when deliberately changing a legacy cadence', () => {
+    mocks.rows = [{ ...source, fetch_frequency: 1 }];
+    mount();
+    fireEvent.click(screen.getByRole('button', { name: 'Edit Feed One' }));
+    const frequency = screen.getByLabelText('Fetch frequency (minutes)');
+    fireEvent.change(frequency, { target: { value: '2' } });
+    expect(frequency).toHaveAttribute('min', '30');
+  });
   it('saves feed configuration separately from publisher identity and diagnostics', async () => {
     mount();
     fireEvent.click(screen.getByRole('button', { name: 'Edit Feed One' }));
