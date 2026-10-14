@@ -1492,3 +1492,33 @@ automation, native/deferred deep links, branded password pages, customer enrichm
 report SDK/team discovery, integrations, outgoing webhooks, permissions/account
 discovery and controlled release/publication stay in scope. No production writes
 or deployments occurred.
+
+### Scoped live QR image links
+
+Use durable opaque capability records rather than public link-ID enumeration or
+stateless tickets that cannot be revoked individually. Owners, current members
+and keys with links:read can explicitly create an image link for a currently
+visible managed SHORT record. Owner inventory exports can also create one for an
+explicit HTTP(S) URL, inheriting workspace defaults. A 256-bit random bearer is
+returned once in image URLs; only its SHA-256 is stored. A private versioned row
+binds the originating owner/member/key, optional link, appearance overrides and
+inherit/hide logo choice, with optional expiry and explicit revocation. Default
+is no expiry until revoked, suitable for embeds; downloaded codes retain the
+encoded ordinary redirect URL and are unaffected by image-link revocation.
+
+Every public retrieval rechecks that creator's current role/membership/key scope,
+expiry and folder/link access under the existing ACL lock. It emits only canonical
+short URL (including managed domain roots), QR appearance and controlled effective
+logo metadata. No destination, passwords, notes, identity, folder data or analytics
+are exposed. Link deletion cascades; lost access/revocation/expiry closes retrieval.
+Generating an image never resolves the redirect or consumes a visit/quota.
+
+The authenticated API creates/lists/revokes records. The public capability endpoint
+returns minimal profile data only to the bearer; the Worker fetches it with bounded
+reads and no redirects, then uses its existing validated rendering path. share
+requests accept only output format/size, so they cannot override the authorized
+payload or smuggle a logo URL. Worker/Pages responses remain no-store/no-referrer.
+Creation has per-principal active/hourly and global-hourly budgets. List/revoke
+remain scoped; owners can manage all workspace image links. Local custom artwork
+still needs a separate reviewed asset attachment that preserves workspace defaults;
+keep that, UI authoring/copy and five-SDK contracts as required follow-ups.
