@@ -1,3 +1,4 @@
+import { useAuth } from '@/hooks/useAuth';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 export interface RedirectMember {
@@ -9,8 +10,11 @@ export interface RedirectMember {
   active: boolean;
 }
 export function useRedirectMembers() {
+  const { user } = useAuth();
   return useQuery<RedirectMember[]>({
-    queryKey: ['redirect-workspace-members'],
+    queryKey: ['redirect-workspace-members', user?.id],
+    enabled: !!user,
+    gcTime: 0,
     queryFn: async ({ signal }) => {
       const result: RedirectMember[] = [];
       for (let offset = 0; ; offset += 100) {

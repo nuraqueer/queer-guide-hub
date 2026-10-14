@@ -1,3 +1,4 @@
+/* eslint no-control-regex: "off" -- Rejecting ASCII control characters is intentional input/header validation. */
 /** DNS-pinned HTTPS delivery. No unpinned fetch fallback or caller-provided TLS policy. */
 export type WebhookErrorCode =
   | 'dns_blocked'

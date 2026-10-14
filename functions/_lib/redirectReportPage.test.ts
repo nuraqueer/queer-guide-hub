@@ -33,7 +33,7 @@ describe('live shared-report HTML metadata', () => {
     const result = await redirectReportPage(env, request(), path);
     expect(result?.indexable).toBe(true);
     expect(result?.body).toContain('&lt;script&gt;');
-    expect(result?.body).not.toMatch(/PRIVATE FIELD|<script>|sales|99/);
+    expect(result?.body).not.toMatch(/PRIVATE FIELD|<script>|sales|99/i);
     const options = (fetcher.mock.calls[0] as unknown as [URL, RequestInit])[1];
     expect(new Headers(options.headers).get('authorization')).toBe('Bearer qg_report_' + id);
     expect(

@@ -240,7 +240,7 @@ Deno.test('management rejects invalid shapes and unsafe cursors', async () => {
 Deno.test('dispatcher resolves before preparing secrets and reports cancelled leases', async () => {
   const id = crypto.randomUUID(),
     lease = crypto.randomUUID();
-  let calls: string[] = [];
+  const calls: string[] = [];
   const db = {
     async rpc(name: string) {
       calls.push(name);

@@ -1,3 +1,4 @@
+/* eslint no-control-regex: "off" -- Rejecting ASCII control characters is intentional input/header validation. */
 export interface PasswordPageBranding {
   brandName: string | null;
   logo: { url: string; width: number; height: number } | null;

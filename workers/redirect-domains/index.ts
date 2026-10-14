@@ -1,3 +1,4 @@
+// eslint-disable-next-line @typescript-eslint/triple-slash-reference -- Generated ambient Worker declarations require a type reference without a runtime import.
 /// <reference path="./worker-configuration.d.ts" />
 import type { IncomingRequestCfProperties } from '@cloudflare/workers-types';
 import {

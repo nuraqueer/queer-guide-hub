@@ -1,5 +1,6 @@
 import { useRedirectMembers, type RedirectMember as Member } from '@/hooks/useRedirectMembers';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { useAuth } from '@/hooks/useAuth';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
@@ -15,6 +16,17 @@ async function request(path: string, method: 'GET' | 'POST' | 'PATCH' | 'DELETE'
   return data;
 }
 export function RedirectWorkspaceMembers() {
+  const { user } = useAuth();
+  return <MemberEditor key={user?.id ?? 'signed-out'} />;
+}
+function MemberEditor() {
+  const alive = useRef(true);
+  useEffect(() => {
+    alive.current = true;
+    return () => {
+      alive.current = false;
+    };
+  }, []);
   const client = useQueryClient();
   const [label, setLabel] = useState(''),
     [userId, setUserId] = useState('');
@@ -26,6 +38,7 @@ export function RedirectWorkspaceMembers() {
     mutationFn: ({ id, values, remove }: { id?: string; values?: unknown; remove?: boolean }) =>
       request(id ? '/' + id : '', remove ? 'DELETE' : id ? 'PATCH' : 'POST', values),
     onSuccess: async (_data, variables) => {
+      if (!alive.current) return;
       if (!variables.id) {
         setLabel('');
         setUserId('');
@@ -117,7 +130,7 @@ export function RedirectWorkspaceMembers() {
         </p>
       )}
       <ul className="divide-y">
-        {members.data?.map((member) => (
+        {(!members.isError ? members.data : [])?.map((member) => (
           <li key={member.id} className="space-y-2 py-4">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div>

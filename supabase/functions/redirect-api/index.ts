@@ -58,7 +58,7 @@ Deno.serve(async (req: Request) => {
    const principal=await sessionPrincipal('workspace:write');if(principal.failure)return principal.failure;if(principal.id!==null)return json({error:'Workspace owner access required'},403);
    const id=manual[1]??null;if(id&&!UUID.test(id)||new URL(req.url).search)return json({error:'Invalid manual redirect request'},400);
    let values=null,expected=null;
-   if(req.method==='GET'&&id){}
+   if(req.method==='GET'&&id){/* Read the current record through the private RPC below. */}
    else if(req.method===(id?'PATCH':'POST')){
     const body=await boundedJson(req,262144);
     if(!body||typeof body!=='object'||Array.isArray(body)||Object.keys(body).some(key=>!['values','expectedUpdatedAt'].includes(key))||id&&(typeof body.expectedUpdatedAt!=='string'||!Number.isFinite(Date.parse(body.expectedUpdatedAt)))||!id&&body.expectedUpdatedAt!=null)return json({error:'Provide redirect fields and the current record timestamp'},400);
@@ -424,12 +424,12 @@ Deno.serve(async (req: Request) => {
   if(memberMatch){
    if(tokenCredential||!user||user.is_anonymous)return json({error:'Admin session required'},403);
    const role=await identityClient!.rpc('has_role_jwt',{required_role:'admin'});if(role.error)return json({error:'Authorization unavailable'},503);if(!role.data)return json({error:'Forbidden'},403);
-   const id=memberMatch[1],select='id,user_id,kind,label,role,active,created_at';if(id&&!UUID.test(id))return json({error:'Invalid member ID'},400);
+   const id=memberMatch[1];if(id&&!UUID.test(id))return json({error:'Invalid member ID'},400);
    if(req.method==='GET'&&!id){
     const query=new URL(req.url).searchParams,offset=Number(query.get('offset')??0);if([...query.keys()].some(k=>k!=='offset')||!Number.isInteger(offset)||offset<0||offset>1e7)return json({error:'Invalid member page'},400);
-    const {data,count,error}=await db.from('redirect_workspace_members').select(select,{count:'exact'}).order('id').range(offset,offset+99);if(error)return rpcError(error);return json({data,count});
+    const {data,error}=await db.rpc('redirect_member_administration',{p_actor:user.id,p_action:'list',p_offset:offset});if(error)return rpcError(error);return json(data);
    }
-   if(req.method==='DELETE'&&id){const {data,error}=await db.from('redirect_workspace_members').delete().eq('id',id).select('id');if(error)return rpcError(error);return json({deleted:!!data?.length,id});}
+   if(req.method==='DELETE'&&id){const {data,error}=await db.rpc('redirect_member_administration',{p_actor:user.id,p_action:'delete',p_id:id});if(error)return rpcError(error);return json(data);}
    if(req.method==='POST'&&!id||req.method==='PATCH'&&id){
     const body=await boundedJson(req),create=req.method==='POST',allowed=create?['label','role','active','kind','userId']:['label','role','active'];
     if(!body||typeof body!=='object'||Array.isArray(body)||!Object.keys(body).length||Object.keys(body).some(k=>!allowed.includes(k)))return json({error:'Invalid membership fields'},400);
@@ -437,8 +437,7 @@ Deno.serve(async (req: Request) => {
     if(body.role!==undefined&&!['member','viewer'].includes(body.role)||body.active!==undefined&&typeof body.active!=='boolean')return json({error:'Invalid membership role or status'},400);
     if(create&&(!['user','machine'].includes(body.kind)||body.kind==='user'&&(typeof body.userId!=='string'||!UUID.test(body.userId))||body.kind==='machine'&&body.userId!=null))return json({error:'Choose an existing account UUID or a machine member'},400);
     const values={...(body.label!==undefined?{label:body.label.trim()}:{}),...(body.role!==undefined?{role:body.role}:{}),...(body.active!==undefined?{active:body.active}:{}),...(create?{kind:body.kind,user_id:body.kind==='user'?body.userId:null}:{})};
-    const table=db.from('redirect_workspace_members'),change=create?table.insert(values):table.update(values).eq('id',id!);
-    const {data,error}=await change.select(select).single();if(error)return rpcError(error);return json(data,create?201:200);
+    const {data,error}=await db.rpc('redirect_member_administration',{p_actor:user.id,p_action:create?'create':'update',p_id:id??null,p_values:values});if(error)return rpcError(error);return json(data,create?201:200);
    }
    return json({error:'Method not supported'},405);
   }

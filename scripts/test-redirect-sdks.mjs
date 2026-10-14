@@ -310,6 +310,22 @@ try {
     const response=await fetch(base+path,{method,headers:{Authorization:'Bearer '+credential,...(body?{'Content-Type':'application/json'}:{})},...(body?{body:JSON.stringify(body)}:{})});
     const data=await response.json();if(response.status!==expected)throw new Error('Report HTTP '+path+' expected '+expected+' received '+response.status+': '+JSON.stringify(data));return data;
   }
+  const managedMember=await reportRequest('/members','POST',{label:'HTTP machine',kind:'machine',role:'viewer'},undefined,201);
+  if(managedMember.kind!=='machine'||managedMember.user_id!==null)throw new Error('Membership creation response changed');
+  const memberPage=await reportRequest('/members?offset=0');
+  if(!memberPage.data.some(row=>row.id===managedMember.id)||memberPage.count<1)throw new Error('Membership listing failed');
+  await reportRequest('/members','GET',undefined,token,403);
+  await reportRequest('/members/'+managedMember.id,'PATCH',{active:false});
+  await reportRequest('/members/'+managedMember.id,'PATCH',{userId:reportOtherActor},undefined,400);
+  // The identity boundary deliberately still reports admin: SQL must deny a stale claim.
+  await db.query('DELETE FROM public.user_roles WHERE user_id=$1',[reportActor]);
+  await reportRequest('/members','GET',undefined,undefined,403);
+  await reportRequest('/members/'+managedMember.id,'DELETE',undefined,undefined,403);
+  if(!(await db.query('SELECT id FROM public.redirect_workspace_members WHERE id=$1',[managedMember.id])).rows.length)throw new Error('Stale admin removed member');
+  await db.query("INSERT INTO public.user_roles VALUES($1,'admin')",[reportActor]);
+  const memberRemoved=await reportRequest('/members/'+managedMember.id,'DELETE');
+  if(!memberRemoved.deleted)throw new Error('Membership delete failed');
+  console.log('Member administration: actual HTTP -> migrated SQL current actor checks, native field shapes, key denial and stale admin-claim read/delete rejection passed.');
   const domain=await reportRequest('/domains','POST',{hostname:'LINKS.Example.com.'},undefined,201);
   if(domain.hostname!=='links.example.com'||domain.ownershipVerified||domain.providerConnected)throw new Error('Domain creation claimed readiness');
   await reportRequest('/domains','GET',undefined,token,403);

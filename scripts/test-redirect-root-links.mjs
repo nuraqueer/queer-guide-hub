@@ -223,7 +223,7 @@ assert.ok(
   brandedHtml.includes('/storage/v1/object/public/redirect-brand-assets/' + passwordAsset.key),
 );
 assert.ok(brandedHtml.includes('crossorigin="anonymous" referrerpolicy="no-referrer"'));
-assert.ok(!brandedHtml.includes('https://example.org/home'));
+assert.doesNotMatch(brandedHtml, /example[.]org/u);
 assert.ok(
   brandedChallenge.headers
     .get('Content-Security-Policy')

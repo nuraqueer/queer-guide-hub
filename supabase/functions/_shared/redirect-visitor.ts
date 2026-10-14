@@ -1,3 +1,4 @@
+/* eslint no-control-regex: "off" -- Rejecting ASCII control characters is intentional input/header validation. */
 export function visitorAgent(agent: string | null) {
  const ua=(agent??'').slice(0,512);
  const isBot=/bot|spider|crawler|headless|facebookexternalhit|slurp|preview/i.test(ua);

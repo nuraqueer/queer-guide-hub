@@ -26,7 +26,7 @@ exist. Existing local tools are a foundation, not proof of parity or deployment.
 | Device targeting | iOS/Android destinations, evaluated before geo | Candidate: iOS/Android priority tested |
 | A/B testing | 2–5 destinations, weighted traffic≥10%, end date≤6 weeks, manual winner/end | Candidate: editor/resolver implemented locally |
 | A/B completion | Device→geo→experiment priority; choose winner by sales/conversions, rates, clicks; leads fallback | Candidate: selection/metrics now fed by verified native and scoped server conversion ingestion |
-| Password links | Password challenge, hashed secret, no disclosure/bypass, scoped access | Partial: hashed protection, atomic attempt throttling and signed IP relay; custom password logo pending |
+| Password links | Password challenge, hashed secret, no disclosure/bypass, scoped access | Candidate: hashed protection, atomic throttling, signed IP relay and versioned controlled password-page branding; live release pending |
 | Expiration | Date and expired destination URL, live enforcement without stale cached rules | Candidate: date/phrase parser, custom fallback and live enforcement tested |
 | Link cloaking | Explicit iframe mode with accurate iframe limitations, standard redirect fallback | Candidate: HTTPS guarded iframe wrapper and persistent direct fallback; runtime release pending |
 | Branded QR | Dots square/circle/joined; marker center square/circle; border square/rounded/circle; colors | Partial: dot/marker/color controls, saved workspace/domain appearance and logos, scoped individual/bulk defaults and scan verification implemented locally; hosted-image publication/copy/revoke UI and five SDKs implemented locally; release pending |
@@ -37,10 +37,10 @@ exist. Existing local tools are a foundation, not proof of parity or deployment.
 | Live events | Paginated live click/lead/sale stream, real events rather than demo data | Candidate: private click/lead/sale activity with keyset pages and five-second refresh |
 | Shared dashboards | Revocable scoped sharing, sanitized aggregate-only default | Candidate: saved snapshots, explicit dynamic folders, password/expiry/revoke, aggregate-only UI, date selection and live opt-in indexing implemented locally; runtime release pending |
 | Custom reports | Custom dates, granular link/folder/tag/domain/geo/device/event filters | Partial: date/dimension report UI/API, personal saved definitions and scoped sharing implemented locally; team discovery and runtime release pending |
-| Integrations | Segment and GTM adapters; native configured integrations and provider callbacks | Missing |
+| Integrations | Segment and GTM adapters; native configured integrations and provider callbacks | Partial: native Segment/GTM artifacts and setup, privacy/consent gates and actual conversion/outbox handler fixtures pass; provider installation/runtime evidence pending |
 | REST API | Authenticated/scoped link CRUD/upsert/count/list, analytics/events, folders/tags, bulk operations | Partial: scoped link CRUD/upsert/count/list/mixed bulk, conversions and analytics/events; folder/tag/template resource CRUD with workspace scopes; scoped targeting/password/tracking/preview policy endpoints; domain fields/filter/canonical URLs implemented locally; deep-link fields and release pending |
 | SDKs | TypeScript, Python, Go, Ruby, PHP wrappers and runnable examples covering management/tracking | Candidate: five native clients verified through actual HTTP handler and isolated DB; publication/release pending |
-| Webhooks | Signed link create/update/delete/click and lead/sale events, retries, delivery history, replay and secret rotation | Missing |
+| Webhooks | Signed link create/update/delete/click and lead/sale events, retries, delivery history, replay and secret rotation | Candidate: durable signed outbox/dispatcher, management/history/replay/rotation UI and five receiver SDKs tested locally; live cron/transport/provider release pending |
 
 ## Primary references
 
@@ -1945,7 +1945,7 @@ https://supabase.com/docs/guides/functions/connect-to-postgres.
 
 ### Outgoing webhook implementation and local evidence (2026-10-14)
 
-Migration `99991792003234_redirect_webhooks.sql` adds service-only subscriptions,
+Migration `99991792014604_redirect_webhooks.sql` adds service-only subscriptions,
 transactional event/outbox capture, one lease per endpoint, bounded retry and
 retention, versioned routing cancellation, test/replay, secret rotation overlap,
 and a Vault-backed minutely dispatch job when pg_cron is available. Lifecycle,
@@ -2173,7 +2173,7 @@ proof remains required; a preview-only image is not feature completion.
 
 ### Password-page branding implementation and local evidence (2026-10-14)
 
-Migration `99991792009182_redirect_password_branding.sql` adds independent private,
+Migration `99991792014610_redirect_password_branding.sql` adds independent private,
 versioned per-SHORT branding, explicit public label/minimal immutable asset
 metadata, current owner/member/key/link/folder checks, bounded upload reservations
 and same-principal/current-version finish. Existing shared asset claim/receipt
@@ -2238,7 +2238,7 @@ issue is resolved. Original PR4378 remains merged; later candidates are local.
 ### Current-owner credential audit design (2026-10-14)
 
 Correction to the preceding baseline-only finding: ordered migration
-99991791920009_redirect_link_policies.sql already drops redirects_public_read
+99991792014410_redirect_link_policies.sql already drops redirects_public_read
 and revokes public execution of resolve_short_redirect. Preserve this established
 password-aware routing and add an effective-schema regression check; no redundant
 public routing redesign is required. Production policy state remains uninspected.
@@ -2319,3 +2319,33 @@ cache after unmount, and denied refresh suppresses earlier rows. Remount member
 form state by account so late responses cannot clear another account's draft.
 Verify actual HTTP -> migrated SQL, lost actor role, missing/ordinary actor,
 existing user/machine creation and safe field restrictions.
+
+### Member administration and CI remediation evidence (2026-10-14)
+
+Service-only member administration now checks the actual acting user's current
+admin role under the ACL lock in the same transaction as listing/mutations. Both
+SQL and REST validate fields; membership identity cannot be rebound by PATCH.
+Member cache keys include the account and use gcTime 0; account changes remount
+form drafts, denied refresh hides old rows, and late old mutation completion
+cannot clear the current account's draft. Four UI tests pass. Full SQL and actual
+HTTP/migrated SQL prove machine creation/list/patch/delete, scoped-key denial,
+missing/ordinary actor denial and stale admin-claim read/delete rejection. All
+five native SDK suites pass. App remains 702 inherited errors, none new; build
+passes (~24 seconds), native API Deno check passes, focused lint passes.
+
+The first draft CI exposed migration ordering against current main: this branch's
+unmerged migration versions had been overtaken by 34 newer main migrations.
+All 34 branch-only, never-deployed migrations were renumbered using the mandatory
+allocator, in their original dependency order; reference updates were performed
+by that tool. No main/applied migration was renamed. A fresh effective-schema,
+version/grammar, root-routing and five SDK run verifies the resulting names/order.
+
+CI lint corrections retain deliberate ASCII-control rejection with explained
+rule annotations, document the intentional GET branch, use const in the dispatcher
+test and preserve generated ambient Worker declarations without a runtime import.
+Local full lint must exclude ignored tmp/.wrangler artifacts created by runtime
+fixtures; no production-source directory is excluded. CodeQL's two findings were
+in test assertions: password-page destination absence and HTML escaping. Those
+assertions now reject any matching destination host and check tags regardless of
+case. Seven report-page tests and 25 focused resolver/password/member tests pass;
+new CodeQL/CI results remain to be checked after push.

@@ -1,3 +1,4 @@
+/* eslint no-control-regex: "off" -- Rejecting ASCII control characters is intentional input/header validation. */
 import { assertPublicHttpUrl } from './ssrf-guard.ts';
 import { llmChatCompletion } from './llm-client.ts';
 

@@ -1,3 +1,4 @@
+/* eslint no-control-regex: "off" -- Rejecting ASCII control characters is intentional input/header validation. */
 import { UUID } from './redirect-api.ts';
 import {
   qrLogoInput,
