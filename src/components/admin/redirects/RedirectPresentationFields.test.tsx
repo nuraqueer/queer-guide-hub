@@ -30,6 +30,36 @@ beforeEach(() => {
   mocks.prepare.mockResolvedValue('fixture-image');
 });
 describe('preview and cloaking editor', () => {
+  it('generates a reviewable draft while retaining other policy fields', async () => {
+    mocks.invoke.mockResolvedValue({
+      data: { title: 'Community events', description: 'Explore local events.' },
+      error: null,
+    });
+    render(<Harness />);
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Custom social preview' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Enable attribution elsewhere' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Generate title and description' }));
+    await waitFor(() =>
+      expect(screen.getByLabelText('Preview title')).toHaveValue('Community events'),
+    );
+    expect(mocks.invoke).toHaveBeenCalledWith('redirect-api/links/fixture/preview-generate', {
+      body: {},
+    });
+    expect(screen.getByLabelText('Saved policy')).toHaveTextContent('"track_conversions":true');
+    expect(screen.getByText(/Review the draft, then Save/)).toBeInTheDocument();
+  });
+  it('keeps manual text when generation fails', async () => {
+    mocks.invoke.mockResolvedValue({
+      data: { error: 'Preview generation is not configured' },
+      error: null,
+    });
+    render(<Harness />);
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Custom social preview' }));
+    fireEvent.change(screen.getByLabelText('Preview title'), { target: { value: 'Manual title' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Generate title and description' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('not configured');
+    expect(screen.getByLabelText('Preview title')).toHaveValue('Manual title');
+  });
   it('edits bounded metadata and independently enables framing', () => {
     render(<Harness />);
     fireEvent.click(screen.getByRole('checkbox', { name: 'Custom social preview' }));

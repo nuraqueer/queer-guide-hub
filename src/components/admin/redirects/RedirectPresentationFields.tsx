@@ -45,6 +45,29 @@ export function RedirectPresentationFields({
       onUploading(false);
     }
   };
+  const generate = async () => {
+    setBusy(true);
+    onUploading(true);
+    setError('');
+    try {
+      const { data, error: generationError } = await supabase.functions.invoke(
+        'redirect-api/links/' + id + '/preview-generate',
+        { body: {} },
+      );
+      if (generationError || data?.error) throw new Error(data?.error ?? generationError?.message);
+      if (typeof data?.title !== 'string' || typeof data?.description !== 'string')
+        throw new Error('Invalid generated preview');
+      onChange((current) => ({
+        ...current,
+        preview: { ...current.preview, title: data.title, description: data.description },
+      }));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not generate preview');
+    } finally {
+      setBusy(false);
+      onUploading(false);
+    }
+  };
   return (
     <fieldset className="space-y-4" disabled={busy}>
       <legend className="font-medium">Sharing and presentation</legend>
@@ -63,6 +86,15 @@ export function RedirectPresentationFields({
       </label>
       {policy.preview && (
         <div className="space-y-4">
+          <Button type="button" variant="outline" onClick={() => void generate()}>
+            Generate title and description
+          </Button>
+          <p className="text-xs text-muted-foreground">
+            Uses the saved destination’s public page content through Firecrawl and the configured AI
+            provider. Review the draft, then Save to apply it. Generation replaces the draft title
+            and description.
+          </p>
+          {busy && <p role="status">Preparing preview…</p>}
           <div className="space-y-2">
             <Label htmlFor="redirect-preview-title">Preview title</Label>
             <Input
@@ -100,7 +132,6 @@ export function RedirectPresentationFields({
               PNG or JPG, up to 1.5 MB. Center-cropped to 1200 × 630. Uploaded artwork is public;
               use public campaign images.
             </p>
-            {busy && <p role="status">Preparing and uploading artwork…</p>}
           </div>
           {policy.preview.image && (
             <div className="space-y-2">

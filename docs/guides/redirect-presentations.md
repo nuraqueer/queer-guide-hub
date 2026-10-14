@@ -82,3 +82,40 @@ image upload over HTTP into actual source handlers/isolated SQL; file storage us
 a fixture adapter, not production Storage. Component tests cover controls and
 concurrent edit preservation. Native browser rendering/upload and production
 migration/provider delivery remain unverified.
+
+## Generate a preview draft
+
+`POST /links/{id}/preview-generate` accepts `{}` and requires `links:write`
+(or a verified admin session). It uses the link's saved main destination, not an
+arbitrary supplied URL or device/experiment destination. It returns only
+`{title, description}`; neither the endpoint nor the editor saves this draft.
+Review it and press Save to apply it. Generation replaces draft text and retains
+artwork, video, and other policy settings. Failures preserve manual text.
+
+Deployment needs `FIRECRAWL_API_KEY` plus the existing Cloudflare AI configuration
+(`CF_ACCOUNT_ID` and `CF_AI_API_TOKEN`, or their existing aliases) or
+`NVIDIA_API_KEY`. `AI_DISABLED=1` disables generation. Missing configuration returns
+503 without reserving spend. Destination page content is sent to Firecrawl and
+up to 16,000 characters are sent to the configured AI provider. Use this for
+public page content; no page credentials or caller cookies are forwarded.
+
+The edge contacts the fixed Firecrawl v2 scrape endpoint with redirects disabled,
+a 12-second transport timeout, no actions, and no document parsers. It never
+fetches the destination itself. Direct private/loopback/local URL literals and
+URL credentials are rejected; DNS and redirect isolation inside the external
+scraping service remain that provider's responsibility. Provider responses are
+bounded to 512 KB, inference requests use at most 300 output tokens, zero client
+retries, and the existing AI usage telemetry. NVIDIA and Cloudflare fallback
+retain the shared client's behavior: Cloudflare uses a 15-second timeout,
+NVIDIA uses its shared 45-second transport ceiling, and fallback can add both. Generated JSON has closed keys and the same 120/240
+character limits as the editor; malformed output returns 503.
+
+Service-only PostgreSQL reservations atomically enforce 5 requests/link/hour,
+10 requests/credential-or-admin/hour, and 60 requests/workspace/hour. Failed
+provider calls consume reservations. A 429 includes `Retry-After`. Link scope is
+rechecked both at reservation and after generation; revoked credentials cannot
+receive the draft. No AI credentials or real page/provider requests are used in
+tests. Live provider delivery and native browser rendering remain unverified.
+
+Provider references: [Firecrawl scrape API](https://docs.firecrawl.dev/api-reference/endpoint/scrape)
+and [Workers AI compatible API](https://developers.cloudflare.com/workers-ai/configuration/open-ai-compatibility/).

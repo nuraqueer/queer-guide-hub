@@ -312,3 +312,21 @@ Final checkpoint checks: nine existing policy/save authorization tests also pass
 genuine signed-Stripe regression, frontend/proxy builds, SDK declarations,
 targeted lint and migration-version gate passed. App typecheck reports no new
 errors (704 inherited). No production bucket, schema or deployment was changed.
+
+## Checkpoint: AI preview drafts
+
+Implemented locally: authenticated/scoped `preview-generate` endpoint and editor
+button producing reviewable title/description drafts from the saved destination's
+public page content, via configured Firecrawl and the shared AI client. Generation
+does not save policy or artwork. SQL spend reservations enforce global, actor,
+and link hourly limits, including failed calls. Direct destination fetches are
+avoided; external scraping network isolation belongs to the provider. Input,
+content-response, prompt, and generated JSON limits are enforced. Configuration
+and upstream failures preserve manual text. See the presentation guide for setup
+and privacy details.
+
+Local proof: helper and editor tests, actual edge-source authorization/revocation/
+rate-limit tests, and migrated PostgreSQL reservations. Live provider delivery,
+browser rendering, production migrations, and release remain outstanding. Other
+open parity requirements above remain in scope; this checkpoint does not close
+the full project.

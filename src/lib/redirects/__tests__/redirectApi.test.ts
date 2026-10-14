@@ -82,6 +82,10 @@ function runtime() {
           error: state.conversionError,
         },
   );
+  const generate = vi.fn(async () => ({
+    title: 'Generated title',
+    description: 'Generated description',
+  }));
   const upload = vi.fn(async () => ({ error: null })),
     remove = vi.fn(async () => ({ error: null }));
   const storage = {
@@ -125,7 +129,14 @@ function runtime() {
     auth: { getUser },
     rpc: vi.fn(async () => ({ data: state.admin, error: null })),
   };
-  new Function('Deno', 'createClient', 'crypto', code)(
+  new Function(
+    'Deno',
+    'createClient',
+    'crypto',
+    'generateRedirectPreview',
+    'isLlmConfigured',
+    code,
+  )(
     {
       env: {
         get: (name: string) => (name === 'SUPABASE_SERVICE_ROLE_KEY' ? 'service' : 'fixture'),
@@ -136,9 +147,12 @@ function runtime() {
     },
     (_url: string, key: string) => (key === 'service' ? { rpc, from, storage } : identity),
     webcrypto,
+    generate,
+    () => true,
   );
   return {
     state,
+    generate,
     rpc,
     from,
     getUser,
@@ -432,5 +446,68 @@ describe('actual Redirects API handler', () => {
     expect((await run.invoke('/analytics', undefined, token, 'GET')).status).toBe(403);
     run.state.admin = false;
     expect((await run.invoke('/analytics', undefined, 'signed-user', 'GET')).status).toBe(403);
+  });
+});
+
+describe('preview generation API', () => {
+  it('checks scope before reserving spend and rechecks access before returning a draft', async () => {
+    const app = runtime();
+    app.rpc.mockImplementation(
+      async (name) =>
+        ({
+          data:
+            name === 'reserve_redirect_preview'
+              ? { target: 'https://example.com', retryAfter: 0 }
+              : {},
+          error: null,
+        }) as never,
+    );
+    const response = await app.invoke('/links/' + click + '/preview-generate', {});
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({
+      title: 'Generated title',
+      description: 'Generated description',
+    });
+    expect(app.rpc.mock.calls.map((call) => call[0])).toEqual([
+      'redirect_presentation',
+      'reserve_redirect_preview',
+      'redirect_presentation',
+    ]);
+    expect(app.generate).toHaveBeenCalledWith('https://example.com', 'fixture', click);
+  });
+  it('does not contact providers after authorization or rate-limit failures', async () => {
+    const app = runtime();
+    app.rpc.mockResolvedValue({
+      data: null,
+      error: { code: '42501', message: 'Outside scope' },
+    } as never);
+    expect((await app.invoke('/links/' + click + '/preview-generate', {})).status).toBe(403);
+    expect(app.generate).not.toHaveBeenCalled();
+    app.rpc.mockImplementation(
+      async (name) =>
+        ({
+          data: name === 'reserve_redirect_preview' ? { retryAfter: 180 } : {},
+          error: null,
+        }) as never,
+    );
+    const response = await app.invoke('/links/' + click + '/preview-generate', {});
+    expect(response.status).toBe(429);
+    expect(response.headers.get('Retry-After')).toBe('180');
+    expect(app.generate).not.toHaveBeenCalled();
+  });
+  it('rejects target overrides and discards results when credentials are revoked during generation', async () => {
+    const app = runtime();
+    expect(
+      (await app.invoke('/links/' + click + '/preview-generate', { target: 'https://example.com' }))
+        .status,
+    ).toBe(400);
+    app.rpc
+      .mockResolvedValueOnce({ data: {}, error: null } as never)
+      .mockResolvedValueOnce({
+        data: { target: 'https://example.com', retryAfter: 0 },
+        error: null,
+      } as never)
+      .mockResolvedValueOnce({ data: null, error: { code: '42501', message: 'Revoked' } } as never);
+    expect((await app.invoke('/links/' + click + '/preview-generate', {})).status).toBe(403);
   });
 });

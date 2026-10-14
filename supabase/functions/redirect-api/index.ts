@@ -1,3 +1,5 @@
+import { generateRedirectPreview } from '../_shared/redirect-preview-generation.ts';
+import { isLlmConfigured } from '../_shared/llm-client.ts';
 import { previewImageInfo } from "../_shared/redirect-presentation.ts";
 import { policyErrors } from "../_shared/link-policy.ts";
 import { bulkLinkInput, linkInput, linkListInput, workspaceInput, LINK_SCOPES } from "../_shared/redirect-links.ts";
@@ -46,9 +48,20 @@ Deno.serve(async (req: Request) => {
    let tokenId:string|null=null;
    if(tokenCredential){const {data,error}=await db.rpc('authenticate_redirect_api_token',{p_hash:await tokenDigest(credential),p_scope:scope});if(error)return json({error:'Credential verification unavailable'},503);if(!data)return json({error:'Required link scope is missing'},403);tokenId=data.id;}
    else{const {data,error}=await identityClient!.rpc('has_role_jwt',{required_role:'admin'});if(error)return json({error:'Authorization unavailable'},503);if(!data)return json({error:'Forbidden'},403);}
-   const presentationMatch=path.match(/^\/links\/([a-f0-9-]{36})\/(presentation|preview-image)$/i);
+   const presentationMatch=path.match(/^\/links\/([a-f0-9-]{36})\/(presentation|preview-image|preview-generate)$/i);
    if(presentationMatch){
     const [,linkId,endpoint]=presentationMatch;if(!UUID.test(linkId))return json({error:'Invalid link ID'},400);
+    if(endpoint==='preview-generate'&&req.method==='POST'){
+     const access=await db.rpc('redirect_presentation',{p_redirect_id:linkId,p_action:'check',p_token_id:tokenId});if(access.error)return rpcError(access.error);
+     const body=await boundedJson(req);if(!body||typeof body!=='object'||Array.isArray(body)||Object.keys(body).length)return json({error:'Generation accepts an empty object'},400);
+     const apiKey=Deno.env.get('FIRECRAWL_API_KEY');
+     if(!apiKey||(!isLlmConfigured()&&!Deno.env.get('NVIDIA_API_KEY'))||Deno.env.get('AI_DISABLED')==='1')return json({error:'Preview generation is not configured'},503);
+     const reservation=await db.rpc('reserve_redirect_preview',{p_redirect_id:linkId,p_token_id:tokenId,p_actor_id:user?.id??null});if(reservation.error)return rpcError(reservation.error);
+     if(reservation.data.retryAfter)return new Response(JSON.stringify({error:'Preview generation limit reached'}),{status:429,headers:{...cors,'Content-Type':'application/json','Cache-Control':'no-store','Retry-After':String(reservation.data.retryAfter)}});
+     let draft;try{draft=await generateRedirectPreview(reservation.data.target,apiKey,linkId);}catch{return json({error:'Could not generate a preview from this destination. Try again later or enter it manually.'},503);}
+     const checked=await db.rpc('redirect_presentation',{p_redirect_id:linkId,p_action:'check',p_token_id:tokenId});if(checked.error)return rpcError(checked.error);
+     return json(draft);
+    }
     if(endpoint==='preview-image'&&req.method==='POST'){
      const access=await db.rpc('redirect_presentation',{p_redirect_id:linkId,p_action:'check',p_token_id:tokenId});
      if(access.error)return rpcError(access.error);
