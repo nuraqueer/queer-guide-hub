@@ -28,3 +28,10 @@ export function routeJourneyTrack(pathname: string): JourneyTrack {
   }
   return 'pink';
 }
+
+export function routeStationName(pathname: string): string {
+  const path = stripLocale(pathname);
+  const segment = path.split('/').filter(Boolean)[0];
+  if (!segment) return 'queer.guide';
+  return segment.replaceAll('-', ' ');
+}
