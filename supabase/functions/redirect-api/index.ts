@@ -1,3 +1,4 @@
+import {qrAssetStorageConfig,qrLogoInput,storeRedirectQrLogo,qrLogoPublicResponse} from '../_shared/redirect-qr-assets.ts';
 import {qrStylePreferenceInput} from '../_shared/redirect-qr-style.ts';
 import {manualRedirectInput} from '../_shared/redirect-manual-records.ts';
 import {domainProviderConfig,domainProviderInput} from '../_shared/redirect-domain-provider.ts';
@@ -60,23 +61,31 @@ Deno.serve(async (req: Request) => {
    }else return json({error:'Method not supported'},405);
    const result=await db.rpc('redirect_manual_record',{p_actor:user!.id,p_id:id,p_values:values,p_expected_updated_at:expected});if(result.error)return rpcError(result.error);return json(result.data,id?200:201);
   }
-  const qrStyles=path.match(/^\/qr-styles\/(workspace|domains\/([a-f0-9-]{36})|links(?:\/([a-f0-9-]{36}))?)$/i);
+  const qrStyles=path.match(/^\/qr-styles\/(workspace|domains\/([a-f0-9-]{36})|links(?:\/([a-f0-9-]{36}))?)(\/logo)?$/i);
   if(qrStyles){
-   const [,rawKind,domainId,linkId]=qrStyles;const kind=rawKind.toLowerCase();
+   const [,rawKind,domainId,linkId,logoEndpoint]=qrStyles;const kind=rawKind.toLowerCase();
    if(kind.startsWith('links')){
-    if(req.method!=='GET')return json({error:'Method not supported'},405);
+    if(req.method!=='GET'||logoEndpoint)return json({error:'Method not supported'},405);
     let principalId:string|null=null;
     if(tokenCredential){const auth=await db.rpc('authenticate_redirect_api_token',{p_hash:await tokenDigest(credential),p_scope:'links:read'});if(auth.error)return json({error:'Credential verification unavailable'},503);if(!auth.data)return json({error:'Read scope is required'},403);principalId=auth.data.id;}
     else{const principal=await sessionPrincipal('links:read');if(principal.failure)return principal.failure;principalId=principal.id;}
     const q=new URL(req.url).searchParams,ids=linkId?[linkId]:(q.get('ids')??'').split(',');
     if([...q.keys()].some(key=>key!=='ids')||linkId&&q.size||!ids.length||ids.length>100||ids.some(id=>!UUID.test(id))||new Set(ids).size!==ids.length)return json({error:'Choose 1–100 distinct link IDs'},400);
-    const result=await db.rpc('redirect_qr_styles_for_links',{p_ids:ids,p_token_id:principalId});if(result.error)return rpcError(result.error);return json(linkId?result.data[0]:{data:result.data});
+    const result=await db.rpc('redirect_qr_styles_for_links',{p_ids:ids,p_token_id:principalId});if(result.error)return rpcError(result.error);const styled=qrLogoPublicResponse(result.data,Deno.env.get('SUPABASE_URL')??'');return json(linkId?styled[0]:{data:styled});
    }
    if(tokenCredential)return json({error:'Workspace owner account session required'},403);
    const principal=await sessionPrincipal('workspace:write');if(principal.failure)return principal.failure;if(principal.id!==null)return json({error:'Workspace owner access required'},403);
+   if(logoEndpoint){
+    if(req.method!=='POST'||new URL(req.url).search)return json({error:'Method not supported'},405);
+    const config=qrAssetStorageConfig(Deno.env.get('SUPABASE_URL')??'',Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')??'');if(!config)return json({error:'Logo storage is not configured'},503);
+    const input=await qrLogoInput(await boundedJson(req,2100000));
+    const result=await storeRedirectQrLogo(db,config,user!.id,domainId??null,input);if(result.error){if(result.error.code==='QR_STORAGE')return json({error:result.error.message},503);return rpcError({code:result.error.code,message:result.error.message??'Logo upload unavailable'});}
+    if(result.data?.retryAfter)return new Response(JSON.stringify({error:'Logo upload limit reached'}),{status:429,headers:{...cors,'Content-Type':'application/json','Cache-Control':'no-store','Retry-After':String(result.data.retryAfter)}});
+    return json(qrLogoPublicResponse(result.data,Deno.env.get('SUPABASE_URL')??''));
+   }
    if(!['GET','PATCH'].includes(req.method))return json({error:'Method not supported'},405);if(new URL(req.url).search)return json({error:'Invalid QR style request'},400);
    const values=req.method==='PATCH'?qrStylePreferenceInput(await boundedJson(req,4096)):null;
-   const result=await db.rpc('redirect_qr_style_resource',{p_actor:user!.id,p_domain:domainId??null,p_values:values});if(result.error)return rpcError(result.error);return json(result.data);
+   const result=await db.rpc('redirect_qr_style_resource',{p_actor:user!.id,p_domain:domainId??null,p_values:values});if(result.error)return rpcError(result.error);return json(qrLogoPublicResponse(result.data,Deno.env.get('SUPABASE_URL')??''));
   }
   if(path==='/domain-choices'||path==='/linked-domains'){
    if(req.method!=='GET')return json({error:'Method not supported'},405);

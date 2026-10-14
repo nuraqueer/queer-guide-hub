@@ -144,8 +144,9 @@ the actual HTTP API against an isolated ready-domain fixture.
 
 Effective saved QR appearance is available through `getQrStyle(id)` in
 TypeScript/PHP, `get_qr_style(id)` in Python/Ruby and `GetQRStyle(ctx, id)` in Go.
-Responses contain only id, the resolved shape/colors and source
-(default/workspace/domain). Current links:read, folder and ID restrictions apply;
+Responses contain id, the resolved shape/colors and source
+(default/workspace/domain), plus effectiveLogo and logoSource. A present logo
+contains only public raster metadata and its fixed-project hosted URL. Current links:read, folder and ID restrictions apply;
 owner preference endpoints remain unavailable to keys. All five native tests
 exercise these getters. See [saved QR styles](../../docs/guides/redirect-qr-branding.md)
 for precedence, batching, versions and remaining hosted-logo/image work.

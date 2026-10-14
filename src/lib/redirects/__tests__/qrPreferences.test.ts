@@ -6,6 +6,23 @@ const mocks = vi.hoisted(() => ({ api: vi.fn() }));
 vi.mock('../memberApi', () => ({ memberRedirectApi: mocks.api }));
 beforeEach(() => vi.resetAllMocks());
 describe('QR preference contracts', () => {
+  it('accepts independent retained/hide/clear logo choices but never an arbitrary asset or URL', () => {
+    expect(qrStylePreferenceInput({ version: null, logoMode: 'none' })).toEqual({
+      version: null,
+      logoMode: 'none',
+    });
+    expect(qrStylePreferenceInput({ version: null, clearLogo: true })).toEqual({
+      version: null,
+      clearLogo: true,
+    });
+    for (const value of [
+      { version: null, logoMode: 'url' },
+      { version: null, logoMode: null },
+      { version: null, clearLogo: 'true' },
+      { version: null, logoAsset: 'https://example.org/logo.png' },
+    ])
+      expect(() => qrStylePreferenceInput(value)).toThrow();
+  });
   it('accepts field removals/reset and rejects version, unknown, color and shape corruption', () => {
     expect(
       qrStylePreferenceInput({ version: null, style: { dots: 'joined', foreground: null } }),

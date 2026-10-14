@@ -665,3 +665,7 @@ verify_jwt = false
 # Dedicated hostname lifecycle consumer; validates internal secret or admin session.
 [functions.redirect-domain-provisioner]
 verify_jwt = false
+
+# Durable orphan/replaced-logo cleanup validates internal secret or admin session.
+[functions.redirect-qr-assets-cleanup]
+verify_jwt = false

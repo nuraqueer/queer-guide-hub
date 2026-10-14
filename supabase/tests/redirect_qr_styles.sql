@@ -27,7 +27,7 @@ BEGIN
  INSERT INTO public.redirect_workspace_members(user_id,kind,role,label) VALUES(outsider,'user','viewer','QR viewer') RETURNING id INTO member;
  INSERT INTO public.redirect_api_tokens(name,token_hash,prefix,scopes,redirect_ids,member_id,created_by,expires_at) VALUES('QR key',repeat('e',64),'fixture',ARRAY['links:read'],ARRAY[visible],member,actor,now()+interval '1 day') RETURNING id INTO key;
  r:=public.redirect_qr_styles_for_links(ARRAY[visible],key);
- IF r#>>'{0,source}'<>'domain' OR r#>>'{0,style,dots}'<>'joined' OR (r->0)-ARRAY['id','style','source']::text[]<>'{}' THEN RAISE EXCEPTION 'Effective style inheritance or minimal fields incorrect';END IF;
+ IF r#>>'{0,source}'<>'domain' OR r#>>'{0,style,dots}'<>'joined' OR (r->0)-ARRAY['id','style','source','effectiveLogo','logoSource']::text[]<>'{}' THEN RAISE EXCEPTION 'Effective style inheritance or minimal fields incorrect';END IF;
  BEGIN PERFORM public.redirect_qr_styles_for_links(ARRAY[visible,hidden],key);RAISE EXCEPTION 'Scoped read exposed hidden link';EXCEPTION WHEN no_data_found THEN NULL;END;
  d:=public.redirect_qr_style_resource(actor,domain,jsonb_build_object('version',d->>'version','style',NULL));
  IF d->'style'<>'{}'::jsonb OR public.redirect_qr_styles_for_links(ARRAY[visible],key)#>>'{0,source}'<>'workspace' THEN RAISE EXCEPTION 'Reset did not restore inheritance';END IF;

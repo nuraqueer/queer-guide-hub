@@ -30,7 +30,7 @@ exist. Existing local tools are a foundation, not proof of parity or deployment.
 | Expiration | Date and expired destination URL, live enforcement without stale cached rules | Candidate: date/phrase parser, custom fallback and live enforcement tested |
 | Link cloaking | Explicit iframe mode with accurate iframe limitations, standard redirect fallback | Candidate: HTTPS guarded iframe wrapper and persistent direct fallback; runtime release pending |
 | Branded QR | Dots square/circle/joined; marker center square/circle; border square/rounded/circle; colors | Partial: dot/marker/color controls, versioned workspace/domain saved styles and scoped individual/bulk defaults implemented locally; scan verification before export; durable logos/hosted assets and release pending |
-| QR logos/export | Workspace/domain/logo precedence and hide; SVG/PNG/JPG; clipboard image and image URL | Partial: per-export logo, PNG/JPG/SVG, image/data URL copy; workspace/domain precedence pending |
+| QR logos/export | Workspace/domain/logo precedence and hide; SVG/PNG/JPG; clipboard image and image URL | Partial: per-export logo and PNG/JPG/SVG, image/data URL copy, hosted-logo asset API/precedence/cleanup implemented locally; saved-logo editor/renderer integration, hosted QR output URLs and release pending |
 | Click analytics | Real-time totals/time series, custom date/filter/export, countries/cities/devices/browsers/OS/referrers | Candidate: SQL totals/time series, date/dimension filters, export and bounded live refresh; release pending |
 | Conversion tracking | Click attribution, leads/signup/sale/revenue, trusted conversion ingestion and application hooks | Candidate: scoped ingestion, consented signup and verified Stripe hooks implemented locally |
 | Customer insights | Customer journey across click→lead→sale with private event timeline | Partial: private ID-based cross-link paginated journeys; identity enrichment missing |
@@ -1316,3 +1316,53 @@ required follow-up; hosted logos do not complete that output requirement.
 References (retrieved 2026-10-14):
 https://supabase.com/docs/guides/storage/uploads/standard-uploads
 https://supabase.com/docs/guides/storage/management/delete-objects
+
+
+Hosted-logo backend implemented locally: dedicated public raster bucket with
+restrictive direct write/list policies; private immutable asset records; owner
+versioned upload reservations; bounded no-overwrite Storage POST; and current
+owner/version/expiry rechecks before atomic attachment. PNG/JPG MIME/dimensions
+are inspected from bytes (1.5 MB/1024px limits) and SHA-256 is computed server-side.
+Unknown outcomes retain reservations and never trigger a second automatic POST.
+Owner preferences accept independent inherit/none/custom modes and clearLogo;
+hide/inherit retain the scoped upload for reuse, while explicit clear releases
+it. Effective API reads expose only public asset metadata, deterministic fixed-
+project URLs and source. Domain overrides/hide take precedence over workspace.
+
+The private cleanup queue uses leases/reference checks, one-hour replacement/read
+grace, backoff and exact-key Storage API deletions. Referenced retained assets are
+excluded. Deleted-domain assets retain cleanup metadata. Tombstones are rechecked
+one day after deletion and every 30 days afterward; they cannot be reattached.
+The internal/admin cleanup function and configured minute cron are implemented.
+Indexes support recent-upload budgets, pending scopes, references and due cleanup.
+No raw Storage metadata is deleted with SQL.
+
+Evidence: migrated SQL verifies metadata/owner checks, missing custom uploads,
+workspace/domain/hide/inherit precedence, retained references, stale versions,
+revoked owners, consumed/expired reservations, deleted-domain scope, retries,
+lease acknowledgement, tombstones, pending budgets and private grants. Actual
+loopback owner HTTP → migrated SQL → real bounded Storage transport against an
+isolated response adapter verifies PNG/JPG uploads, exact public URL/metadata,
+key denial, rejection before upload, current-owner revocation after bytes, lost
+receipts without retries, quotas/Retry-After, physical orphan/replacement cleanup
+and late-object deletion. Fixture physical objects are cleared at the end. All
+five native SDKs/examples pass with the additive metadata contract. Twenty-five
+focused tests across six files pass, including the actual cleanup handler's
+internal/admin authorization, sanitized failures, fixed origins/keys and body/
+receipt bounds. The post-format cleanup/transport subset also passes. App ratchet
+remains 704 inherited errors with none new, Pages functions checks and targeted
+lint/format pass, build 19.19s. All 2,280 migration versions/grammar checks pass.
+Supabase deployment/Deno runtime, real Storage/policies/CORS/cron and cleanup
+throughput remain unverified release work; no production calls were made.
+
+This is the asset/API stage, not saved-logo UI or full branding completion. Next:
+add logo metadata types and bounded/digest-checked client loading, owner upload/
+retained/hide/clear controls, and explicit per-export custom/hide/saved choices.
+Bulk appearance overrides must preserve each row's saved logo unless the user
+explicitly overrides logos; deduplicate/bound loaded assets and avoid serializing
+repeated large data URIs into cache/fingerprint keys. Hosted QR output image URLs
+remain required afterward. The full remaining domain lifecycle/DNS automation,
+native/deferred deep links, branded password pages, customer enrichment, report
+SDK/team discovery, integrations, outgoing webhooks, permissions/account discovery
+and controlled release/publication proof remain intact. No production Storage
+uploads/deletions, DNS/provider changes, deployments or publication occurred.

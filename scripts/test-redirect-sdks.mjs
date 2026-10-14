@@ -16,6 +16,7 @@ const pieces = [
   '_shared/redirect-domains.ts',
   '_shared/redirect-domain-provider.ts',
   '_shared/redirect-presentation.ts',
+  '_shared/redirect-qr-assets.ts',
   '_shared/link-policy.ts',
   '_shared/redirect-policy-api.ts',
   '_shared/redirect-links.ts',
@@ -95,7 +96,23 @@ const identity={auth:{getUser:async(value)=>({data:{user:value==='fixture-accoun
 let dnsCalls=0,dnsMissing=false;
 const providerConfig={zoneId:'a'.repeat(32),token:'fixture-provider-token',cnameTarget:'links.queer.guide'};
 const providerObjects=new Map();let providerCreates=0,providerDeletes=0,providerRestarts=0;
+const logoObjects=new Map();let logoUploads=0,logoDeletes=0,loseLogoReceipt=false,revokeLogoOwner=false;
 const fixtureDnsFetch=async (input,options)=>{const url=new URL(String(input));
+if(url.origin==='https://fixture.supabase.co'&&url.pathname.startsWith('/storage/v1/object/redirect-brand-assets')){
+ const headers=new Headers(options?.headers);if(headers.get('Authorization')!=='Bearer fixture-service'||headers.get('apikey')!=='fixture-service')throw new Error('Wrong Storage credentials');
+ if(options.method==='POST'){
+  const key=url.pathname.split('/redirect-brand-assets/')[1];if(!/^[a-f0-9-]{36}\.(png|jpg)$/.test(key)||headers.get('x-upsert')!=='false'||logoObjects.has(key))throw new Error('Invalid or repeated logo upload');
+  logoUploads++;logoObjects.set(key,{bytes:new Uint8Array(options.body),mime:headers.get('Content-Type')});
+  if(revokeLogoOwner){revokeLogoOwner=false;await db.query('DELETE FROM public.user_roles WHERE user_id=$1',[reportActor]);}
+  if(loseLogoReceipt){loseLogoReceipt=false;throw new Error('Lost upload receipt');}
+  return Response.json({Id:webcrypto.randomUUID(),Key:'redirect-brand-assets/'+key});
+ }
+ if(options.method==='DELETE'){
+  const {prefixes}=JSON.parse(options.body);if(prefixes.length!==1||!/^[a-f0-9-]{36}\.(png|jpg)$/.test(prefixes[0]))throw new Error('Invalid cleanup key');
+  logoDeletes++;const exists=logoObjects.delete(prefixes[0]);return Response.json(exists?[{name:prefixes[0]}]:[]);
+ }
+ throw new Error('Unexpected Storage operation');
+}
 if(url.origin==='https://api.cloudflare.com'){
  if(new Headers(options?.headers).get('Authorization')!=='Bearer '+providerConfig.token||!url.pathname.startsWith('/client/v4/zones/'+providerConfig.zoneId+'/custom_hostnames'))throw new Error('Invalid fixture provider credentials/zone');
  const method=options?.method??'GET',tail=url.pathname.split('/custom_hostnames')[1];
@@ -107,9 +124,9 @@ if(url.origin==='https://api.cloudflare.com'){
  return Response.json({success:true,result:item});
 }
 if(url.origin!=='https://cloudflare-dns.com'||url.pathname!=='/dns-query')throw new Error('Unexpected external fixture request');dnsCalls++;const hostname=url.searchParams.get('name').replace(/^_qg-redirect\./,'');const row=(await db.query('SELECT verification_token FROM public.redirect_domains WHERE hostname=$1',[hostname])).rows[0];return new Response(JSON.stringify({Status:0,Question:[{name:url.searchParams.get('name'),type:16}],Answer:row&&!dnsMissing?[{name:url.searchParams.get('name'),type:16,data:'\"qg-redirect='+row.verification_token+'\"'}]:[]}),{headers:{'Content-Type':'application/dns-json'}});};
-policyRuntime=new Function('Deno', 'createClient', 'crypto', 'fetch', code+'\nreturn {verifyLinkPassword,dispatchRedirectDomainJobs};')(
+policyRuntime=new Function('Deno', 'createClient', 'crypto', 'fetch', code+'\nreturn {verifyLinkPassword,dispatchRedirectDomainJobs,dispatchRedirectQrAssetCleanup,qrAssetStorageConfig};')(
   {
-    env: { get: (key) => key==='SUPABASE_SERVICE_ROLE_KEY'?'fixture-service':key==='SUPABASE_ANON_KEY'?'fixture-anon':key==='REDIRECT_CF_ZONE_ID'?providerConfig.zoneId:key==='REDIRECT_CF_API_TOKEN'?providerConfig.token:key==='REDIRECT_CNAME_TARGET'?providerConfig.cnameTarget:'fixture' },
+    env: { get: (key) => key==='SUPABASE_URL'?'https://fixture.supabase.co':key==='SUPABASE_SERVICE_ROLE_KEY'?'fixture-service':key==='SUPABASE_ANON_KEY'?'fixture-anon':key==='REDIRECT_CF_ZONE_ID'?providerConfig.zoneId:key==='REDIRECT_CF_API_TOKEN'?providerConfig.token:key==='REDIRECT_CNAME_TARGET'?providerConfig.cnameTarget:'fixture' },
     serve: (fn) => {
       handler = fn;
     },
@@ -314,13 +331,74 @@ try {
   if(qrDomain.effectiveStyle.dots!=='joined')throw new Error('Domain QR did not inherit workspace');
   qrDomain=await reportRequest('/qr-styles/domains/'+domain.id,'PATCH',{version:qrDomain.version,style:{border:'rounded'}});
   const qrEffective=await reportRequest('/qr-styles/links/'+branded.id,'GET',undefined,token);
-  if(qrEffective.source!=='domain'||qrEffective.style.dots!=='joined'||qrEffective.style.border!=='rounded'||Object.keys(qrEffective).sort().join(',')!=='id,source,style')throw new Error('Scoped QR style precedence or public fields incorrect');
+  if(qrEffective.source!=='domain'||qrEffective.style.dots!=='joined'||qrEffective.style.border!=='rounded'||Object.keys(qrEffective).sort().join(',')!=='effectiveLogo,id,logoSource,source,style')throw new Error('Scoped QR style precedence or public fields incorrect');
   const qrBatch=await reportRequest('/qr-styles/links?ids='+branded.id,'GET',undefined,token);
   if(qrBatch.data[0].id!==branded.id)throw new Error('Batched QR style lookup failed');
   await reportRequest('/qr-styles/links?ids='+branded.id+','+branded.id,'GET',undefined,token,400);
   await reportRequest('/qr-styles/domains/'+domain.id,'PATCH',{version:qrDomain.version,style:null},token,403);
   await reportRequest('/qr-styles/domains/'+domain.id,'PATCH',{version:qrDomain.version,style:null});
   await reportRequest('/qr-styles/workspace','PATCH',{version:qrWorkspace.version,style:null});
+
+  const logoPng=await sharp({create:{width:64,height:64,channels:3,background:'#221144'}}).png().toBuffer();
+  const logoJpg=await sharp({create:{width:64,height:64,channels:3,background:'#442211'}}).jpeg().toBuffer();
+  let ownerQr=await reportRequest('/qr-styles/workspace');
+  await reportRequest('/qr-styles/workspace/logo','POST',{version:ownerQr.version,image:logoPng.toString('base64')},token,403);
+  const beforeLogoUpload=logoUploads;
+  await reportRequest('/qr-styles/workspace/logo','POST',{version:ownerQr.version,image:Buffer.from('<svg/>').toString('base64')},undefined,400);
+  if(logoUploads!==beforeLogoUpload)throw new Error('Invalid raster reached Storage');
+  ownerQr=await reportRequest('/qr-styles/workspace/logo','POST',{version:ownerQr.version,image:logoPng.toString('base64')});
+  const workspaceLogo=ownerQr.logoAsset;
+  if(workspaceLogo.url!=='https://fixture.supabase.co/storage/v1/object/public/redirect-brand-assets/'+workspaceLogo.key)throw new Error('Hosted logo URL escaped the fixed project bucket');
+  if(ownerQr.logoMode!=='custom'||ownerQr.logoSource!=='workspace'||workspaceLogo.width!==64||!logoObjects.has(workspaceLogo.key)||Object.keys(workspaceLogo).sort().join(',')!=='bytes,height,id,key,mime,sha256,url,width')throw new Error('Logo upload did not attach minimal checked asset metadata');
+  let logoDomain=await reportRequest('/qr-styles/domains/'+domain.id);
+  if(logoDomain.effectiveLogo.id!==workspaceLogo.id)throw new Error('Logo did not inherit workspace');
+  logoDomain=await reportRequest('/qr-styles/domains/'+domain.id,'PATCH',{version:logoDomain.version,logoMode:'none'});
+  const hiddenLogo=await reportRequest('/qr-styles/links/'+branded.id,'GET',undefined,token);
+  if(hiddenLogo.logoSource!=='hidden'||hiddenLogo.effectiveLogo!==null)throw new Error('Hidden logo leaked an effective asset');
+  logoDomain=await reportRequest('/qr-styles/domains/'+domain.id+'/logo','POST',{version:logoDomain.version,image:logoJpg.toString('base64')});
+  const domainLogo=logoDomain.logoAsset;
+  const effectiveLogo=await reportRequest('/qr-styles/links/'+branded.id,'GET',undefined,token);
+  if(effectiveLogo.logoSource!=='domain'||effectiveLogo.effectiveLogo.id!==domainLogo.id||domainLogo.mime!=='image/jpeg')throw new Error('Domain JPEG logo did not take precedence');
+  logoDomain=await reportRequest('/qr-styles/domains/'+domain.id,'PATCH',{version:logoDomain.version,logoMode:'inherit'});
+  if(logoDomain.logoAsset.id!==domainLogo.id||logoDomain.effectiveLogo.id!==workspaceLogo.id)throw new Error('Inherit discarded retained upload');
+  logoDomain=await reportRequest('/qr-styles/domains/'+domain.id,'PATCH',{version:logoDomain.version,logoMode:'custom'});
+  logoDomain=await reportRequest('/qr-styles/domains/'+domain.id,'PATCH',{version:logoDomain.version,clearLogo:true});
+  await db.query("UPDATE public.redirect_qr_assets SET next_cleanup_at=now()-interval '1 second' WHERE id=$1",[domainLogo.id]);
+  const storageConfig=policyRuntime.qrAssetStorageConfig('https://fixture.supabase.co','fixture-service');
+  await policyRuntime.dispatchRedirectQrAssetCleanup(service,storageConfig,fixtureDnsFetch);
+  if(logoObjects.has(domainLogo.key)||!logoObjects.has(workspaceLogo.key))throw new Error('Cleanup missed retired logo or deleted referenced workspace asset');
+  // A late physical upload to an already-deleted key is still tracked by its tombstone.
+  logoObjects.set(domainLogo.key,{bytes:logoJpg,mime:'image/jpeg'});
+  await db.query("UPDATE public.redirect_qr_assets SET next_cleanup_at=now()-interval '1 second' WHERE id=$1",[domainLogo.id]);
+  await policyRuntime.dispatchRedirectQrAssetCleanup(service,storageConfig,fixtureDnsFetch);
+  if(logoObjects.has(domainLogo.key))throw new Error('Tombstone did not clean late upload');
+  const beforeAmbiguous=logoUploads;
+  loseLogoReceipt=true;
+  await reportRequest('/qr-styles/workspace/logo','POST',{version:ownerQr.version,image:logoPng.toString('base64')},undefined,503);
+  if(logoUploads!==beforeAmbiguous+1)throw new Error('Uncertain logo upload was retried');
+  revokeLogoOwner=true;
+  await reportRequest('/qr-styles/workspace/logo','POST',{version:ownerQr.version,image:logoPng.toString('base64')},undefined,403);
+  await db.query("INSERT INTO public.user_roles(user_id,role) VALUES($1,'admin')",[reportActor]);
+  const unchangedLogo=await reportRequest('/qr-styles/workspace');
+  if(unchangedLogo.logoAsset.id!==workspaceLogo.id||unchangedLogo.version!==ownerQr.version)throw new Error('Failed/unauthorized upload changed preference');
+  await db.query("UPDATE public.redirect_qr_assets SET expires_at=now()-interval '1 second',next_cleanup_at=now()-interval '1 second' WHERE state='pending'");
+  await policyRuntime.dispatchRedirectQrAssetCleanup(service,storageConfig,fixtureDnsFetch);
+  if(logoObjects.size!==1||!logoObjects.has(workspaceLogo.key))throw new Error('Orphan cleanup did not leave exactly the referenced asset');
+  const staleUploadCount=logoUploads;
+  await reportRequest('/qr-styles/workspace/logo','POST',{version:null,image:logoPng.toString('base64')},undefined,409);
+  if(logoUploads!==staleUploadCount)throw new Error('Stale version uploaded bytes');
+  ownerQr=await reportRequest('/qr-styles/workspace','PATCH',{version:ownerQr.version,clearLogo:true});
+  const beforePendingLimit=logoUploads;
+  for(let attempt=0;attempt<3;attempt++){loseLogoReceipt=true;await reportRequest('/qr-styles/workspace/logo','POST',{version:ownerQr.version,image:logoPng.toString('base64')},undefined,503);}
+  const logoLimited=await fetch(base+'/qr-styles/workspace/logo',{method:'POST',headers:{Authorization:'Bearer fixture-account-session','Content-Type':'application/json'},body:JSON.stringify({version:ownerQr.version,image:logoPng.toString('base64')})});
+  if(logoLimited.status!==429||logoLimited.headers.get('Retry-After')!=='900'||logoUploads!==beforePendingLimit+3)throw new Error('Logo upload budget reached Storage or lost retry header');
+  await logoLimited.json();
+  await db.query("UPDATE public.redirect_qr_assets SET expires_at=now()-interval '1 second',next_cleanup_at=now()-interval '1 second' WHERE state='pending'");
+  await policyRuntime.dispatchRedirectQrAssetCleanup(service,storageConfig,fixtureDnsFetch);
+  await db.query("UPDATE public.redirect_qr_assets SET next_cleanup_at=now()-interval '1 second' WHERE id=$1",[workspaceLogo.id]);
+  await policyRuntime.dispatchRedirectQrAssetCleanup(service,storageConfig,fixtureDnsFetch);
+  if(logoObjects.size)throw new Error('Cleared logo fixtures left physical objects');
+  console.log('Hosted QR logos: actual owner HTTP → reservation/migrated SQL → bounded Storage transport proves PNG/JPG validation, version/current-owner recheck, domain/workspace/hide precedence, retained/reset logos, no blind upload retry, orphan cleanup and late-upload tombstones.');
   console.log('Saved QR appearance: actual owner HTTP/migrated SQL verifies version conflicts, workspace/domain inheritance, minimal scoped single/batch reads, key write denial and reset.');
   const domainPage=await reportRequest('/links?filters='+encodeURIComponent(JSON.stringify({domainId:domain.id})));
   if(domainPage.count!==1||domainPage.data[0].id!==branded.id)throw new Error('HTTP domain filter mixed namespaces');

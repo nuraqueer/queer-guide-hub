@@ -1,23 +1,23 @@
 # Saved QR styles and branding
 
-Saved shape/color preferences are implemented locally. Durable logo uploads,
-workspace/domain logo precedence, hosted QR image URLs and production rollout
-remain required; this page does not claim full branding completion.
+Saved appearance and the hosted-logo lifecycle/API are implemented locally.
+Saved-logo editor/renderer integration, hosted QR image URLs and production
+rollout remain required; this page does not claim full branding completion.
 
 ## Owner preferences
 
 Owner account sessions can GET/PATCH `/qr-styles/workspace` or
 `/qr-styles/domains/:domainId`. The domain must exist, but does not need routing
 readiness to edit its appearance. Reads return `version` (null before the first
-save), explicit `style` overrides, `effectiveStyle` and domainId. Writes require
-`{version, style}` and reject stale versions with 409. Keys and member sessions
+save), explicit `style` overrides, `effectiveStyle` and domainId. Appearance writes use
+`{version, style}`; logo-only writes are described below. Stale versions return 409. Keys and member sessions
 cannot read or write these private preference endpoints.
 
 Appearance fields are dots (square/circle/joined), border
 (square/rounded/circle), center (square/circle), foreground and background
-(six-digit hex colors). Only these fields are accepted. A partial object merges
+(six-digit hex colors). Only these appearance fields are accepted. A partial object merges
 with saved overrides; null field values remove an override. `style: null` clears
-all overrides. Resetting preserves the preference record with a new version so
+all appearance overrides. Resetting preserves the preference record with a new version so
 stale writers cannot recreate a removed preference unnoticed.
 
 Effective appearance merges built-in defaults → workspace → domain overrides.
@@ -66,9 +66,9 @@ Each generated code retains its canonical URL and QR attribution. Individual
 field IDs are unique when several settings editors share a page.
 
 The preference JSON deliberately contains no raster data or arbitrary image URLs.
-Existing per-export PNG/JPG logos remain local to that export. Controlled hosted
-logo assets, inherited custom/hide behavior, cleanup and hosted QR image URLs are
-the next branding work, followed by controlled Storage/browser/release validation.
+Existing per-export PNG/JPG logos remain local to that export. The hosted-logo lifecycle/API described below is implemented locally. Connecting
+its inherited/custom/hide behavior to the UI/renderers and adding hosted QR image
+URLs are next, followed by controlled Storage/browser/release validation.
 
 ## Local verification
 
@@ -82,3 +82,58 @@ browser evidence uses a labeled fixture for preference responses while running
 the real editor and QR generator/scan verifier; production requests are blocked.
 
 Product reference: [Dub domain QR logos](https://dub.co/changelog/custom-qr-code-logo).
+
+## Hosted logo asset API (local backend)
+
+The logo lifecycle/API is implemented locally. Connecting the saved-logo editor
+and the individual/bulk renderers to these references remains pending. Existing
+exports currently consume saved appearance plus per-export local logos; this API
+checkpoint does not claim that saved logos already appear in the UI.
+
+Owners POST `{version, image}` to `/qr-styles/workspace/logo` or
+`/qr-styles/domains/:domainId/logo`. Image is bare base64 PNG/JPG bytes, at most
+1,500,000 bytes decoded and 1024px per dimension. MIME and dimensions come from
+byte inspection; SHA-256 is computed on the server. Caller MIME, asset IDs and URLs
+are not accepted. Logos are public image assets, stored under immutable UUID keys
+in `redirect-brand-assets`; direct writes/listing by anon/authenticated roles are
+restricted. Each upload uses no overwrite, no redirects and a 15-second request.
+
+The owner/preference version is checked before upload and again before attaching
+its receipt. Only a matching active reservation can be consumed once, by its
+original current owner, before its 15-minute expiry. Stale versions return 409;
+owner/key restrictions remain in force after bytes are uploaded. Ambiguous
+Storage outcomes return 503 without repeating the POST. Pending records remain
+available to cleanup. Limits are 60 reservations per owner/hour, 600 globally/hour
+and three live pending uploads per scope; a limit returns 429/Retry-After 900.
+
+Preference PATCH accepts `logoMode: inherit | none | custom` independently of
+appearance. Custom requires a previously uploaded active asset for that scope.
+Inherit/none retain that uploaded asset for later reuse. `clearLogo: true` drops
+its reference and defaults the mode to inherit; combine with explicit none to
+clear and hide. Shape/color resets preserve logo choices. Uploading a replacement
+attaches it atomically with a new shared preference version.
+
+Owner responses include logoMode and their retained logoAsset. Effective reads
+add `effectiveLogo` and `logoSource` (default/workspace/domain/hidden). A domain
+custom logo takes precedence over the workspace, none hides it, and inherit uses
+the workspace choice. Public metadata contains only id, fixed-bucket key/URL,
+MIME, byte length, dimensions and SHA-256. Pending assets, uploader identity,
+reservations, leases and cleanup errors remain private. The public URL is derived
+from the configured project; no caller-supplied host/path is used.
+
+`redirect-qr-assets-cleanup` accepts an internal secret or a verified admin POST.
+It claims three unreferenced expired/retired keys with two-minute leases, deletes
+through the Storage API and acknowledges the exact lease. Replaced/cleared assets
+have a one-hour read grace period. Failed deletes retry with bounded backoff.
+Referenced assets are excluded even when their logo is hidden/inherited. Domain
+deletion retains asset metadata. Tombstones stay tracked, are rechecked after one
+day and then every 30 days, and cannot be reattached; this catches late physical
+uploads after an ambiguous request. Raw Storage metadata is never deleted with
+SQL. Cron invokes the worker once per minute only when the configured project URL
+and internal invocation secret both exist in Vault. Real cron/Storage/CORS and
+cleanup throughput remain part of controlled release validation.
+
+Local migrated SQL, actual owner HTTP with the real bounded Storage transport,
+and isolated Storage responses verify attachment, precedence, lost receipts,
+permission changes, conflicts, quotas, retries and tombstones. Production Storage
+uploads and deletions have not been exercised by this work.
