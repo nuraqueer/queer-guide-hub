@@ -49,6 +49,7 @@ export async function qrImageResponse(
       headers: {
         ...headers,
         'Content-Type': image.mime,
+        'X-QG-QR-Verified': '1',
         'Content-Length': String(image.bytes.byteLength),
       },
     });

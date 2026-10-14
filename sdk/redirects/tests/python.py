@@ -19,7 +19,8 @@ created=api.create_link({'target':'https://example.com/?q=a%26b#detail','slug':'
 id=created['link']['id']
 assert api.get_qr_style(id)['style']['foreground']=='#111111'
 assert created['link']['clickLimit']==25 and created['link']['notes']=='SDK notes' and created['link']['startsAt']
-qr_image=api.create_qr_image({'linkId':id,'logoMode':'none'})
+qr_image=api.create_qr_image({'linkId':id,'logo':os.environ['REDIRECT_TEST_QR_LOGO']})
+assert qr_image['state']=='published' and qr_image['logoMode']=='custom' and qr_image['logoAsset']['url']
 assert qr_image['imageUrls']['png'].startswith('https://queer.guide/api/qr?share=qg_qr_')
 assert any(row['id']==qr_image['id'] for row in api.list_qr_images()['data'])
 assert api.revoke_qr_image(qr_image['id'],qr_image['version'])['revokedAt']

@@ -59,6 +59,7 @@ async function scanned(response, expected) {
       .then((text) => text.slice(0, 100)),
   );
   assert.equal(response.headers.get('cache-control'), 'no-store');
+  assert.equal(response.headers.get('x-qg-qr-verified'), '1');
   const { data, info } = await sharp(new Uint8Array(await response.arrayBuffer()))
     .ensureAlpha()
     .raw()

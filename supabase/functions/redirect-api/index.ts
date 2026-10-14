@@ -1,4 +1,4 @@
-import {createQrImageToken,qrImageLinkInput,qrImageRevokeInput,qrImageUrls,publicQrImageRequest} from '../_shared/redirect-qr-images.ts';
+import {createQrImageToken,qrImageLinkInput,qrImageRevokeInput,qrImageUrls,publicQrImageRequest,storeQrImageArtwork} from '../_shared/redirect-qr-images.ts';
 import {qrAssetStorageConfig,qrLogoInput,storeRedirectQrLogo,qrLogoPublicResponse} from '../_shared/redirect-qr-assets.ts';
 import {qrStylePreferenceInput} from '../_shared/redirect-qr-style.ts';
 import {manualRedirectInput} from '../_shared/redirect-manual-records.ts';
@@ -82,6 +82,8 @@ Deno.serve(async (req: Request) => {
     }
     const id = qrImages[1] ?? null,
       q = new URL(req.url).searchParams;
+    let artwork: Awaited<ReturnType<typeof qrLogoInput>> | null = null;
+    let artworkConfig: ReturnType<typeof qrAssetStorageConfig> = null;
     let action: string,
       values: unknown = null,
       token: string | null = null,
@@ -89,7 +91,18 @@ Deno.serve(async (req: Request) => {
       after: string | null = null;
     if (req.method === 'POST' && !id && !q.size) {
       action = 'create';
-      values = qrImageLinkInput(await boundedJson(req, 4096));
+      const input = qrImageLinkInput(await boundedJson(req, 2100000));
+      if (typeof input.logo === 'string') {
+        artwork = await qrLogoInput({ version: null, image: input.logo });
+        artworkConfig = qrAssetStorageConfig(
+          Deno.env.get('SUPABASE_URL') ?? '',
+          Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
+        );
+        if (!artworkConfig)
+          return json({ error: 'Artwork storage is not configured' }, 503);
+        delete input.logo;
+      }
+      values = input;
       token = createQrImageToken();
     } else if (req.method === 'GET' && !id) {
       action = 'list';
@@ -110,7 +123,7 @@ Deno.serve(async (req: Request) => {
       action = 'revoke';
       values = qrImageRevokeInput(await boundedJson(req, 1024));
     } else return json({ error: 'Method not supported' }, 405);
-    const result = await db.rpc('redirect_qr_image_resource', {
+    let result = await db.rpc('redirect_qr_image_resource', {
       p_action: action,
       p_actor: user?.id ?? null,
       p_principal: principalId,
@@ -134,8 +147,45 @@ Deno.serve(async (req: Request) => {
           },
         },
       );
+    if (artwork && token) {
+      result = await storeQrImageArtwork(
+        db,
+        artworkConfig!,
+        user?.id ?? null,
+        principalId,
+        result.data,
+        artwork,
+      );
+      if (result.error)
+        return result.error.code?.startsWith('QR_')
+          ? json({ error: result.error.message }, 503)
+          : rpcError(result.error);
+      if (result.data?.retryAfter)
+        return new Response(
+          JSON.stringify({ error: 'QR image link limit reached' }),
+          {
+            status: 429,
+            headers: {
+              ...cors,
+              'Content-Type': 'application/json',
+              'Cache-Control': 'no-store',
+              'Retry-After': String(result.data.retryAfter),
+            },
+          },
+        );
+    }
+    const prepared =
+      action === 'list'
+        ? {
+            ...result.data,
+            data: qrLogoPublicResponse(
+              result.data.data,
+              Deno.env.get('SUPABASE_URL') ?? '',
+            ),
+          }
+        : qrLogoPublicResponse(result.data, Deno.env.get('SUPABASE_URL') ?? '');
     return json(
-      token ? { ...result.data, imageUrls: qrImageUrls(token) } : result.data,
+      token ? { ...prepared, imageUrls: qrImageUrls(token) } : prepared,
       token ? 201 : 200,
     );
   }

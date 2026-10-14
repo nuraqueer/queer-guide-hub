@@ -185,5 +185,17 @@ the actual API/migrated database. Separate full-path HTTP/Wasm tests verify live
 branding changes and independently decode generated PNG/JPG images.
 
 These endpoints and wrappers are local implementation, not a released package or
-production endpoint. Durable per-export custom-artwork attachment, UI authoring
-and controlled deployment remain required.
+production endpoint. Per-export custom-artwork publication is implemented locally; UI authoring and
+controlled deployment remain required.
+
+Custom artwork uses the same create method with `logo` containing bare-base64
+PNG/JPG bytes (up to 1.5 MB and 1024px per dimension). Mode is implicitly custom;
+explicit custom mode is also accepted, while inherit/none cannot accompany bytes.
+The server creates a private 15-minute draft, reserves an immutable asset, fully
+renders and scan-verifies through the fixed QR service, uploads once and rechecks
+current permissions/version before publication. Only published responses contain
+imageUrls; `state` and `logoAsset` describe the publication/artwork. Workspace and
+domain preferences are unchanged. A failed/unknown upload leaves a private draft
+for cleanup; do not blindly retry writes. List/revoke can manage failed drafts.
+Uploaded raster artwork is public, with a read grace before physical cleanup after
+revocation/deletion. Downloaded/previously fetched images cannot be erased.

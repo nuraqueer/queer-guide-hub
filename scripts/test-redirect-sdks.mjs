@@ -28,7 +28,7 @@ const pieces = [
   'redirect-api/index.ts',
 ].map((file) =>
   readFileSync('supabase/functions/' + file, 'utf8')
-    .replace(/^import .*;\s*$/gm, '')
+    .replace(/^import[\s\S]*?;\s*$/gm, '')
     .replace(/^export\s+/gm, ''),
 );
 const code = ts.transpileModule(pieces.join('\n'), {
@@ -98,7 +98,19 @@ let dnsCalls=0,dnsMissing=false;
 const providerConfig={zoneId:'a'.repeat(32),token:'fixture-provider-token',cnameTarget:'links.queer.guide'};
 const providerObjects=new Map();let providerCreates=0,providerDeletes=0,providerRestarts=0;
 const logoObjects=new Map();let logoUploads=0,logoDeletes=0,loseLogoReceipt=false,revokeLogoOwner=false;
+let artworkVerifierPromise,artworkVerifierRuntime;let failArtworkVerification=false;
+async function verifyArtworkFixture(request) {
+ if(failArtworkVerification)return new Response(null,{status:503});
+ artworkVerifierPromise??=(async()=>{
+  const {register}=await import('tsx/esm/api');artworkVerifierRuntime=register({namespace:'qr-artwork-verifier-fixture'});
+  const [{qrImageResponse},{initWasm}]=await Promise.all([artworkVerifierRuntime.import('../workers/redirect-qr/handler.ts',import.meta.url),artworkVerifierRuntime.import('@resvg/resvg-wasm',import.meta.url)]);
+  await initWasm(readFileSync('node_modules/@resvg/resvg-wasm/index_bg.wasm'));return qrImageResponse;
+ })();
+ const render=await artworkVerifierPromise;
+ return render(request,'https://fixture.supabase.co',async()=>true,async()=>{},async()=>{throw new Error('Artwork verifier attempted an external fetch');});
+}
 const fixtureDnsFetch=async (input,options)=>{const url=new URL(String(input));
+if(url.origin==='https://queer.guide'&&url.pathname==='/api/qr'){if(options.method!=='POST'||new Headers(options.headers).has('Authorization'))throw new Error('Invalid artwork verification request');return verifyArtworkFixture(new Request(url,options));}
 if(url.origin==='https://fixture.supabase.co'&&url.pathname.startsWith('/storage/v1/object/redirect-brand-assets')){
  const headers=new Headers(options?.headers);if(headers.get('Authorization')!=='Bearer fixture-service'||headers.get('apikey')!=='fixture-service')throw new Error('Wrong Storage credentials');
  if(options.method==='POST'){
@@ -203,6 +215,7 @@ const env = {
   REDIRECT_TEST_TOKEN: token,
   REDIRECT_TEST_CLICK: click.rows[0].id,
   REDIRECT_TEST_IMAGE: artwork.toString('base64'),
+  REDIRECT_TEST_QR_LOGO:(await sharp({create:{width:64,height:64,channels:3,background:'#652895'}}).png().toBuffer()).toString('base64'),
 };
 async function run(command, args, extra = {}) {
   await new Promise((resolve, reject) => {
@@ -228,6 +241,10 @@ try {
   await run('ruby', ['sdk/redirects/tests/ruby.rb']);
   await run('php', ['sdk/redirects/tests/php.php']);
   await run(process.env.REDIRECT_GO_BIN ?? 'go', ['test', './...'], { cwd: 'sdk/redirects/go' });
+  const sdkArtworkStorage=policyRuntime.qrAssetStorageConfig('https://fixture.supabase.co','fixture-service');
+  await db.query("UPDATE public.redirect_qr_assets a SET next_cleanup_at=now()-interval '1 second' WHERE state='active' AND NOT EXISTS(SELECT FROM public.redirect_qr_styles WHERE logo_asset_id=a.id) AND NOT EXISTS(SELECT FROM public.redirect_qr_image_links WHERE logo_asset_id=a.id)");
+  for(let sdkCleanup=0;sdkCleanup<4&&logoObjects.size;sdkCleanup++)await policyRuntime.dispatchRedirectQrAssetCleanup(service,sdkArtworkStorage,fixtureDnsFetch);
+  if(logoObjects.size)throw new Error('Released SDK artwork was not physically cleaned');
   await db.query('DELETE FROM public.redirect_domain_jobs WHERE domain_id=$1',[sdkRootDomain]);
   await db.query('DELETE FROM public.redirect_domains WHERE id=$1',[sdkRootDomain]);
   if (traps !== 0 || limited !== 5)
@@ -403,6 +420,35 @@ try {
       if(decodeImageQr(new Uint8ClampedArray(data),info.width,info.height)?.data!==branded.shortUrl+'?qg_qr=1')throw new Error('Live hosted image encoded the wrong redirect');
     }
     logoDomain=await reportRequest('/qr-styles/domains/'+domain.id,'PATCH',{version:logoDomain.version,logoMode:'custom'});
+    const preferencesBeforeCustom=await reportRequest('/qr-styles/workspace');
+    const customImage=await reportRequest('/qr-images','POST',{linkId:branded.id,logo:logoPng.toString('base64')},undefined,201);
+    if(customImage.state!=='published'||customImage.logoMode!=='custom'||!customImage.logoAsset?.url)throw new Error('Custom image did not publish checked artwork');
+    const customProfile=await reportRequest('/public-qr-image','GET',undefined,capability(customImage));
+    if(customProfile.logoSource!=='custom'||customProfile.effectiveLogo.id!==customImage.logoAsset.id||JSON.stringify(await reportRequest('/qr-styles/workspace'))!==JSON.stringify(preferencesBeforeCustom))throw new Error('Image artwork changed workspace defaults or lost custom precedence');
+    const customSvg=await renderedImage(customImage.imageUrls.svg,'svg');if(customSvg.status!==200||!(await customSvg.text()).includes('data:image/png;base64,'+logoPng.toString('base64')))throw new Error('Hosted custom image lost its artwork');
+    await db.query("UPDATE public.redirect_qr_assets SET next_cleanup_at=now()-interval '1 second' WHERE id=$1",[customImage.logoAsset.id]);
+    await policyRuntime.dispatchRedirectQrAssetCleanup(service,policyRuntime.qrAssetStorageConfig('https://fixture.supabase.co','fixture-service'),fixtureDnsFetch);
+    if(!logoObjects.has(customImage.logoAsset.key))throw new Error('Cleanup deleted referenced image artwork');
+    await reportRequest('/qr-images/'+customImage.id,'DELETE',{version:customImage.version});
+    await db.query("UPDATE public.redirect_qr_assets SET next_cleanup_at=now()-interval '1 second' WHERE id=$1",[customImage.logoAsset.id]);
+    await policyRuntime.dispatchRedirectQrAssetCleanup(service,policyRuntime.qrAssetStorageConfig('https://fixture.supabase.co','fixture-service'),fixtureDnsFetch);
+    if(logoObjects.has(customImage.logoAsset.key))throw new Error('Revoked image artwork was not physically cleaned');
+    const customUploadsBefore=logoUploads;
+    const invalidLogo=logoPng.subarray(0,34).toString('base64');
+    await reportRequest('/qr-images','POST',{linkId:branded.id,logo:invalidLogo},undefined,400);
+    failArtworkVerification=true;
+    await reportRequest('/qr-images','POST',{linkId:branded.id,logo:logoPng.toString('base64')},undefined,503);
+    failArtworkVerification=false;
+    if(logoUploads!==customUploadsBefore)throw new Error('Unverified artwork reached Storage');
+    loseLogoReceipt=true;
+    await reportRequest('/qr-images','POST',{linkId:branded.id,logo:logoPng.toString('base64')},undefined,503);
+    if(logoUploads!==customUploadsBefore+1)throw new Error('Unknown image upload was retried');
+    revokeLogoOwner=true;
+    await reportRequest('/qr-images','POST',{linkId:branded.id,logo:logoPng.toString('base64')},undefined,403);
+    await db.query("INSERT INTO public.user_roles(user_id,role) VALUES($1,'admin')",[reportActor]);
+    const pendingArt=(await db.query("SELECT token_hash FROM public.redirect_qr_image_links WHERE publication_state='pending'")).rows;
+    for(const pending of pendingArt)if((await db.query('SELECT public.redirect_public_qr_image($1) AS profile',[pending.token_hash])).rows[0].profile!==null)throw new Error('Failed artwork draft became public');
+    if(JSON.stringify(await reportRequest('/qr-styles/workspace'))!==JSON.stringify(preferencesBeforeCustom))throw new Error('Failed custom artwork altered defaults');
     const keyImage=await reportRequest('/qr-images','POST',{linkId:branded.id,logoMode:'none',style:{dots:'circle'}},token,201);
     const keyList=await reportRequest('/qr-images?limit=100','GET',undefined,token);
     if(keyList.data.some(row=>row.id===liveImage.id)||!keyList.data.some(row=>row.id===keyImage.id)||JSON.stringify(keyList).includes(capability(keyImage)))throw new Error('Image list escaped creator scope or exposed capability');
@@ -454,6 +500,7 @@ try {
   if(unchangedLogo.logoAsset.id!==workspaceLogo.id||unchangedLogo.version!==ownerQr.version)throw new Error('Failed/unauthorized upload changed preference');
   await db.query("UPDATE public.redirect_qr_assets SET expires_at=now()-interval '1 second',next_cleanup_at=now()-interval '1 second' WHERE state='pending'");
   await policyRuntime.dispatchRedirectQrAssetCleanup(service,storageConfig,fixtureDnsFetch);
+  for(let expiredPass=0;expiredPass<10&&logoObjects.size>1;expiredPass++)await policyRuntime.dispatchRedirectQrAssetCleanup(service,storageConfig,fixtureDnsFetch);
   if(logoObjects.size!==1||!logoObjects.has(workspaceLogo.key))throw new Error('Orphan cleanup did not leave exactly the referenced asset');
   const staleUploadCount=logoUploads;
   await reportRequest('/qr-styles/workspace/logo','POST',{version:null,image:logoPng.toString('base64')},undefined,409);
@@ -557,5 +604,6 @@ try {
   );
 } finally {
   await new Promise((resolve) => server.close(resolve));
+  await artworkVerifierRuntime?.unregister();
   await db.close();
 }

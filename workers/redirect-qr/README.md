@@ -35,8 +35,8 @@ standard appearance, no logo. OPTIONS returns CORS headers. Parameters:
 POST `/api/qr` accepts the same string parameters as JSON (no query string).
 `logo` can instead be a PNG/JPG base64 data URI for local artwork, without
 `logoHash`. This returns generated image bytes; it does **not** mint a durable
-GET URL for the uploaded artwork. Such authoring still requires a controlled
-asset/recipe save which does not replace workspace defaults.
+GET URL for the uploaded artwork. Durable custom image publication is provided by authenticated POST /qr-images
+with logo bytes, which performs that controlled asset save without replacing defaults.
 
 PNG/JPG logos are capped at 1,500,000 bytes and 1024px per dimension. Actual PNG
 CRC/decoding and bounded JPEG decoding run before embedding. Saved logo responses
@@ -82,8 +82,8 @@ Native tests specifically catch pngjs's private synchronous zlib API incompatibi
 logo decoding uses its supported streaming API instead.
 
 Revocable live profiles and five-SDK create/list/revoke methods are implemented
-locally. UI hosted-image authoring/copy, durable local-artwork attachments, real
-Pages binding/cold starts/resource limits and controlled production deployment
+locally. UI hosted-image authoring/copy, real Pages binding/cold starts/resource limits
+and controlled production deployment
 remain follow-ups. The service alone is not full QR parity.
 Dependencies are pinned in the root lockfile. resvg-wasm is MPL-2.0, jpeg-js is
 BSD-3-Clause, pngjs/node-qrcode/jsQR are MIT; retain their distributed license notices.
@@ -92,3 +92,10 @@ Creation quotas use a private immutable two-day ledger that survives redirect or
 creator deletion. The existing internal QR cleanup worker prunes bounded batches
 of that ledger and images revoked/expired for 90 days; active permanent image links
 are retained. Real cron throughput remains a controlled release check.
+
+Successful raster responses include X-QG-QR-Verified: 1 after actual scan checks.
+The authenticated artwork publisher invokes the fixed site /api/qr POST endpoint
+and validates this header, PNG MIME, bounded body and 1024px dimensions before any
+Storage upload. The site's Pages binding/Worker must therefore be deployed before
+custom publications can succeed. Failure keeps a private draft, never a fallback
+public QR. This dependency is not currently deployed or release-verified.

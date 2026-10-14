@@ -9,7 +9,8 @@ export interface QrImageOptions {
     foreground: string;
     background: string;
   }> | null;
-  logoMode?: 'inherit' | 'none';
+  logoMode?: 'inherit' | 'none' | 'custom';
+  logo?: string;
 }
 export type QrImageInput = QrImageOptions &
   ({ linkId: string; url?: never } | { url: string; linkId?: never });
@@ -22,7 +23,18 @@ export interface QrImageLink {
   expiresAt: string | null;
   revokedAt: string | null;
   style: NonNullable<QrImageOptions['style']>;
-  logoMode: 'inherit' | 'none';
+  logoMode: 'inherit' | 'none' | 'custom';
+  state: 'pending' | 'published';
+  logoAsset: {
+    id: string;
+    key: string;
+    url: string;
+    mime: 'image/png' | 'image/jpeg';
+    bytes: number;
+    width: number;
+    height: number;
+    sha256: string;
+  } | null;
 }
 export interface CreatedQrImageLink extends QrImageLink {
   imageUrls: { png: string; jpg: string; svg: string };

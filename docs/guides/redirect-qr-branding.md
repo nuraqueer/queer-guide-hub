@@ -168,8 +168,8 @@ same SVG geometry and scan checks as downloads. See
 GET supports explicit appearance and fixed-bucket saved logo references; POST also
 accepts local PNG/JPG artwork. The relay requires a REDIRECT_QR service binding and
 is not deployed. Revocable saved-default image links and five-SDK contracts are
-implemented locally; UI hosted-image copying and durable custom-artwork attachments
-remain pending. A POST image response
+implemented locally, including durable per-image custom artwork; UI hosted-image
+copying remains pending. A POST image response
 does not create a durable share URL for its local artwork.
 
 
@@ -190,3 +190,15 @@ Current role, member/key scope and folder/link access are rechecked every reques
 Creating a QR image does not change workspace defaults; revoked URLs cannot fall
 back to different branding. Retention/creation-ledger cleanup is bounded and uses
 the existing internal cleanup worker; real cron is still unverified.
+
+
+Custom artwork publications accept `logo` bare-base64 PNG/JPG in POST /qr-images.
+They remain pending/private until the same checked file is rendered/scan-verified,
+uploaded to its immutable reserved key and attached after current creator/version
+checks. The API returns imageUrls only after publication. Workspace/domain defaults
+remain untouched; custom per-image artwork takes precedence. Unknown uploads are
+not repeated automatically. Failed pending records have 15-minute expiry and are
+pruned after one day; their hourly creation history remains. Stored artwork stays
+referenced until revoke/delete, then receives a one-hour read grace before cleanup.
+This depends on the fixed site QR service and the existing internal cleanup job;
+real gateway/binding/Storage/cron verification is still required before release.

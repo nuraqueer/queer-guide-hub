@@ -1,6 +1,13 @@
+import { previewImageInfo } from './redirect-presentation.ts';
 import { UUID, tokenDigest } from './redirect-api.ts';
 import { qrStylePreferenceInput } from './redirect-qr-style.ts';
-import { qrLogoPublicResponse, type QrAssetDb } from './redirect-qr-assets.ts';
+import {
+  qrLogoPublicResponse,
+  uploadQrLogoObject,
+  type QrAssetDb,
+  type QrAssetStorage,
+  type qrLogoInput,
+} from './redirect-qr-assets.ts';
 export const QR_IMAGE_TOKEN = /^qg_qr_[a-f0-9]{64}$/;
 export function createQrImageToken() {
   return (
@@ -16,7 +23,7 @@ export function qrImageLinkInput(value: unknown) {
   const data = value as Record<string, unknown>;
   if (
     Object.keys(data).some(
-      (key) => !['linkId', 'url', 'label', 'expiresAt', 'style', 'logoMode'].includes(key),
+      (key) => !['linkId', 'url', 'label', 'expiresAt', 'style', 'logoMode', 'logo'].includes(key),
     ) ||
     Object.hasOwn(data, 'linkId') === Object.hasOwn(data, 'url')
   )
@@ -70,7 +77,20 @@ export function qrImageLinkInput(value: unknown) {
     result.style = (
       qrStylePreferenceInput({ version: null, style: data.style }) as { style: unknown }
     ).style;
-  if ('logoMode' in data) {
+  if ('logo' in data) {
+    if (
+      typeof data.logo !== 'string' ||
+      !data.logo.length ||
+      data.logo.length > 2000000 ||
+      data.logo.length % 4 ||
+      !/^[A-Za-z0-9+/]*={0,2}$/.test(data.logo) ||
+      (data.logoMode !== undefined && data.logoMode !== 'custom')
+    )
+      throw new Error('Provide base64 PNG/JPG artwork with custom logo mode');
+    result.logo = data.logo;
+    result.logoMode = 'custom';
+  }
+  if ('logoMode' in data && !('logo' in data)) {
     if (!['inherit', 'none'].includes(data.logoMode as string))
       throw new Error('Choose inherited or hidden artwork');
     result.logoMode = data.logoMode;
@@ -131,4 +151,144 @@ export async function publicQrImageRequest(
   } catch {
     return json({ error: 'QR image profile unavailable' }, 503);
   }
+}
+
+/** Verify with the fixed scan-checking service, then upload once and finalize the same draft. */
+export async function storeQrImageArtwork(
+  db: QrAssetDb,
+  config: QrAssetStorage,
+  actor: string | null,
+  principal: string | null,
+  image: { id: string; version: string },
+  input: Awaited<ReturnType<typeof qrLogoInput>>,
+  fetcher: typeof fetch = fetch,
+) {
+  const reservation = await db.rpc('reserve_redirect_qr_image_logo', {
+    p_actor: actor,
+    p_principal: principal,
+    p_image: image.id,
+    p_version: image.version,
+    p_mime: input.mime,
+    p_bytes: input.bytes.length,
+    p_width: input.width,
+    p_height: input.height,
+    p_sha256: input.sha256,
+  });
+  if (reservation.error || reservation.data?.retryAfter) return reservation;
+  const asset = reservation.data;
+  if (
+    !asset ||
+    !UUID.test(asset.id) ||
+    asset.key !== asset.id + '.' + input.extension ||
+    !asset.profile ||
+    typeof asset.profile.url !== 'string' ||
+    typeof asset.profile.tracked !== 'boolean'
+  )
+    throw new Error('Invalid artwork reservation');
+  let encoded = '';
+  for (let offset = 0; offset < input.bytes.length; offset += 8192)
+    encoded += String.fromCharCode(...input.bytes.subarray(offset, offset + 8192));
+  let response: Response;
+  try {
+    response = await fetcher('https://queer.guide/api/qr', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        url: asset.profile.url,
+        tracked: asset.profile.tracked ? '1' : '0',
+        format: 'png',
+        size: '1024',
+        ...asset.profile.style,
+        logo: 'data:' + input.mime + ';base64,' + btoa(encoded),
+      }),
+      redirect: 'error',
+      credentials: 'omit',
+      referrerPolicy: 'no-referrer',
+      cache: 'no-store',
+      signal: AbortSignal.timeout(20000),
+    });
+  } catch {
+    return {
+      data: null,
+      error: {
+        code: 'QR_VERIFY',
+        message: 'Artwork verification is unavailable. The image draft has not been published.',
+      },
+    };
+  }
+  if (response.status === 429) {
+    await response.body?.cancel();
+    return { data: { retryAfter: 60 }, error: null };
+  }
+  if (
+    !response.ok ||
+    response.headers.get('Content-Type')?.split(';')[0] !== 'image/png' ||
+    response.headers.get('X-QG-QR-Verified') !== '1'
+  ) {
+    await response.body?.cancel();
+    return {
+      data: null,
+      error: {
+        code: response.status === 400 || response.status === 422 ? '22023' : 'QR_VERIFY',
+        message:
+          'Custom artwork could not be scan-verified. The image draft has not been published.',
+      },
+    };
+  }
+  try {
+    if (!response.body) throw new Error('Missing verified image');
+    const reader = response.body.getReader();
+    const chunks: Uint8Array[] = [];
+    let size = 0;
+    try {
+      for (;;) {
+        const part = await reader.read();
+        if (part.done) break;
+        size += part.value.length;
+        if (size > 1500000) throw new Error('Verified image exceeded limit');
+        chunks.push(part.value);
+      }
+    } catch (error) {
+      await reader.cancel();
+      throw error;
+    } finally {
+      reader.releaseLock();
+    }
+    const png = new Uint8Array(size);
+    let offset = 0;
+    for (const part of chunks) {
+      png.set(part, offset);
+      offset += part.length;
+    }
+    const info = previewImageInfo(png);
+    if (info.mime !== 'image/png' || info.width !== 1024 || info.height !== 1024)
+      throw new Error('Invalid verification raster');
+  } catch {
+    return {
+      data: null,
+      error: {
+        code: 'QR_VERIFY',
+        message:
+          'Artwork verification response is unavailable. The image draft has not been published.',
+      },
+    };
+  }
+  try {
+    await uploadQrLogoObject(config, asset, input, fetcher);
+  } catch {
+    return {
+      data: null,
+      error: {
+        code: 'QR_STORAGE',
+        message:
+          'Artwork upload outcome is unavailable. The draft was not published; the reserved asset will be cleaned up.',
+      },
+    };
+  }
+  return db.rpc('finish_redirect_qr_image_logo', {
+    p_actor: actor,
+    p_principal: principal,
+    p_image: image.id,
+    p_asset: asset.id,
+  });
 }

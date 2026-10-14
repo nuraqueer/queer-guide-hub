@@ -30,7 +30,7 @@ exist. Existing local tools are a foundation, not proof of parity or deployment.
 | Expiration | Date and expired destination URL, live enforcement without stale cached rules | Candidate: date/phrase parser, custom fallback and live enforcement tested |
 | Link cloaking | Explicit iframe mode with accurate iframe limitations, standard redirect fallback | Candidate: HTTPS guarded iframe wrapper and persistent direct fallback; runtime release pending |
 | Branded QR | Dots square/circle/joined; marker center square/circle; border square/rounded/circle; colors | Partial: dot/marker/color controls, saved workspace/domain appearance and logos, scoped individual/bulk defaults and scan verification implemented locally; hosted-image authoring/integration and release pending |
-| QR logos/export | Workspace/domain/logo precedence and hide; SVG/PNG/JPG; clipboard image and image URL | Partial: saved/local logos, PNG/JPG/SVG and clipboard exports, durable logo assets/editor/cleanup implemented locally; server image-rendering service implemented locally; revocable live hosted-image profiles and five-SDK methods implemented locally; custom artwork/UI/release pending |
+| QR logos/export | Workspace/domain/logo precedence and hide; SVG/PNG/JPG; clipboard image and image URL | Partial: saved/local logos, PNG/JPG/SVG and clipboard exports, durable logo assets/editor/cleanup implemented locally; server image-rendering service implemented locally; revocable live hosted-image profiles and five-SDK methods implemented locally; per-image custom artwork implemented locally; UI/release pending |
 | Click analytics | Real-time totals/time series, custom date/filter/export, countries/cities/devices/browsers/OS/referrers | Candidate: SQL totals/time series, date/dimension filters, export and bounded live refresh; release pending |
 | Conversion tracking | Click attribution, leads/signup/sale/revenue, trusted conversion ingestion and application hooks | Candidate: scoped ingestion, consented signup and verified Stripe hooks implemented locally |
 | Customer insights | Customer journey across click→lead→sale with private event timeline | Partial: private ID-based cross-link paginated journeys; identity enrichment missing |
@@ -1605,3 +1605,54 @@ unchanged. Add the input/types/method coverage to all five SDKs. Complete UI
 publication/copy/revoke controls afterward, with preview/account/selection identity
 guards. Existing broad implementation approval applies; production release and
 real service-binding/gateway/Storage/cron proof remain required.
+
+
+### Custom image artwork publication checkpoint
+
+Implemented POST /qr-images logo bytes across owner/member/key authoring and all
+five SDKs. Custom requests create private 15-minute drafts, reserve an immutable
+asset under the original creator/version and quotas, fully decode/render/scan-check
+through the fixed site QR service, upload once, then recheck current creator/link
+access, version, reservation and expiry before atomic publication. Only successful
+published responses include imageUrls. Verification checks the attested PNG MIME,
+1024px dimensions and bounded body over fixed HTTPS without redirects/credentials.
+No caller URL is fetched. The QR service emits the verification header only after
+actual pixel scan checks. Workspace/domain preferences are never changed.
+
+Per-image artwork wins over saved defaults in public profiles. Asset cleanup and
+lease acknowledgement now guard both preference and image references. Revoke or
+image/link/creator deletion releases assets with the one-hour read grace. Pending
+drafts stay non-public, expire after 15 minutes and are pruned after one day;
+expired drafts do not consume active publication slots, but creation/upload budget
+history persists. Unknown upload receipts never cause a second POST. Asset
+metadata/tombstones remain tracked for late-object cleanup. Base64 validation now
+uses a bounded linear pattern, avoiding recursive regexp overflow for large valid
+raster files. SDK metadata includes pending/published state and public logoAsset.
+
+Evidence: migrated SQL covers private drafts, outsider/stale reservation denial,
+canonical/minimal reservation data, cross-scope attachment denial, publication and
+unchanged workspace defaults, consumed reservations, reference-safe cleanup,
+revocation grace, revoked key/current-version finalization denial, expired draft
+pruning/orphan tracking, pending-upload budget and link-deletion cleanup. Actual
+HTTP -> migrated SQL -> real QR verifier/Wasm -> bounded Storage adapter -> final
+attachment exercises all five native SDK custom-image methods, public custom SVG
+embedding, retained defaults, protected/released physical assets, invalid/truncated
+artwork and unavailable verification before Storage, lost receipts without retry,
+owner revocation after bytes, private failed drafts and eventual physical cleanup.
+All five SDKs/examples pass and fixture objects are cleaned. Ninety-three focused
+tests across 14 files pass, including large valid raster base64 and verification
+response/transport bounds. Native workerd verifies attested SVG/PNG/JPG output.
+App ratchet remains 704 inherited errors, none new; strict Worker/SDK and Pages
+function checks, targeted lint, format and build pass (23.65s). All 2,282 migration
+versions and Postgres 17 grammar/body checks pass. Wrangler dry-run is about
+1.01 MiB gzip. No production writes/uploads/deletions/deployments occurred.
+
+Next: complete frontend hosted-image authoring, copy and revoke controls with
+account/selection/branding identity guards and native browser evidence. The fixed
+site Pages binding/QR Worker must be deployed before custom publication can pass
+verification; real gateway/Storage/CORS/cron/retention throughput and configured
+2026-10-14 runtime proof remain release work (local workerd supports 2026-10-13).
+The overall goal remains active with domain lifecycle/DNS automation, native/
+deferred deep links, branded password pages, customer enrichment, report SDK/team
+discovery, integrations, outgoing webhooks, permissions/account discovery and
+controlled release/publication still required.

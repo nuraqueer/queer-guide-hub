@@ -65,7 +65,10 @@ func TestSDKIntegration(t *testing.T) {
 	if must(api.GetQRStyle(ctx, id))["style"].(map[string]any)["foreground"] != "#111111" {
 		t.Fatal("QR style not readable")
 	}
-	qrImage := must(api.CreateQRImage(ctx, Object{"linkId": id, "logoMode": "none"}))
+	qrImage := must(api.CreateQRImage(ctx, Object{"linkId": id, "logo": os.Getenv("REDIRECT_TEST_QR_LOGO")}))
+	if qrImage["state"] != "published" || qrImage["logoMode"] != "custom" || qrImage["logoAsset"] == nil {
+		t.Fatal("Custom artwork was not published")
+	}
 	if !strings.HasPrefix(qrImage["imageUrls"].(map[string]any)["png"].(string), "https://queer.guide/api/qr?share=qg_qr_") {
 		t.Fatal("Image URL capability missing")
 	}

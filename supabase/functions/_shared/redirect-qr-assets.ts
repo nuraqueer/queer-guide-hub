@@ -32,7 +32,8 @@ export async function qrLogoInput(value: unknown) {
     typeof data.image !== 'string' ||
     !data.image.length ||
     data.image.length > 2000000 ||
-    !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(data.image)
+    data.image.length % 4 !== 0 ||
+    !/^[A-Za-z0-9+/]*={0,2}$/.test(data.image)
   )
     throw new Error('Provide base64 PNG/JPG bytes and the current preference version');
   const bytes = Uint8Array.from(atob(data.image), (char) => char.charCodeAt(0));
@@ -73,6 +74,34 @@ async function qrStorageJson(response: Response) {
 function qrStorageHeaders(config: QrAssetStorage) {
   return { Authorization: 'Bearer ' + config.serviceKey, apikey: config.serviceKey };
 }
+export async function uploadQrLogoObject(
+  config: QrAssetStorage,
+  asset: { id: string; key: string },
+  input: Awaited<ReturnType<typeof qrLogoInput>>,
+  fetcher: typeof fetch = fetch,
+) {
+  if (!UUID.test(asset.id) || asset.key !== asset.id + '.' + input.extension)
+    throw new Error('Invalid logo upload reservation');
+  const response = await fetcher(
+    config.origin + '/storage/v1/object/' + QR_ASSET_BUCKET + '/' + asset.key,
+    {
+      method: 'POST',
+      headers: {
+        ...qrStorageHeaders(config),
+        'Content-Type': input.mime,
+        'x-upsert': 'false',
+        'Cache-Control': 'max-age=3600',
+      },
+      body: new Uint8Array(input.bytes).buffer,
+      signal: AbortSignal.timeout(15000),
+      redirect: 'error',
+      cache: 'no-store',
+    },
+  );
+  const receipt = await qrStorageJson(response);
+  if (receipt.Key !== QR_ASSET_BUCKET + '/' + asset.key)
+    throw new Error('Storage receipt mismatch');
+}
 export async function storeRedirectQrLogo(
   db: QrAssetDb,
   config: QrAssetStorage,
@@ -97,25 +126,7 @@ export async function storeRedirectQrLogo(
   if (!asset || !UUID.test(asset.id) || asset.key !== asset.id + '.' + input.extension)
     throw new Error('Invalid logo upload reservation');
   try {
-    const response = await fetcher(
-      config.origin + '/storage/v1/object/' + QR_ASSET_BUCKET + '/' + asset.key,
-      {
-        method: 'POST',
-        headers: {
-          ...qrStorageHeaders(config),
-          'Content-Type': input.mime,
-          'x-upsert': 'false',
-          'Cache-Control': 'max-age=3600',
-        },
-        body: new Uint8Array(input.bytes).buffer,
-        signal: AbortSignal.timeout(15000),
-        redirect: 'error',
-        cache: 'no-store',
-      },
-    );
-    const receipt = await qrStorageJson(response);
-    if (receipt.Key !== QR_ASSET_BUCKET + '/' + asset.key)
-      throw new Error('Storage receipt mismatch');
+    await uploadQrLogoObject(config, asset, input, fetcher);
   } catch {
     // Reservation survives crashes/timeouts; the cleanup worker owns this exact key.
     return {

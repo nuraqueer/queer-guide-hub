@@ -74,7 +74,7 @@ export async function readQrImageProfile(
       (key) => !['dots', 'border', 'center', 'foreground', 'background'].includes(key),
     ) ||
     qrStyleError(data.style as QrStyle) ||
-    !['default', 'workspace', 'domain', 'hidden'].includes(String(data.logoSource))
+    !['default', 'workspace', 'domain', 'hidden', 'custom'].includes(String(data.logoSource))
   )
     return invalidProfile();
   const parameters: Record<string, string> = {
