@@ -32,6 +32,27 @@ function show(value?: DomainProviderStatus, configured = true) {
   return act;
 }
 describe('reviewed hostname provider controls', () => {
+  it('keeps validation restart distinct from refresh and reports queued/attempted outcomes', () => {
+    const act = show({
+      ...provider,
+      id: 'fixture',
+      state: 'waiting',
+      canRestartValidation: true,
+      validationRestartRequestedAt: '2026-10-14T12:00:00Z',
+      validationRestartPending: true,
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Restart hostname and TLS validation' }));
+    expect(act).toHaveBeenCalledWith('/provider/restart-validation', 'POST');
+    expect(screen.getByRole('status')).toHaveTextContent('Validation restart queued');
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh provider checks' }));
+    expect(act).toHaveBeenLastCalledWith('/provider/refresh', 'POST');
+  });
+  it('disables restart during cooldown or when not eligible', () => {
+    show({ ...provider, id: 'fixture', state: 'waiting', canRestartValidation: false });
+    expect(
+      screen.getByRole('button', { name: 'Restart hostname and TLS validation' }),
+    ).toBeDisabled();
+  });
   it('checks the branded URL without cookies or referrer and refreshes authoritative registry status', async () => {
     const fetcher = vi.fn(async () => Response.json({ ready: true, protocol: 1 }));
     vi.stubGlobal('fetch', fetcher);

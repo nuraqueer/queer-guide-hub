@@ -346,3 +346,35 @@ combined result and requests a refresh. Each revision covers visible hostname
 bindings and counts, not click activity or provider status. SDK methods return
 individual pages, so callers assembling a catalog should apply the same revision
 check.
+
+
+## Restart hostname and certificate validation
+
+Owner account sessions can request `POST /domains/:id/provider/restart-validation`
+with the current `{version}`. This queues Cloudflare's no-change SSL PATCH for the
+existing provider hostname. `Refresh provider checks` continues to read status.
+Keys and member sessions cannot request a restart. The domain must be enabled,
+currently verified and connected to the configured zone/target. Requests are
+limited to one every five minutes and invalidate cached certificate readiness.
+
+The durable worker first GETs and verifies the exact provider ID and hostname,
+then checks the current lease/operation, binding, proof, configuration and owner
+permission in SQL before consuming one restart intent. It sends only the observed
+DV certificate `type` and validation `method` (txt/http/email). Unknown settings
+require provider inspection. It never substitutes a method or creates a hostname
+as the restart operation. Intervening refresh/disconnect actions supersede the
+pending restart.
+
+The provider response exposes `canRestartValidation`,
+`validationRestartPending`, `validationRestartRequestedAt` and
+`validationRestartStartedAt`. Started means authorization was consumed before the
+network call, not proof that Cloudflare applied the PATCH. A crash or ambiguous
+network result may leave the external outcome unknown. Status jobs continue GET
+polling without repeating that PATCH; review status and request again after the
+cooldown when necessary. This prevents repeated backoff resets. The UI labels
+queued, attempted and superseded requests separately.
+
+Cloudflare documents the matching SSL-object PATCH as a DCV restart in its
+[Common API Calls guide](https://developers.cloudflare.com/cloudflare-for-platforms/cloudflare-for-saas/start/common-api-calls/).
+Local provider simulations establish request behavior, not actual certificate
+issuance or production DNS/provider configuration.

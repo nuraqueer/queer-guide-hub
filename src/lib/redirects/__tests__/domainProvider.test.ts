@@ -34,6 +34,8 @@ const snapshot = {
   status: 'active',
   ssl: {
     status: 'pending_validation',
+    type: 'dv',
+    method: 'txt',
     private_key: 'PRIVATE KEY',
     validation_records: [
       { txt_name: '_acme-challenge.links.example.com', txt_value: 'public-validation' },
@@ -48,14 +50,16 @@ const snapshot = {
 function database(value: DomainProviderJob = job) {
   return {
     rpc: vi.fn<DomainProviderDb['rpc']>(async (name) => ({
-      data:
-        name === 'reserve_redirect_domain_renewal'
-          ? null
-          : name === 'claim_redirect_domain_jobs'
-            ? [value]
-            : name === 'begin_redirect_domain_create'
-              ? nonce
-              : true,
+      data: [
+        'reserve_redirect_domain_renewal',
+        'begin_redirect_domain_validation_restart',
+      ].includes(name)
+        ? null
+        : name === 'claim_redirect_domain_jobs'
+          ? [value]
+          : name === 'begin_redirect_domain_create'
+            ? nonce
+            : true,
       error: null,
     })),
   };
@@ -67,23 +71,98 @@ function completion(db: ReturnType<typeof database>) {
 }
 const ok = (result: unknown) => Response.json({ success: true, result });
 describe('durable domain provider adapter', () => {
+  it('restarts validation once using the exact observed SSL settings after SQL authorization', async () => {
+    const db = database({ ...job, kind: 'refresh', providerId: provider });
+    let used = false;
+    const original = db.rpc.getMockImplementation()!;
+    db.rpc.mockImplementation(async (name, args) => {
+      if (name !== 'begin_redirect_domain_validation_restart') return original(name, args);
+      expect(args).toMatchObject({
+        p_provider: provider,
+        p_lease: lease,
+        p_operation: operation,
+        p_zone: config.zoneId,
+        p_target: config.cnameTarget,
+      });
+      const data = !used;
+      used = true;
+      return { data, error: null };
+    });
+    const fetcher = vi.fn<typeof fetch>(async () => ok(snapshot));
+    await dispatchRedirectDomainJobs(db, config, fetcher);
+    expect(fetcher.mock.calls.map((call) => call[1]?.method)).toEqual(['GET', 'PATCH']);
+    expect(JSON.parse(fetcher.mock.calls[1][1]!.body as string)).toEqual({
+      ssl: { type: 'dv', method: 'txt' },
+    });
+    expect(completion(db)).toMatchObject({
+      kind: 'status',
+      id: provider,
+      sslStatus: 'pending_validation',
+    });
+    await dispatchRedirectDomainJobs(db, config, fetcher);
+    expect(fetcher.mock.calls.map((call) => call[1]?.method)).toEqual(['GET', 'PATCH', 'GET']);
+  });
+  it('inspects status after an ambiguous PATCH without repeating it', async () => {
+    const db = database({ ...job, kind: 'refresh', providerId: provider });
+    let reserved = false;
+    const original = db.rpc.getMockImplementation()!;
+    db.rpc.mockImplementation(async (name, args) => {
+      if (name !== 'begin_redirect_domain_validation_restart') return original(name, args);
+      const data = !reserved;
+      reserved = true;
+      return { data, error: null };
+    });
+    const fetcher = vi.fn<typeof fetch>(async (_input, init) => {
+      if (init?.method === 'PATCH') throw new Error('connection lost');
+      return ok(snapshot);
+    });
+    await dispatchRedirectDomainJobs(db, config, fetcher);
+    expect(completion(db)).toMatchObject({
+      kind: 'error',
+      retry: true,
+      error: expect.stringContaining('without repeating'),
+    });
+    await dispatchRedirectDomainJobs(db, config, fetcher);
+    expect(fetcher.mock.calls.filter((call) => call[1]?.method === 'PATCH')).toHaveLength(1);
+    expect(completion(db)).toMatchObject({ kind: 'status' });
+  });
+  it('refuses unknown SSL configuration and mismatched objects before any PATCH', async () => {
+    for (const value of [
+      { ...snapshot, ssl: { status: 'pending_validation' } },
+      { ...snapshot, id: nonce },
+    ]) {
+      const db = database({ ...job, kind: 'refresh', providerId: provider });
+      const original = db.rpc.getMockImplementation()!;
+      db.rpc.mockImplementation(async (name, args) =>
+        name === 'begin_redirect_domain_validation_restart'
+          ? { data: true, error: null }
+          : original(name, args),
+      );
+      const fetcher = vi.fn(async () => ok(value));
+      await dispatchRedirectDomainJobs(db, config, fetcher);
+      expect(fetcher).toHaveBeenCalledTimes(1);
+      expect(completion(db)).toMatchObject({ kind: 'error' });
+    }
+  });
   it('renews a previously verified proof with the bounded DNS verifier before refreshing known TLS state', async () => {
     const db = database({ ...job, kind: 'refresh', providerId: provider });
     db.rpc.mockImplementation(async (name) => ({
       data:
-        name === 'claim_redirect_domain_jobs'
-          ? [{ ...job, kind: 'refresh', providerId: provider }]
-          : name === 'reserve_redirect_domain_renewal'
-            ? {
-                actor: id,
-                version: operation,
-                attempt: nonce,
-                verification: {
-                  name: '_qg-redirect.' + job.hostname,
-                  value: 'qg-redirect=' + 'a'.repeat(64),
-                },
-              }
-            : true,
+        name === 'begin_redirect_domain_validation_restart'
+          ? false
+          : name === 'claim_redirect_domain_jobs'
+            ? [{ ...job, kind: 'refresh', providerId: provider }]
+            : name === 'reserve_redirect_domain_renewal'
+              ? {
+                  actor: id,
+                  version: operation,
+                  attempt: nonce,
+                  verification: {
+                    name: '_qg-redirect.' + job.hostname,
+                    value: 'qg-redirect=' + 'a'.repeat(64),
+                  },
+                }
+              : true,
       error: null,
     }));
     const fetcher = vi.fn(async (input: RequestInfo | URL) =>

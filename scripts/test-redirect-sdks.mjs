@@ -90,14 +90,15 @@ await db.query("INSERT INTO public.user_roles(user_id,role) VALUES($1,'admin')",
 const identity={auth:{getUser:async(value)=>({data:{user:value==='fixture-account-session'?{id:reportActor,created_at:'2026-10-01T00:00:00Z',is_anonymous:false}:null},error:null})},rpc:async()=>({data:true,error:null})};
 let dnsCalls=0,dnsMissing=false;
 const providerConfig={zoneId:'a'.repeat(32),token:'fixture-provider-token',cnameTarget:'links.queer.guide'};
-const providerObjects=new Map();let providerCreates=0,providerDeletes=0;
+const providerObjects=new Map();let providerCreates=0,providerDeletes=0,providerRestarts=0;
 const fixtureDnsFetch=async (input,options)=>{const url=new URL(String(input));
 if(url.origin==='https://api.cloudflare.com'){
  if(new Headers(options?.headers).get('Authorization')!=='Bearer '+providerConfig.token||!url.pathname.startsWith('/client/v4/zones/'+providerConfig.zoneId+'/custom_hostnames'))throw new Error('Invalid fixture provider credentials/zone');
  const method=options?.method??'GET',tail=url.pathname.split('/custom_hostnames')[1];
- if(method==='POST'&&!tail){providerCreates++;const body=JSON.parse(options.body),item={id:webcrypto.randomUUID(),hostname:body.hostname,status:'active',ssl:{status:'pending_validation',validation_records:[{txt_name:'_acme-challenge.'+body.hostname,txt_value:'fixture-validation'}]}};providerObjects.set(item.id,item);return Response.json({success:true,result:item});}
+ if(method==='POST'&&!tail){providerCreates++;const body=JSON.parse(options.body),item={id:webcrypto.randomUUID(),hostname:body.hostname,status:'active',ssl:{type:'dv',method:'txt',status:'pending_validation',validation_records:[{txt_name:'_acme-challenge.'+body.hostname,txt_value:'fixture-validation'}]}};providerObjects.set(item.id,item);return Response.json({success:true,result:item});}
  if(method==='GET'&&!tail)return Response.json({success:true,result:[...providerObjects.values()].filter(item=>item.hostname===url.searchParams.get('hostname'))});
  const item=providerObjects.get(tail.slice(1));if(!item)return Response.json({success:false},{status:404});
+ if(method==='PATCH'){const body=JSON.parse(options.body);if(JSON.stringify(body)!==JSON.stringify({ssl:{type:item.ssl.type,method:item.ssl.method}}))throw new Error('Restart changed provider SSL settings');providerRestarts++;item.ssl.status='pending_validation';return Response.json({success:true,result:item});}
  if(method==='DELETE'){providerDeletes++;providerObjects.delete(item.id);return Response.json({success:true,result:{id:item.id}});}
  return Response.json({success:true,result:item});
 }
@@ -267,6 +268,17 @@ try {
   await policyRuntime.dispatchRedirectDomainJobs(service,providerConfig,fixtureDnsFetch);
   let providerView=await reportRequest('/domains/'+domain.id);
   if(providerCreates!==1||providerView.provider.hostnameStatus!=='active'||providerView.provider.certificateReady||providerView.provider.certificateStatus!=='pending_validation')throw new Error('Hostname and TLS states were conflated');
+  await reportRequest('/domains/'+domain.id+'/provider/restart-validation','POST',{version:providerView.version},token,403);
+  providerView=await reportRequest('/domains/'+domain.id+'/provider/restart-validation','POST',{version:providerView.version});
+  if(!providerView.provider.validationRestartPending||providerRestarts)throw new Error('Validation restart was not durably queued');
+  await policyRuntime.dispatchRedirectDomainJobs(service,providerConfig,fixtureDnsFetch);
+  providerView=await reportRequest('/domains/'+domain.id);
+  if(providerRestarts!==1||providerView.provider.validationRestartPending||!providerView.provider.validationRestartStartedAt||providerCreates!==1)throw new Error('Restart did not PATCH exact existing provider once');
+  await reportRequest('/domains/'+domain.id+'/provider/restart-validation','POST',{version:providerView.version},undefined,400);
+  await reportRequest('/domains/'+domain.id+'/provider/refresh','POST',{version:providerView.version});
+  await policyRuntime.dispatchRedirectDomainJobs(service,providerConfig,fixtureDnsFetch);
+  providerView=await reportRequest('/domains/'+domain.id);
+  if(providerRestarts!==1)throw new Error('Status refresh repeated validation PATCH');
   for(const item of providerObjects.values())item.ssl.status='active';
   await reportRequest('/domains/'+domain.id+'/provider/refresh','POST',{version:providerView.version});
   await policyRuntime.dispatchRedirectDomainJobs(service,providerConfig,fixtureDnsFetch);
@@ -331,7 +343,7 @@ try {
   await policyRuntime.dispatchRedirectDomainJobs(service,providerConfig,fixtureDnsFetch);
   defaults=await reportRequest('/domains/'+domain.id);
   if(defaults.providerConnected||providerObjects.size||providerDeletes!==1||defaults.provider.state!=='disconnected')throw new Error('Provider cleanup failed or orphaned an object');
-  console.log('Hostname lifecycle: actual owner HTTP → migrated queue → actual provider adapter → isolated Cloudflare API; pending TLS vs active, one POST, refresh and asynchronous disconnect/delete passed.');
+  console.log('Hostname lifecycle: actual owner HTTP → migrated queue → actual provider adapter → isolated Cloudflare API; pending TLS vs active, one POST, owner-only queued validation restart, exact one PATCH, cooldown, GET-only refresh and asynchronous disconnect/delete passed.');
   await db.query("UPDATE public.redirect_domains SET next_check_at=now()-interval '1 second' WHERE id=$1",[domain.id]);
   dnsMissing=true;
   const lost=await reportRequest('/domains/'+domain.id+'/verify','POST',{version:defaults.version});

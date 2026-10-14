@@ -11,6 +11,10 @@ export interface DomainProviderStatus {
   checkedAt: string | null;
   error: string | null;
   canConfirmAbsence: boolean;
+  canRestartValidation?: boolean;
+  validationRestartPending?: boolean;
+  validationRestartRequestedAt?: string | null;
+  validationRestartStartedAt?: string | null;
   validationRecords: { type: string; name: string; value: string }[];
   candidates: { id: string; hostname: string; createdAt?: string }[];
 }
@@ -204,6 +208,17 @@ export function RedirectDomainProvider({
             Refresh provider checks
           </Button>
         )}
+        {connected && provider?.desired && (
+          <Button
+            variant="outline"
+            disabled={
+              !configured || pending || !verified || disabled || !provider.canRestartValidation
+            }
+            onClick={() => act('/provider/restart-validation', 'POST')}
+          >
+            Restart hostname and TLS validation
+          </Button>
+        )}
         {(provider?.desired || connected || state === 'review') && (
           <Button
             variant="outline"
@@ -217,6 +232,17 @@ export function RedirectDomainProvider({
           </Button>
         )}
       </div>
+      {provider?.validationRestartRequestedAt && (
+        <p role="status" className="text-sm">
+          {provider.validationRestartPending
+            ? 'Validation restart queued. The provider worker will recheck ownership before sending it.'
+            : provider.validationRestartStartedAt
+              ? 'Validation restart attempted. Refresh provider checks to see the current result.'
+              : 'Validation restart superseded. Refresh provider checks before requesting it again.'}{' '}
+          Requests are limited to once every five minutes. An interrupted request may need another
+          attempt after reviewing status.
+        </p>
+      )}
       {state === 'review' && (
         <div className="space-y-2 text-sm">
           <p>

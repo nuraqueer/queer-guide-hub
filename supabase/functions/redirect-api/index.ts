@@ -80,7 +80,7 @@ Deno.serve(async (req: Request) => {
    }
    const result=await db.rpc('redirect_domain_preference',{p_actor:user!.id,p_values:values});if(result.error)return rpcError(result.error);return json(result.data);
   }
-  const domains=path.match(/^\/domains(?:\/([a-f0-9-]{36}))?(?:\/(verify|rotate|provider)(?:\/(connect|refresh|disconnect|adopt|confirm-absence))?)?$/i);
+  const domains=path.match(/^\/domains(?:\/([a-f0-9-]{36}))?(?:\/(verify|rotate|provider)(?:\/(connect|refresh|disconnect|adopt|confirm-absence|restart-validation))?)?$/i);
   if(domains){
    if(tokenCredential)return json({error:'Workspace owner account session required'},403);
    const principal=await sessionPrincipal('workspace:write');if(principal.failure)return principal.failure;
@@ -91,7 +91,7 @@ Deno.serve(async (req: Request) => {
     if(req.method!=='POST'||!providerAction)return json({error:'Method not supported'},405);
     if(!providerConfig)return json({error:'Hostname provider is not configured'},503);
     const values=domainProviderInput(await boundedJson(req,16384),providerAction);
-    const result=await db.rpc('redirect_domain_provider_action',{p_actor:user!.id,p_id:id,p_version:values.version,p_action:providerAction.replace('-','_'),p_zone:providerConfig.zoneId,p_target:providerConfig.cnameTarget,p_candidate:values.candidateId??null});if(result.error)return rpcError(result.error);return json(result.data);
+    const result=providerAction==='restart-validation'?await db.rpc('request_redirect_domain_validation_restart',{p_actor:user!.id,p_id:id,p_version:values.version,p_zone:providerConfig.zoneId,p_target:providerConfig.cnameTarget}):await db.rpc('redirect_domain_provider_action',{p_actor:user!.id,p_id:id,p_version:values.version,p_action:providerAction.replace('-','_'),p_zone:providerConfig.zoneId,p_target:providerConfig.cnameTarget,p_candidate:values.candidateId??null});if(result.error)return rpcError(result.error);return json(result.data);
    }
    let action:string,values:Record<string,unknown>={},limit=50,after:string|null=null;
    if(endpoint==='verify'&&req.method==='POST'){

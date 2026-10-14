@@ -112,7 +112,7 @@ function retryAfter(response: Response) {
 async function providerRequest(
   config: DomainProviderConfig,
   path: string,
-  method: 'GET' | 'POST' | 'DELETE',
+  method: 'GET' | 'POST' | 'PATCH' | 'DELETE',
   fetcher: typeof fetch,
   body?: unknown,
 ): Promise<any> {
@@ -337,7 +337,33 @@ export async function dispatchRedirectDomainJobs(
             });
             if (recorded.error) throw new Error('Could not record provider adoption');
             result = recorded.data ? { kind: 'status', ...snapshot } : { kind: 'cancelled' };
-          } else result = { kind: 'status', ...snapshot };
+          } else {
+            const restarting = await db.rpc('begin_redirect_domain_validation_restart', {
+              p_id: job.id, p_lease: job.lease, p_operation: job.operation,
+              p_provider: id, p_zone: config.zoneId, p_target: config.cnameTarget,
+            });
+            if (restarting.error) throw new Error('Validation restart authorization unavailable');
+            if (restarting.data === true) {
+              const ssl = found.result.ssl;
+              if (ssl?.type !== 'dv' || !['txt', 'http', 'email'].includes(ssl?.method))
+                throw new ProviderFailure(false, false, false, undefined, 'Unsupported certificate settings; inspect Cloudflare before restarting validation');
+              try {
+                const patched = await providerRequest(config, '/' + id, 'PATCH', fetcher, {
+                  ssl: { type: ssl.type, method: ssl.method },
+                });
+                if (!patched) result = { kind: 'deleted', id };
+                else {
+                  const updated = providerSnapshot(patched.result, job.hostname);
+                  if (updated.id !== id.toLowerCase()) throw new Error('Provider object mismatch');
+                  result = { kind: 'status', ...updated };
+                }
+              } catch {
+                // The one-use SQL reservation prevents another PATCH, including after a crash.
+                throw new ProviderFailure(true, false, false, undefined,
+                  'Validation restart outcome could not be verified; checking status without repeating the request');
+              }
+            } else result = { kind: 'status', ...snapshot };
+          }
         }
       }
     } catch (error) {

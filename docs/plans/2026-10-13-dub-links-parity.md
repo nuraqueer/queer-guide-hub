@@ -19,7 +19,7 @@ exist. Existing local tools are a foundation, not proof of parity or deployment.
 | Bulk actions | Create/update/upsert/delete, folder/tag assignment, archive, import/export, QR export | Candidate for managed links: atomic create/update/upsert/deletion API and CSV review/import/export UI, archive/restore, folder/tag assignment and verified QR ZIP; production release pending |
 | Custom previews | Uploaded OG image (1200×630, ≤1.5 MB), title≤120, description≤240, video API, crawler unfurl | Candidate: editor, scoped upload/presentation APIs and crawler HTML; native browser/Storage release pending |
 | AI previews | Generate title/description from destination content using configured AI provider | Candidate: scoped draft generator with spend limits; live provider and browser verification pending |
-| Custom domains | Verify ownership/DNS, multiple domains, primary domain, redirects on branded hostname | Partial: private registry, exact DNS verification, owner UI and stored defaults implemented locally; durable Cloudflare lifecycle/TLS checks implemented locally; hostname namespaces, signed relay/resolver, routing health, background proof renewal and inventory/CSV/QR/API/SDK fields implemented locally; ready choices, owner primary preference and tracked/member builders implemented locally; active manual CMS domain field and atomic owner saves implemented locally; URL domain filters and scoped linked-domain facets implemented locally; real provider proof and release pending |
+| Custom domains | Verify ownership/DNS, multiple domains, primary domain, redirects on branded hostname | Partial: private registry, exact DNS verification, owner UI and stored defaults implemented locally; durable Cloudflare lifecycle/TLS checks implemented locally; hostname namespaces, signed relay/resolver, routing health, background proof renewal and inventory/CSV/QR/API/SDK fields implemented locally; ready choices, owner primary preference and tracked/member builders implemented locally; active manual CMS domain field and atomic owner saves implemented locally; URL domain filters and scoped linked-domain facets implemented locally; explicit provider validation restart implemented locally; real provider proof and release pending |
 | Domain defaults | Root/not-found redirects, default expiration URL, workspace/domain QR logos | Partial: root/not-found/expiry settings and signed-host resolver implemented locally; managed root-link policies, QR/logo precedence and release pending |
 | Deep links | iOS/Android association files, app page routes, fallback and deferred attribution | Missing |
 | Geo targeting | Country-specific destinations and default fallback | Candidate: country rules and fallback tested |
@@ -1081,3 +1081,39 @@ timeout/non-repeat and mismatches; owner HTTP denial for keys/members; and UI
 restart eligibility/status without conflating it with read-only refresh.
 Source: Cloudflare Common API Calls, retrieved 2026-10-14:
 https://developers.cloudflare.com/cloudflare-for-platforms/cloudflare-for-saas/start/common-api-calls/
+
+
+Implemented locally: an explicit owner-only validation restart now queues a
+single-use intent on the existing provider operation. The new migration adds
+private request/start state, a versioned request RPC and a service-only reservation
+RPC. Fresh ownership, enabled domain, known binding, exact zone/target, current
+owner, lease and operation are rechecked; five-minute cooldown and readiness
+invalidation are enforced in SQL. A GET confirms hostname/ID before authorization;
+the adapter PATCHes matching observed DV SSL type/method. Ambiguous results and
+worker crashes never cause an automatic second PATCH; status polling continues.
+Intervening refresh/disconnect supersedes pending intent. UI distinguishes refresh
+from restart and displays queued, attempted and superseded states.
+
+Evidence: migrated SQL covers owner/stale-version/configuration denial, readiness
+invalidation, duplicate/cooldown rejection, refresh job kind, stale lease/provider
+binding, null provider, expired proof, revoked owner, single-use reservation,
+attempt timestamps, cancellation and private grants. Actual owner HTTP through
+migrated SQL and the real adapter/provider simulator proves queued behavior,
+key denial, one exact PATCH with no extra hostname POST, cooldown and GET-only
+subsequent refresh. All five native SDKs/examples pass. Twenty-seven focused tests
+across five files pass, including unknown SSL configuration, object mismatch,
+ambiguous PATCH/non-repeat, routing and existing provider setup regressions.
+Native browser verified the real provider panel in a labeled local fixture:
+restart queues, disables during cooldown, then displays the attempted status;
+390px client/scroll widths both equal 390. Screenshots in shared outputs:
+validation-restart-queued-desktop.jpg and validation-restart-attempted-mobile.jpg.
+Temporary tab/viewport cleaned up. Build passes in 20.95s; app typecheck retains
+704 inherited errors with none new; functions types and targeted lint/format pass.
+All 2,277 migration versions and grammar checks pass. No production writes,
+provider calls, DNS changes, deployment or package publication occurred.
+
+This remains progress toward the full goal. Managed root-link advanced policies,
+remaining domain lifecycle/DNS automation, native/deferred deep links, durable QR
+styles, branded password pages, customer enrichment, report SDK/team discovery,
+integrations, outgoing webhooks, remaining permissions/account discovery and
+controlled real-service/release verification remain required.
