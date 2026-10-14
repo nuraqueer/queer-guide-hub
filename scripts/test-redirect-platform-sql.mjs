@@ -25,6 +25,7 @@ try {
   await db.exec(readFileSync('supabase/tests/redirect_domain_routing.sql','utf8'));
   await db.exec(readFileSync('supabase/tests/redirect_domain_choices.sql','utf8'));
   await db.exec(readFileSync('supabase/tests/redirect_manual_records.sql','utf8'));
+  await db.exec(readFileSync('supabase/tests/redirect_linked_domains.sql','utf8'));
   console.log(
     'Redirect platform SQL: policies, atomic creation, quotas, expiry, variant metrics, conversion attribution, analytics, password throttling scoped link management, workspace APIs and presentations passed.',
   );

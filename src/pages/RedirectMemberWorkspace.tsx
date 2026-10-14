@@ -3,12 +3,14 @@ import {
   RedirectAccessRequests,
 } from '@/components/admin/redirects/RedirectAccessRequests';
 import { PageContainer } from '@/components/layout/PageContainer';
-import { useState } from 'react';
-import { Navigate, useLocation } from 'react-router';
+import { useEffect, useState } from 'react';
+import { Navigate, useLocation, useSearchParams } from 'react-router';
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { RedirectDomainSelect } from '@/components/admin/redirects/RedirectDomainSelect';
 import { useRedirectDomainChoices } from '@/hooks/useRedirectDomainChoices';
 import { useAuth } from '@/hooks/useAuth';
+import { useLinkedRedirectDomains } from '@/hooks/useLinkedRedirectDomains';
+import { UUID } from '../../supabase/functions/_shared/redirect-api';
 import { useMemberRedirectResources } from '@/hooks/useMemberRedirectResources';
 import {
   memberRedirectApi,
@@ -309,28 +311,66 @@ export function MemberWorkspaceContent({
       memberRedirectApi<{ role: 'owner' | 'member' | 'viewer'; label: string | null }>('/session'),
     retry: false,
   });
-  const [search, setSearch] = useState(''),
-    [folder, setFolder] = useState(''),
-    [archive, setArchive] = useState(false),
-    [selected, setSelected] = useState<string[]>([]);
+  const [viewParams, setViewParams] = useSearchParams();
+  const search = viewParams.get('q') ?? '',
+    folder = viewParams.get('folder') ?? '',
+    archive = viewParams.get('archive') === '1';
+  const domainFilter = (viewParams.get('domain') ?? '').toLowerCase();
+  const validDomainFilter = !domainFilter || domainFilter === 'builtin' || UUID.test(domainFilter);
+  const setViewParam = (key: string, value: string) =>
+    setViewParams(
+      (params) => {
+        if (value) params.set(key, value);
+        else params.delete(key);
+        return params;
+      },
+      { replace: true },
+    );
+  const setSearch = (value: string) => setViewParam('q', value),
+    setFolder = (value: string) => setViewParam('folder', value),
+    setArchive = (value: boolean) => setViewParam('archive', value ? '1' : '');
+  const domains = useLinkedRedirectDomains(userId, session.isSuccess);
+  const domainOptions = domains.isError ? [] : (domains.data?.data ?? []);
+  const [selectedState, setSelected] = useState<string[]>([]);
   const [editor, setEditor] = useState<{ link?: MemberLink; prefill?: MemberLink } | null>(null),
     [qr, setQr] = useState<string | null>(null),
     [policy, setPolicy] = useState<MemberLink | null>(null),
     [analytics, setAnalytics] = useState<string | null>(null),
     [importing, setImporting] = useState(false),
-    [access, setAccess] = useState<string | null>(null);
+    [accessState, setAccess] = useState<string | null>(null);
   const [requestFolder, setRequestFolder] = useState<{ id: string; name: string } | null>(null);
   const [requestView, setRequestView] = useState<'mine' | 'review' | null>(
     initialRequestView ?? null,
   );
-  const [deletingFolder, setDeletingFolder] = useState(false);
+  const [deletingFolderState, setDeletingFolder] = useState(false);
   const [bulkFolder, setBulkFolder] = useState('');
   const [folderName, setFolderName] = useState(''),
-    [deleting, setDeleting] = useState<string[] | null>(null);
-  const filters = { search, isArchived: archive, ...(folder ? { folderId: folder } : {}) };
+    [deletingState, setDeleting] = useState<string[] | null>(null);
+  const filters = {
+    search,
+    isArchived: archive,
+    ...(folder ? { folderId: folder } : {}),
+    ...(domainFilter ? { domainId: domainFilter === 'builtin' ? null : domainFilter } : {}),
+  };
+  const filterScope = JSON.stringify([userId, filters]);
+  const [transientScope, setTransientScope] = useState(filterScope);
+  const currentScope = transientScope === filterScope;
+  const selected = currentScope ? selectedState : [],
+    deleting = currentScope ? deletingState : null,
+    access = currentScope ? accessState : null,
+    deletingFolder = currentScope && deletingFolderState;
+  useEffect(() => {
+    if (transientScope === filterScope) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- synchronize transient selections/dialogs with externally navigated filter URLs; derived scope gates hide them before this effect runs.
+    setSelected([]);
+    setDeleting(null);
+    setDeletingFolder(false);
+    setAccess(null);
+    setTransientScope(filterScope);
+  }, [filterScope, transientScope]);
   const links = useInfiniteQuery({
     queryKey: ['redirect-member', userId, 'links', filters],
-    enabled: session.isSuccess,
+    enabled: session.isSuccess && validDomainFilter,
     initialPageParam: null as string | null,
     queryFn: ({ pageParam, signal }) =>
       memberRedirectApi<{ data: MemberLink[]; count: number; nextCursor: string | null }>(
@@ -494,8 +534,65 @@ export function MemberWorkspaceContent({
             ))}
           </select>
         </div>
+        <div className="space-y-2">
+          <Label htmlFor="workspace-domain">Domain filter</Label>
+          <select
+            id="workspace-domain"
+            className={CONTROL}
+            value={domainFilter}
+            onChange={(event) => filterChange(() => setViewParam('domain', event.target.value))}
+          >
+            <option value="">All accessible domains</option>
+            <option value="builtin">queer.guide/go</option>
+            {domainFilter &&
+              domainFilter !== 'builtin' &&
+              !domainOptions.some((domain) => domain.id === domainFilter) && (
+                <option value={domainFilter}>Selected domain (not in accessible list)</option>
+              )}
+            {domainOptions.map((domain) => (
+              <option key={domain.id} value={domain.id}>
+                {domain.hostname}
+              </option>
+            ))}
+          </select>
+          {domains.isPending && (
+            <p role="status" className="text-sm">
+              Loading domain filters…
+            </p>
+          )}
+          {domains.isError && (
+            <div>
+              <p role="alert" className="text-sm">
+                Could not load domain filters.
+              </p>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => void domains.refetch()}
+              >
+                Retry domain filters
+              </Button>
+            </div>
+          )}
+          {!validDomainFilter && (
+            <p role="alert" className="text-sm">
+              Invalid domain filter. Choose a domain or all accessible domains.
+            </p>
+          )}
+        </div>
       </div>
       <div className="flex flex-wrap items-center gap-4">
+        {(search || folder || archive || domainFilter) && (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => void navigator.clipboard.writeText(window.location.href)}
+          >
+            Copy filtered view
+          </Button>
+        )}
         <label className="flex items-center gap-2">
           <input
             type="checkbox"
@@ -708,7 +805,7 @@ export function MemberWorkspaceContent({
           </div>
         </section>
       )}
-      {links.isPending && <p role="status">Loading links…</p>}
+      {links.isPending && validDomainFilter && <p role="status">Loading links…</p>}
       {links.isError && (
         <p role="alert">
           {links.error.message}{' '}

@@ -416,15 +416,45 @@ export function parseClientRedirects(text: string): InventoryRedirect[] {
   });
 }
 
+export function canonicalInventoryDomain(value: string) {
+  const host = value.trim().toLowerCase();
+  return host === 'www.queer.guide' ? 'queer.guide' : host;
+}
+export function inventoryDomain(row: InventoryRedirect): string {
+  let hostname = row.domainHostname;
+  if (!hostname) {
+    try {
+      const url = new URL(row.source);
+      if (['https:', 'http:'].includes(url.protocol)) hostname = url.hostname;
+    } catch {
+      /* Relative/parameterized site paths use the builtin host. */
+    }
+  }
+  return canonicalInventoryDomain(hostname ?? 'queer.guide');
+}
+export function inventoryDomainFacets(rows: InventoryRedirect[]) {
+  const counts = new Map<string, number>();
+  for (const row of rows) {
+    const host = inventoryDomain(row);
+    counts.set(host, (counts.get(host) ?? 0) + 1);
+  }
+  return [...counts]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([hostname, count]) => ({ hostname, count }));
+}
+
 export function filterInventory(
   rows: InventoryRedirect[],
   search: string,
   origin: string,
   state: string,
+  domain = '',
 ) {
+  const selectedDomain = canonicalInventoryDomain(domain);
   const query = search.trim().toLocaleLowerCase();
   return rows.filter(
     (row) =>
+      (!selectedDomain || inventoryDomain(row) === selectedDomain) &&
       (!origin || row.origin === origin) &&
       (!state || row.state === state) &&
       (!query ||

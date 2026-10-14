@@ -6,6 +6,8 @@ import {
   loadDatabaseInventory,
   loadSlugSource,
   manualRedirect,
+  inventoryDomain,
+  inventoryDomainFacets,
   parseClientRedirects,
   parseStaticRedirects,
   readInventoryPages,
@@ -120,6 +122,38 @@ describe('complete redirect inventory', () => {
     );
   });
 
+  it('groups source domains without confusing destination hosts or builtin aliases', () => {
+    const builtin = manualRedirect({
+      id: 'site',
+      type: 'PATH',
+      source_path: '/old',
+      target: 'https://elsewhere.example/events',
+      is_enabled: true,
+      status_code: 301,
+    });
+    const custom = manualRedirect({
+      id: 'brand',
+      type: 'SHORT',
+      slug: 'promo',
+      domain_id: 'domain',
+      domain_hostname: 'links.community.com',
+      target: '/events',
+      is_enabled: false,
+      status_code: 302,
+    });
+    const alias = { ...builtin, id: 'alias', source: 'https://www.queer.guide/old' };
+    expect(inventoryDomain(builtin)).toBe('queer.guide');
+    expect(inventoryDomain(alias)).toBe('queer.guide');
+    expect(inventoryDomainFacets([builtin, alias, custom])).toContainEqual({
+      hostname: 'queer.guide',
+      count: 2,
+    });
+    expect(filterInventory([builtin, custom], '', '', '', 'links.community.com')).toEqual([custom]);
+    expect(filterInventory([builtin, alias, custom], '', '', '', 'WWW.QUEER.GUIDE')).toEqual([
+      builtin,
+      alias,
+    ]);
+  });
   it('retains branded sources and domain identity in the all-source inventory', () => {
     const row = manualRedirect({
       id: 'custom',

@@ -2,6 +2,7 @@ require_relative '../ruby/redirects'
 api=QueerGuide::RedirectsClient.new(ENV.fetch('REDIRECT_TEST_TOKEN'),base_url:ENV.fetch('REDIRECT_TEST_BASE'))
 def check(value); raise 'Assertion failed' unless value; end
 check(api.list_domain_choices['count']==0)
+check(api.list_linked_domains['count']==0)
 folder=api.create_resource('folders',{name:'Héllo & + Ruby'});tag=api.create_resource('tags',{name:'Ruby tag',color:'pink'})
 template=api.create_resource('templates',{name:'Ruby template',parameters:{utm_campaign:'Launch & +'}})
 check(api.update_resource('folders',folder['id'],{description:'Changed'})['description']=='Changed')

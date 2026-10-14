@@ -313,3 +313,36 @@ ranges must be ordered; clearing expiry updates the policy copy. Managed CSV
 roundtrips these fields and uses `notesJson`, preserving literal null text/empty
 strings/null clearing while preventing spreadsheet formula evaluation. No
 deployment or production schema success is implied by this local implementation.
+
+
+## Domain filters and linked-domain facets
+
+The inventory's domain filter groups all loaded source rules by hostname,
+including manual custom hosts and built-in automatic, static and client routes.
+It uses `?domain=<hostname>`; built-in www aliases share the queer.guide bucket.
+An unknown bookmarked domain produces no matches. Filtering resets selection and
+pagination, and exports and copied views use the same filtered rows.
+
+The member workspace keeps `q`, `folder`, `archive=1` and `domain` in its URL.
+Use a custom domain UUID or `domain=builtin` for the built-in namespace. These
+compose with the server's existing search/folder/archive filters. Browser history
+changes clear transient selections and destructive dialogs. Invalid domain
+bookmarks show an error without requesting an unfiltered link list.
+
+`GET /linked-domains?limit=100&cursor=<UUID>` requires `links:read`. It returns
+`data: [{id, hostname, linkCount}]`, custom-domain `count`, `builtinCount`,
+`nextCursor` and `revision`. Counts include all currently accessible SHORT links,
+including archived and disabled links. Domains remain visible after losing
+readiness, so existing links can still be found. PATH rules are excluded.
+Membership, folder/ID restrictions and revocation are checked under the ACL lock.
+No registry, ownership or provider fields are returned. A domain no longer in the
+accessible catalog retains a neutral selected label without fetching its hidden
+hostname or silently changing the filter.
+
+This management catalog is independent of `/domain-choices`, which remains the
+ready-only creation catalog. The browser reads every page with cancellation,
+cursor-loop detection and a matching revision; a changed revision rejects the
+combined result and requests a refresh. Each revision covers visible hostname
+bindings and counts, not click activity or provider status. SDK methods return
+individual pages, so callers assembling a catalog should apply the same revision
+check.

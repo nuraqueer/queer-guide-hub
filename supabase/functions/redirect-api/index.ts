@@ -59,14 +59,14 @@ Deno.serve(async (req: Request) => {
    }else return json({error:'Method not supported'},405);
    const result=await db.rpc('redirect_manual_record',{p_actor:user!.id,p_id:id,p_values:values,p_expected_updated_at:expected});if(result.error)return rpcError(result.error);return json(result.data,id?200:201);
   }
-  if(path==='/domain-choices'){
+  if(path==='/domain-choices'||path==='/linked-domains'){
    if(req.method!=='GET')return json({error:'Method not supported'},405);
    let principalId:string|null=null;
    if(tokenCredential){const {data,error}=await db.rpc('authenticate_redirect_api_token',{p_hash:await tokenDigest(credential),p_scope:'links:read'});if(error)return json({error:'Credential verification unavailable'},503);if(!data)return json({error:'Read scope is required'},403);principalId=data.id;}
    else{const principal=await sessionPrincipal('links:read');if(principal.failure)return principal.failure;principalId=principal.id;}
    const q=new URL(req.url).searchParams,limit=Number(q.get('limit')??100),after=q.get('cursor');
    if([...q.keys()].some(key=>!['limit','cursor'].includes(key))||!Number.isInteger(limit)||limit<1||limit>100||after&&!UUID.test(after))return json({error:'Invalid domain page'},400);
-   const result=await db.rpc('redirect_domain_choices',{p_token_id:principalId,p_limit:limit,p_after:after});if(result.error)return rpcError(result.error);return json(result.data);
+   const result=await db.rpc(path==='/linked-domains'?'redirect_linked_domains':'redirect_domain_choices',{p_token_id:principalId,p_limit:limit,p_after:after});if(result.error)return rpcError(result.error);return json(result.data);
   }
   if(path==='/domain-preference'){
    if(tokenCredential)return json({error:'Workspace owner account session required'},403);

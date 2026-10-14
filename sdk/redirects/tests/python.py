@@ -3,6 +3,7 @@ sys.path.insert(0,os.path.join(os.path.dirname(__file__),'../python'))
 from redirects import RedirectsClient, RedirectApiError
 api=RedirectsClient(os.environ['REDIRECT_TEST_TOKEN'],os.environ['REDIRECT_TEST_BASE'])
 assert api.list_domain_choices()['count']==0
+assert api.list_linked_domains()['count']==0
 folder=api.create_resource('folders',{'name':'Héllo & + Python'})
 tag=api.create_resource('tags',{'name':'Python tag','color':'pink'})
 template=api.create_resource('templates',{'name':'Python template','parameters':{'utm_campaign':'Launch & +'}})

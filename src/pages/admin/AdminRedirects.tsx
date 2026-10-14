@@ -16,7 +16,12 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { useRedirectInventory } from '@/hooks/useRedirectInventory';
-import { filterInventory, type InventoryRedirect } from '@/lib/redirects/inventory';
+import {
+  filterInventory,
+  inventoryDomainFacets,
+  canonicalInventoryDomain,
+  type InventoryRedirect,
+} from '@/lib/redirects/inventory';
 import { publicSourceUrl } from '@/lib/redirects/linkTools';
 import { RedirectLinkBuilder } from '@/components/admin/redirects/RedirectLinkBuilder';
 import { RedirectQrDialog } from '@/components/admin/redirects/RedirectQrDialog';
@@ -79,6 +84,7 @@ export default function AdminRedirects() {
   const [workspaceOpen, setWorkspaceOpen] = useState(false);
   const [organization, setOrganization] = useState<InventoryRedirect | null>(null);
   const [policyLink, setPolicyLink] = useState<InventoryRedirect | null>(null);
+  const domainFilter = canonicalInventoryDomain(searchParams.get('domain') ?? '');
   const folderFilter = searchParams.get('folder') ?? '';
   const tagFilter = searchParams.get('tag') ?? '';
   const archiveFilter = ['active', 'archived', 'all'].includes(searchParams.get('archive') ?? '')
@@ -89,6 +95,7 @@ export default function AdminRedirects() {
     search,
     origin,
     state,
+    domainFilter,
     folderFilter,
     tagFilter,
     archiveFilter,
@@ -111,17 +118,18 @@ export default function AdminRedirects() {
   }, [searchParams, setSearchParams, openEditor]);
 
   const rows = inventory.data?.rows;
+  const domains = useMemo(() => inventoryDomainFacets(rows ?? []), [rows]);
   const origins = useMemo(() => [...new Set(rows?.map((row) => row.origin) ?? [])].sort(), [rows]);
   const baseFiltered = useMemo(
     () =>
-      filterInventory(rows ?? [], search, origin, state).sort((a, b) =>
+      filterInventory(rows ?? [], search, origin, state, domainFilter).sort((a, b) =>
         sort === 'source'
           ? a.source.localeCompare(b.source) || a.id.localeCompare(b.id)
           : (b.updatedAt ?? '').localeCompare(a.updatedAt ?? '') ||
             a.source.localeCompare(b.source) ||
             a.id.localeCompare(b.id),
       ),
-    [rows, search, origin, state, sort],
+    [rows, search, origin, state, sort, domainFilter],
   );
   const filtered = useMemo(
     () =>
@@ -136,7 +144,7 @@ export default function AdminRedirects() {
         : baseFiltered,
     [baseFiltered, workspace.data, folderFilter, tagFilter, archiveFilter],
   );
-  const setOrganizationFilter = (key: 'folder' | 'tag' | 'archive', value: string) => {
+  const setOrganizationFilter = (key: 'folder' | 'tag' | 'archive' | 'domain', value: string) => {
     clearSelection();
     setPage(0);
     setSearchParams(
@@ -300,6 +308,22 @@ export default function AdminRedirects() {
         </Button>
         <select
           className={SELECT_CLASS}
+          aria-label="Filter by domain"
+          value={domainFilter}
+          onChange={(event) => setOrganizationFilter('domain', event.target.value)}
+        >
+          <option value="">All domains</option>
+          {domainFilter && !domains.some((domain) => domain.hostname === domainFilter) && (
+            <option value={domainFilter}>{domainFilter} (not in current inventory)</option>
+          )}
+          {domains.map((domain) => (
+            <option key={domain.hostname} value={domain.hostname}>
+              {domain.hostname} ({domain.count})
+            </option>
+          ))}
+        </select>
+        <select
+          className={SELECT_CLASS}
           aria-label="Filter by folder"
           value={folderFilter}
           disabled={!workspace.data}
@@ -338,7 +362,7 @@ export default function AdminRedirects() {
           <option value="archived">Archived</option>
           <option value="all">All redirects</option>
         </select>
-        {(folderFilter || tagFilter || archiveFilter !== 'active') && (
+        {(domainFilter || folderFilter || tagFilter || archiveFilter !== 'active') && (
           <Button
             variant="outline"
             size="sm"

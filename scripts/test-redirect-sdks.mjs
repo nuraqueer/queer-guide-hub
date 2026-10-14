@@ -310,9 +310,20 @@ try {
   const manualPolicy=await reportRequest('/links/'+manual.id+'/policy');if(manualPolicy.policy.expires_at||!manualPolicy.policy.track_conversions)throw new Error('Manual expiry failed to preserve other policy fields');
   const disconnect=await reportRequest('/domains/'+domain.id+'/provider/disconnect','POST',{version:providerView.version});
   if(disconnect.provider.certificateReady||providerObjects.size!==1)throw new Error('Disconnect did not close readiness before cleanup');
+  const usedDomains=await reportRequest('/linked-domains?limit=1','GET',undefined,token);
+  if(usedDomains.count!==1||usedDomains.data[0].id!==domain.id||usedDomains.data[0].hostname!==domain.hostname||usedDomains.data[0].linkCount!==1||!/^[a-f0-9]{32}$/.test(usedDomains.revision)||Object.keys(usedDomains.data[0]).sort().join(',')!=='hostname,id,linkCount')throw new Error('Management facet lost inactive domain or exposed private fields');
+  const domainLinks=await reportRequest('/links?filters='+encodeURIComponent(JSON.stringify({domainId:domain.id})),'GET',undefined,token);
+  if(domainLinks.count!==1||domainLinks.data[0].id!==manual.id)throw new Error('Inactive domain filter failed');
+  const builtinLinks=await reportRequest('/links?filters='+encodeURIComponent(JSON.stringify({domainId:null})),'GET',undefined,token);
+  if(!builtinLinks.count||builtinLinks.data.some(link=>link.domainId!==null))throw new Error('Builtin filter mixed namespaces');
+
   manual=await reportRequest('/manual-records/'+manual.id,'PATCH',{values:{notes:'Repaired while unavailable'},expectedUpdatedAt:manual.updated_at});
   manual=await reportRequest('/manual-records/'+manual.id,'PATCH',{values:{type:'PATH',source_path:'/manual-return',domain_id:null},expectedUpdatedAt:manual.updated_at});
   if(manual.domain_id!==null||manual.domain_hostname!==null||manual.slug!==null||manual.notes!=='Repaired while unavailable')throw new Error('Manual repair/path conversion failed');
+  const afterMoveFacets=await reportRequest('/linked-domains','GET',undefined,token);
+  if(afterMoveFacets.count!==0||afterMoveFacets.revision===usedDomains.revision)throw new Error('Moved link left a stale management domain facet');
+  console.log('Linked-domain facets: actual scoped HTTP proves inactive-domain visibility, minimal public fields, custom/builtin filtering and revision changes after a move.');
+
   console.log('Manual owner API: actual HTTP → migrated SQL proves full fields, atomic branded conversions, stale/readonly/key denial, policy-expiry sync and unavailable-domain repair.');
   const unavailablePrimary=await reportRequest('/domain-choices');
   if(!unavailablePrimary.primaryUnavailable||unavailablePrimary.primaryDomainId!==domain.id||unavailablePrimary.count!==0)throw new Error('Disconnected primary silently became builtin');

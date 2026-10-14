@@ -41,9 +41,9 @@ const row = (index: number): InventoryRedirect => ({
   state: 'Enabled',
   updatedAt: null,
 });
-function show() {
+function show(path = '/admin/content/redirects') {
   return render(
-    <MemoryRouter initialEntries={['/admin/content/redirects']}>
+    <MemoryRouter initialEntries={[path]}>
       <AdminRedirects />
     </MemoryRouter>,
   );
@@ -61,6 +61,36 @@ beforeEach(() => {
 });
 
 describe('unified redirects index', () => {
+  it('filters all sources by hostname, retains deep links and clears bulk selection', () => {
+    const custom = manualRedirect({
+      id: 'custom',
+      type: 'SHORT',
+      slug: 'custom-link',
+      domain_id: 'domain',
+      domain_hostname: 'links.community.com',
+      target: '/events',
+      is_enabled: false,
+      status_code: 302,
+    });
+    mocks.inventory.data = { rows: [row(1), custom], errors: [] };
+    show();
+    fireEvent.click(screen.getByLabelText('Select visible redirects'));
+    expect(screen.getByLabelText('Selection fixture')).toHaveTextContent('2 selected');
+    fireEvent.change(screen.getByLabelText('Filter by domain'), {
+      target: { value: 'links.community.com' },
+    });
+    expect(screen.getByText('https://links.community.com/custom-link')).toBeVisible();
+    expect(screen.queryByText('/events/old-1')).toBeNull();
+    expect(screen.queryByLabelText('Selection fixture')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Copy filtered view' })).toBeVisible();
+    expect(screen.getByRole('status')).toHaveTextContent('of 1 redirects');
+  });
+  it('does not silently drop an unknown bookmarked domain filter', () => {
+    show('/admin/content/redirects?domain=missing.community.com');
+    expect(screen.getByLabelText('Filter by domain')).toHaveValue('missing.community.com');
+    expect(screen.queryByText('/events/old-0')).toBeNull();
+    expect(screen.getByRole('status')).toHaveTextContent('0 redirects');
+  });
   it('selects across pages up to 100, then clears selection when filters change', () => {
     show();
     fireEvent.click(screen.getByLabelText('Select visible redirects'));

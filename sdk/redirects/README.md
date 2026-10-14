@@ -120,3 +120,13 @@ are positive 32-bit integers; null removes the limit. Notes accept up to 10,000
 characters. Omitted update fields are preserved. All five native HTTP test clients
 exercise these fields. Manual CMS type/source conversions are a separate owner-
 session endpoint and are not granted to server keys.
+
+
+Linked-domain management facets are available through `listLinkedDomains(limit,
+cursor)` (TypeScript/PHP), `list_linked_domains` (Python/Ruby), and
+`ListLinkedDomains(ctx, limit, cursor)` (Go). Pages contain accessible domain
+ID/hostname/linkCount entries, custom-domain count, builtinCount, nextCursor and
+revision. They include inactive domains used by visible SHORT links and exclude
+inaccessible folders/IDs. These facets do not establish creation readiness; use
+listDomainChoices for that. When combining pages, reject a changed revision and
+restart the read. Domain UUID/null filters on list/count continue to apply.

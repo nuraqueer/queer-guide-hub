@@ -19,7 +19,7 @@ exist. Existing local tools are a foundation, not proof of parity or deployment.
 | Bulk actions | Create/update/upsert/delete, folder/tag assignment, archive, import/export, QR export | Candidate for managed links: atomic create/update/upsert/deletion API and CSV review/import/export UI, archive/restore, folder/tag assignment and verified QR ZIP; production release pending |
 | Custom previews | Uploaded OG image (1200×630, ≤1.5 MB), title≤120, description≤240, video API, crawler unfurl | Candidate: editor, scoped upload/presentation APIs and crawler HTML; native browser/Storage release pending |
 | AI previews | Generate title/description from destination content using configured AI provider | Candidate: scoped draft generator with spend limits; live provider and browser verification pending |
-| Custom domains | Verify ownership/DNS, multiple domains, primary domain, redirects on branded hostname | Partial: private registry, exact DNS verification, owner UI and stored defaults implemented locally; durable Cloudflare lifecycle/TLS checks implemented locally; hostname namespaces, signed relay/resolver, routing health, background proof renewal and inventory/CSV/QR/API/SDK fields implemented locally; ready choices, owner primary preference and tracked/member builders implemented locally; active manual CMS domain field and atomic owner saves implemented locally; real provider proof and release pending |
+| Custom domains | Verify ownership/DNS, multiple domains, primary domain, redirects on branded hostname | Partial: private registry, exact DNS verification, owner UI and stored defaults implemented locally; durable Cloudflare lifecycle/TLS checks implemented locally; hostname namespaces, signed relay/resolver, routing health, background proof renewal and inventory/CSV/QR/API/SDK fields implemented locally; ready choices, owner primary preference and tracked/member builders implemented locally; active manual CMS domain field and atomic owner saves implemented locally; URL domain filters and scoped linked-domain facets implemented locally; real provider proof and release pending |
 | Domain defaults | Root/not-found redirects, default expiration URL, workspace/domain QR logos | Partial: root/not-found/expiry settings and signed-host resolver implemented locally; managed root-link policies, QR/logo precedence and release pending |
 | Deep links | iOS/Android association files, app page routes, fallback and deferred attribution | Missing |
 | Geo targeting | Country-specific destinations and default fallback | Candidate: country rules and fallback tested |
@@ -1012,3 +1012,42 @@ removed from the current facet response stays selected with a neutral label;
 never disclose its hidden hostname or silently replace the filter. Queries are
 account-keyed, cancelable and detect cursor loops. Add equivalent paged SDK reads
 and verify scoped counts, inactive domains, revocation and end-to-end filter UX.
+
+
+Implemented locally: URL-backed inventory hostname filters and member UUID/builtin
+filters, composing search, folder and archive state. Unknown/invalid bookmarks
+never fall back to all links. Filter changes and browser history clear bulk
+selection and destructive dialogs. Inaccessible/vanished domain selections retain
+a neutral label. Inventory exports and copied views use the filtered rows.
+
+The new service-only redirect_linked_domains SQL and links:read HTTP endpoint
+count only currently visible SHORT links, retaining disabled/archived links and
+inactive domains without registry/provider joins. ACL scope is rechecked under
+its shared lock. All five SDKs expose paged reads. Account-keyed browser reads
+support cancellation, cursor-loop detection and matching catalog revisions;
+readiness still comes exclusively from the separate domain-choices catalog.
+
+Evidence: migrated SQL verifies counts, PATH exclusion, archived/disabled and
+unverified domain visibility, minimal fields, page boundaries, folder/ID scope,
+inactive/revoked principals and service-only grants. Actual HTTP verifies custom
+and builtin filtering, inactive-domain fields and a revision change after a
+manual type move. All five native SDKs/examples pass. Twenty-eight focused tests
+across four files pass, covering filter composition, unknown bookmarks, browser
+history selection clearing, account isolation, pagination cancellation/loops and
+revision changes. Native browser verified both actual views using the labeled
+local fixture with production requests blocked. The inventory narrows 402 source
+rules to the one disabled branded fixture link and clears previous selection;
+the read-only member view narrows two links to that same link. At 390px client
+and scroll widths both measure 390. Screenshots in shared outputs:
+domain-filter-inventory-desktop.jpg and domain-filter-member-mobile.jpg.
+Temporary browser tab and viewport were cleaned up. Build passes in 19.36s;
+functions types and targeted lint/format pass. App types retain 704 inherited
+errors with none new. All 2,276 migration versions and SQL grammar checks pass.
+
+This is another local parity checkpoint. Managed root-link policies, provider
+validation restart, remaining domain lifecycle/DNS automation, native/deferred
+deep links, durable QR styles, branded password pages, customer enrichment,
+report SDK/team discovery, integrations, durable outgoing webhooks, remaining
+permissions/account discovery and controlled real-service/release validation
+remain required. No production migrations, DNS/provider writes, deployments,
+package publication or release have occurred in this checkpoint.

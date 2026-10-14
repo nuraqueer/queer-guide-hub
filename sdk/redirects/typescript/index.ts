@@ -34,6 +34,13 @@ export interface DomainChoices extends Page<DomainChoice> {
   primaryDomainId: string | null;
   primaryUnavailable: boolean;
 }
+export interface LinkedDomain extends DomainChoice {
+  linkCount: number;
+}
+export interface LinkedDomainsPage extends Page<LinkedDomain> {
+  builtinCount: number;
+  revision: string;
+}
 export interface LinkPolicy {
   preview?: { title?: string; description?: string; image?: string; video?: string };
   cloaked?: boolean;
@@ -206,6 +213,9 @@ export class RedirectsClient {
   }
   deleteLink(id: string) {
     return this.request<Mutation>('DELETE', '/links/' + id);
+  }
+  listLinkedDomains(limit = 100, cursor?: string) {
+    return this.request<LinkedDomainsPage>('GET', '/linked-domains', undefined, { limit, cursor });
   }
   listDomainChoices(limit = 100, cursor?: string) {
     return this.request<DomainChoices>('GET', '/domain-choices', undefined, { limit, cursor });

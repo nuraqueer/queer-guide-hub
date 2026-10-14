@@ -52,6 +52,7 @@ class RedirectsClient:
     def update_link(self, link_id, data): return self.request('PATCH','/links/'+link_id,data)
     def upsert_link(self, data): return self.request('PUT','/links/upsert',data)
     def delete_link(self, link_id): return self.request('DELETE','/links/'+link_id)
+    def list_linked_domains(self, limit=100, cursor=None): return self.request('GET','/linked-domains',query={'limit':limit,'cursor':cursor})
     def list_domain_choices(self, limit=100, cursor=None): return self.request('GET','/domain-choices',query={'limit':limit,'cursor':cursor})
     def list_links(self, filters=None, limit=100, cursor=None): return self.request('GET','/links',query={'filters':filters or {},'limit':limit,'cursor':cursor})
     def count_links(self, filters=None): return self.request('GET','/links/count',query={'filters':filters or {}})
