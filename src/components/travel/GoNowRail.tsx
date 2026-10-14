@@ -61,7 +61,7 @@ export function GoNowRail() {
                   className="group relative block aspect-[3/4] overflow-hidden rounded-container bg-surface-container no-underline"
                 >
                   {showNetwork ? (
-                    <div className="absolute inset-0 flex items-center justify-center bg-background p-4 pb-24">
+                    <div className="absolute inset-0 flex items-center justify-center rounded-container bg-background p-4 pb-24">
                       <CityNetwork slug={d.slug} variant="thumb" className="h-full" />
                     </div>
                   ) : (
