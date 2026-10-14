@@ -40,7 +40,7 @@ exist. Existing local tools are a foundation, not proof of parity or deployment.
 | Integrations | Segment and GTM adapters; native configured integrations and provider callbacks | Missing |
 | REST API | Authenticated/scoped link CRUD/upsert/count/list, analytics/events, folders/tags, bulk operations | Partial: scoped link CRUD/upsert/count/list/mixed bulk, conversions and analytics/events; folder/tag/template resource CRUD with workspace scopes; scoped targeting/password/tracking/preview policy endpoints; domain fields/filter/canonical URLs implemented locally; deep-link fields and release pending |
 | SDKs | TypeScript, Python, Go, Ruby, PHP wrappers and runnable examples covering management/tracking | Candidate: five native clients verified through actual HTTP handler and isolated DB; publication/release pending |
-| Webhooks | Signed click/lead/sale events, retries, delivery history, replay and secret rotation | Missing |
+| Webhooks | Signed link create/update/delete/click and lead/sale events, retries, delivery history, replay and secret rotation | Missing |
 
 ## Primary references
 
@@ -1876,3 +1876,69 @@ Customer enrichment is implemented locally. Continue through signed outgoing
 webhooks, Segment/GTM, native/deferred deep links, branded password pages, domain
 lifecycle/DNS automation, team/account/invites/all-source permissions and controlled
 infrastructure release plus SDK publication. The full goal remains active.
+
+
+### Durable outgoing webhooks design
+
+Current Dub references include link.created/link.updated/link.deleted/link.clicked,
+lead.created and sale.created, plus event logs. Implement those six events and an
+explicit webhook.test event, not only the earlier click/lead/sale ledger subset.
+Use a transactional PostgreSQL outbox; inline callback fetches would hold public
+redirects hostage to receivers, and a memory queue would lose accepted events.
+Configured endpoints are workspace-owner managed. Current owner sessions and
+unrestricted owner-minted keys with workspace:write plus events:read can manage
+subscriptions; members and ID-limited keys cannot expose workspace events.
+
+Create/update/pause/archive/restore endpoints, choose event types and optional
+managed link IDs, and show a random 256-bit signing secret once on create/rotate.
+Private RLS subscription/event/delivery/attempt tables expose only explicit DTOs.
+Default event data omits customer identities, destinations, query/referrer secrets,
+passwords and private notes; an explicit customer-ID opt-in includes only the
+external ID, never enriched name/email/avatar. Link lifecycle updates deduplicate
+within a transaction, excluding visit counters, with latest canonical short URL;
+policy/metadata/tag changes are also updates. A narrow private-schema trigger
+queues immutable event metadata without widening client grants. No receiver call
+occurs inside a click/conversion transaction. Optional bounded pg_net wakeups and
+a minutely cron both invoke the internal dispatcher using existing Vault config.
+
+Drain bounded leased jobs with one active delivery per endpoint and current owner/
+subscription checks. Settings changes cancel pending deliveries via a routing
+version; already-sent in-flight messages cannot be recalled. Store attempts before
+network IO, recover expired leases, retry network/non-2xx failures with bounded
+exponential backoff and Retry-After, and fail terminally after eight attempts.
+Delivery is at least once: stable event IDs/body permit consumer deduplication.
+Manual replay reviews the stored event/current endpoint and version, preserves
+logical event ID and attempt history, and never silently replays on writes.
+Retain completed delivery history for 30 days and remove expired prior secrets.
+
+Use Standard Webhooks HMAC-SHA256 over id.timestamp.rawBody with webhook-id,
+webhook-timestamp and webhook-signature headers, plus delivery/key-version tracing.
+Rotation has a 24-hour overlap and dual signatures; queued jobs use current keys.
+All five SDKs expose management/history/test/replay/rotation and bounded constant-
+time receiver verification, checking timestamp tolerance and raw bytes before JSON.
+
+For outbound requests, validate HTTPS and public DNS/IP addresses on every attempt,
+pin the chosen public IP with Deno.connect, then Deno.startTls verifies the original
+hostname with normal trust roots. Use HTTP/1.1 with exact body length, no cookies/
+credentials/redirects, bounded headers and a 4KB plain response excerpt. This
+avoids DNS rebinding without excluding Cloudflare-hosted receivers (Workers raw
+TCP cannot serve that complete destination set). Close pending/active sockets on
+timeout; never fall back to ordinary unpinned fetch. Recheck the leased job after
+DNS and before signing/sending. Deno is now available as an isolated official
+2.9.6 runtime under ignored tmp/deno-runtime; production Edge runtime proof remains
+required. Native tests use local TLS with a test-only trusted CA/connector mapping,
+assert public-IP pin and hostname checks and make no third-party callback writes.
+
+Owner UI uses incumbent form/list controls for subscription choices, one-time
+secret copy, current version edits, pause/archive confirmation, test delivery,
+raw event/response/history inspection, replay review and rotation review. Bearer
+secrets stay in local state. Account/selection changes reset drafts/secrets and
+abort reads; stale writes require reload. Verify SQL transactions/ACL/leases/
+retention, actual HTTP/all five SDKs, native TLS/SSRF/signature vectors, UI races
+and desktop/mobile evidence before controlled release. This design is within the
+approved full feature scope and does not mark other requirements complete.
+
+Sources: https://dub.co/blog/introducing-webhooks,
+https://github.com/standard-webhooks/standard-webhooks/blob/main/spec/standard-webhooks.md,
+https://docs.deno.com/api/deno/network/ and
+https://supabase.com/docs/guides/functions/connect-to-postgres.
