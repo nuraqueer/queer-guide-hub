@@ -1,5 +1,5 @@
-import React from 'react';
-import { TrackLoader } from '@/components/transit/TrackLoader';
+import { Loading } from '@/components/ui/loading';
+import { LoadingRegion } from '@/components/ui/loading-region';
 
 import { Skeleton } from '@/components/ui/skeleton';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
@@ -13,11 +13,11 @@ interface OptimizedLoaderProps {
 export const OptimizedLoader = ({
   type = 'card',
   count = 1,
-  showTitle = true
+  showTitle = true,
 }: OptimizedLoaderProps) => {
   if (type === 'profile') {
     return (
-      <div className="w-full p-6 flex flex-col gap-6">
+      <LoadingRegion className="w-full p-6 flex flex-col gap-6">
         {showTitle && (
           <div className="flex flex-col gap-2">
             <Skeleton />
@@ -54,13 +54,13 @@ export const OptimizedLoader = ({
             </Card>
           ))}
         </div>
-      </div>
+      </LoadingRegion>
     );
   }
 
   if (type === 'dashboard') {
     return (
-      <div className="flex flex-col gap-6">
+      <LoadingRegion className="flex flex-col gap-6">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {Array.from({ length: 3 }).map((_, i) => (
             <Card key={i}>
@@ -94,13 +94,13 @@ export const OptimizedLoader = ({
             </div>
           </CardContent>
         </Card>
-      </div>
+      </LoadingRegion>
     );
   }
 
   if (type === 'list') {
     return (
-      <div className="flex flex-col gap-4">
+      <LoadingRegion className="flex flex-col gap-4">
         {Array.from({ length: count }).map((_, i) => (
           <div key={i} className="flex items-center gap-4 p-4">
             <Skeleton />
@@ -111,24 +111,21 @@ export const OptimizedLoader = ({
             <Skeleton />
           </div>
         ))}
-      </div>
+      </LoadingRegion>
     );
   }
 
   if (type === 'full') {
     return (
       <div className="flex items-center justify-center min-h-screen">
-        <div className="text-center flex flex-col gap-4 items-center">
-          <TrackLoader size={48} label="Loading" />
-          <p className="text-sm text-muted-foreground">Loading your data...</p>
-        </div>
+        <Loading size="lg" />
       </div>
     );
   }
 
   // Default card type
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+    <LoadingRegion className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
       {Array.from({ length: count }).map((_, i) => (
         <Card key={i}>
           <CardHeader>
@@ -144,6 +141,6 @@ export const OptimizedLoader = ({
           </CardContent>
         </Card>
       ))}
-    </div>
+    </LoadingRegion>
   );
 };

@@ -1,45 +1,13 @@
-# `loading`
+# Shared loading UI
 
-Source: [`loading.tsx`](./loading.tsx)
+Public and admin interfaces use the same neutral ink track loop and muted skeletons on the existing paper surface. Route changes never introduce a coloured full-screen overlay or an artificial wait.
 
-## Purpose
+- `Loading` and `InlineLoading`: a neutral track loop with an optional label.
+- `LoadingSpinner`: compact indicator for existing content or buttons; pass `label={null}` when a parent announces the status.
+- `PageLoadingState` / `PageLoading`: content-shaped page placeholders.
+- `LoadingRegion`: shared status region for custom placeholder layouts.
+- `LoadingTableSkeleton`, `LoadingTableRowSkeleton`, `LoadingTextSkeleton`, `LoadingCardSkeleton`: shared content templates. The admin names re-export these for compatibility.
 
-One-line: shadcn-as-MUI wrapper for the `loading` primitive. See
-`src/components/ui/README.md` for the wrapper architecture.
+Regions reserve their layout immediately, reveal after 400 ms, and replace animated placeholders with explanatory text after eight seconds. Pass `onRetry` only when the caller has an actual retry action. Table-row placeholders keep valid table markup and the same timing. Small standalone track loops stop moving after eight seconds. Reduced motion retains a static, neutral indicator.
 
-## Variants
-
-See the component source for `variant`, `size`, and other prop
-options. The shadcn API surface is preserved; the underlying
-implementation uses MUI 7.
-
-## States
-
-Default · hover · active · focus · disabled. Loading where applicable.
-
-## Accessibility
-
-- Ships with MUI's keyboard + ARIA defaults.
-- All interactive variants meet WCAG 2.2 AA when used with the
-  default theme. Verified by `e2e/a11y-public-routes.spec.ts` and
-  per-component vitest tests in `__tests__/`.
-
-## Do / Don't
-
-- **Do** import from `@/components/ui/loading`.
-- **Do** take radius from the semantic trio (`rounded-container`/
-  `rounded-element`/`rounded-badge`) and avoid the soft `shadow-*`
-  ramp. Enforced by `__tests__/token-compliance.test.tsx` for the
-  canonical primitives.
-- **Don't** import the underlying MUI component directly when this
-  wrapper exists.
-- **Don't** introduce hardcoded color literals — use theme tokens
-  (`theme.palette.*`) or CSS variables (`hsl(var(--foreground))`).
-
-## Example
-
-```tsx
-import { /* exports */ } from '@/components/ui/loading';
-
-// minimal usage — see source for the full prop surface.
-```
+Give a region a useful `label`, and avoid nesting status announcements. Keep the shapes appropriate to the incoming content; visual consistency does not require tables and cards to have the same layout.
