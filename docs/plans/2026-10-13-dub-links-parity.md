@@ -2420,3 +2420,36 @@ cached admin claims after current role removal, ordinary account denial, unchang
 current owner organization behavior, private table/grant policy shapes and legacy
 policy save behavior. Token administration remains next, followed by all-source
 member management and invitation/discovery flows.
+
+### Direct current-owner RLS implementation and evidence (2026-10-15)
+
+The narrow no-argument Redirects owner helper checks actual auth.uid/current role
+under the shared ACL lock. It uses no row-locking SELECT, so PostgREST's read-only
+table GET transactions remain usable; the role-mutation statement trigger uses
+the exclusive same lock. Eleven private/admin table policy sets replace only the
+admin JWT predicate, preserving all other predicates, commands and roles. Campaign,
+metadata and bulk organization RPCs use the current helper. Public automatic-alias
+routing and the global app JWT helper are unchanged. No raw member-table grants
+were added; anonymous callers cannot execute the owner helper.
+
+Legacy policy saving now sends only the verified actor, calls scoped policy writes
+and reports role revocation as 403. Password changes reserve the existing actor/
+link/global hourly budget before PBKDF2, giving 429/Retry-After before hashing.
+Five handler tests pass, covering actual forwarded context, revoked role, hashing/
+removal and pre-hash quota denial. Full migrated SQL proves retained current owner
+organization abilities, denied direct reads/inserts and metadata/campaign calls
+with a stale admin claim, denied legacy owner policy writes and successful reads
+in a READ ONLY transaction. A first policy-shape assertion matched the retained
+SQL output alias AS has_role_jwt; it was corrected to inspect actual function calls.
+All five SDK HTTP suites still pass; native Deno and lint pass, and all 2324 SQL
+migrations pass PostgreSQL 17 grammar. Old admin fixtures now have real users/roles
+and actual sub claims. No production migration was applied.
+
+Latest draft CI has passed migration-history/version, lint and CodeQL checks.
+The critical-data-quality job reports production city_safety_gate_drift with two
+venue records (ceiling zero). This is production data queried by that job; these
+Redirects candidates have not changed production. Record it as release evidence,
+not a reason to weaken the gate or modify unrelated venue data without a reviewed
+fix. Continue independent Redirects work: authoritative credential administration,
+all-source membership, account discovery/invitations, remaining domain/app features
+and controlled infrastructure/provider/SDK release.

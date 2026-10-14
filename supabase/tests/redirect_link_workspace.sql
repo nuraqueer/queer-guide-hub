@@ -1,7 +1,9 @@
 -- Execute after redirect_link_workspace. Fixtures are rolled back.
 BEGIN;
+INSERT INTO auth.users(id) VALUES('00000000-0000-4000-8000-000000000001');
+INSERT INTO public.user_roles VALUES('00000000-0000-4000-8000-000000000001','admin');
 SET LOCAL ROLE authenticated;
-SET LOCAL request.jwt.claims = '{"role":"authenticated","user_role":"admin"}';
+SET LOCAL request.jwt.claims = '{"role":"authenticated","user_role":"admin","sub":"00000000-0000-4000-8000-000000000001"}';
 DO $$
 DECLARE f uuid; t uuid; saved jsonb; n bigint; unknown_tag uuid := gen_random_uuid();
 BEGIN

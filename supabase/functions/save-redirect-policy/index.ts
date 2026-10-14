@@ -26,10 +26,15 @@ Deno.serve(async (req: Request) => {
     const errors = policyErrors(body.policy);
     if (errors.length) return json({error:errors.join("; ")},400);
     const changePassword = body.remove_password === true || typeof body.password === "string";
+    const db = createClient(url,Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,{global:{headers:{"x-qg-redirect-session-actor":identity.user.id}}});
+    if (typeof body.password === "string") {
+      const reserved = await db.rpc("reserve_redirect_policy_password",{p_redirect_id:body.redirect_id,p_actor_id:identity.user.id});
+      if (reserved.error) return json({error:reserved.error.message},reserved.error.code === "42501" ? 403 : 400);
+      if (reserved.data) return new Response(JSON.stringify({error:"Password update limit reached"}),{status:429,headers:{...cors,"Content-Type":"application/json","Cache-Control":"no-store","Retry-After":String(reserved.data)}});
+    }
     const passwordHash = typeof body.password === "string" ? await hashLinkPassword(body.password) : null;
-    const db = createClient(url,Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
     const {data,error} = await db.rpc("set_redirect_link_policy",{p_redirect_id:body.redirect_id,p_policy:body.policy,p_password_hash:passwordHash,p_change_password:changePassword});
-    if (error) return json({error:error.message},400);
+    if (error) return json({error:error.message},error.code === "42501" ? 403 : 400);
     return json(data);
   } catch (error) { return json({error:error instanceof Error ? error.message : "Invalid policy"},400); }
 });

@@ -2,7 +2,7 @@ BEGIN;
 INSERT INTO auth.users(id) VALUES('00000000-0000-4000-8000-000000000001');
 INSERT INTO public.user_roles VALUES('00000000-0000-4000-8000-000000000001','admin');
 SET LOCAL ROLE authenticated;
-SET LOCAL request.jwt.claims = '{"role":"authenticated","user_role":"admin"}';
+SET LOCAL request.jwt.claims = '{"role":"authenticated","user_role":"admin","sub":"00000000-0000-4000-8000-000000000001"}';
 DO $$ DECLARE folder uuid; tag_a uuid; tag_b uuid; saved jsonb; key text; count_before integer; BEGIN
  INSERT INTO public.redirect_link_folders(name) VALUES('bulk-fixture') RETURNING id INTO folder;
  INSERT INTO public.redirect_link_tags(name) VALUES('bulk-a') RETURNING id INTO tag_a;

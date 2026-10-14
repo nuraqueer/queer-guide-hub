@@ -17,10 +17,15 @@ function runtime() {
     compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext },
   }).outputText;
   let handler: (req: Request) => Promise<Response>;
-  const state = { authenticated: true, admin: true };
-  const save = vi.fn(async (_name: string, args: Record<string, unknown>) => ({
-    data: { policy: args.p_policy, has_password: !!args.p_password_hash },
-    error: null,
+  const state = { authenticated: true, admin: true, revoked: false, retry: 0 };
+  const save = vi.fn(async (name: string, args: Record<string, unknown>) => ({
+    data:
+      name === 'reserve_redirect_policy_password'
+        ? state.retry
+        : { policy: args.p_policy, has_password: !!args.p_password_hash },
+    error: state.revoked
+      ? { code: '42501', message: 'Current workspace owner access required' }
+      : null,
   }));
   const identity = {
     auth: {
@@ -31,7 +36,7 @@ function runtime() {
     },
     rpc: vi.fn(async () => ({ data: state.admin, error: null })),
   };
-  const clients = vi.fn((_url: string, key: string) =>
+  const clients = vi.fn((_url: string, key: string, _options?: unknown) =>
     key === 'service' ? { rpc: save } : identity,
   );
   new Function('Deno', 'createClient', 'crypto', code)(
@@ -92,16 +97,36 @@ describe('policy-saving authorization boundary', () => {
     const response = await run.invoke({ ...policyBody, password: 'fixture-secret' });
     expect(response.status).toBe(200);
     expect(await response.text()).not.toContain('fixture-secret');
-    const saved = run.save.mock.calls[0][1];
+    const saves = () => run.save.mock.calls.filter(([name]) => name === 'set_redirect_link_policy');
+    const saved = saves()[0][1];
     expect(saved.p_password_hash).toMatchObject({ algorithm: 'PBKDF2-SHA256', iterations: 600000 });
     expect(JSON.stringify(saved)).not.toContain('fixture-secret');
     expect(saved.p_change_password).toBe(true);
     await run.invoke(policyBody);
-    expect(run.save.mock.calls[1][1].p_change_password).toBe(false);
+    expect(saves()[1][1].p_change_password).toBe(false);
     await run.invoke({ ...policyBody, remove_password: true });
-    expect(run.save.mock.calls[2][1]).toMatchObject({
+    expect(saves()[2][1]).toMatchObject({
       p_change_password: true,
       p_password_hash: null,
     });
+  });
+  it('forwards only the verified actor context and surfaces database revocation as forbidden', async () => {
+    const run = runtime();
+    run.state.revoked = true;
+    expect((await run.invoke(policyBody)).status).toBe(403);
+    expect(run.clients).toHaveBeenCalledWith('fixture', 'service', {
+      global: { headers: { 'x-qg-redirect-session-actor': 'admin' } },
+    });
+  });
+  it('checks current access and password budget before hashing or saving', async () => {
+    const run = runtime();
+    run.state.retry = 60;
+    const limited = await run.invoke({ ...policyBody, password: 'fixture-secret' });
+    expect(limited.status).toBe(429);
+    expect(limited.headers.get('Retry-After')).toBe('60');
+    expect(run.save.mock.calls.map(([name]) => name)).toEqual(['reserve_redirect_policy_password']);
+    run.state.revoked = true;
+    expect((await run.invoke({ ...policyBody, password: 'fixture-secret' })).status).toBe(403);
+    expect(run.save.mock.calls.some(([name]) => name === 'set_redirect_link_policy')).toBe(false);
   });
 });

@@ -59,7 +59,7 @@ BEGIN
 END $$;
 RESET ROLE;
 SET LOCAL ROLE authenticated;
-SET LOCAL request.jwt.claims='{"role":"authenticated","user_role":"admin"}';
+SET LOCAL request.jwt.claims='{"role":"authenticated","user_role":"admin","sub":"00000000-0000-4000-8000-000000000001"}';
 DO $$ BEGIN
  IF NOT EXISTS(SELECT id,name FROM public.redirect_api_tokens) THEN RAISE EXCEPTION 'Admin metadata unavailable'; END IF;
  BEGIN PERFORM token_hash FROM public.redirect_api_tokens; RAISE EXCEPTION 'Token hash disclosed'; EXCEPTION WHEN insufficient_privilege THEN NULL; END;
