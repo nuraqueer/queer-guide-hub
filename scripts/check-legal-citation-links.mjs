@@ -40,6 +40,8 @@
  * never happened is the absence of evidence. The cost is stated rather than
  * hidden: a host that truly vanishes now only warns, so read the unverifiable
  * list — a url that is unreachable run after run is rot, not weather.
+ * Server failures and unsupported/authenticated requests are also unverifiable.
+ * Only HTTP 404/410 or a detected soft-404 establishes that the document is gone.
  *
  * THE STATUS CODE CATCHES NOTHING ON THESE HOSTS — measured, not assumed. Every
  * one of the citation hosts answers a missing document with HTTP 200 and a
@@ -113,7 +115,9 @@ async function probe(url) {
       if (res.status === 403 || res.status === 429) {
         return { state: 'unverifiable', code: res.status, final: res.url }
       }
-      if (method === 'GET') return { state: 'dead', code: res.status, final: res.url }
+      if (method === 'GET') {
+        return { state: res.status === 404 || res.status === 410 ? 'dead' : 'unverifiable', code: res.status, final: res.url }
+      }
     } catch (err) {
       // No status came back at all, so the server said nothing about the
       // document. Unreachable-from-CI, not gone — see the header note.
@@ -167,7 +171,9 @@ if (unverifiable.length) {
   // but they are not the same thing to whoever reads this, so say which.
   console.log('\nUnverifiable from CI — open in a browser to confirm:')
   for (const u of unverifiable) {
-    const why = u.code === 0 ? `unreachable (${u.note})` : `HTTP ${u.code} (bot challenge/ratelimit)`
+    const why = u.code === 0 ? `unreachable (${u.note})`
+      : u.code === 403 || u.code === 429 ? `HTTP ${u.code} (bot challenge/ratelimit)`
+      : `HTTP ${u.code} (document could not be verified)`
     console.log(`  - ${u.slug}: ${why} ${u.url}`)
   }
   if (unverifiable.some((u) => u.code === 0)) {
