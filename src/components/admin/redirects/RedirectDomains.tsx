@@ -16,6 +16,8 @@ interface Domain {
   verifiedUntil: string | null;
   lastCheck: string | null;
   providerConnected: boolean;
+  routingReady?: boolean;
+  routingSeenAt?: string | null;
   provider?: DomainProviderStatus;
   rootUrl: string | null;
   notFoundUrl: string | null;
@@ -69,8 +71,8 @@ function DomainRegistry({ accountId }: { accountId: string }) {
       <h3 className="text-lg font-semibold">Custom domains</h3>
       <p className="text-sm">
         Register a domain you control and verify its TXT record. Ownership, TLS and branded routing
-        are separate requirements. Provider connections run in the background; public branded
-        routing is not available yet.
+        are separate requirements. Provider connections run in the background. Check branded routing
+        once DNS and the certificate are ready.
       </p>
       <form
         className="space-y-2"
@@ -127,6 +129,7 @@ function DomainRegistry({ accountId }: { accountId: string }) {
               domain={domain}
               pending={mutation.isPending}
               setup={query.data?.pages[0].providerSetup}
+              onRoutingChecked={() => client.invalidateQueries({ queryKey: key })}
               expanded={expanded.has(domain.id)}
               onExpand={(open) =>
                 setExpanded((current) => {
@@ -170,8 +173,10 @@ function DomainRow({
   expanded,
   onExpand,
   setup,
+  onRoutingChecked,
 }: {
   domain: Domain;
+  onRoutingChecked: () => Promise<unknown>;
   setup?: { configured: boolean; cnameTarget: string | null };
   pending: boolean;
   expanded: boolean;
@@ -218,9 +223,11 @@ function DomainRow({
           </p>
         )}
         <p className="text-sm">
-          {domain.providerConnected
-            ? 'Provider record present; routing readiness still requires verification.'
-            : 'TLS and branded routing are not connected.'}
+          {domain.routingReady
+            ? 'Branded routing is ready.'
+            : domain.providerConnected
+              ? 'Provider record present; routing readiness still requires verification.'
+              : 'TLS and branded routing are not connected.'}
         </p>
         <div className="space-y-2 text-sm">
           <p>
@@ -266,6 +273,9 @@ function DomainRow({
         </div>
         <RedirectDomainProvider
           provider={domain.provider}
+          routingReady={domain.routingReady}
+          routingSeenAt={domain.routingSeenAt}
+          onRoutingChecked={onRoutingChecked}
           setup={setup}
           hostname={domain.hostname}
           verified={domain.ownershipVerified}

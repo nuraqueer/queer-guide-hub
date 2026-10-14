@@ -120,6 +120,24 @@ describe('complete redirect inventory', () => {
     );
   });
 
+  it('retains branded sources and domain identity in the all-source inventory', () => {
+    const row = manualRedirect({
+      id: 'custom',
+      type: 'SHORT',
+      slug: 'same-link',
+      domain_id: 'domain-a',
+      domain_hostname: 'links.community.com',
+      target: '/events',
+      is_enabled: true,
+      status_code: 302,
+    });
+    expect(row).toMatchObject({
+      source: 'https://links.community.com/same-link',
+      domainHostname: 'links.community.com',
+      isShortLink: true,
+      manualId: 'custom',
+    });
+  });
   it('shows configured manual state and searches destinations and origins', () => {
     const row = manualRedirect({
       id: '1',

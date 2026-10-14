@@ -41,7 +41,8 @@ export function buildCampaignDestination(
     if (keys.has(key)) throw new Error(`Parameter ${key} appears more than once.`);
     if (CAMPAIGN_FIELDS.includes(key as (typeof CAMPAIGN_FIELDS)[number]))
       throw new Error('Set campaign tags in the campaign fields.');
-    if (['qg_click_id', 'qg_qr', 'pw', 'password'].includes(key)) throw new Error('This parameter is reserved for link access or attribution.');
+    if (['qg_click_id', 'qg_qr', 'pw', 'password'].includes(key))
+      throw new Error('This parameter is reserved for link access or attribution.');
     keys.add(key);
     url.searchParams.set(key, value);
   }
@@ -68,7 +69,22 @@ export function suggestCampaignSlug(target: string) {
   return `${slug}-campaign`;
 }
 
-export function publicSourceUrl(source: string) {
+export function publicSourceUrl(source: string, managedDomain?: string) {
+  if (managedDomain) {
+    try {
+      const url = new URL(source);
+      return url.protocol === 'https:' &&
+        !url.username &&
+        !url.password &&
+        !url.port &&
+        url.hostname === managedDomain &&
+        /^\/[a-z0-9][a-z0-9-]{1,62}[a-z0-9]$/.test(url.pathname)
+        ? url.href
+        : null;
+    } catch {
+      return null;
+    }
+  }
   if (!isConcretePath(source)) return null;
   const url = new URL(source, LINK_ORIGIN);
   return url.origin === LINK_ORIGIN ? url.href : null;

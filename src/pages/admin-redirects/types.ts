@@ -6,6 +6,8 @@ export interface RedirectRow {
   id: string;
   type: RedirectType;
   slug: string | null;
+  domain_id?: string | null;
+  domain_hostname?: string | null;
   source_path: string | null;
   match_kind: string;
   target: string;

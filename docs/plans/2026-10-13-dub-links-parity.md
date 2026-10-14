@@ -9,7 +9,7 @@ exist. Existing local tools are a foundation, not proof of parity or deployment.
 
 | Requirement | Required behavior / evidence | Current state |
 | --- | --- | --- |
-| Branded links | Custom slug, random slug, editable destination; shorten arbitrary public HTTP(S) URLs | Candidate: public HTTP(S) destinations, random slug UI and server allocation; private/local targets rejected; custom domains missing |
+| Branded links | Custom slug, random slug, editable destination; shorten arbitrary public HTTP(S) URLs | Candidate: public HTTP(S) destinations, random slug UI and server allocation; private/local targets rejected; hostname namespaces and signed branded routing implemented locally, pending controlled release |
 | UTM builder | Source/medium/campaign/term/content/referral; preserve queries/fragments | Candidate: six campaign fields including referral; query/fragment preservation tested |
 | Shared UTM templates | Named workspace templates, apply/save/edit/delete in builder/settings | Candidate: implemented locally; pending release |
 | Folders | Create/rename/delete/move links, folder-filtered list and analytics | Candidate: implemented locally; pending release |
@@ -19,8 +19,8 @@ exist. Existing local tools are a foundation, not proof of parity or deployment.
 | Bulk actions | Create/update/upsert/delete, folder/tag assignment, archive, import/export, QR export | Candidate for managed links: atomic create/update/upsert/deletion API and CSV review/import/export UI, archive/restore, folder/tag assignment and verified QR ZIP; production release pending |
 | Custom previews | Uploaded OG image (1200×630, ≤1.5 MB), title≤120, description≤240, video API, crawler unfurl | Candidate: editor, scoped upload/presentation APIs and crawler HTML; native browser/Storage release pending |
 | AI previews | Generate title/description from destination content using configured AI provider | Candidate: scoped draft generator with spend limits; live provider and browser verification pending |
-| Custom domains | Verify ownership/DNS, multiple domains, primary domain, redirects on branded hostname | Partial: private registry, exact DNS verification, owner UI and stored defaults implemented locally; durable Cloudflare lifecycle/TLS checks implemented locally; real provider proof, hostname namespaces/routing, primary, builder/SDK/inventory and release pending |
-| Domain defaults | Root/not-found redirects, default expiration URL, workspace/domain QR logos | Partial: root/not-found/expiry settings stored and validated; live resolver behavior and QR/logo precedence pending |
+| Custom domains | Verify ownership/DNS, multiple domains, primary domain, redirects on branded hostname | Partial: private registry, exact DNS verification, owner UI and stored defaults implemented locally; durable Cloudflare lifecycle/TLS checks implemented locally; hostname namespaces, signed relay/resolver, routing health, background proof renewal and inventory/CSV/QR/API/SDK fields implemented locally; primary/builder choices, real provider proof and release pending |
+| Domain defaults | Root/not-found redirects, default expiration URL, workspace/domain QR logos | Partial: root/not-found/expiry settings and signed-host resolver implemented locally; managed root-link policies, QR/logo precedence and release pending |
 | Deep links | iOS/Android association files, app page routes, fallback and deferred attribution | Missing |
 | Geo targeting | Country-specific destinations and default fallback | Candidate: country rules and fallback tested |
 | Device targeting | iOS/Android destinations, evaluated before geo | Candidate: iOS/Android priority tested |
@@ -38,7 +38,7 @@ exist. Existing local tools are a foundation, not proof of parity or deployment.
 | Shared dashboards | Revocable scoped sharing, sanitized aggregate-only default | Candidate: saved snapshots, explicit dynamic folders, password/expiry/revoke, aggregate-only UI, date selection and live opt-in indexing implemented locally; runtime release pending |
 | Custom reports | Custom dates, granular link/folder/tag/domain/geo/device/event filters | Partial: date/dimension report UI/API, personal saved definitions and scoped sharing implemented locally; team discovery and runtime release pending |
 | Integrations | Segment and GTM adapters; native configured integrations and provider callbacks | Missing |
-| REST API | Authenticated/scoped link CRUD/upsert/count/list, analytics/events, folders/tags, bulk operations | Partial: scoped link CRUD/upsert/count/list/mixed bulk, conversions and analytics/events; folder/tag/template resource CRUD with workspace scopes; scoped targeting/password/tracking/preview policy endpoints; domain/deep-link fields pending |
+| REST API | Authenticated/scoped link CRUD/upsert/count/list, analytics/events, folders/tags, bulk operations | Partial: scoped link CRUD/upsert/count/list/mixed bulk, conversions and analytics/events; folder/tag/template resource CRUD with workspace scopes; scoped targeting/password/tracking/preview policy endpoints; domain fields/filter/canonical URLs implemented locally; deep-link fields and release pending |
 | SDKs | TypeScript, Python, Go, Ruby, PHP wrappers and runnable examples covering management/tracking | Candidate: five native clients verified through actual HTTP handler and isolated DB; publication/release pending |
 | Webhooks | Signed click/lead/sale events, retries, delivery history, replay and secret rotation | Missing |
 
@@ -824,3 +824,49 @@ DNS verifier and current owner authority. Missing proof closes routing. The full
 builder, primary, inventory, CSV/QR, five SDK and controlled-deployment integration
 requirements remain in scope; managed root-link policies and provider validation
 restart also remain explicit follow-up requirements.
+
+Implemented locally: hostname foreign keys and scoped unique indexes, explicit
+built-in null namespace, canonical API URLs/domain filters, scoped upsert/bulk,
+immutable inventory hostnames, and readiness checks for new/moved bindings.
+A dedicated Cloudflare SaaS relay signs actual URL scope and strips untrusted
+internal/customer auth headers. The resolver verifies protocol/method/host/path/
+query/IP/time, isolates domains without fallback, retains passwords/previews/
+cloaking/targeting/conversions/QR attribution, and uses stored domain defaults.
+Current authority/ownership/TLS gates resolution and atomic visit recording.
+Both older visit/click entry points now delegate to those same guards. A branded
+request cannot count against a link moved back into the built-in namespace.
+
+The owner panel runs a bounded, explicit browser health GET with no credentials,
+referrer, cache or redirects and refreshes authoritative registry readiness.
+Signed health/traffic records proof bound to provider ID/protocol; active traffic
+refreshes after six hours, proof expires after 24 hours. Known-provider polling
+renews previous ownership proof using existing nonce/version/budget/DNS controls;
+rotated or never-verified challenges require explicit initial verification.
+Inventory, legacy source display, managed CSV namespace roundtrips/duplicate
+checks/template and inventory QR attribution now preserve branded identity.
+TypeScript types and the five SDK field contract are documented.
+
+Evidence: all migrated SQL tests pass, including same-slug/default-domain
+isolation, spoofed derived hostname, missing/stale routing proof, provider change,
+stale TLS, disabled domain, revoked requester, namespace transition and legacy
+entry-point guards. Actual owner HTTP → SQL → actual provider adapter exercises
+route-proof gating, canonical URLs, scoped list/upsert and background DNS renewal;
+all five native SDKs/examples pass. 110 focused tests across 13 files pass,
+including actual Worker → resolver execution, MAC tampering, password/preview/QR
+behavior, bounded forms, browser health flow, CSV and inventory regressions.
+Worker types and local bundle dry run pass. App types remain 704 inherited errors
+with none new; functions types, targeted lint/formatting, production build and
+2273 unique/parseable migrations pass. Actual CSV → SQL integration also passes.
+Native browser verified the owner routing check and responsive controls; mobile
+client/scroll width are both 390. Saved local-fixture evidence:
+`outputs/redirect-dub-parity/domain-routing-ready-desktop.jpg` and
+`domain-routing-ready-mobile.jpg` in the shared workspace root. Temporary tab and
+viewport were cleaned up; production requests were blocked in the fixture.
+
+This is a checkpoint, not full Dub parity or a production rollout. Still required:
+domain choices/primary preference and full builder/member integration, broader
+all-source folder semantics, managed root-link policies, provider validation
+restart, remaining domain lifecycle/DNS automation, and every other open feature
+in this ledger. Dedicated Worker/zone routing, real DNS/TLS, scheduled renewal,
+production migrations, release/PR/push and controlled-domain verification remain
+unperformed. No production provider/DNS/database/deployment writes were made.

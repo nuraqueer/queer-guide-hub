@@ -1,7 +1,7 @@
 import sharp from 'sharp';
 import jsQR from 'jsqr';
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_QR_STYLE, qrStyleError, renderQrSvg, type QrStyle } from '../qr';
+import { DEFAULT_QR_STYLE, qrTrackingUrl, qrStyleError, renderQrSvg, type QrStyle } from '../qr';
 
 const link = 'https://queer.guide/go/pride-qr?utm_source=poster#details';
 async function decode(svg: string, jpg = false) {
@@ -49,6 +49,13 @@ describe('branded QR scanability', () => {
     };
     for (const url of [link, 'https://queer.guide/go/abc'])
       expect(await decode(renderQrSvg(url, style))).toBe(url);
+  });
+  it('annotates known managed branded QR links and leaves ordinary external URLs alone', async () => {
+    const raw = 'https://links.community.com/pride-qr?utm_source=poster';
+    expect(qrTrackingUrl(raw)).toBe(raw);
+    const tracked = qrTrackingUrl(raw, true);
+    expect(new URL(tracked).searchParams.get('qg_qr')).toBe('1');
+    expect(await decode(renderQrSvg(tracked))).toBe(tracked);
   });
   it('blocks low contrast, inverted colors and unsafe logo markup', () => {
     expect(qrStyleError({ ...DEFAULT_QR_STYLE, foreground: '#eeeeee' })).toContain('contrast');

@@ -6,6 +6,15 @@ import {
   randomLinkSlug,
 } from '../../../../supabase/functions/_shared/redirect-links';
 describe('link management input contract', () => {
+  it('accepts explicit domain bindings and default-namespace filters while rejecting malformed IDs', () => {
+    const domainId = '00000000-0000-4000-8000-000000000001';
+    expect(linkInput({ domainId }, 'update')).toEqual({ domainId });
+    expect(linkInput({ domainId: null }, 'update')).toEqual({ domainId: null });
+    expect(linkListInput({ domainId: null })).toEqual({ domainId: null });
+    expect(linkListInput({ domainId })).toEqual({ domainId });
+    expect(() => linkInput({ domainId: 'bad' }, 'update')).toThrow('domain');
+    expect(() => linkListInput({ domainId: 'bad' })).toThrow('domain');
+  });
   it('supports boolean archive patches and filters', () => {
     expect(linkInput({ isArchived: true }, 'update')).toEqual({ isArchived: true });
     expect(linkListInput({ isArchived: false })).toEqual({ isArchived: false });

@@ -1,3 +1,4 @@
+import { checkRedirectDomainDns } from './redirect-domains.ts';
 import { UUID } from './redirect-api.ts';
 export interface DomainProviderConfig {
   zoneId: string;
@@ -262,6 +263,17 @@ export async function dispatchRedirectDomainJobs(
           undefined,
           'Provider configuration changed; restore the bound zone and CNAME target',
         );
+      if (job.kind === 'refresh') {
+        const renewal = await db.rpc('reserve_redirect_domain_renewal', { p_id:job.id,p_lease:job.lease,p_operation:job.operation });
+        if (renewal.error) throw new Error('Ownership renewal unavailable');
+        if (renewal.data) {
+          const proof=renewal.data;
+          if (![proof.actor,proof.version,proof.attempt].every(value=>typeof value==='string' && UUID.test(value)) || proof.verification?.name !== '_qg-redirect.'+job.hostname || typeof proof.verification?.value!=='string') throw new Error('Invalid ownership renewal');
+          const outcome=await checkRedirectDomainDns(proof.verification,fetcher);
+          const recorded=await db.rpc('redirect_domain_check_result',{p_actor:proof.actor,p_id:job.id,p_version:proof.version,p_attempt:proof.attempt,p_outcome:outcome});
+          if(recorded.error) throw new Error('Ownership changed during renewal');
+        }
+      }
       if (job.kind === 'preflight' || job.kind === 'reconcile') {
         const candidates = await providerCandidates(config, job.hostname, fetcher);
         if (candidates.length || job.kind === 'reconcile')

@@ -27,16 +27,22 @@ function downloadQr(url: string, name: string) {
   anchor.remove();
 }
 
-export function QrExport({ url }: { url: string }) {
+export function QrExport({
+  url,
+  managedShortLink = false,
+}: {
+  url: string;
+  managedShortLink?: boolean;
+}) {
   const [style, setStyle] = useState<QrStyle>({ ...DEFAULT_QR_STYLE });
   const error = qrStyleError(style);
   const qr = useQuery({
-    queryKey: ['redirect-qr', url, style],
+    queryKey: ['redirect-qr', url, style, managedShortLink],
     staleTime: Infinity,
     retry: false,
     enabled: !error,
     queryFn: async () => {
-      return generateQr(qrTrackingUrl(url), style);
+      return generateQr(qrTrackingUrl(url, managedShortLink), style);
     },
   });
   return (
@@ -149,7 +155,15 @@ export function QrExport({ url }: { url: string }) {
   );
 }
 
-export function RedirectQrDialog({ url, onClose }: { url: string; onClose: () => void }) {
+export function RedirectQrDialog({
+  url,
+  onClose,
+  managedShortLink = false,
+}: {
+  url: string;
+  onClose: () => void;
+  managedShortLink?: boolean;
+}) {
   return (
     <Dialog
       open
@@ -164,7 +178,7 @@ export function RedirectQrDialog({ url, onClose }: { url: string; onClose: () =>
             The QR code opens this URL. Create a tracked link to collect visit analytics.
           </DialogDescription>
         </DialogHeader>
-        <QrExport url={url} />
+        <QrExport url={url} managedShortLink={managedShortLink} />
       </DialogContent>
     </Dialog>
   );

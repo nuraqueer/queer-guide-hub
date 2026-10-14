@@ -4,7 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 import {
   managedImportCsv,
   MANAGED_IMPORT_MAX_BYTES,
-  IMPORT_HEADERS,
+  managedLinksCsv,
   type ImportMode,
   type ImportOperation,
 } from '@/lib/redirects/importCsv';
@@ -97,8 +97,17 @@ export function RedirectManagedImportDialog({
     const url = URL.createObjectURL(
       new Blob(
         [
-          IMPORT_HEADERS.join(',') +
-            '\r\n,pride-campaign,https://example.com/events,302,true,false,PRESERVE,,,,,,\r\n',
+          managedLinksCsv([
+            {
+              slug: 'pride-campaign',
+              domainId: null,
+              target: 'https://example.com/events',
+              statusCode: 302,
+              isEnabled: true,
+              isArchived: false,
+              queryMode: 'PRESERVE',
+            },
+          ]),
         ],
         { type: 'text/csv;charset=utf-8' },
       ),

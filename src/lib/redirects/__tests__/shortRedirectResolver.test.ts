@@ -2,9 +2,12 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { webcrypto } from 'node:crypto';
 import ts from 'typescript';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { hashLinkPassword } from '../../../../supabase/functions/_shared/link-policy';
 
+import domainWorker from '../../../../workers/redirect-domains/index';
+const domainSecret = 'fixture-domain-secret-'.repeat(3);
+afterEach(() => vi.unstubAllGlobals());
 function runtime() {
   const source = readFileSync(
     join(__dirname, '../../../../supabase/functions/redirect-handler/index.ts'),
@@ -26,8 +29,22 @@ function runtime() {
     join(__dirname, '../../../../supabase/functions/_shared/redirect-presentation.ts'),
     'utf8',
   ).replace(/^export\s+/gm, '');
+  const domainRelay = readFileSync(
+    join(__dirname, '../../../../supabase/functions/_shared/redirect-domain-relay.ts'),
+    'utf8',
+  ).replace(/^export\s+/gm, '');
   const code = ts.transpileModule(
-    shared + '\n' + visitor + '\n' + relay + '\n' + presentation + '\n' + source,
+    shared +
+      '\n' +
+      visitor +
+      '\n' +
+      relay +
+      '\n' +
+      presentation +
+      '\n' +
+      domainRelay +
+      '\n' +
+      source,
     {
       compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext },
     },
@@ -45,6 +62,16 @@ function runtime() {
       start_at: null,
       end_at: null as string | null,
     },
+    domain: null as null | {
+      id: string;
+      hostname: string;
+      rootUrl: string | null;
+      notFoundUrl: string | null;
+      expiredUrl: string | null;
+    },
+    managedTarget: false,
+    domainFailure: false,
+    filters: [] as Array<[string, string, unknown]>,
     settings: { policy: {}, password_hash: null as unknown },
     failed: false,
     quota: true,
@@ -53,17 +80,22 @@ function runtime() {
   };
   const rpc = vi.fn(async (name: string, _args?: Record<string, unknown>) => ({
     error:
-      name === 'reserve_redirect_password_attempt' && state.attemptError
+      (name === 'reserve_redirect_password_attempt' && state.attemptError) ||
+      (name === 'redirect_public_domain' && state.domainFailure)
         ? { message: 'offline' }
         : null,
     data:
-      name === 'reserve_redirect_password_attempt'
-        ? state.retry
-        : name === 'record_redirect_visit'
-          ? state.quota
-            ? 'click-id'
-            : null
-          : [],
+      name === 'redirect_public_domain'
+        ? state.domain
+        : name === 'record_redirect_domain_route'
+          ? !!state.domain
+          : name === 'reserve_redirect_password_attempt'
+            ? state.retry
+            : name === 'record_redirect_visit'
+              ? state.quota
+                ? 'click-id'
+                : null
+              : [],
   }));
   const db = {
     rpc,
@@ -72,13 +104,25 @@ function runtime() {
         select() {
           return query;
         },
-        eq() {
+        is(key: string, value: unknown) {
+          state.filters.push([table, key, value]);
+          return query;
+        },
+        eq(key: string, value: unknown) {
+          state.filters.push([table, key, value]);
           return query;
         },
         async maybeSingle() {
           return {
             error: state.failed ? { message: 'offline' } : null,
-            data: table === 'redirects' ? state.link : state.settings,
+            data:
+              table === 'redirects'
+                ? state.link
+                : table === 'redirect_domains'
+                  ? state.managedTarget
+                    ? { id: 'managed' }
+                    : null
+                  : state.settings,
           };
         },
       };
@@ -88,7 +132,11 @@ function runtime() {
   const deno = {
     env: {
       get: (key: string) =>
-        key === 'SUPABASE_URL' ? 'https://fixture.supabase.co' : 'fixture-key',
+        key === 'SUPABASE_URL'
+          ? 'https://fixture.supabase.co'
+          : key === 'REDIRECT_RELAY_SECRET'
+            ? domainSecret
+            : 'fixture-key',
     },
     serve: (callback: typeof handler) => {
       handler = callback;
@@ -98,6 +146,7 @@ function runtime() {
   return {
     state,
     rpc,
+    handle: (request: Request) => handler!(request),
     invoke: (method = 'GET', query = 'utm_source=qr', body?: string, agent = '') =>
       handler!(
         new Request(
@@ -244,5 +293,105 @@ describe('live short-link resolver', () => {
       domain: 'queer.guide',
     });
     expect(run.rpc.mock.calls[0][1]?.p_query).toBe('utm_source=poster');
+  });
+});
+
+describe('branded Worker → actual resolver', () => {
+  const env = {
+    SUPABASE_URL: 'https://fixture.supabase.co',
+    SUPABASE_ANON_KEY: 'fixture-key',
+    REDIRECT_RELAY_SECRET: domainSecret,
+  };
+  function branded() {
+    const run = runtime();
+    vi.stubGlobal('crypto', webcrypto);
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url, options) => run.handle(new Request(url, options))),
+    );
+    run.state.domain = {
+      id: 'domain-a',
+      hostname: 'links.community.com',
+      rootUrl: 'https://example.com/home',
+      notFoundUrl: 'https://example.com/missing',
+      expiredUrl: 'https://example.com/expired',
+    };
+    return {
+      ...run,
+      open: (path = '/pride-qr', method = 'GET') =>
+        domainWorker.fetch(
+          new Request('https://links.community.com' + path, {
+            method,
+            headers: { 'cf-connecting-ip': '192.0.2.1' },
+          }),
+          env,
+        ),
+    };
+  }
+  it('isolates builtin and custom namespaces, and records canonical branded visit context and QR attribution', async () => {
+    const run = branded();
+    const response = await run.open('/pride-qr?qg_qr=1&utm_source=poster');
+    expect(response.status).toBe(302);
+    expect(run.state.filters).toContainEqual(['redirects', 'domain_id', 'domain-a']);
+    expect(
+      run.rpc.mock.calls.find(([name]) => name === 'record_redirect_visit')?.[1],
+    ).toMatchObject({
+      p_path: '/pride-qr',
+      p_metadata: { domain: 'links.community.com', is_qr: true },
+      p_query: 'utm_source=poster',
+    });
+    expect(response.headers.get('Location')).not.toContain('qg_qr');
+    run.state.filters = [];
+    expect((await run.invoke()).status).toBe(302);
+    expect(run.state.filters).toContainEqual(['redirects', 'domain_id', null]);
+  });
+  it('does not fall back to builtin links for a rejected, missing or unavailable custom domain', async () => {
+    const run = branded();
+    run.state.domain = null;
+    expect((await run.open()).status).toBe(404);
+    expect(run.state.filters).toHaveLength(0);
+    expect(run.rpc.mock.calls.some(([name]) => name === 'record_redirect_visit')).toBe(false);
+    run.state.domainFailure = true;
+    expect((await run.open()).status).toBe(502);
+    const forged = await run.handle(
+      new Request('https://fixture.supabase.co/functions/v1/redirect-handler?slug=pride-qr', {
+        headers: { 'x-qg-domain-hostname': 'links.community.com' },
+      }),
+    );
+    expect(forged.status).toBe(404);
+    expect(run.state.filters).toHaveLength(0);
+  });
+  it('checks routing without a link or visit, and uses domain fallbacks without recording visits', async () => {
+    const run = branded();
+    const health = await run.open('/.well-known/qg-redirect');
+    expect(await health.json()).toEqual({ ready: true, protocol: 1 });
+    expect(run.state.filters).toHaveLength(0);
+    expect((await run.open('/')).headers.get('Location')).toBe('https://example.com/home');
+    expect((await run.open('/invalid/path')).headers.get('Location')).toBe(
+      'https://example.com/missing',
+    );
+    run.state.link.end_at = '2000-01-01T00:00:00Z';
+    expect((await run.open()).headers.get('Location')).toBe('https://example.com/expired');
+    expect(run.rpc.mock.calls.some(([name]) => name === 'record_redirect_visit')).toBe(false);
+  });
+  it('keeps protected previews private and uses the branded canonical URL for public previews', async () => {
+    const run = branded();
+    run.state.settings.policy = { preview: { title: 'Branded preview' } };
+    const request = new Request('https://links.community.com/pride-qr', {
+      headers: { 'User-Agent': 'Twitterbot/1.0' },
+    });
+    const preview = await domainWorker.fetch(request, env);
+    expect(await preview.text()).toContain('https://links.community.com/pride-qr');
+    run.state.settings.password_hash = await hashLinkPassword('fixture-password');
+    const denied = await domainWorker.fetch(request, env);
+    expect(denied.status).toBe(401);
+    expect(await denied.text()).not.toContain('Branded preview');
+    expect(run.rpc.mock.calls.some(([name]) => name === 'record_redirect_visit')).toBe(false);
+  });
+  it('rejects managed-domain destination loops before counting a visit', async () => {
+    const run = branded();
+    run.state.managedTarget = true;
+    expect((await run.open()).status).toBe(502);
+    expect(run.rpc.mock.calls.some(([name]) => name === 'record_redirect_visit')).toBe(false);
   });
 });

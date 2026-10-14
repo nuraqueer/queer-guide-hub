@@ -1,7 +1,22 @@
 import { describe, it, expect } from 'vitest';
-import { parseRedirectCsv, managedImportCsv, managedLinksCsv, IMPORT_HEADERS } from '../importCsv';
+import { parseRedirectCsv, managedImportCsv, managedLinksCsv } from '../importCsv';
 const id = '00000000-0000-4000-8000-000000000001';
 describe('managed CSV import and export', () => {
+  it('preserves custom-domain identity in roundtrips and permits the same slug on different domains', () => {
+    const branded = { id, slug: 'same-link', target: '/events', domainId: id };
+    expect(managedImportCsv(managedLinksCsv([branded]), 'update')[0]).toMatchObject({
+      id,
+      data: { domainId: id },
+    });
+    const csv = 'slug,target,domainId\nsame-link,/events,' + id + '\nsame-link,/events,null';
+    expect(managedImportCsv(csv, 'upsert')).toHaveLength(2);
+    expect(() => managedImportCsv(csv + '\nsame-link,/events,' + id, 'upsert')).toThrow(
+      'Duplicate link identity',
+    );
+    expect(managedImportCsv('id,domainId\n' + id + ',null', 'update')[0].data).toEqual({
+      domainId: null,
+    });
+  });
   it('handles BOM, CRLF, commas, escaped quotes and multiline comments', () => {
     const csv =
       '\uFEFFslug,target,comment\r\nPRIDE,https://example.com,"Community, ""welcome""\nMore text"\r\n';
@@ -83,9 +98,17 @@ describe('managed CSV import and export', () => {
     expect(() => managedImportCsv('slug,target\npride,/events\nmissing,', 'create')).toThrow(
       'Row 3',
     );
-    const template =
-      IMPORT_HEADERS.join(',') +
-      '\r\n,pride-campaign,https://example.com/events,302,true,false,PRESERVE,,,,,,\r\n';
+    const template = managedLinksCsv([
+      {
+        slug: 'pride-campaign',
+        domainId: null,
+        target: 'https://example.com/events',
+        statusCode: 302,
+        isEnabled: true,
+        isArchived: false,
+        queryMode: 'PRESERVE',
+      },
+    ]);
     expect(managedImportCsv(template, 'create')).toHaveLength(1);
   });
 });

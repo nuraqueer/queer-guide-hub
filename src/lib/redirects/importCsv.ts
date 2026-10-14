@@ -9,6 +9,7 @@ export interface ImportOperation {
 export const IMPORT_HEADERS = [
   'id',
   'slug',
+  'domainId',
   'target',
   'statusCode',
   'isEnabled',
@@ -135,7 +136,7 @@ export function managedImportCsv(text: string, mode: ImportMode): ImportOperatio
           data[field] = Number(raw);
         } else if (['queryOverride', 'utmDefaults', 'tagIds'].includes(field))
           data[field] = JSON.parse(raw);
-        else if (['expiresAt', 'folderId'].includes(field) && raw.trim() === 'null')
+        else if (['expiresAt', 'folderId', 'domainId'].includes(field) && raw.trim() === 'null')
           data[field] = null;
         else
           data[field] =
@@ -143,7 +144,12 @@ export function managedImportCsv(text: string, mode: ImportMode): ImportOperatio
       }
       if (mode === 'update' && !id) throw new Error('Update requires a link ID');
       const checked = linkInput(data, mode);
-      const identity = mode === 'update' ? id : checked.slug;
+      const identity =
+        mode === 'update'
+          ? id
+          : checked.slug
+            ? `${checked.domainId ?? 'builtin'}:${checked.slug}`
+            : undefined;
       if (identity) {
         const key = String(identity);
         if (identities.has(key)) throw new Error('Duplicate link identity in this batch');

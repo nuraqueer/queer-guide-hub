@@ -148,9 +148,12 @@ export async function generateQr(url: string, style: QrStyle, signal?: AbortSign
   throw new Error('This style could not be verified. Try square markers or remove the logo.');
 }
 
-export function qrTrackingUrl(raw: string) {
+export function qrTrackingUrl(raw: string, managedShortLink = false) {
   const url = new URL(raw);
-  if (['queer.guide', 'www.queer.guide'].includes(url.hostname) && url.pathname.startsWith('/go/'))
+  if (
+    managedShortLink ||
+    (['queer.guide', 'www.queer.guide'].includes(url.hostname) && url.pathname.startsWith('/go/'))
+  )
     url.searchParams.set('qg_qr', '1');
   return url.href;
 }

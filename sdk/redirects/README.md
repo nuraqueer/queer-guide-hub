@@ -89,3 +89,19 @@ links:read for reads and links:write for patches. The response exposes policy an
 hasPassword only; top-level null policy fields remove a setting, and password:null
 removes protection. See [the policy API guide](../../docs/guides/redirect-policy-api.md)
 for fields, complete examples, hash limits and expiry/merge semantics.
+
+## Branded hostname namespaces
+
+Pass `domainId` (a registered domain UUID) in link create/upsert/update or bulk
+input. Pass `null` to select the built-in `/go/` namespace. Omitted updates preserve
+the current binding; omitted create/upsert selects the built-in namespace. The
+same slug can exist on different domains. List/count filters accept the same
+UUID/null `domainId`. Responses include the canonical `shortUrl`, `domainId` and
+`domainHostname`; use `shortUrl` instead of constructing a URL from the slug.
+
+A new or moved binding requires current ownership, TLS and signed public-routing
+proof. Existing folder/member/token permissions still apply. Domain registration,
+provider setup and routing checks are owner-session controls; these SDKs do not
+acquire those privileges. Python/Ruby/PHP dictionaries and Go `Object` pass the
+same fields as TypeScript `LinkInput`. The implementation and SDKs remain local
+sources awaiting production rollout/publication.

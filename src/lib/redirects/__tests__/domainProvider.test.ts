@@ -49,11 +49,13 @@ function database(value: DomainProviderJob = job) {
   return {
     rpc: vi.fn<DomainProviderDb['rpc']>(async (name) => ({
       data:
-        name === 'claim_redirect_domain_jobs'
-          ? [value]
-          : name === 'begin_redirect_domain_create'
-            ? nonce
-            : true,
+        name === 'reserve_redirect_domain_renewal'
+          ? null
+          : name === 'claim_redirect_domain_jobs'
+            ? [value]
+            : name === 'begin_redirect_domain_create'
+              ? nonce
+              : true,
       error: null,
     })),
   };
@@ -65,6 +67,57 @@ function completion(db: ReturnType<typeof database>) {
 }
 const ok = (result: unknown) => Response.json({ success: true, result });
 describe('durable domain provider adapter', () => {
+  it('renews a previously verified proof with the bounded DNS verifier before refreshing known TLS state', async () => {
+    const db = database({ ...job, kind: 'refresh', providerId: provider });
+    db.rpc.mockImplementation(async (name) => ({
+      data:
+        name === 'claim_redirect_domain_jobs'
+          ? [{ ...job, kind: 'refresh', providerId: provider }]
+          : name === 'reserve_redirect_domain_renewal'
+            ? {
+                actor: id,
+                version: operation,
+                attempt: nonce,
+                verification: {
+                  name: '_qg-redirect.' + job.hostname,
+                  value: 'qg-redirect=' + 'a'.repeat(64),
+                },
+              }
+            : true,
+      error: null,
+    }));
+    const fetcher = vi.fn(async (input: RequestInfo | URL) =>
+      new URL(String(input)).hostname === 'cloudflare-dns.com'
+        ? Response.json(
+            {
+              Status: 0,
+              Question: [{ name: '_qg-redirect.' + job.hostname, type: 16 }],
+              Answer: [
+                {
+                  name: '_qg-redirect.' + job.hostname,
+                  type: 16,
+                  data: '"qg-redirect=' + 'a'.repeat(64) + '"',
+                },
+              ],
+            },
+            { headers: { 'Content-Type': 'application/dns-json' } },
+          )
+        : ok(snapshot),
+    );
+    await dispatchRedirectDomainJobs(db, config, fetcher);
+    expect(db.rpc).toHaveBeenCalledWith(
+      'redirect_domain_check_result',
+      expect.objectContaining({
+        p_actor: id,
+        p_id: id,
+        p_version: operation,
+        p_attempt: nonce,
+        p_outcome: 'verified',
+      }),
+    );
+    expect(fetcher).toHaveBeenCalledTimes(2);
+    expect(completion(db)).toMatchObject({ kind: 'status', id: provider });
+  });
   it('stays idle without dedicated valid configuration and validates reviewed owner actions', async () => {
     expect(domainProviderConfig('bad', 'token', config.cnameTarget)).toBeNull();
     expect(domainProviderConfig(config.zoneId, '', config.cnameTarget)).toBeNull();

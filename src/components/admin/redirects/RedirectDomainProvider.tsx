@@ -23,7 +23,13 @@ export function RedirectDomainProvider({
   connected,
   pending,
   act,
+  routingReady = false,
+  routingSeenAt,
+  onRoutingChecked,
 }: {
+  routingReady?: boolean;
+  routingSeenAt?: string | null;
+  onRoutingChecked?: () => Promise<unknown>;
   provider?: DomainProviderStatus;
   setup?: { configured: boolean; cnameTarget: string | null };
   hostname: string;
@@ -33,6 +39,8 @@ export function RedirectDomainProvider({
   pending: boolean;
   act: (suffix: string, method: 'POST', body?: Record<string, unknown>) => void;
 }) {
+  const [checkingRoute, setCheckingRoute] = useState(false);
+  const [routingMessage, setRoutingMessage] = useState('');
   const [review, setReview] = useState<'connect' | 'disconnect' | 'absence' | null>(null);
   const [candidate, setCandidate] = useState<string | null>(null);
   const [confirmedAbsent, setConfirmedAbsent] = useState(false);
@@ -76,10 +84,77 @@ export function RedirectDomainProvider({
           )}
         </dl>
       )}
-      <p className="text-sm text-muted-foreground">
-        An active certificate does not prove that branded links are routed correctly. Public branded
-        routing is not available yet.
-      </p>
+      <section aria-label="Branded routing" className="space-y-2">
+        <p className="text-sm">Branded routing: {routingReady ? 'Ready' : 'Not verified'}</p>
+        {routingSeenAt && (
+          <p className="text-sm text-muted-foreground">
+            Last route check: {new Date(routingSeenAt).toLocaleString()}
+          </p>
+        )}
+        <p className="text-sm text-muted-foreground">
+          Check routing after the certificate is active and your hostname points to the configured
+          CNAME target.
+        </p>
+        <Button
+          type="button"
+          variant="outline"
+          disabled={
+            pending || checkingRoute || !verified || disabled || !provider?.certificateReady
+          }
+          onClick={async () => {
+            setCheckingRoute(true);
+            setRoutingMessage('');
+            try {
+              const response = await fetch('https://' + hostname + '/.well-known/qg-redirect', {
+                method: 'GET',
+                credentials: 'omit',
+                referrerPolicy: 'no-referrer',
+                cache: 'no-store',
+                redirect: 'error',
+                signal: AbortSignal.timeout(8000),
+              });
+              if (
+                !response.ok ||
+                !response.headers.get('Content-Type')?.startsWith('application/json')
+              )
+                throw new Error('Routing check failed');
+              const reader = response.body?.getReader();
+              if (!reader) throw new Error('Routing check failed');
+              let body = '';
+              let bytes = 0;
+              const decoder = new TextDecoder();
+              for (;;) {
+                const { value, done } = await reader.read();
+                if (done) break;
+                bytes += value.length;
+                if (bytes > 4096) {
+                  await reader.cancel();
+                  throw new Error('Routing check failed');
+                }
+                body += decoder.decode(value, { stream: true });
+              }
+              const result = JSON.parse(body + decoder.decode());
+              if (result.ready !== true || result.protocol !== 1)
+                throw new Error('Routing check failed');
+              await onRoutingChecked?.();
+              setRoutingMessage('Routing check received. Current status refreshed.');
+            } catch {
+              setRoutingMessage(
+                'Could not verify routing. Check DNS, certificate status and the branded routing service, then try again.',
+              );
+            } finally {
+              setCheckingRoute(false);
+            }
+          }}
+        >
+          {checkingRoute ? 'Checking routing…' : 'Check branded routing'}
+        </Button>
+        {routingMessage && (
+          <p role="status" className="text-sm">
+            {routingMessage}
+          </p>
+        )}
+      </section>
       {provider?.error && (
         <p role="alert" className="text-sm">
           {provider.error}

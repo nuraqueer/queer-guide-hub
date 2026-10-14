@@ -187,7 +187,9 @@ export function RedirectFormDialog({
               <Label>Slug</Label>
               <div className="flex items-center gap-1">
                 <span style={{ fontFamily: 'monospace' }} className="text-muted-foreground">
-                  /go/
+                  {editingRedirect?.domain_hostname
+                    ? `${editingRedirect.domain_hostname}/`
+                    : '/go/'}
                 </span>
                 <Input
                   value={slug}
@@ -203,7 +205,8 @@ export function RedirectFormDialog({
                     : 'hsl(var(--muted-foreground))',
                 }}
               >
-                {validationErrors.slug || `Short URL: queer.guide/go/${slug || '...'}`}
+                {validationErrors.slug ||
+                  `Short URL: ${editingRedirect?.domain_hostname ? editingRedirect.domain_hostname + '/' : 'queer.guide/go/'}${slug || '...'}`}
               </p>
             </div>
           ) : (

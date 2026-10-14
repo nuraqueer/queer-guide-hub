@@ -1,10 +1,12 @@
 # Custom redirect domain setup
 
-The Link workspace dialog has owner-only domain registration, ownership checks
-and durable Cloudflare hostname/TLS setup. Root, not-found and expired-link
-destinations are stored. Public branded routing, hostname-scoped link namespaces
-and primary selection are not implemented yet. A successful TXT or certificate
-check must never be presented as a live branded short-link domain.
+The Link workspace has owner-only domain registration, ownership checks, durable
+Cloudflare hostname/TLS setup and an explicit branded routing check. Managed
+links have separate hostname namespaces; the default remains
+`https://queer.guide/go/<slug>`. Root, not-found and default expiry destinations
+are resolved on branded hosts. The domain picker and primary-domain preference
+are still pending. This implementation is local; provisioning a production
+hostname and deploying the dedicated relay remain release work.
 
 ## Registration and ownership
 
@@ -94,7 +96,6 @@ References: [Dub custom domains](https://dub.co/help/article/how-to-add-custom-d
 [Cloudflare SaaS setup](https://developers.cloudflare.com/cloudflare-for-platforms/cloudflare-for-saas/start/getting-started/),
 [Cloudflare DNS JSON](https://developers.cloudflare.com/1.1.1.1/encryption/dns-over-https/make-api-requests/dns-json/).
 
-
 ## Durable hostname and certificate lifecycle
 
 Configure the dedicated server secrets `REDIRECT_CF_ZONE_ID`,
@@ -181,3 +182,74 @@ provider validation restart, domain SDKs and deployment remain open.
 References: [Cloudflare activation and certificate states](https://developers.cloudflare.com/cloudflare-for-platforms/cloudflare-for-saas/domain-support/hostname-validation/validation-status/),
 [Custom hostname API](https://developers.cloudflare.com/api/resources/custom_hostnames/methods/create/),
 [Workers as fallback origin](https://developers.cloudflare.com/cloudflare-for-platforms/cloudflare-for-saas/start/advanced-settings/worker-as-origin/).
+
+## Hostname namespaces and authenticated routing
+
+`domainId` on link create, update, upsert and bulk operations selects the domain.
+Explicit `null` selects the built-in namespace; an omitted update preserves the
+current binding, while an omitted create/upsert selects the built-in namespace.
+List/count `filters.domainId` uses the same UUID/null semantics. API responses
+include `domainId`, `domainHostname` and the canonical `shortUrl`. Existing ID,
+folder and token permissions still apply. A new/moved binding needs current
+ownership, TLS and routing proof. Existing unavailable links can still be edited
+or removed. Domain deletion is restricted while links reference it.
+
+Managed CSV includes `domainId` and roundtrips bindings. Blank update cells preserve
+the binding; `null` explicitly returns it to the built-in namespace. Duplicate
+checks use domain plus slug. The all-source inventory displays branded URLs and
+its QR export preserves QR attribution on managed links. Ordinary external URLs
+remain unannotated. Builder domain selection and primary preferences remain open.
+
+The dedicated `workers/redirect-domains` relay derives scope from the actual HTTPS
+request URL. It forwards neither customer credentials/cookies nor customer-supplied
+internal headers. Its domain-separated HMAC covers protocol, method, hostname,
+path, canonical query, visitor IP and timestamp. The resolver rejects bad/old MACs,
+altered routing parameters and unknown/unready domains without trying the built-in
+namespace. The built-in resolver explicitly selects a null domain binding.
+
+Every branded request rechecks current provider requester authority, enabled
+state, 24-hour ownership proof and provider hostname/TLS observations no older
+than 15 minutes. Click recording checks domain state again before consuming quota.
+Public previews, password gates, targeting, conversions, cloaking and QR visits
+continue through the same resolver. Root/not-found/expired fallbacks never count
+as visits. Runtime destination checks reject registered redirect-domain loops.
+Advanced managed root-link policies are a separate remaining requirement.
+
+The owner uses **Check branded routing** after DNS and TLS setup. The browser makes
+an explicit, cookie-free GET with no referrer to
+`https://<hostname>/.well-known/qg-redirect`. A valid signed request records routing
+proof tied to the current provider ID and protocol. It returns only readiness
+and protocol; CORS permits the configured application origins without credentials.
+The UI refreshes authoritative registry status and never treats an arbitrary
+customer-host response as database proof. Routing proof lasts 24 hours; actual
+signed traffic refreshes it after six hours. Dormant domains need a fresh check
+before they can receive new link bindings. No server fetch to an arbitrary
+customer hostname is introduced.
+
+Known-provider polling renews previously owner-verified DNS proof when fewer than
+six hours remain, including recovery of expired previous proof. It uses the same
+bounded DNS verifier, per-domain cooldown, global/actor budgets, observation nonce,
+version checks and current owner authority. Missing TXT clears readiness;
+transient DNS failure never extends proof. A rotated/unverified challenge is
+never verified automatically. Provider cleanup remains available independently.
+
+## Release order and verification
+
+1. Apply the namespace/routing migration before deploying clients that select the
+   new columns, then release the redirect API, resolver and domain provisioner.
+2. Configure the dedicated SaaS fallback Worker with the intended `SUPABASE_URL`,
+   public `SUPABASE_ANON_KEY` and a sufficiently long `REDIRECT_RELAY_SECRET`
+   matching the resolver. The committed configuration has no production URL,
+   credentials, custom-host routes or workers.dev exposure. The ignored local
+   fixture variables are not production credentials.
+3. Review the dedicated SaaS fallback zone and Worker routing using the
+   [Cloudflare Worker-as-origin setup](https://developers.cloudflare.com/cloudflare-for-platforms/cloudflare-for-saas/start/advanced-settings/worker-as-origin/).
+   Do not apply a wildcard route to the main application zone as a shortcut.
+4. Provision one controlled hostname, verify TXT/TLS, run the browser routing
+   check, and verify real DNS/Worker/backend traffic before moving live links.
+   Exercise same-slug isolation, root/not-found/expiry defaults, password and QR
+   visits, disablement, missing DNS proof, requester revocation and cleanup.
+
+Local SQL, actual HTTP/SDK integration and Worker/resolver fixtures verify the
+implementation. They do not establish real DNS, certificate issuance, deployed
+routing, cron scheduling or production migration success.

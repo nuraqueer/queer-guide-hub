@@ -18,6 +18,8 @@ export interface InventoryRedirect {
     | 'Recorded';
   updatedAt: string | null;
   manualId?: string;
+  isShortLink?: boolean;
+  domainHostname?: string;
 }
 
 export interface SlugSource {
@@ -178,6 +180,10 @@ export function manualRedirect(row: Row, now = Date.now()): InventoryRedirect {
   return {
     id: `redirects:${row.id}`,
     manualId: String(row.id),
+    isShortLink: row.type === 'SHORT',
+    ...(row.domain_id && row.domain_hostname
+      ? { domainHostname: String(row.domain_hostname) }
+      : {}),
     clicks: Number(row.click_count ?? 0),
     campaign,
     prefill:
@@ -199,7 +205,12 @@ export function manualRedirect(row: Row, now = Date.now()): InventoryRedirect {
         : {},
     origin: 'redirects',
     kind: 'Manual',
-    source: row.type === 'SHORT' ? `/go/${row.slug}` : String(row.source_path ?? ''),
+    source:
+      row.type === 'SHORT'
+        ? row.domain_id && row.domain_hostname
+          ? `https://${row.domain_hostname}/${row.slug}`
+          : `/go/${row.slug}`
+        : String(row.source_path ?? ''),
     target: row.target ? String(row.target) : null,
     statusCode: Number(row.status_code),
     state,
@@ -258,7 +269,7 @@ export async function loadDatabaseInventory(read: ReadInventoryRows) {
         (
           await read(
             'redirects',
-            'id,type,slug,source_path,target,status_code,is_enabled,start_at,end_at,click_limit,click_count,utm_defaults,query_mode,query_override,updated_at',
+            'id,type,slug,domain_id,domain_hostname,source_path,target,status_code,is_enabled,start_at,end_at,click_limit,click_count,utm_defaults,query_mode,query_override,updated_at',
             'id',
           )
         ).map((r) => manualRedirect(r)),

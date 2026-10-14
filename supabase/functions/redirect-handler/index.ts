@@ -1,3 +1,4 @@
+import { DOMAIN_HEALTH_PATH, hasDomainRelay, verifyDomainRelay } from "../_shared/redirect-domain-relay.ts";
 import { socialPreviewAgent, presentationPage } from "../_shared/redirect-presentation.ts";
 import { redirectClientIp } from "../_shared/redirect-relay.ts";
 import { visitorMetadata } from "../_shared/redirect-visitor.ts";
@@ -37,7 +38,11 @@ Deno.serve(async (req: Request) => {
   const head=req.method === "HEAD";
   if (!["GET","HEAD","POST"].includes(req.method)) return new Response("Method not allowed",{status:405,headers:{...responseHeaders,Allow:"GET, HEAD, POST"}});
   const url=new URL(req.url), slug=url.searchParams.get("slug")?.toLowerCase().trim() ?? "";
-  if (!/^[a-z0-9][a-z0-9-]{1,62}[a-z0-9]$/.test(slug)) return page(404,"Link not found","This short link does not exist.",false,head);
+  const branded=hasDomainRelay(req.headers);
+  const relay=branded ? await verifyDomainRelay(req,Deno.env.get("REDIRECT_RELAY_SECRET")) : null;
+  if (branded && !relay) return page(404,"Link not found","This short link does not exist.",false,head);
+  const validSlug=/^[a-z0-9][a-z0-9-]{1,62}[a-z0-9]$/.test(slug);
+  if (!branded && !validSlug) return page(404,"Link not found","This short link does not exist.",false,head);
   const incoming=new URLSearchParams(url.searchParams.get("q") ?? "");
   let password=url.searchParams.get("pw") ?? incoming.get("pw") ?? "";
   const isQr=incoming.get("qg_qr") === "1";
@@ -46,14 +51,40 @@ Deno.serve(async (req: Request) => {
   try {
     if (req.method === "POST") password=await postedPassword(req);
     const db=createClient(Deno.env.get("SUPABASE_URL")!,Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
-    const {data:link,error:lookupError}=await db.from("redirects").select("*").eq("type","SHORT").eq("slug",slug).maybeSingle();
+    let domain: {id:string;hostname:string;rootUrl:string|null;notFoundUrl:string|null;expiredUrl:string|null;needsRouteRefresh?:boolean}|null=null;
+    if (relay) {
+      const {data,error}=await db.rpc("redirect_public_domain",{p_hostname:relay.hostname});
+      if(error)return page(503,"Link unavailable","Please try again shortly.",false,head);
+      if(!data)return page(404,"Link not found","This domain is unavailable.",false,head);
+      domain=data;
+      if(data.needsRouteRefresh && relay.path!==DOMAIN_HEALTH_PATH) {
+        const {data:refreshed,error:refreshError}=await db.rpc("record_redirect_domain_route",{p_hostname:relay.hostname});
+        if(refreshError || refreshed!==true)return page(503,"Link unavailable","Please try again shortly.",false,head);
+      }
+      if(relay.path===DOMAIN_HEALTH_PATH) {
+        if(req.method!=="GET")return new Response(null,{status:405,headers:{...responseHeaders,Allow:"GET"}});
+        const {data:recorded,error:recordError}=await db.rpc("record_redirect_domain_route",{p_hostname:relay.hostname});
+        return new Response(JSON.stringify({ready:!recordError&&recorded===true,protocol:1}),{status:!recordError&&recorded===true?200:503,headers:{...responseHeaders,"Content-Type":"application/json"}});
+      }
+    }
+    const fallback=async(target:string|null|undefined) => {
+      if(!target || !validPublicTarget(target))return null;
+      const parsed=new URL(target,"https://queer.guide");
+      const {data:managed,error}=await db.from("redirect_domains").select("id").eq("hostname",parsed.hostname).maybeSingle();
+      if(error || managed?.id || ["queer.guide","www.queer.guide"].includes(parsed.hostname)&&parsed.pathname.startsWith("/go/"))return null;
+      return new Response(null,{status:302,headers:{...responseHeaders,Location:parsed.href}});
+    };
+    if(domain && relay?.path==="/") return await fallback(domain.rootUrl) ?? page(404,"Link not found","No destination is configured for this domain.",false,head);
+    if(!validSlug)return await fallback(domain?.notFoundUrl) ?? page(404,"Link not found","This short link does not exist.",false,head);
+    const query=db.from("redirects").select("*").eq("type","SHORT").eq("slug",slug);
+    const {data:link,error:lookupError}=await (domain ? query.eq("domain_id",domain.id) : query.is("domain_id",null)).maybeSingle();
     if (lookupError) return page(503,"Link unavailable","Please try again shortly.",false,head);
-    if (!link || !link.is_enabled || link.start_at && Date.parse(link.start_at)>Date.now()) return page(404,"Link not found","This link is unavailable.",false,head);
+    if (!link || !link.is_enabled || link.start_at && Date.parse(link.start_at)>Date.now()) return await fallback(domain?.notFoundUrl) ?? page(404,"Link not found","This link is unavailable.",false,head);
     const {data:settings,error:settingsError}=await db.from("redirect_link_policies").select("policy,password_hash").eq("redirect_id",link.id).maybeSingle();
     if (settingsError) return page(503,"Link unavailable","Please try again shortly.",false,head);
-    const policy:LinkPolicy={...(settings?.policy ?? {}),...(link.end_at ? {expires_at:link.end_at} : {})};
+    const policy:LinkPolicy={...(settings?.policy ?? {}),...(link.end_at ? {expires_at:link.end_at} : {}),...(!settings?.policy?.expired_target && domain?.expiredUrl ? {expired_target:domain.expiredUrl} : {})};
     if (policyErrors(policy).length || !validPublicTarget(link.target)) return page(503,"Link unavailable","The destination settings need attention.",false,head);
-    const ip=await redirectClientIp(req.headers,slug,Deno.env.get("REDIRECT_RELAY_SECRET"));
+    const ip=relay?.ip ?? await redirectClientIp(req.headers,slug,Deno.env.get("REDIRECT_RELAY_SECRET"));
     const hash=new Uint8Array(await crypto.subtle.digest("SHA-256",new TextEncoder().encode(ip+(Deno.env.get("REDIRECT_IP_HASH_SALT") ?? "qg-redirect-salt-2026"))));
     const ipHash=Array.from(hash,(value)=>value.toString(16).padStart(2,"0")).join("");
     if (settings?.password_hash) {
@@ -81,18 +112,22 @@ Deno.serve(async (req: Request) => {
     const targetUrl=new URL(destination);
     targetUrl.searchParams.delete("qg_click_id"); destination=targetUrl.href;
     if (["queer.guide","www.queer.guide"].includes(targetUrl.hostname) && targetUrl.pathname.startsWith("/go/")) return page(508,"Link loop","This link points to another short link.",false,head);
+    const {data:managedTarget,error:targetError}=await db.from("redirect_domains").select("id").eq("hostname",targetUrl.hostname).maybeSingle();
+    if(targetError)return page(503,"Link unavailable","Please try again shortly.",false,head);
+    if(managedTarget?.id)return page(508,"Link loop","This link points to another short link.",false,head);
+    const canonical=domain ? "https://"+domain.hostname+"/"+slug : "https://queer.guide/go/"+slug;
     if(!selected.expired&&policy.preview&&socialPreviewAgent(req.headers.get("user-agent")??"")) {
       if(link.click_limit!==null&&link.click_limit!==undefined&&link.click_count>=link.click_limit)return page(410,"Link unavailable","This link has reached its visit limit.",false,head);
-      return presentationPage(policy.preview,"https://queer.guide/go/"+slug,destination,false,head);
+      return presentationPage(policy.preview,canonical,destination,false,head);
     }
     if(policy.cloaked&&!selected.expired&&!destination.startsWith("https://"))return page(503,"Link unavailable","Framed destinations require HTTPS.",false,head);
     if (!head && !selected.expired) {
-      const {data:clickId,error}=await db.rpc("record_redirect_visit",{p_redirect_id:link.id,p_path:"/go/"+slug,p_query:incoming.toString() || null,p_referer:cleanReferrer(req.headers.get("referer")),p_user_agent:req.headers.get("user-agent"),p_country:country,p_ip_hash:ipHash,p_status:link.status_code,p_variant_id:selected.variantId,p_destination:destination,p_metadata:visitorMetadata(req,isQr)});
+      const {data:clickId,error}=await db.rpc("record_redirect_visit",{p_redirect_id:link.id,p_path:domain ? "/"+slug : "/go/"+slug,p_query:incoming.toString() || null,p_referer:cleanReferrer(req.headers.get("referer")),p_user_agent:req.headers.get("user-agent"),p_country:country,p_ip_hash:ipHash,p_status:link.status_code,p_variant_id:selected.variantId,p_destination:destination,p_metadata:{...visitorMetadata(req,isQr),domain:domain?.hostname ?? "queer.guide"}});
       if(error)return page(503,"Link unavailable","Please try again shortly.",false,head);
       if(!clickId)return page(410,"Link unavailable","This link has expired or reached its visit limit.",false,head);
       if(policy.track_conversions){targetUrl.searchParams.set("qg_click_id",clickId);destination=targetUrl.href;}
     }
-    if(policy.cloaked&&!selected.expired)return presentationPage(policy.preview,"https://queer.guide/go/"+slug,destination,true,head);
+    if(policy.cloaked&&!selected.expired)return presentationPage(policy.preview,canonical,destination,true,head);
     return new Response(null,{status:selected.expired ? 302 : link.status_code,headers:{...responseHeaders,Location:destination}});
   } catch {return page(503,"Link unavailable","Please try again shortly.",false,head);}
 });

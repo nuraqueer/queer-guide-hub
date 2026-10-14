@@ -27,7 +27,12 @@ export function getRedirectColumns() {
       header: 'Source',
       cell: (info) => {
         const row = info.row.original;
-        const source = row.type === 'SHORT' ? `/go/${row.slug}` : row.source_path;
+        const source =
+          row.type === 'SHORT'
+            ? row.domain_id && row.domain_hostname
+              ? `https://${row.domain_hostname}/${row.slug}`
+              : `/go/${row.slug}`
+            : row.source_path;
         return (
           <div className="flex items-center gap-1">
             <span

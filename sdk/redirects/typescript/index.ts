@@ -9,6 +9,7 @@ export interface LinkInput {
   queryOverride?: Record<string, string> | null;
   utmDefaults?: Record<string, string> | null;
   expiresAt?: string | null;
+  domainId?: string | null;
   folderId?: string | null;
   tagIds?: string[];
   comment?: string;
@@ -19,6 +20,7 @@ export interface Link extends LinkInput {
   target: string;
   clicks: number;
   shortUrl: string;
+  domainHostname: string | null;
   updatedAt: string;
 }
 export interface LinkPolicy {

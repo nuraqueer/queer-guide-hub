@@ -1,6 +1,7 @@
-import { fireEvent, render, screen } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { RedirectDomainProvider, type DomainProviderStatus } from './RedirectDomainProvider';
+afterEach(() => vi.unstubAllGlobals());
 const provider: DomainProviderStatus = {
   state: 'review',
   desired: true,
@@ -31,6 +32,38 @@ function show(value?: DomainProviderStatus, configured = true) {
   return act;
 }
 describe('reviewed hostname provider controls', () => {
+  it('checks the branded URL without cookies or referrer and refreshes authoritative registry status', async () => {
+    const fetcher = vi.fn(async () => Response.json({ ready: true, protocol: 1 }));
+    vi.stubGlobal('fetch', fetcher);
+    const refreshed = vi.fn(async () => {});
+    render(
+      <RedirectDomainProvider
+        hostname="links.example.com"
+        verified
+        disabled={false}
+        connected
+        pending={false}
+        provider={{ ...provider, state: 'ready', certificateReady: true }}
+        act={vi.fn()}
+        onRoutingChecked={refreshed}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Check branded routing' }));
+    await waitFor(() => expect(refreshed).toHaveBeenCalledOnce());
+    expect(fetcher).toHaveBeenCalledWith(
+      'https://links.example.com/.well-known/qg-redirect',
+      expect.objectContaining({
+        credentials: 'omit',
+        referrerPolicy: 'no-referrer',
+        cache: 'no-store',
+        redirect: 'error',
+      }),
+    );
+    expect(screen.getByText('Branded routing: Not verified')).toBeVisible();
+    expect(
+      await screen.findByText('Routing check received. Current status refreshed.'),
+    ).toBeVisible();
+  });
   it('requires explicit review before connection and stays disabled when unconfigured', () => {
     const act = show();
     fireEvent.click(screen.getByRole('button', { name: 'Request provider connection' }));
@@ -54,7 +87,8 @@ describe('reviewed hostname provider controls', () => {
     expect(screen.getByText('active')).toBeVisible();
     expect(screen.getByText('pending_validation')).toBeVisible();
     expect(screen.getByText('Not ready')).toBeVisible();
-    expect(screen.getByText(/Public branded routing is not available yet/)).toBeVisible();
+    expect(screen.getByText('Branded routing: Not verified')).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Check branded routing' })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Request provider connection' })).toBeDisabled();
   });
   it('reviews the exact candidate and requires an absence attestation for uncertain creates', () => {

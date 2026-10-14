@@ -76,6 +76,16 @@ describe('campaign link tools', () => {
     expect(jsQR(pixels, width, width)?.data).toBe(value);
     expect(await QRCode.toString(value, { type: 'svg', margin: 4 })).toContain('<svg');
   });
+  it('only exposes a branded source URL when its trusted domain matches', () => {
+    expect(publicSourceUrl('https://links.community.com/pride-qr')).toBeNull();
+    expect(publicSourceUrl('https://links.community.com/pride-qr', 'links.community.com')).toBe(
+      'https://links.community.com/pride-qr',
+    );
+    expect(publicSourceUrl('https://evil.example/pride-qr', 'links.community.com')).toBeNull();
+    expect(
+      publicSourceUrl('https://user:secret@links.community.com/pride-qr', 'links.community.com'),
+    ).toBeNull();
+  });
   it('counts visits by UTC date, country, and referrer host without exposing referrer query parameters', () => {
     const summaries = summariseVisits([
       {
