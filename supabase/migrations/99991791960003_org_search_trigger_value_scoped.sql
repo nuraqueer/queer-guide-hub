@@ -13,7 +13,7 @@
 -- rows, at 98 ms each.
 --
 -- THE SIBLING MIGRATION IS HALF OF THIS AND NEITHER IS WORTH MUCH ALONE.
--- 99991791955502 stops completeness_score ping-ponging between two writers.
+-- 99991791960002 stops completeness_score ping-ponging between two writers.
 -- What it CANNOT stop is refresh_business_brand_quality's remaining 2,000 rows
 -- every 15 minutes (192,000/day), because that statement must stamp
 -- quality_checked_at = now() unconditionally — it is the job's round-robin

@@ -17,7 +17,7 @@ import { join } from 'node:path';
  *      venue-generated identities the indexer is written to EXCLUDE, costing
  *      98 ms each to produce nothing.
  *
- * 99991791955502 gives the column one writer; 99991791955504 makes the trigger
+ * 99991791960002 gives the column one writer; 99991791960003 makes the trigger
  * compare values. NEITHER IS WORTH MUCH ALONE: refresh must keep stamping
  * quality_checked_at unconditionally (it is its round-robin cursor), and only
  * the value-scoped trigger makes those 192,000 writes/day free.
@@ -45,8 +45,8 @@ function statementsOnly(sql: string): string {
     .join('\n');
 }
 
-const WRITER = '99991791955502_org_quality_single_writer_completeness.sql';
-const TRIGGER = '99991791955504_org_search_trigger_value_scoped.sql';
+const WRITER = '99991791960002_org_quality_single_writer_completeness.sql';
+const TRIGGER = '99991791960003_org_search_trigger_value_scoped.sql';
 
 const writerRaw = read(WRITER);
 const triggerRaw = read(TRIGGER);
@@ -60,7 +60,7 @@ it('the comment stripper is load-bearing', () => {
   expect(triggerRaw.length).toBeGreaterThan(trigger.length + 500);
 });
 
-describe('99991791955502 — one writer for organizations.completeness_score', () => {
+describe('99991791960002 — one writer for organizations.completeness_score', () => {
   it('patches the live definition instead of restating a 200-line function', () => {
     // Restating it from a repo file silently reverts whatever another session
     // last string-patched into the live body (the 99991790719601 rule).
@@ -126,7 +126,7 @@ describe('99991791955502 — one writer for organizations.completeness_score', (
   });
 });
 
-describe('99991791955504 — the organizations search trigger compares values', () => {
+describe('99991791960003 — the organizations search trigger compares values', () => {
   /** The WHEN clause of the UPDATE trigger, from the statement only. */
   const whenClause = (() => {
     const start = trigger.indexOf('when (');
