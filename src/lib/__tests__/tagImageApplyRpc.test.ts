@@ -1,6 +1,14 @@
 /**
- * Guards 99991791728981_tag_image_apply_rpc.sql and the two call sites it exists
- * for.
+ * Guards 99991791728981_tag_image_apply_rpc.sql and the tag-imagery call sites.
+ *
+ * `tag_image_apply` NO LONGER HAS A CALLER (2026-10-11). It was the auto-publish
+ * path for the Wikidata P18 tier, and that tier's first live dry run returned 12
+ * auto-publish candidates of which ZERO were right, so `publish` was removed
+ * from the guard's verdict union. The RPC stays in the database rather than
+ * being dropped in the same change that stopped calling it, and this file still
+ * guards it -- the migration-level assertions below are unaffected, and the
+ * call-site block asserts the ABSENCE of the call plus the queue insert that
+ * replaced it.
  *
  * Running tag-imagery ONCE found three defects no test, typecheck or green
  * deploy had caught, because the function had never executed:
@@ -378,27 +386,57 @@ describe('the superseded provenance automation', () => {
 });
 
 describe('tag-imagery call sites', () => {
-  it('publishes through the RPC, never a PostgREST update', () => {
-    expect(fn).toContain("supabase.rpc('tag_image_apply'");
+  // THESE TWO ASSERTED THE AUTO-PUBLISH CALL SITE UNTIL 2026-10-11, and the
+  // measurement retired it: the Wikidata P18 tier returned 12 auto-publish
+  // candidates on its first live dry run and ZERO were right. `publish` is gone
+  // from the guard's verdict union, so `tag_image_apply` has no caller.
+  //
+  // They are RETARGETED rather than deleted, because what they were protecting
+  // did not change. `zz_enforce_tag_image_contract` still refuses an image that
+  // arrives without its licence, attribution, alt text and source, so six values
+  // plus the asset id still have to travel together -- the only difference is
+  // that the payload now reaches the contract through a human's approval
+  // (`_apply_review_value`'s `tag_image` arm) instead of through the RPC.
+  it('writes no image at all -- not through PostgREST, and no longer through the RPC', () => {
     expect(fn).not.toMatch(/from\('unified_tags'\)\s*\.?\s*\n?\s*\.update\(/);
     expect(fn).not.toMatch(/\.from\('unified_tags'\)[\s\S]{0,80}\.update\(/);
+    expect(fn).not.toContain("supabase.rpc('tag_image_apply'");
+
+    // POSITIVE CONTROL. "Writes nothing" is equally true of a function that
+    // does nothing, so the queue insert has to be shown to exist -- otherwise
+    // gutting the whole loop passes this test.
+    expect(fn).toContain("from('entity_review_queue')");
+    expect(fn).toMatch(/\.insert\(\{[\s\S]{0,200}entity_type: 'tag'/);
   });
 
-  it('passes all six image values plus the asset id to the RPC', () => {
-    const start = fn.indexOf("supabase.rpc('tag_image_apply'");
-    const call = fn.slice(start, fn.indexOf('})', start));
-    for (const p of [
-      'p_tag_id',
-      'p_url',
-      'p_alt',
-      'p_source',
-      'p_license',
-      'p_attribution',
-      'p_explicit',
-      'p_asset_id',
-    ]) {
-      expect(call).toContain(p);
+  it('the PROPOSAL carries all six image values plus the asset id', () => {
+    // Read off the queue insert, which is now the only thing that can satisfy
+    // the contract. Keyed on the payload's own start rather than on the whole
+    // file: `source` and `license` appear all over this function, so an
+    // unscoped search would pass against a payload missing every one of them.
+    const start = fn.indexOf("from('entity_review_queue')");
+    expect(start).toBeGreaterThan(0);
+    const payloadStart = fn.indexOf('proposed_value:', start);
+    expect(payloadStart).toBeGreaterThan(start);
+    const payload = fn.slice(payloadStart, fn.indexOf('},', payloadStart));
+    for (const k of ['url', 'alt', 'source', 'license', 'attribution', 'explicit', 'asset_id']) {
+      expect(payload).toContain(k);
     }
+  });
+
+  it('NO VERDICT PUBLISHES -- asserted on the guard, not only on this caller', () => {
+    // The caller having no apply branch is one half. The other is that the
+    // verdict union cannot express `publish`, so a future caller cannot
+    // re-reach it: that is why the arm was removed rather than left behind a
+    // flag. Read comment-stripped, since the guard's own header explains the
+    // retirement and quotes the word throughout.
+    const guard = stripTs(
+      readFileSync(join(ROOT, 'supabase/functions/_shared/tag-image-guard.ts'), 'utf8'),
+    );
+    expect(guard).toMatch(/export type TagImageVerdict/);
+    expect(guard).not.toMatch(/decision:\s*'publish'/);
+    // And the P18 tier specifically returns a review verdict that says why.
+    expect(guard).toContain("why: 'p18_review_gated'");
   });
 
   it('records a miss through the RPC and sends no attempt count', () => {

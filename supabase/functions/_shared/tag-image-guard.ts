@@ -7,8 +7,13 @@
  * check that did not exist. It is deliberately pure and has no I/O, so the
  * rules can be tested against the real strings that defeated the old system.
  *
- * WHAT THIS CAN AND CANNOT DO, stated because the boundary decides which tier
- * is allowed to auto-publish:
+ * NO TIER AUTO-PUBLISHES. Wikidata P18 did until 2026-10-11, on the argument
+ * that an image curated on the tag's own entity makes the match structural;
+ * measured on prod it was 0 of 12 correct, so the verdict union no longer has a
+ * `publish` arm at all. See the P18 branch for the numbers.
+ *
+ * WHAT THIS CAN AND CANNOT DO, stated because the boundary is what bounds the
+ * candidate set a human is asked to read:
  *
  *   It CAN refuse an image whose file name and description have nothing to do
  *   with the tag. Measured against the retired corpus, that removes the whole
@@ -19,9 +24,9 @@
  *   It CANNOT tell a namesake from the real sense. `unicorn` ->
  *   "Unicorn_spider_outline.jpg" corroborates perfectly on the word "unicorn"
  *   and is still wrong, exactly as the tag's own Wikidata link once pointed at
- *   a spider. No lexical rule fixes that, which is WHY keyword-search tiers are
- *   review-gated and only Wikidata P18 -- an image curated on the tag's own
- *   entity -- may publish without a human.
+ *   a spider. No lexical rule fixes that, which is why every tier is
+ *   review-gated -- and the P18 measurement above shows that a curated
+ *   identifier does not fix it either.
  */
 
 /** Sources that may illustrate a glossary entry, mirroring the DB vocabulary. */
@@ -188,7 +193,6 @@ export interface TagRow {
 }
 
 export type TagImageVerdict =
-  | { decision: 'publish'; explicit: boolean }
   | { decision: 'review'; explicit: boolean; why: string }
   | { decision: 'refuse'; why: string }
 
@@ -268,11 +272,12 @@ export function tagImageVerdict(
   // og:image, social cards and search thumbnails, and that a human sees it
   // before it publishes.
   //
-  // The honest cost, stated rather than buried: tier-1 P18 auto-publish is
-  // therefore reachable only on NON-adult tags — 347 of the 1,196 indexable
-  // cohort, not 423. Auto-publishing a Commons photograph onto an adult kink
-  // page with neither a human nor a classifier having looked at it is precisely
-  // the 2026-08-28 failure, so the reduction is the point.
+  // This used to carry the only cost that mattered — tier-1 auto-publish was
+  // reachable on NON-adult tags only, 347 of the 1,196 indexable cohort rather
+  // than 423. Auto-publish is gone (see the P18 branch), so the flag no longer
+  // narrows anything: every tier queues either way, and what `explicit` still
+  // buys is that the image stays out of og:image, social cards and search
+  // thumbnails, and that the reviewer is told which it is.
   const explicit =
     lexiconHit ||
     (tag.is_adult === true && candidate.source !== 'pexels' && candidate.source !== 'unsplash')
@@ -285,10 +290,27 @@ export function tagImageVerdict(
     }
   }
 
-  // P18 is curated on the tag's own Wikidata entity, so the match is structural
-  // rather than guessed. It is the only tier that may publish unattended.
+  // P18 WAS THE ONE TIER THAT PUBLISHED UNATTENDED, AND THE MEASUREMENT KILLED
+  // IT. The argument was that an image curated on the tag's own Wikidata entity
+  // makes the topical match structural rather than guessed. Hand-read on prod
+  // 2026-10-11 (40 rows, dry_run): 12 of 12 auto-publish candidates were wrong
+  // or vacuous, ZERO right. `tucking` resolved to an 18th-century Scottish
+  // cloth-WAULKING engraving; `metal` to the comics magazine Métal Hurlant;
+  // `love` to Dicksee's Romeo and Juliet; `news-education` to Bettannier's
+  // revanchist Alsace-Lorraine classroom. Six of the twelve had their PROSE
+  // repaired by round 20 for exactly this generic-sense confusion, so tier 1
+  // would have published an image asserting the sense that repair removed.
+  //
+  // The entity is right FOR THE ENTITY and this corpus's tags systematically do
+  // not mean their namesake entity -- the wrong-sense family CLAUDE.md records
+  // across twenty-one prose rounds. Images inherit the defect the prose had, by
+  // the same mechanism, so nothing structural was ever on offer.
+  //
+  // Queued rows measured ~7/10 defensible against 0/12 auto-published. The
+  // difference is entirely the human, so all three tiers queue and `publish` is
+  // gone from the verdict union rather than left behind a flag.
   if (candidate.source === 'wikidata:p18') {
-    return { decision: 'publish', explicit: false }
+    return { decision: 'review', explicit: false, why: 'p18_review_gated' }
   }
 
   // Everything else is a keyword search. Corroboration bounds the candidate set
