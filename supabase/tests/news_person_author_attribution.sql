@@ -4,8 +4,8 @@ do $$ declare v_id uuid; v_source uuid; begin
  insert into news_articles(author,title,source_id) values('https://www.facebook.com/6030918854','URL credit',v_source) returning id into v_id;
  assert (select author is null from news_articles where id=v_id),'URL must not be a person';
  assert exists(select 1 from news_author_credit_audit where article_id=v_id and original_author='https://www.facebook.com/6030918854'),'Original credit preserved';
- insert into news_articles(author,title,source_id) values('Editors','Team',v_source),('Big Money Players Network and iHeartPodcasts','Network',v_source),('Dyking Out - a Lesbian and LGBTQ Podcast for Everyone!','Show',v_source),('Example Magazine','Publisher',v_source);
- assert (select count(*) from news_articles where title in ('Team','Network','Show','Publisher') and author is not null)=0,'Collective credits rejected';
+ insert into news_articles(author,title,source_id) values('Editors','Team',v_source),('Big Money Players Network and iHeartPodcasts','Network',v_source),('Dyking Out - a Lesbian and LGBTQ Podcast for Everyone!','Show',v_source),('Example Magazine','Publisher',v_source),('iHeartPodcasts','Audio publisher',v_source),('Shondaland Audio and iHeartPodcasts','Audio partnership',v_source);
+ assert (select count(*) from news_articles where title in ('Team','Network','Show','Publisher','Audio publisher','Audio partnership') and author is not null)=0,'Collective credits rejected';
  insert into news_articles(author,title,source_id) values('José Muñoz','Person',v_source),('Cher','Mononym',v_source),('李明','International',v_source);
  assert (select count(*) from news_articles where title in ('Person','Mononym','International') and author is not null)=3,'Names preserved';
  begin perform admin_news_author_change('José Muñoz','Editors',false,1);raise exception 'Invalid rename accepted';exception when invalid_parameter_value then null;end;
