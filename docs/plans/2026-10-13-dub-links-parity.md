@@ -630,3 +630,17 @@ confirm 61 → 21 clicks for the preset, a zero custom interval, reset to 61 and
 removal on revocation. At 390 pixels client and scroll widths are both 390. The
 `shared-report-dates-*` screenshots retain explicit fixture labels. Temporary
 browser tab and viewport were cleaned up. No production state was changed.
+
+### Next extension: explicit dashboard indexing
+
+Add an off-by-default publication setting, reviewed before publishing. Password
+protection and indexing cannot be combined. Existing publications stay noindex.
+The edge must use the live, sanitized public report read (with its existing
+budgets/permissions/version/expiry/revocation gates) before emitting indexable
+HTML, rather than relying on client-only robots changes or a second metadata API.
+Only explicitly indexable, unprotected shares expose their title and aggregate
+summary in server HTML. Other shares retain a generic shell and noindex. All
+share HTML stays no-store/no-referrer, including failures; localized/query variants
+stay noindex. Indexable reports do not get generic locale alternates or unrelated
+hub content. Client robots metadata follows the same sanitized flag. Revocation
+can stop future publication but cannot immediately remove search-engine copies.
