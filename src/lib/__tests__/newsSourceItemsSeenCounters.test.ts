@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 /**
- * Guards 99991791955347_news_source_items_seen_counters.
+ * Guards 99991791960078_news_source_items_seen_counters.
  *
  * `news_sources.articles_fetched` and `avg_articles_per_fetch` had a single
  * writer, `news_source_record_outcome`, which has had no caller for as long as
@@ -19,7 +19,7 @@ import { join } from 'node:path';
  * executable line deleted.
  */
 
-const MIGRATION = '99991791955347_news_source_items_seen_counters.sql';
+const MIGRATION = '99991791960078_news_source_items_seen_counters.sql';
 const RPC = 'news_source_record_items_seen';
 
 const stripSqlComments = (sql: string) =>
