@@ -6,12 +6,14 @@ export function filterWorkspaceLinks(
   metadata: Map<string, LinkMetadata>,
   folderId: string,
   tagId: string,
+  archive: 'active' | 'archived' | 'all' = 'all',
 ) {
   return rows.filter((row) => {
     const link = metadata.get(row.id);
     const folderMatches =
       !folderId || (folderId === 'unfiled' ? !link?.folder_id : link?.folder_id === folderId);
-    return folderMatches && (!tagId || !!link?.tagIds.includes(tagId));
+    const archiveMatches = archive === 'all' || !!link?.is_archived === (archive === 'archived');
+    return archiveMatches && folderMatches && (!tagId || !!link?.tagIds.includes(tagId));
   });
 }
 

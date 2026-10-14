@@ -8,12 +8,20 @@ const mocks = vi.hoisted(() => ({
   openEditor: vi.fn(),
   refetch: vi.fn(),
   inventory: {} as Record<string, unknown>,
+  metadata: new Map<string, { is_archived?: boolean }>(),
 }));
 vi.mock('@/hooks/useRedirectWorkspace', () => ({
   useRedirectWorkspace: () => ({
-    data: { folders: [], tags: [], templates: [], metadata: new Map() },
+    data: { folders: [], tags: [], templates: [], metadata: mocks.metadata },
     isError: false,
   }),
+}));
+vi.mock('@/components/admin/redirects/RedirectBulkActions', () => ({
+  RedirectBulkActions: ({ rows, onClear }: { rows: InventoryRedirect[]; onClear: () => void }) => (
+    <div aria-label="Selection fixture">
+      {rows.length} selected<button onClick={onClear}>Clear selection</button>
+    </div>
+  ),
 }));
 vi.mock('@/hooks/useRedirectInventory', () => ({ useRedirectInventory: () => mocks.inventory }));
 vi.mock('@/components/admin/shell/AdminShell', () => ({
@@ -42,6 +50,7 @@ function show() {
 }
 beforeEach(() => {
   vi.clearAllMocks();
+  mocks.metadata = new Map();
   mocks.inventory = {
     data: { rows: Array.from({ length: 107 }, (_, index) => row(index)), errors: [] },
     isPending: false,
@@ -52,6 +61,33 @@ beforeEach(() => {
 });
 
 describe('unified redirects index', () => {
+  it('selects across pages up to 100, then clears selection when filters change', () => {
+    show();
+    fireEvent.click(screen.getByLabelText('Select visible redirects'));
+    expect(screen.getByLabelText('Selection fixture')).toHaveTextContent('50 selected');
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+    fireEvent.click(screen.getByLabelText('Select visible redirects'));
+    expect(screen.getByLabelText('Selection fixture')).toHaveTextContent('100 selected');
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+    for (const checkbox of within(screen.getByRole('table', { name: 'Redirects' }))
+      .getAllByRole('checkbox')
+      .slice(1))
+      expect(checkbox).toBeDisabled();
+    fireEvent.change(screen.getByRole('textbox', { name: 'Search redirects' }), {
+      target: { value: 'current-106' },
+    });
+    expect(screen.queryByLabelText('Selection fixture')).toBeNull();
+    expect(screen.getByLabelText('Select /events/old-106')).not.toBeDisabled();
+  });
+  it('hides archived rows from the active view and exposes an archived-only view', () => {
+    mocks.metadata.set('event:0', { is_archived: true });
+    show();
+    expect(screen.queryByText('/events/old-0')).toBeNull();
+    expect(screen.getByRole('status')).toHaveTextContent('of 106 redirects');
+    fireEvent.change(screen.getByLabelText('Archive status'), { target: { value: 'archived' } });
+    expect(screen.getByText('/events/old-0')).toBeVisible();
+    expect(screen.getByRole('status')).toHaveTextContent('1–1 of 1 redirects');
+  });
   it('paginates the complete list and resets pagination when searching destinations', () => {
     show();
     expect(

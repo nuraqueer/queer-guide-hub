@@ -16,9 +16,9 @@ exist. Existing local tools are a foundation, not proof of parity or deployment.
 | Tags | Multiple colored tags, create/rename/delete, shareable filtered list and analytics | Candidate: implemented locally; pending release |
 | Comments | Team-visible comment on link card, clickable hyperlinks | Candidate: implemented locally; pending release |
 | Folder permissions | Explicit view/edit permissions for team members, enforced in database/API | Missing |
-| Bulk actions | Create/update/upsert/delete, folder/tag assignment, archive, import/export, QR export | Partial: CSV import/basic export plus scoped atomic API batches and folder/tag assignment; archive and bulk UI/QR exports pending |
+| Bulk actions | Create/update/upsert/delete, folder/tag assignment, archive, import/export, QR export | Partial: atomic API batches, archive/restore, cross-page bulk organization/deletion/selected CSV UI; richer import/upsert UI and bulk QR exports pending |
 | Custom previews | Uploaded OG image (1200×630, ≤1.5 MB), title≤120, description≤240, video API, crawler unfurl | Candidate: editor, scoped upload/presentation APIs and crawler HTML; native browser/Storage release pending |
-| AI previews | Generate title/description from destination content using configured AI provider | Missing |
+| AI previews | Generate title/description from destination content using configured AI provider | Candidate: scoped draft generator with spend limits; live provider and browser verification pending |
 | Custom domains | Verify ownership/DNS, multiple domains, primary domain, redirects on branded hostname | Missing |
 | Domain defaults | Root/not-found redirects, default expiration URL, workspace/domain QR logos | Missing |
 | Deep links | iOS/Android association files, app page routes, fallback and deferred attribution | Missing |
@@ -330,3 +330,30 @@ rate-limit tests, and migrated PostgreSQL reservations. Live provider delivery,
 browser rendering, production migrations, and release remain outstanding. Other
 open parity requirements above remain in scope; this checkpoint does not close
 the full project.
+
+## Checkpoint: archive and selected bulk management
+
+Implemented locally: selection across inventory pages (100-row cap), active/
+archived/all views, atomic archive/restore and folder/tag changes across manual,
+automatic, static, and client inventory. Archive is organization metadata; it
+preserves routing and enabled state. Adding/removing one tag retains other tags
+and comments. Managed short-link deletion requires a concrete selected-link list
+and typed DELETE confirmation, then uses the existing atomic scoped API. Source-
+owned automatic/static rules cannot be deleted through this bulk UI. Selected
+CSV export and clearing selection are available.
+
+API link objects/patches/filters accept boolean `isArchived`; the API's default
+list remains all managed links, and callers can explicitly request active or
+archived records. The TypeScript SDK includes the archive field; other clients
+use their existing object dictionaries. SQL rechecks scope and authorization;
+ordinary members cannot change archive metadata. Failed batches roll back and
+UI errors retain selection. Production migration, native browser evidence,
+bulk QR export and the remaining richer import/upsert UI remain outstanding.
+
+Validation for this checkpoint: 43 focused tests across API input/handler,
+organization, selected bulk controls, and inventory views passed. Migrated
+PostgreSQL tests prove authorization, archive filtering, retained routing state,
+metadata preservation and rollback. Five SDK clients and their examples passed
+through the actual HTTP handler and isolated SQL again. Lint and migration-version
+gates pass; typecheck remains at 704 inherited errors with none new. Production
+build passes. These checks do not prove native browser or production behavior.

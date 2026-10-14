@@ -6,6 +6,12 @@ import {
   randomLinkSlug,
 } from '../../../../supabase/functions/_shared/redirect-links';
 describe('link management input contract', () => {
+  it('supports boolean archive patches and filters', () => {
+    expect(linkInput({ isArchived: true }, 'update')).toEqual({ isArchived: true });
+    expect(linkListInput({ isArchived: false })).toEqual({ isArchived: false });
+    expect(() => linkInput({ isArchived: 'true' }, 'update')).toThrow();
+    expect(() => linkListInput({ isArchived: null })).toThrow();
+  });
   it('preserves public destinations, fragments and explicit clear fields', () => {
     expect(
       linkInput(

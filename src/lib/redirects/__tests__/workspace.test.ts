@@ -33,6 +33,19 @@ describe('shared link workspace', () => {
     expect(filterWorkspaceLinks(rows, metadata, 'unfiled', '')).toEqual([rows[1]]);
     expect(filterWorkspaceLinks(rows, metadata, 'folder', 'missing')).toEqual([]);
   });
+  it('filters archive metadata independently of routing state', () => {
+    const rows = parseStaticRedirects('/old /new 301\n/other /target 302');
+    const metadata = new Map([
+      [
+        rows[0].id,
+        { redirect_key: rows[0].id, folder_id: null, tagIds: [], comment: '', is_archived: true },
+      ],
+    ]);
+    expect(filterWorkspaceLinks(rows, metadata, '', '', 'active')).toEqual([rows[1]]);
+    expect(filterWorkspaceLinks(rows, metadata, '', '', 'archived')).toEqual([rows[0]]);
+    expect(filterWorkspaceLinks(rows, metadata, '', '', 'all')).toEqual(rows);
+    expect(rows[0].state).toBe('Enabled');
+  });
   it('renders comment links as safe HTTP URLs and retains unsupported schemes as text', () => {
     const segments = commentSegments('See https://queer.guide/help and javascript:alert(1)');
     expect(segments.filter((segment) => segment.url)).toEqual([

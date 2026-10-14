@@ -4,6 +4,7 @@ export interface LinkInput {
   target?: string;
   statusCode?: 301 | 302 | 307 | 308;
   isEnabled?: boolean;
+  isArchived?: boolean;
   queryMode?: 'PRESERVE' | 'DROP' | 'OVERRIDE';
   queryOverride?: Record<string, string> | null;
   utmDefaults?: Record<string, string> | null;

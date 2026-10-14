@@ -15,6 +15,7 @@ export async function createRedirectTestDb() {
       'redirect_workspace_api.sql',
       'redirect_presentations.sql',
       'redirect_preview_generation.sql',
+      'redirect_archive_bulk.sql',
     ]) {
       const name = files.find((file) => file.endsWith(suffix));
       if (!name) throw new Error('Missing migration ' + suffix);

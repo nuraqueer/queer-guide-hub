@@ -25,6 +25,7 @@ export interface LinkMetadata {
   folder_id: string | null;
   comment: string;
   tagIds: string[];
+  is_archived?: boolean;
 }
 export interface RedirectWorkspace {
   folders: LinkFolder[];
@@ -67,7 +68,12 @@ export function useRedirectWorkspace() {
         read(TABLES.folders, 'id,name,description', 'id', signal),
         read(TABLES.tags, 'id,name,color', 'id', signal),
         read(TABLES.templates, 'id,name,parameters', 'id', signal),
-        read('redirect_link_metadata', 'redirect_key,folder_id,comment', 'redirect_key', signal),
+        read(
+          'redirect_link_metadata',
+          'redirect_key,folder_id,comment,is_archived',
+          'redirect_key',
+          signal,
+        ),
         read(
           'redirect_link_tag_assignments',
           'redirect_key,tag_id',
@@ -147,6 +153,28 @@ export function useRedirectWorkspace() {
       await client.invalidateQueries({ queryKey: KEY });
     },
   });
+  const bulk = useMutation({
+    mutationFn: async ({
+      keys,
+      action,
+      value,
+    }: {
+      keys: string[];
+      action: 'archive' | 'restore' | 'folder' | 'add-tag' | 'remove-tag';
+      value?: string | null;
+    }) => {
+      const { data, error } = await untypedRpc<number>('bulk_redirect_organization', {
+        p_keys: keys,
+        p_action: action,
+        p_value: value ?? null,
+      });
+      if (error) throw new Error(error.message);
+      return data;
+    },
+    onSuccess: async () => {
+      await client.invalidateQueries({ queryKey: KEY });
+    },
+  });
   const createLink = useMutation({
     mutationFn: async ({
       slug,
@@ -175,5 +203,5 @@ export function useRedirectWorkspace() {
       ]);
     },
   });
-  return { ...query, resource, assignment, createLink };
+  return { ...query, resource, assignment, createLink, bulk };
 }

@@ -1,3 +1,4 @@
+import { RedirectBulkActions } from '@/components/admin/redirects/RedirectBulkActions';
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router';
 import { Download, Plus, RefreshCw } from 'lucide-react';
@@ -39,7 +40,10 @@ const SELECT_CLASS =
   'h-9 max-w-full rounded-element border border-input bg-background px-4 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
 
 function exportRows(rows: InventoryRedirect[]) {
-  const quote = (value: unknown) => `"${String(value ?? '').replace(/"/g, '""')}"`;
+  const quote = (value: unknown) => {
+    const text = String(value ?? '');
+    return `"${(/^[=+@\-\t\r\n]/.test(text) ? "'" + text : text).replace(/"/g, '""')}"`;
+  };
   const lines = [
     ['Source', 'Destination', 'HTTP status', 'State', 'Origin', 'Kind'],
     ...rows.map((row) => [row.source, row.target, row.statusCode, row.state, row.origin, row.kind]),
@@ -77,6 +81,21 @@ export default function AdminRedirects() {
   const [policyLink, setPolicyLink] = useState<InventoryRedirect | null>(null);
   const folderFilter = searchParams.get('folder') ?? '';
   const tagFilter = searchParams.get('tag') ?? '';
+  const archiveFilter = ['active', 'archived', 'all'].includes(searchParams.get('archive') ?? '')
+    ? (searchParams.get('archive') as 'active' | 'archived' | 'all')
+    : 'active';
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const selectionScope = JSON.stringify([
+    search,
+    origin,
+    state,
+    folderFilter,
+    tagFilter,
+    archiveFilter,
+  ]);
+  const [selection, setSelection] = useState({ scope: selectionScope, ids: new Set<string>() });
+  const selected = selection.scope === selectionScope ? selection.ids : new Set<string>();
+  const clearSelection = () => setSelection({ scope: selectionScope, ids: new Set() });
 
   useEffect(() => {
     const id = searchParams.get('edit');
@@ -107,11 +126,18 @@ export default function AdminRedirects() {
   const filtered = useMemo(
     () =>
       workspace.data
-        ? filterWorkspaceLinks(baseFiltered, workspace.data.metadata, folderFilter, tagFilter)
+        ? filterWorkspaceLinks(
+            baseFiltered,
+            workspace.data.metadata,
+            folderFilter,
+            tagFilter,
+            archiveFilter,
+          )
         : baseFiltered,
-    [baseFiltered, workspace.data, folderFilter, tagFilter],
+    [baseFiltered, workspace.data, folderFilter, tagFilter, archiveFilter],
   );
-  const setOrganizationFilter = (key: 'folder' | 'tag', value: string) => {
+  const setOrganizationFilter = (key: 'folder' | 'tag' | 'archive', value: string) => {
+    clearSelection();
     setPage(0);
     setSearchParams(
       (params) => {
@@ -125,6 +151,16 @@ export default function AdminRedirects() {
   const lastPage = Math.max(0, Math.ceil(filtered.length / PAGE_SIZE) - 1);
   const currentPage = Math.min(page, lastPage);
   const visible = filtered.slice(currentPage * PAGE_SIZE, (currentPage + 1) * PAGE_SIZE);
+  const selectedRows = (rows ?? []).filter((row) => selected.has(row.id));
+  const toggle = (ids: string[], checked: boolean) =>
+    setSelection((current) => {
+      const next = new Set(current.scope === selectionScope ? current.ids : []);
+      for (const id of ids) {
+        if (checked && next.size < 100) next.add(id);
+        else if (!checked) next.delete(id);
+      }
+      return { scope: selectionScope, ids: next };
+    });
   const partial = !!inventory.data?.errors.length;
 
   return (
@@ -184,7 +220,8 @@ export default function AdminRedirects() {
         </Link>
         .
       </p>
-      <div
+      <fieldset
+        disabled={bulkBusy}
         className="mb-4 flex flex-wrap items-center gap-2"
         role="search"
         aria-label="Search redirects"
@@ -195,6 +232,7 @@ export default function AdminRedirects() {
           placeholder="Search source, destination, or origin"
           value={search}
           onChange={(event) => {
+            clearSelection();
             setSearch(event.target.value);
             setPage(0);
           }}
@@ -204,6 +242,7 @@ export default function AdminRedirects() {
           aria-label="Redirect origin"
           value={origin}
           onChange={(event) => {
+            clearSelection();
             setOrigin(event.target.value);
             setPage(0);
           }}
@@ -220,6 +259,7 @@ export default function AdminRedirects() {
           aria-label="Redirect state"
           value={state}
           onChange={(event) => {
+            clearSelection();
             setState(event.target.value);
             setPage(0);
           }}
@@ -287,7 +327,18 @@ export default function AdminRedirects() {
             </option>
           ))}
         </select>
-        {(folderFilter || tagFilter) && (
+        <select
+          className={SELECT_CLASS}
+          aria-label="Archive status"
+          value={archiveFilter}
+          disabled={!workspace.data}
+          onChange={(event) => setOrganizationFilter('archive', event.target.value)}
+        >
+          <option value="active">Active view</option>
+          <option value="archived">Archived</option>
+          <option value="all">All redirects</option>
+        </select>
+        {(folderFilter || tagFilter || archiveFilter !== 'active') && (
           <Button
             variant="outline"
             size="sm"
@@ -296,7 +347,15 @@ export default function AdminRedirects() {
             Copy filtered view
           </Button>
         )}
-      </div>
+      </fieldset>
+      {selectedRows.length > 0 && (
+        <RedirectBulkActions
+          rows={selectedRows}
+          onBusy={setBulkBusy}
+          onClear={clearSelection}
+          onExport={() => exportRows(selectedRows)}
+        />
+      )}
       {workspace.isError && (
         <div role="alert" className="mb-4 text-sm text-destructive">
           Could not load folders, tags, and templates. Organization filters are unavailable.{' '}
@@ -340,6 +399,20 @@ export default function AdminRedirects() {
           <Table variant="admin" aria-label="Redirects">
             <TableHeader>
               <TableRow>
+                <TableHead>
+                  <input
+                    type="checkbox"
+                    aria-label="Select visible redirects"
+                    disabled={bulkBusy || !workspace.data || !visible.length}
+                    checked={visible.length > 0 && visible.every((row) => selected.has(row.id))}
+                    onChange={(event) =>
+                      toggle(
+                        visible.map((row) => row.id),
+                        event.target.checked,
+                      )
+                    }
+                  />
+                </TableHead>
                 <TableHead>Source</TableHead>
                 <TableHead>Destination</TableHead>
                 <TableHead>HTTP</TableHead>
@@ -353,6 +426,19 @@ export default function AdminRedirects() {
             <TableBody>
               {visible.map((row) => (
                 <TableRow key={row.id}>
+                  <TableCell>
+                    <input
+                      type="checkbox"
+                      aria-label={'Select ' + row.source}
+                      checked={selected.has(row.id)}
+                      disabled={
+                        bulkBusy ||
+                        !workspace.data ||
+                        (!selected.has(row.id) && selected.size >= 100)
+                      }
+                      onChange={(event) => toggle([row.id], event.target.checked)}
+                    />
+                  </TableCell>
                   <TableCell className="min-w-48 max-w-80 break-words font-mono text-xs">
                     {row.source}
                   </TableCell>
@@ -366,7 +452,12 @@ export default function AdminRedirects() {
                   <TableCell className="tabular-nums">
                     {row.statusCode ?? (row.kind === 'Client' ? 'Client' : '—')}
                   </TableCell>
-                  <TableCell className="whitespace-nowrap">{row.state}</TableCell>
+                  <TableCell className="whitespace-nowrap">
+                    {row.state}
+                    {workspace.data?.metadata.get(row.id)?.is_archived && (
+                      <span className="block text-xs text-muted-foreground">Archived</span>
+                    )}
+                  </TableCell>
                   <TableCell>
                     <span className="block whitespace-nowrap">{row.kind}</span>
                     <span className="text-xs text-muted-foreground">{row.origin}</span>
@@ -482,7 +573,7 @@ export default function AdminRedirects() {
               ))}
               {!visible.length && (
                 <TableRow>
-                  <TableCell colSpan={8} className="py-12 text-center text-muted-foreground">
+                  <TableCell colSpan={9} className="py-12 text-center text-muted-foreground">
                     {rows?.length
                       ? 'No redirects match these filters.'
                       : partial

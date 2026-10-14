@@ -18,7 +18,7 @@ function stringMap(value: unknown) {
 }
 export function linkInput(value: unknown, operation: 'create' | 'update' | 'upsert') {
   const data = object(value), result: Record<string, unknown> = {};
-  const fields = ['slug','target','statusCode','isEnabled','queryMode','queryOverride','utmDefaults','expiresAt','folderId','tagIds','comment'];
+  const fields = ['slug','target','statusCode','isEnabled','isArchived','queryMode','queryOverride','utmDefaults','expiresAt','folderId','tagIds','comment'];
   if (Object.keys(data).some(key => !fields.includes(key))) throw new Error('Unknown link field');
   if (operation !== 'update' && data.target === undefined) throw new Error('A destination is required');
   if (operation === 'upsert' && data.slug === undefined) throw new Error('Upsert requires a slug');
@@ -35,6 +35,7 @@ export function linkInput(value: unknown, operation: 'create' | 'update' | 'upse
     result.target = data.target.trim();
   }
   if (data.statusCode !== undefined && ![301,302,307,308].includes(data.statusCode as number)) throw new Error('Invalid redirect status');
+  if (data.isArchived !== undefined && typeof data.isArchived !== 'boolean') throw new Error('Invalid archive state');
   if (data.isEnabled !== undefined && typeof data.isEnabled !== 'boolean') throw new Error('Invalid enabled state');
   if (data.queryMode !== undefined && !['PRESERVE','DROP','OVERRIDE'].includes(data.queryMode as string)) throw new Error('Invalid query mode');
   if (data.expiresAt !== undefined && data.expiresAt !== null && (typeof data.expiresAt !== 'string' || !Number.isFinite(Date.parse(data.expiresAt)))) throw new Error('Invalid expiration date');
@@ -64,10 +65,11 @@ export function bulkLinkInput(value: unknown) {
 }
 export function linkListInput(value: unknown) {
   const filters = object(value);
-  if (Object.keys(filters).some(key => !['search','ids','folderId','tagId','isEnabled'].includes(key))) throw new Error('Unknown link filter');
+  if (Object.keys(filters).some(key => !['search','ids','folderId','tagId','isEnabled','isArchived'].includes(key))) throw new Error('Unknown link filter');
   if (filters.search !== undefined && (typeof filters.search !== 'string' || filters.search.length > 200)) throw new Error('Search exceeds 200 characters');
   if (filters.ids !== undefined && (!Array.isArray(filters.ids) || filters.ids.length > 100 || filters.ids.some(id => !uuid(id)))) throw new Error('Invalid link IDs');
   for (const key of ['folderId','tagId']) if (filters[key] !== undefined && !uuid(filters[key])) throw new Error('Invalid organization filter');
+  if (filters.isArchived !== undefined && typeof filters.isArchived !== 'boolean') throw new Error('Invalid archive filter');
   if (filters.isEnabled !== undefined && typeof filters.isEnabled !== 'boolean') throw new Error('Invalid enabled filter');
   return filters;
 }
