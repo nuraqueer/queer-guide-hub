@@ -28,7 +28,7 @@ Deno.serve(async (req: Request) => {
  const path=new URL(req.url).pathname.split('/redirect-api')[1]?.replace(/\/$/,'') ?? '';
  const credential=req.headers.get('Authorization')?.replace(/^Bearer\s+/i,'') ?? '';
  if(!credential)return json({error:'Unauthorized'},401);
- const db=createClient(Deno.env.get('SUPABASE_URL')!,Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
+ let db=createClient(Deno.env.get('SUPABASE_URL')!,Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
  if(path==='/public-qr-image')return publicQrImageRequest(req,db,Deno.env.get('SUPABASE_URL')??'',cors);
  if(path==='/public-report')return publicReportRequest(req,db,Deno.env.get('REDIRECT_RELAY_SECRET')??Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,cors);
  const tokenCredential=/^qg_redirect_[a-f0-9]{64}$/.test(credential);
@@ -39,6 +39,7 @@ Deno.serve(async (req: Request) => {
   const {data,error}=await identityClient.auth.getUser(credential);
   if(error || !data.user)return json({error:'Unauthorized'},401);
   user=data.user;
+  db=createClient(Deno.env.get('SUPABASE_URL')!,Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,{global:{headers:{'x-qg-redirect-session-actor':user.id}}});
  }
  const sessionPrincipal=async(scope:string):Promise<{id:string|null;role?:string;label?:string;failure?:Response}>=>{
   if(!user||user.is_anonymous)return {id:null,failure:json({error:'A registered account is required'},403)};

@@ -65,7 +65,7 @@ const service = {
       },
     }),
   },
-  rpc: async (name, args = {}) => {
+  rpc: async (name, args = {}, requestHeaders = {}) => {
     try {
       const entries = Object.entries(args);
       const params = entries.map(([key, value]) =>
@@ -76,12 +76,12 @@ const service = {
             : value,
       );
       const sql =
-        'SELECT public.' +
+        "WITH context AS MATERIALIZED(SELECT set_config('request.headers',$" + (params.length+1) + ',true)) SELECT public.' +
         name +
         '(' +
         entries.map(([key], index) => key + '=> $' + (index + 1)).join(',') +
-        ') AS result';
-      const result = await db.query(sql, params);
+        ') AS result FROM context';
+      const result = await db.query(sql, [...params, JSON.stringify(requestHeaders)]);
       if(name==='redirect_policy_resource'&&args.p_change_password===true&&args.p_password_hash){
         const stored=(await db.query('SELECT password_hash FROM public.redirect_link_policies WHERE redirect_id=$1',[args.p_redirect_id])).rows[0].password_hash;
         if(!await policyRuntime.verifyLinkPassword('fixture-sdk-password',stored))throw new Error('Persisted SDK password hash did not verify');
@@ -152,7 +152,7 @@ policyRuntime=new Function('Deno', 'createClient', 'crypto', 'fetch', code+'\nre
       handler = fn;
     },
   },
-  (_url,key) => key==='fixture-service'?service:identity,
+  (_url,key,options) => key==='fixture-service'?{...service,rpc:(name,args)=>service.rpc(name,args,options?.global?.headers??{})}:identity,
   webcrypto,
   fixtureDnsFetch,
 );
@@ -320,6 +320,10 @@ try {
   // The identity boundary deliberately still reports admin: SQL must deny a stale claim.
   await db.query('DELETE FROM public.user_roles WHERE user_id=$1',[reportActor]);
   await reportRequest('/members','GET',undefined,undefined,403);
+  await reportRequest('/links','GET',undefined,undefined,403);
+  const spoofedSession=await fetch(base+'/links',{headers:{Authorization:'Bearer fixture-account-session','x-qg-redirect-session-actor':reportOtherActor}});
+  if(spoofedSession.status!==403)throw new Error('Inbound actor header bypassed current owner checks');
+
   await reportRequest('/members/'+managedMember.id,'DELETE',undefined,undefined,403);
   if(!(await db.query('SELECT id FROM public.redirect_workspace_members WHERE id=$1',[managedMember.id])).rows.length)throw new Error('Stale admin removed member');
   await db.query("INSERT INTO public.user_roles VALUES($1,'admin')",[reportActor]);

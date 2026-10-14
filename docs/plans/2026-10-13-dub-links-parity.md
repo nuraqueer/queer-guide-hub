@@ -2382,3 +2382,22 @@ wrong member identity and spoofed incoming headers cannot grant access.
 
 Primary request-context reference:
 https://postgrest.org/en/stable/references/transactions.html
+
+### Owner-session scope context implementation and evidence (2026-10-14)
+
+Verified browser identities now get a separately constructed service client whose
+actor header comes only from Auth.getUser; an inbound header cannot set it. The
+shared service-only scope checks the current owner role for NULL principals and
+the matching user for member sessions under ACL locks. Native HTTP fixtures
+materialize request.headers separately in each migrated SQL statement; trusted
+job fixtures reset it to an empty object. Full SQL and five SDK HTTP suites pass,
+including stale admin-claim /links denial and an inbound spoof naming another
+current owner still denied. Member identity mismatch and current ordinary-user
+owner-scope escalation are denied. Native Deno, lint (no errors) and 2323-migration
+Postgres 17 grammar checks pass. These changes do not affect the frontend build.
+
+Next authorization audit: credential creation/list/revoke still uses direct
+service-table operations, and direct authenticated Redirects RLS/organization
+RPCs still trust cached admin JWT roles. Bring those paths under actual current
+owner checks without changing public automatic-alias routing or granting members
+raw table access; continue all-source discovery/organization afterward.
