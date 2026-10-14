@@ -37,6 +37,16 @@ export interface CountryRef {
   code: string
 }
 
+/** Leave enough time for one complete reverse request, pacing, and database writes. */
+export function canStartPostalRequest(
+  elapsedMs: number,
+  requestTimeoutMs: number,
+  intervalMs: number,
+  runBudgetMs: number,
+): boolean {
+  return elapsedMs + requestTimeoutMs + intervalMs < runBudgetMs
+}
+
 export function normPostal(p?: string | null): string | null {
   const s = (p || '').toUpperCase().replace(/[^A-Z0-9]/g, '')
   return s.length >= 3 ? s : null

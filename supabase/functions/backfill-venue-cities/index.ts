@@ -11,6 +11,7 @@ import {
   normPostal,
   postalContradicts,
   postalJobOutcome,
+  canStartPostalRequest,
   stampGeocode,
   houseNumberContradicts,
   photonToNominatim,
@@ -1119,6 +1120,10 @@ async function processSingleEvent(
 const PHOTON_REVERSE = Deno.env.get('PHOTON_REVERSE_URL') || 'https://photon.komoot.io/reverse'
 const PHOTON_SEARCH = Deno.env.get('PHOTON_SEARCH_URL') || 'https://photon.komoot.io/api'
 const PHOTON_INTERVAL_MS = Number(Deno.env.get('PHOTON_INTERVAL_MS') || 1100)
+// pg_net stops waiting after 120 seconds. Leave room for database writes and
+// lease release even when Photon has a slow tail; unstarted rows stay queued.
+const POSTAL_REVERSE_TIMEOUT_MS = 15_000
+const POSTAL_RUN_BUDGET_MS = 90_000
 
 // The attempt ceiling at which a row is "parked": the drain stops selecting it
 // and run_geo_address_enqueue_backlog stops counting it towards queue depth.
@@ -1140,7 +1145,7 @@ async function photonReverse(lat: number, lon: number): Promise<PhotonReverse | 
   // for some rows and "Bavaria" for others and the values will not group.
   const url = `${PHOTON_REVERSE}?lat=${lat}&lon=${lon}&lang=en`
   const controller = new AbortController()
-  const timer = setTimeout(() => controller.abort(), 8000)
+  const timer = setTimeout(() => controller.abort(), POSTAL_REVERSE_TIMEOUT_MS)
   try {
     const res = await fetch(url, {
       signal: controller.signal,
@@ -1166,6 +1171,7 @@ async function processPostalQueue(
   supabase: ReturnType<typeof getServiceClient>,
   batchSize: number,
 ): Promise<{ processed: number; filled: number; extras: number; parked: number; failed: number; remaining: number }> {
+  const startedAt = Date.now()
   const { data: jobs, error } = await supabase
     .from('geo_address_queue')
     .select('entity_type, entity_id, latitude, longitude, attempts')
@@ -1180,9 +1186,16 @@ async function processPostalQueue(
   // `filled` counts postal codes ACTUALLY written — the one thing this queue
   // exists to do. `extras` counts opportunistic state/country_id fills taken
   // from the same response. `parked` counts rows Photon has no postcode for.
-  let filled = 0, extras = 0, parked = 0, failed = 0
+  let processed = 0, filled = 0, extras = 0, parked = 0, failed = 0
 
   for (const job of jobs) {
+    if (!canStartPostalRequest(
+      Date.now() - startedAt,
+      POSTAL_REVERSE_TIMEOUT_MS,
+      PHOTON_INTERVAL_MS,
+      POSTAL_RUN_BUDGET_MS,
+    )) break
+    processed++
     const table = QUEUE_TABLES[job.entity_type]
     if (!table) continue
 
@@ -1297,7 +1310,7 @@ async function processPostalQueue(
     .select('entity_id', { count: 'exact', head: true })
     .lt('attempts', PARK_ATTEMPTS)
 
-  return { processed: jobs.length, filled, extras, parked, failed, remaining: count ?? 0 }
+  return { processed, filled, extras, parked, failed, remaining: count ?? 0 }
 }
 
 async function processPostalQueueWithLease(
