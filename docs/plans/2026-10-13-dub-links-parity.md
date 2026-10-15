@@ -2894,3 +2894,14 @@ city_safety_gate_drift critical failures0; city_safety_review_holds high failure
 statement into its recorded version/name file; no SQL executed. All2,333 migration
 files pass grammar/body validation. The final native Swift package/contract check
 passes after the source-host case-insensitivity regression was added.
+
+Final-head CI verified the Swift contracts and production critical quality gate.
+An unrelated applied migration advanced the floor to99991792083673. Read-only
+history confirms the native app/inbox migrations are unapplied; allocator moved
+them to99991792085653 and99991792085751 respectively. Its first inbox allocation
+collided in the same second with a sibling worktree; the version check caught it
+and a fresh allocator version resolved it. No applied history was renumbered.
+All2,333 local versions are unique and the version check passes. The only other
+open PR4423 claims99991792083683, with no overlap. Full isolated platform SQL and
+all five server SDK/actual HTTP suites pass again using the renamed migrations.
+Cross-PR script itself lacks a local GH_TOKEN, so fresh CI remains authoritative.
