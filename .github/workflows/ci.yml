@@ -81,6 +81,8 @@ jobs:
       # the app's jsdom suite and Deno discovery do not collect these files.
       - name: Run merchant and server-script regressions
         run: npm run test:merchant-sync
+      - name: Verify final derived safety flag guards in isolated PostgreSQL
+        run: node scripts/test-safety-write-guards.mjs
       # Coverage gate is enforced via thresholds in vite.config.ts
       # test.coverage.thresholds (Phase 6, locked 2026-05-16).
       - run: npm run test:coverage

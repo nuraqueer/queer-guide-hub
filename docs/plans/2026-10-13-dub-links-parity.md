@@ -2859,3 +2859,13 @@ Read-only inspection confirms the 15 drifted rows have stored true/expected fals
 (venues6, organizations9). Current venue/org safety triggers omit direct flag
 writes, and the org safety trigger precedes address-derived country changes.
 No production reconciliation or trigger change has been performed.
+
+The release-blocking venue/organization drift now has a reviewed candidate
+migration: final safety derivation on every INSERT/UPDATE, including caller flag
+writes and address-only mutations. The actual migration passes isolated PostgreSQL
+regressions that first reproduce both original failures, reconcile both directions,
+and verify direct-write, geography, city fallback, cruising, nullable category and
+idempotence behavior. CI executes the regression. Existing predicates/RLS/quality
+thresholds remain unchanged. This adds one canonical predicate evaluation to row
+updates previously outside the column-scoped triggers. Production application and
+a fresh zero-drift release gate are still required.
