@@ -54,6 +54,9 @@ module QueerGuide
     def list_qr_images(limit:100,cursor:nil); request('GET','/qr-images',nil,{limit:limit,cursor:cursor}); end
     def revoke_qr_image(id,version); request('DELETE','/qr-images/'+URI.encode_www_form_component(id),{version:version}); end
     def list_domain_choices(limit:100,cursor:nil); request('GET','/domain-choices',nil,{limit:limit,cursor:cursor}); end
+    def list_inventory(filters={},limit:100,after:nil); request('GET','/inventory',nil,filters.merge(limit:limit,after:after)); end
+    def get_inventory_metadata(id); request('GET','/inventory/metadata',nil,{id:id}); end
+    def organize_inventory(operations); request('POST','/inventory/organization',operations); end
     def list_links(filters={},limit:100,cursor:nil); request('GET','/links',nil,{filters:filters,limit:limit,cursor:cursor}); end
     def count_links(filters={}); request('GET','/links/count',nil,{filters:filters}); end
     def bulk(operations); request('POST','/links/bulk',{operations:operations}); end

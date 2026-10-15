@@ -2,6 +2,10 @@
 require_once __DIR__.'/../php/RedirectsClient.php';
 function check($value): void {if (!$value) throw new RuntimeException('Assertion failed');}
 $api=new QueerGuide\RedirectsClient(getenv('REDIRECT_TEST_TOKEN'),getenv('REDIRECT_TEST_BASE'));
+$sourcePage=$api->listInventory(['kind'=>'Client'],1);check(count($sourcePage['data'])===1 && $sourcePage['count']>0);
+$sourceRecord=$sourcePage['data'][0];$sourceMetadata=$api->getInventoryMetadata($sourceRecord['id']);
+$organizedSource=$api->organizeInventory([['id'=>$sourceRecord['id'],'version'=>$sourceMetadata['metadataVersion'],'values'=>['comment'=>'SDK source metadata']]]);
+check($organizedSource['data'][0]['comment']==='SDK source metadata' && $organizedSource['data'][0]['metadataVersion']!==$sourceMetadata['metadataVersion']);
 check($api->listDomainChoices()['count']===1);
 check($api->listLinkedDomains()['count']===0);
 $root=$api->createLink(['isDomainRoot'=>true,'domainId'=>getenv('REDIRECT_TEST_ROOT_DOMAIN'),'target'=>'https://example.org/home'])['link'];

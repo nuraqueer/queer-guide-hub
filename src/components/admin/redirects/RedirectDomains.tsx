@@ -74,7 +74,7 @@ function DomainRegistry({ accountId }: { accountId: string }) {
   });
   return (
     <section aria-label="Custom domains" className="space-y-4 border-t pt-4">
-      <h3 className="text-lg font-semibold">Custom domains</h3>
+      <h3 className="text-title font-sans font-bold">Custom domains</h3>
       <p className="text-sm">
         Register a domain you control and verify its TXT record. Ownership, TLS and branded routing
         are separate requirements. Provider connections run in the background. Check branded routing

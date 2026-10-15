@@ -25,6 +25,18 @@ func TestSDKIntegration(t *testing.T) {
 		}
 		return result
 	}
+	sourcePage := must(api.ListInventory(ctx, Object{"kind": "Client"}, 1, ""))
+	sourceRows := sourcePage["data"].([]any)
+	if len(sourceRows) != 1 {
+		t.Fatal("Inventory page missing")
+	}
+	sourceRecord := sourceRows[0].(map[string]any)
+	sourceMeta := must(api.GetInventoryMetadata(ctx, sourceRecord["id"].(string)))
+	organizedSource := must(api.OrganizeInventory(ctx, []Object{{"id": sourceRecord["id"], "version": sourceMeta["metadataVersion"], "values": Object{"comment": "SDK source metadata"}}}))
+	organizedRows := organizedSource["data"].([]any)
+	if organizedRows[0].(map[string]any)["comment"] != "SDK source metadata" {
+		t.Fatal("Inventory metadata roundtrip failed")
+	}
 	if must(api.ListDomainChoices(ctx, 100, ""))["count"].(interface{ String() string }).String() != "1" {
 		t.Fatal("Unexpected domain choices")
 	}

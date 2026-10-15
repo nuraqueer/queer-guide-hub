@@ -13,6 +13,8 @@ let handler;
 let policyRuntime;
 const pieces = [
   '_shared/redirect-api.ts',
+  '_shared/redirect-inventory-manifest.ts',
+  '_shared/redirect-inventory-api.ts',
   '_shared/redirect-qr-style.ts',
   '_shared/redirect-domains.ts',
   '_shared/redirect-domain-provider.ts',
@@ -39,7 +41,7 @@ const pieces = [
 const code = ts.transpileModule(pieces.join('\n'), {
   compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext },
 }).outputText;
-const jsonArgs = new Set(['p_result', 'p_dates', 'p_event', 'p_filters', 'p_values', 'p_operations','p_patch','p_password_hash']);
+const jsonArgs = new Set(['p_result', 'p_dates', 'p_event', 'p_filters', 'p_manifest', 'p_values', 'p_operations','p_patch','p_password_hash']);
 const artwork = await sharp({
   create: { width: 1200, height: 630, channels: 3, background: 'white' },
 })

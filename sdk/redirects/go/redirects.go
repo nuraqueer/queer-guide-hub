@@ -184,6 +184,23 @@ func (c *Client) ListDomainChoices(ctx context.Context, limit int, cursor string
 	}
 	return c.Request(ctx, "GET", "/domain-choices", nil, q)
 }
+func (c *Client) ListInventory(ctx context.Context, f Object, limit int, after string) (Object, error) {
+	q := Object{}
+	for k, v := range f {
+		q[k] = v
+	}
+	q["limit"] = limit
+	if after != "" {
+		q["after"] = after
+	}
+	return c.Request(ctx, "GET", "/inventory", nil, q)
+}
+func (c *Client) GetInventoryMetadata(ctx context.Context, id string) (Object, error) {
+	return c.Request(ctx, "GET", "/inventory/metadata", nil, Object{"id": id})
+}
+func (c *Client) OrganizeInventory(ctx context.Context, ops []Object) (Object, error) {
+	return c.Request(ctx, "POST", "/inventory/organization", ops, nil)
+}
 func (c *Client) ListLinks(ctx context.Context, f Object, limit int, cursor string) (Object, error) {
 	query := Object{"filters": filters(f), "limit": limit}
 	if cursor != "" {

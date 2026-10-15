@@ -58,7 +58,7 @@ function PublicReportDates({
   };
   return (
     <section aria-label="Reporting dates" className="space-y-4 border-y py-4">
-      <h2 className="text-lg font-semibold">Reporting dates</h2>
+      <h2 className="text-title font-sans font-bold">Reporting dates</h2>
       <p className="text-sm text-muted-foreground">
         Dates use UTC. Start is inclusive; end is exclusive. Selection stays within the published
         period.
@@ -174,7 +174,7 @@ export function SharedReportView({ id }: { id: string }) {
       <meta name="referrer" content="no-referrer" />
       <div className="space-y-6">
         <header>
-          <h1 className="text-3xl font-semibold">{data?.title ?? 'Shared link report'}</h1>
+          <h1 className="text-headline font-normal">{data?.title ?? 'Shared link report'}</h1>
           <p className="text-sm text-muted-foreground">
             Published aggregate analytics. Individual events and customer identities are private.
           </p>
@@ -250,13 +250,13 @@ export function SharedReportView({ id }: { id: string }) {
               {Object.entries(data.report.totals).map(([key, value]) => (
                 <div key={key} className="border-t py-4">
                   <dt className="text-sm capitalize">{key}</dt>
-                  <dd className="text-3xl font-semibold">{value.toLocaleString()}</dd>
+                  <dd className="text-headline font-normal">{value.toLocaleString()}</dd>
                 </div>
               ))}
             </dl>
             {data.includeConversions && data.report.revenue.length > 0 && (
               <section aria-label="Revenue" className="space-y-2">
-                <h2 className="text-xl font-semibold">Revenue by currency</h2>
+                <h2 className="text-title font-sans font-bold">Revenue by currency</h2>
                 {data.report.revenue.map((row) => (
                   <p key={row.currency}>{formatRevenue(amountMicros(row.amount), row.currency)}</p>
                 ))}
@@ -266,7 +266,7 @@ export function SharedReportView({ id }: { id: string }) {
               aria-label={data.includeConversions ? 'Activity over time' : 'Clicks over time'}
               className="space-y-2"
             >
-              <h2 className="text-xl font-semibold">
+              <h2 className="text-title font-sans font-bold">
                 {data.includeConversions ? 'Activity' : 'Clicks'} over time · {data.report.interval}{' '}
                 · UTC
               </h2>
@@ -327,7 +327,7 @@ export function SharedReportView({ id }: { id: string }) {
             <div className="grid gap-4 sm:grid-cols-2">
               {Object.entries(data.report.breakdowns).map(([dimension, rows]) => (
                 <section key={dimension} className="space-y-2 border-t pt-4">
-                  <h2 className="text-lg font-semibold capitalize">
+                  <h2 className="text-title font-sans font-bold capitalize">
                     {dimension === 'os'
                       ? 'Operating systems'
                       : dimension === 'qr'

@@ -75,21 +75,26 @@ describe('hosted QR rendering HTTP', () => {
       expect(Number(response.headers.get('content-length'))).toBe(bytes.length);
     },
   );
-  it('scan-verifies every supported shape combination with the Wasm rasterizer', async () => {
-    for (const dots of ['square', 'circle', 'joined'])
-      for (const border of ['square', 'rounded', 'circle'])
-        for (const center of ['square', 'circle']) {
-          const response = await qrImageResponse(
-            new Request(imageUrl({ dots, border, center })),
-            env,
-            initialize,
-          );
-          expect(response.status).toBe(200);
-          expect(await decode(new Uint8Array(await response.arrayBuffer()))).toBe(
-            'https://links.community.com/?utm_source=poster&qg_qr=1#details',
-          );
-        }
-  });
+  it.each(
+    ['square', 'circle', 'joined'].flatMap((dots) =>
+      ['square', 'rounded', 'circle'].flatMap((border) =>
+        ['square', 'circle'].map((center) => ({ dots, border, center })),
+      ),
+    ),
+  )(
+    'scan-verifies $dots/$border/$center with the Wasm rasterizer',
+    async ({ dots, border, center }) => {
+      const response = await qrImageResponse(
+        new Request(imageUrl({ dots, border, center })),
+        env,
+        initialize,
+      );
+      expect(response.status).toBe(200);
+      expect(await decode(new Uint8Array(await response.arrayBuffer()))).toBe(
+        'https://links.community.com/?utm_source=poster&qg_qr=1#details',
+      );
+    },
+  );
   it('encodes external URLs without following or tracking them', async () => {
     const fetcher = vi.fn<typeof fetch>();
     const result = await parseQrImageRequest(

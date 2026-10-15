@@ -17480,6 +17480,9 @@ export type Database = {
           click_limit: number | null
           created_at: string
           created_by: string | null
+          domain_id: string | null
+          domain_hostname: string | null
+          is_domain_root: boolean
           end_at: string | null
           id: string
           is_enabled: boolean
@@ -17502,6 +17505,9 @@ export type Database = {
           click_limit?: number | null
           created_at?: string
           created_by?: string | null
+          domain_id?: string | null
+          domain_hostname?: string | null
+          is_domain_root?: boolean
           end_at?: string | null
           id?: string
           is_enabled?: boolean
@@ -17524,6 +17530,9 @@ export type Database = {
           click_limit?: number | null
           created_at?: string
           created_by?: string | null
+          domain_id?: string | null
+          domain_hostname?: string | null
+          is_domain_root?: boolean
           end_at?: string | null
           id?: string
           is_enabled?: boolean
@@ -17541,7 +17550,9 @@ export type Database = {
           updated_at?: string
           utm_defaults?: Json | null
         }
-        Relationships: []
+        Relationships: [
+          { foreignKeyName: "redirects_domain_id_fkey", columns: ["domain_id"], isOneToOne: false, referencedRelation: "redirect_domains", referencedColumns: ["id"] },
+        ]
       }
       regions: {
         Row: {

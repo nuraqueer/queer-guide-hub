@@ -1,6 +1,11 @@
 require_relative '../ruby/redirects'
 api=QueerGuide::RedirectsClient.new(ENV.fetch('REDIRECT_TEST_TOKEN'),base_url:ENV.fetch('REDIRECT_TEST_BASE'))
 def check(value); raise 'Assertion failed' unless value; end
+source_page=api.list_inventory({kind:'Client'},limit:1)
+check(source_page['data'].length==1 && source_page['count']>0)
+source_record=source_page['data'][0];source_metadata=api.get_inventory_metadata(source_record['id'])
+organized_source=api.organize_inventory([{id:source_record['id'],version:source_metadata['metadataVersion'],values:{comment:'SDK source metadata'}}])
+check(organized_source['data'][0]['comment']=='SDK source metadata' && organized_source['data'][0]['metadataVersion']!=source_metadata['metadataVersion'])
 check(api.list_domain_choices['count']==1)
 check(api.list_linked_domains['count']==0)
 root=api.create_link({isDomainRoot:true,domainId:ENV.fetch('REDIRECT_TEST_ROOT_DOMAIN'),target:'https://example.org/home'})['link']

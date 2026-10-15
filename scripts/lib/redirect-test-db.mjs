@@ -4,6 +4,7 @@ export async function createRedirectTestDb() {
   const db = new PGlite();
   try {
     await db.exec(readFileSync('supabase/tests/fixtures/redirect-platform-bootstrap.sql', 'utf8'));
+    await db.exec(readFileSync('supabase/tests/fixtures/redirect-inventory-sources.sql', 'utf8'));
     const files = readdirSync('supabase/migrations');
     for (const suffix of [
       'redirect_link_workspace.sql',
@@ -43,6 +44,7 @@ export async function createRedirectTestDb() {
       'redirect_session_scope_context.sql',
       'redirect_current_owner_rls.sql',
       'redirect_token_administration.sql',
+      'redirect_all_source_inventory.sql',
     ]) {
       const name = files.find((file) => file.endsWith(suffix));
       if (!name) throw new Error('Missing migration ' + suffix);

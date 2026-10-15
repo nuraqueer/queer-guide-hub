@@ -1,3 +1,4 @@
+import { inventoryQuery, inventoryOperations, redirectInventoryManifest } from '../_shared/redirect-inventory-api.ts';
 import {passwordBrandingInput,storePasswordLogo} from '../_shared/redirect-password-branding.ts';
 import {createWebhookSecret,webhookInput,webhookVersionInput,webhookPage} from '../_shared/redirect-webhooks.ts';
 import {customerId,customerProfileInput,customerPage} from '../_shared/redirect-customers.ts';
@@ -52,6 +53,16 @@ Deno.serve(async (req: Request) => {
   return {id:membership.data.id,role:membership.data.role,label:membership.data.label};
  };
  try {
+  if(path==='/inventory'||path==='/inventory/metadata'||path==='/inventory/organization'){
+   const read=req.method==='GET',scope=read?'links:read':'links:write';let principalId:string|null=null;
+   if(tokenCredential){const auth=await db.rpc('authenticate_redirect_api_token',{p_hash:await tokenDigest(credential),p_scope:scope});if(auth.error)return rpcError(auth.error);if(!auth.data)return json({error:'Active inventory scope required'},403);principalId=auth.data.id;}
+   else{const principal=await sessionPrincipal(scope);if(principal.failure)return principal.failure;principalId=principal.id;}
+   const quota=await db.rpc('redirect_report_budget',{p_bucket:'inventory:'+(principalId??user!.id),p_limit:900,p_seconds:60});if(quota.error)return rpcError(quota.error);if(quota.data)return new Response(JSON.stringify({error:'Rate limit reached'}),{status:429,headers:{...cors,'Content-Type':'application/json','Cache-Control':'no-store','Retry-After':String(quota.data)}});
+   if(path==='/inventory'&&read){const args=inventoryQuery(new URL(req.url).searchParams);const {data,error}=await db.rpc('redirect_inventory_page',{...args,p_principal:principalId});if(error)return rpcError(error);return json(data);}
+   if(path==='/inventory/metadata'&&read){const query=new URL(req.url).searchParams,key=query.get('id');if([...query.keys()].some(k=>k!=='id')||!key||key.length>4096)return json({error:'Choose an inventory record'},400);const {data,error}=await db.rpc('redirect_inventory_metadata',{p_manifest:redirectInventoryManifest,p_key:key,p_principal:principalId});if(error)return rpcError(error);return json(data);}
+   if(path==='/inventory/organization'&&req.method==='POST'&&!new URL(req.url).search){const operations=inventoryOperations(await boundedJson(req,262144));const {data,error}=await db.rpc('redirect_inventory_organize',{p_manifest:redirectInventoryManifest,p_operations:operations,p_principal:principalId});if(error)return rpcError(error);return json(data);}
+   return json({error:'Method not supported'},405);
+  }
   if(path==='/session'&&req.method==='GET'){if(tokenCredential)return json({error:'Account session required'},403);const principal=await sessionPrincipal('links:read');if(principal.failure)return principal.failure;return json({role:principal.role,label:principal.label??null});}
   const manual=path.match(/^\/manual-records(?:\/([a-f0-9-]{36}))?$/i);
   if(manual){

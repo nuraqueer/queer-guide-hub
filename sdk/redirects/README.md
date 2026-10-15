@@ -493,3 +493,20 @@ account/link writes, and saves names separately from logo uploads without losing
 an unsaved name. Private branding API reads and public minimal metadata have
 separate contracts. Live Storage/cleanup/gateway checks and the pending base-table
 RLS audit must pass before production availability is claimed.
+
+## All-source inventory
+
+All five clients expose `listInventory`, `getInventoryMetadata` and
+`organizeInventory` using each language's naming convention (`list_inventory`,
+`ListInventory`, etc.). Inventory includes PATH rules, automatic aliases and
+static/client definitions, subject to current folder permissions. Use `links:read`
+for reads and `links:write` for organization. `listInventory` accepts filters, limit
+and an opaque `after` cursor; follow the returned `nextCursor`. Set
+`domainId: "builtin"` to select the built-in host.
+
+Read fresh metadata before writing. Organization accepts an array of unique
+`{id, version, values}` operations, where `version` is the returned UUID or null.
+Values may contain folderId, tagIds, comment and isArchived only. Writes are atomic;
+a conflict requires reviewing the current version before retrying. Routing remains
+controlled by its source. Pattern and reservation definitions are not concrete QR
+URLs. See the inventory section in `docs/guides/redirect-workspace-api.md`.

@@ -120,6 +120,7 @@ const STATIC_PAGES = new Set([
   'NotFound',
   'Page',
   'ShareTarget',
+  'SharedRedirectReport',
   'Sitemap',
   'Styleguide',
 ]);
@@ -169,7 +170,16 @@ export function pageDesignFamilyForModule(modulePath: string): PageDesignFamily 
   if (SAFETY_PAGES.has(name)) return 'safety';
 
   if (name.startsWith('Marketplace') || name === 'Wishlist') return 'marketplace';
-  if (['Auth', 'AuthCallback', 'ClaimUsername', 'ResetPassword', 'Settings'].includes(name)) {
+  if (
+    [
+      'Auth',
+      'AuthCallback',
+      'ClaimUsername',
+      'ResetPassword',
+      'Settings',
+      'RedirectMemberWorkspace',
+    ].includes(name)
+  ) {
     return 'account';
   }
   if (['Community', 'Cruising', 'GroupDetail', 'GroupInviteAccept', 'Groups'].includes(name)) {

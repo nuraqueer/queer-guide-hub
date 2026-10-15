@@ -2,7 +2,7 @@ import { supabase } from '@/integrations/supabase/client';
 export async function memberRedirectApi<T>(
   path: string,
   method: 'GET' | 'POST' | 'PATCH' | 'DELETE' = 'GET',
-  body?: Record<string, unknown>,
+  body?: Record<string, unknown> | Record<string, unknown>[],
   signal?: AbortSignal,
 ): Promise<T> {
   const { data, error } = await supabase.functions.invoke('redirect-api' + path, {

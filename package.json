@@ -52,7 +52,8 @@
     "test:redirect-sdks": "node scripts/test-redirect-sdks.mjs",
     "test:redirect-integrations": "node scripts/test-redirect-integrations.mjs",
     "test:redirect-webhooks": "node scripts/test-redirect-webhooks.mjs",
-    "test:redirect-qr": "node scripts/test-redirect-qr-worker.mjs"
+    "test:redirect-qr": "node scripts/test-redirect-qr-worker.mjs",
+    "test:redirect-manifest": "node scripts/sync-redirect-inventory-manifest.mjs"
   },
   "lint-staged": {
     "src/**/*.{ts,tsx}": [

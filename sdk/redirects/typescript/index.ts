@@ -490,6 +490,19 @@ export class RedirectsClient {
   listDomainChoices(limit = 100, cursor?: string) {
     return this.request<DomainChoices>('GET', '/domain-choices', undefined, { limit, cursor });
   }
+  listInventory(filters: JsonObject = {}, limit = 100, after?: string) {
+    return this.request<Page<JsonObject>>('GET', '/inventory', undefined, {
+      ...filters,
+      limit,
+      after,
+    });
+  }
+  getInventoryMetadata(id: string) {
+    return this.request<JsonObject>('GET', '/inventory/metadata', undefined, { id });
+  }
+  organizeInventory(operations: JsonObject[]) {
+    return this.request<{ data: JsonObject[] }>('POST', '/inventory/organization', operations);
+  }
   listLinks(filters: JsonObject = {}, limit = 100, cursor?: string) {
     return this.request<Page<Link>>('GET', '/links', undefined, { filters, limit, cursor });
   }

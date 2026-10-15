@@ -107,6 +107,8 @@ beforeEach(() => {
         },
         error: null,
       };
+    if (path.includes('/inventory?'))
+      return { data: { data: [], count: 0, nextCursor: null }, error: null };
     if (path.includes('/links?'))
       return {
         data: { data: [{ ...row, canEdit: mocks.canEdit }], count: 1, nextCursor: null },

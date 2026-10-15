@@ -149,7 +149,7 @@ export function RedirectAccessRequests({
   const rows = query.data?.pages.flatMap((p) => p.data) ?? [];
   return (
     <section aria-label="Access requests" className="space-y-4 rounded-container border p-4">
-      <h2 className="text-xl font-semibold">Access requests</h2>
+      <h2 className="text-title font-sans font-bold">Access requests</h2>
       <div className="flex flex-wrap gap-2">
         <Button
           variant={view === 'mine' ? 'default' : 'outline'}

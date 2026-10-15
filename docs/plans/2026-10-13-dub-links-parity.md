@@ -2541,7 +2541,7 @@ appear, while metadata continues following the semantic source URL. Read-only
 production schema inspection confirms all fourteen alias foreign keys are UUID,
 venue aliases have UUID IDs, tag aliases have bigint IDs and the others use old
 slug/username keys. A read-only aggregate found zero duplicate tag source URLs.
-No routing/data rows were read or changed for this schema discovery.
+No individual routing records were returned or changed for this schema discovery.
 
 The member page gets an Other redirects section with source/kind/search/folder/
 archive filters, clear read-only base-field labels, private metadata editor,
@@ -2551,3 +2551,64 @@ five SDKs, REST docs and the existing scoped permission SQL/HTTP/UI fixtures.
 Verify hidden/unfiled/folder/selected-key boundaries across all sources, stale
 writes, role/permission revocation, immutable routing and generated-manifest parity.
 Owner inventory behavior and the existing managed-link capabilities remain intact.
+
+### All-source inventory candidate checkpoint (2026-10-15)
+
+A service-only live source view, generated 399-rule static/client manifest,
+scoped inventory paging, versioned metadata and atomic organization RPCs are
+implemented locally. No routing source table is copied or modified. Metadata
+revisions use UUIDs and are stamped for existing owner paths too. Source tags
+with physical bigint IDs retain distinct row identities while sharing the old
+semantic metadata key. Private view/functions are revoked from public clients.
+
+The member workspace now includes Other redirects, source-kind filtering,
+organization drafts, archive/restore, source copy/QR and managed-link prefill.
+Parameterized, reservation and regex source definitions do not fabricate concrete
+QR URLs. Metadata drafts keep their original version; explicit reload replaces
+conflicted drafts. Atomic selected-source folder/tag/archive controls are also
+implemented. The manifest generator is checked in the Node lint CI job, which
+has TypeScript installed; the Deno-only job remains dependency-independent.
+
+Local evidence so far: full SQL tests cover all source kinds, hidden folders,
+view/edit ranks, selected-key bounds, inactive members, immutable routing,
+versions and atomic rollback. Five SDKs expose/list/get/organize and pass actual
+HTTP -> handler -> migrated SQL, in addition to their existing full suites.
+Sixteen focused member/source UI tests pass, native Deno and TypeScript SDK checks
+pass, app ratchet is 702 inherited errors with none new and production build
+passes (~27 seconds). Targeted lint has no errors. Still finish this phase's
+bulk-control tests, browser checks, docs, current full verification and review;
+this checkpoint is not full all-source or overall completion. All changes remain
+local candidates. No production routing/data/schema has been modified.
+
+### All-source validation and CI repair (2026-10-15)
+
+The candidate now passes 18 member/source UI tests, including versioned bulk
+organization, conflict/no-retry behavior and source-kind selection reset. Browser
+fixture checks verified bulk archive, fresh organization prefill/comment save and
+390px layout. The fixture blocks external requests and uses simulated records;
+its screenshot is `outputs/redirect-dub-parity/all-source-mobile.png` in the shared
+workspace. It is not production evidence. API and five SDK docs now describe
+source definitions, opaque row/cursor identities, metadata-only writes and grants.
+
+The existing global workspace write lock serializes metadata creation as well as
+updates. A conditional upsert also checks the expected revision before returning
+a saved result. Full isolated SQL and all five native SDK HTTP/SQL suites pass.
+A local PostgreSQL/Wasm fixture of 20,354 PATH records returned 50-row owner/member
+pages in 269/651 ms respectively. Those timings are local smoke evidence only.
+The 399-rule generated manifest and all 2,326 migration grammar checks passed.
+The production build passed in 34 seconds before the final semantic typography
+adjustments; final app type/build verification follows below.
+
+CI on the previous pushed head additionally exposed route-family omissions,
+missing schema type columns, a stale CMS test expectation and the raw typography
+ratchet. These are corrected using existing page families/semantic tokens and the
+three columns actually introduced by branch migrations. All 67 targeted tests pass.
+The 18-combination QR rasterizer test is parameterized per combination, preserving
+every decode assertion while avoiding one aggregate 15-second CI timeout.
+
+Read-only migration history inspection found applied version 20261014225550,
+`event_safety_after_venue_geography`, absent from Git. Its sole recorded 1,014-byte
+statement is recovered verbatim as a migration file. No DDL was executed, no
+version was renumbered and no placeholder SQL was added. The independent
+production city-safety gate failure and overall parity/release requirements remain
+open; this candidate is not an overall completion claim.

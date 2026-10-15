@@ -1,3 +1,4 @@
+import { RedirectOtherInventory } from '@/components/admin/redirects/RedirectOtherInventory';
 import {
   AskRedirectEdit,
   RedirectAccessRequests,
@@ -458,7 +459,7 @@ export function MemberWorkspaceContent({
   if (session.isError)
     return (
       <section className="space-y-4">
-        <h1 className="text-2xl font-semibold">Link workspace access</h1>
+        <h1 className="text-title font-sans font-bold">Link workspace access</h1>
         <p role="alert">{session.error.message}</p>
         <p>An administrator can add your existing account to this workspace.</p>
         <Button variant="outline" onClick={() => void session.refetch()}>
@@ -470,7 +471,7 @@ export function MemberWorkspaceContent({
     <div className="space-y-6">
       <header className="space-y-4">
         <div>
-          <h1 className="text-3xl font-semibold">Link workspace</h1>
+          <h1 className="text-headline font-normal">Link workspace</h1>
           <p className="text-muted-foreground">
             Your shared links, campaign settings, QR codes and analytics.{' '}
             {session.data?.role === 'viewer' ? 'You have read-only workspace access.' : ''}
@@ -971,6 +972,42 @@ export function MemberWorkspaceContent({
             });
             return result;
           }}
+        />
+      )}
+      {resources.data && session.isSuccess && validDomainFilter && (
+        <RedirectOtherInventory
+          key={filterScope}
+          userId={userId}
+          filters={filters}
+          resources={resources.data}
+          onPrefill={
+            canWrite
+              ? (row, target) =>
+                  setEditor({
+                    prefill: {
+                      id: row.manualId ?? '',
+                      slug: '',
+                      shortUrl: row.source,
+                      target,
+                      folderId: row.folderId,
+                      tagIds: row.tagIds,
+                      comment: row.comment,
+                      isEnabled: true,
+                      isArchived: false,
+                      clicks: 0,
+                      canEdit: true,
+                      statusCode: 302,
+                      queryMode: 'PRESERVE',
+                      queryOverride: null,
+                      utmDefaults: row.campaign ?? null,
+                      expiresAt: null,
+                      startsAt: null,
+                      clickLimit: null,
+                      updatedAt: row.updatedAt ?? '',
+                    },
+                  })
+              : undefined
+          }
         />
       )}
       {qr && (

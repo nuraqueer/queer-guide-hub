@@ -51,6 +51,9 @@ final class RedirectsClient {
     public function listQrImages(int $limit=100,?string $cursor=null): array {return $this->request('GET','/qr-images',null,['limit'=>$limit,'cursor'=>$cursor]);}
     public function revokeQrImage(string $id,string $version): array {return $this->request('DELETE','/qr-images/'.rawurlencode($id),['version'=>$version]);}
     public function listDomainChoices(int $limit=100,?string $cursor=null): array {return $this->request('GET','/domain-choices',null,['limit'=>$limit,'cursor'=>$cursor]);}
+    public function listInventory(array $filters=[],int $limit=100,?string $after=null): array {return $this->request('GET','/inventory',null,array_merge($filters,['limit'=>$limit,'after'=>$after]));}
+    public function getInventoryMetadata(string $id): array {return $this->request('GET','/inventory/metadata',null,['id'=>$id]);}
+    public function organizeInventory(array $operations): array {return $this->request('POST','/inventory/organization',$operations);}
     public function listLinks(array $filters=[],int $limit=100,?string $cursor=null): array {return $this->request('GET','/links',null,['filters'=>(object)$filters,'limit'=>$limit,'cursor'=>$cursor]);}
     public function countLinks(array $filters=[]): array {return $this->request('GET','/links/count',null,['filters'=>(object)$filters]);}
     public function bulk(array $operations): array {return $this->request('POST','/links/bulk',['operations'=>$operations]);}

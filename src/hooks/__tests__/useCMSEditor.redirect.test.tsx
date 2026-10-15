@@ -73,7 +73,14 @@ describe('manual redirect CMS editor IO', () => {
       '/manual-records/' + row.id,
       'PATCH',
       expect.objectContaining({
-        values: { type: 'PATH', source_path: '/converted-cms', domain_id: null, slug: null },
+        expectedUpdatedAt: row.updated_at,
+        values: {
+          type: 'PATH',
+          source_path: '/converted-cms',
+          domain_id: null,
+          slug: null,
+          is_domain_root: false,
+        },
       }),
     );
     expect(result.current.state.errors).toEqual({});

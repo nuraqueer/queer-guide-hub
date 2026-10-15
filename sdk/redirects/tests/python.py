@@ -3,6 +3,11 @@ import os, sys
 sys.path.insert(0,os.path.join(os.path.dirname(__file__),'../python'))
 from redirects import RedirectsClient, RedirectApiError, verify_webhook
 api=RedirectsClient(os.environ['REDIRECT_TEST_TOKEN'],os.environ['REDIRECT_TEST_BASE'])
+source_page=api.list_inventory({'kind':'Client'},limit=1)
+assert len(source_page['data'])==1 and source_page['count']>0
+source_record=source_page['data'][0];source_metadata=api.get_inventory_metadata(source_record['id'])
+organized_source=api.organize_inventory([{'id':source_record['id'],'version':source_metadata['metadataVersion'],'values':{'comment':'SDK source metadata'}}])
+assert organized_source['data'][0]['comment']=='SDK source metadata' and organized_source['data'][0]['metadataVersion']!=source_metadata['metadataVersion']
 assert api.list_domain_choices()['count']==1
 assert api.list_linked_domains()['count']==0
 root=api.create_link({'isDomainRoot':True,'domainId':os.environ['REDIRECT_TEST_ROOT_DOMAIN'],'target':'https://example.org/home'})['link']
