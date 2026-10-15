@@ -70,5 +70,6 @@ replace them with current settings; mutations do not retry automatically.
 The policy-aware JSON transport is described in
 [Native resolution](redirect-native-resolution.md). Association files authorize a
 host; clients must still resolve each link against live policies. A local
-[Swift client](../../sdk/redirects/swift/README.md) consumes that transport; Android,
-deferred attribution and real signed-device verification remain required.
+[Swift client](../../sdk/redirects/swift/README.md) consumes that transport; the local [Android client](../../sdk/redirects/android/README.md)
+also resolves live policies.
+Deferred attribution and real signed-device verification remain required.

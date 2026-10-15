@@ -173,7 +173,8 @@ public struct RedirectClient: Sendable {
     }
 
     private static func decodedPath(_ url: URL) -> String {
-        URLComponents(url: url, resolvingAgainstBaseURL: false)?.percentEncodedPath.removingPercentEncoding ?? ""
+        let path = URLComponents(url: url, resolvingAgainstBaseURL: false)?.percentEncodedPath.removingPercentEncoding ?? ""
+        return path.isEmpty ? "/" : path
     }
 
     private static func publicURL(_ raw: String, maximum: Int, https: Bool = false) -> URL? {
@@ -181,7 +182,7 @@ public struct RedirectClient: Sendable {
               raw.rangeOfCharacter(from: .whitespacesAndNewlines) == nil, !raw.contains("\\"),
               let url = URL(string: raw), url.absoluteString.utf16.count <= maximum,
               let scheme = url.scheme, ["http", "https"].contains(scheme), !https || scheme == "https",
-              url.user == nil, url.password == nil, !https || url.port == nil || url.port == 443,
+              url.user == nil, url.password == nil, (0...65535).contains(url.port ?? 0), !https || url.port == nil || url.port == 443,
               let host = url.host?.lowercased(), host.contains("."), !host.hasSuffix("."),
               host.range(of: "^[a-z0-9.-]+$", options: .regularExpression) != nil,
               !["localhost", "local", "internal", "home", "test", "invalid", "example"].contains(host.components(separatedBy: ".").last ?? "")

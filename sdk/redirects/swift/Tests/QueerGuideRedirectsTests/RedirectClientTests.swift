@@ -70,6 +70,16 @@ final class RedirectClientTests {
         expectNil(result.clickID)
         _ = try await client().resolve(URL(string: "https://QUEER.GUIDE/go/example-link")!)
     }
+    func testBareBrandedHostMatchesCanonicalRootSlash() async throws {
+        try stub(payload(["canonicalUrl": "https://links.example.org/"]))
+        let sdk = try RedirectClient(shortHosts: ["links.example.org"], contentHosts: ["queer.guide"]) {
+            let config = URLSessionConfiguration.ephemeral
+            config.protocolClasses = [StubProtocol.self]
+            return config
+        }
+        let result = try await sdk.resolve(URL(string: "https://links.example.org")!)
+        expectEqual(result.canonicalURL.absoluteString, "https://links.example.org/")
+    }
     func testPasswordUsesFormPostWithLiteralPlusAndNoQuerySecret() async throws {
         try stub(payload(["statusCode": 303])) { request in
             expectEqual(request.httpMethod, "POST")
@@ -142,7 +152,7 @@ final class RedirectClientTests {
         for target in ["http://127.0.0.1/", "http://0177.0.0.1/", "http://0x7f.0.0.1/", "http://2130706433/",
                        "http://10.0.0.1/", "http://169.254.1.1/", "http://172.16.0.1/", "http://192.168.1.1/",
                        "http://100.64.0.1/", "https://[::1]/", "http://host.local/", "https://user:pass@example.org/",
-                       "javascript:alert(1)", "file:///private/file"] {
+                       "https://queer.guide:65536/content", "javascript:alert(1)", "file:///private/file"] {
             try assertInvalid(["destination": target])
         }
         for link in ["http://queer.guide/go/example-link", "https://example.org/go/example-link",
@@ -212,6 +222,7 @@ private func expectNoThrow<T>(_ expression: @autoclosure () throws -> T) {
     static func main() async throws {
         let tests = RedirectClientTests()
         try await tests.testRealTransportSendsExplicitDeniedConsentWithoutCredentialsOrCookies()
+        try await tests.testBareBrandedHostMatchesCanonicalRootSlash()
         try await tests.testPasswordUsesFormPostWithLiteralPlusAndNoQuerySecret()
         try await tests.testConsentedClickIDMatchesDestinationAndDeniedConsentStripsIt()
         try await tests.testWebModeExternalHTTPAndNonstandardPortsUseBrowser()
@@ -220,6 +231,6 @@ private func expectNoThrow<T>(_ expression: @autoclosure () throws -> T) {
         try await tests.testUnsafeDestinationsAndSourceHostsAreRejected()
         try await tests.testWrongMimeRedirectAndOversizedStreamFailClosed()
         try await tests.testCancellationStopsHangingTransport()
-        print("Swift native redirects: nine contract groups pass against real URLSession and isolated URLProtocol fixtures; no production requests or persistent storage.")
+        print("Swift native redirects: ten contract groups pass against real URLSession and isolated URLProtocol fixtures; no production requests or persistent storage.")
     }
 }

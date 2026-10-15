@@ -517,5 +517,7 @@ The credential-free [Swift package](swift/README.md) resolves canonical short UR
 for iOS15+/macOS12+. It is separate from the five server management/conversion
 clients above. Its default consent is denied, it uses the live resolver policies,
 and it returns explicit app/browser navigation decisions. Run
-`node scripts/test-redirect-swift.mjs` on macOS. Android, deterministic deferred
+`node scripts/test-redirect-swift.mjs` on macOS. The [Android Java/Kotlin client](android/README.md) uses the same policy/consent
+protocol with a dedicated OkHttp transport. Run `node scripts/test-redirect-android.mjs`
+with JDK21/Maven. Both clients remain local candidates; deterministic deferred
 attribution, signed-device evidence and package publication remain open.

@@ -21,7 +21,7 @@ exist. Existing local tools are a foundation, not proof of parity or deployment.
 | AI previews          | Generate title/description from destination content using configured AI provider                                   | Candidate: scoped draft generator with spend limits; live provider and browser verification pending                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
 | Custom domains       | Verify ownership/DNS, multiple domains, primary domain, redirects on branded hostname                              | Partial: private registry, exact DNS verification, owner UI and stored defaults implemented locally; durable Cloudflare lifecycle/TLS checks implemented locally; hostname namespaces, signed relay/resolver, routing health, background proof renewal and inventory/CSV/QR/API/SDK fields implemented locally; ready choices, owner primary preference and tracked/member builders implemented locally; active manual CMS domain field and atomic owner saves implemented locally; URL domain filters and scoped linked-domain facets implemented locally; explicit provider validation restart implemented locally; real provider proof and release pending |
 | Domain defaults      | Root/not-found redirects, default expiration URL, workspace/domain QR logos                                        | Partial: root/not-found/expiry settings, signed-host resolver and managed root-link policies/metadata/tracking implemented locally; QR/logo precedence and release pending                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
-| Deep links           | iOS/Android association files, app page routes, fallback and deferred attribution                                  | Partial: owner-managed app identities, per-host association files and gateway behavior implemented locally; policy-aware native resolver and local Swift client implemented; Android, deferred attribution and real device/release evidence remain open                                                                                                                                                                                                                                                                                                                                                                                                       |
+| Deep links           | iOS/Android association files, app page routes, fallback and deferred attribution                                  | Partial: owner-managed app identities, per-host association files and gateway behavior implemented locally; policy-aware native resolver and local Swift/Android clients implemented; deferred attribution and real device/release evidence remain open                                                                                                                                                                                                                                                                                                                                                                                                       |
 | Geo targeting        | Country-specific destinations and default fallback                                                                 | Candidate: country rules and fallback tested                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 | Device targeting     | iOS/Android destinations, evaluated before geo                                                                     | Candidate: iOS/Android priority tested                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | A/B testing          | 2–5 destinations, weighted traffic≥10%, end date≤6 weeks, manual winner/end                                        | Candidate: editor/resolver implemented locally                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
@@ -2923,3 +2923,59 @@ Okio/Kotlin runtime dependencies and AndroidX Startup initialization. Consider a
 scoped OkHttp client to guarantee per-client no-cookie/no-auth behavior rather
 than java.net.HttpURLConnection's process-global CookieHandler. Native package
 configuration and signed-device proof remain open.
+
+### Android native client candidate and canonical root correction
+
+A local Java API usable by Kotlin/Java Android apps now consumes the same native
+protocol. It uses dedicated OkHttp5.5.0 with no cookies/cache/authenticators/
+interceptors, redirect refusal, retryOnConnectionFailure=false, a ten-second whole
+call deadline, bounded64KiB streams and single-use execute/enqueue calls. The
+async API delivers typed results/errors on an I/O worker; its documented coroutine
+bridge connects cancellation to the actual socket. The SDK owns/cleans its pool
+and rejects use after close, including already-created unexecuted calls.
+
+Actual loopback TLS contracts (ephemeral SAN certificates, restricted DNS and
+socket routing; no external requests) pass password/form/Unicode/plus handling,
+default-denied/granted attribution, private cookie isolation, app/browser mode,
+canonical source, malformed/unsafe payloads and URLs, all error statuses/retry
+bounds, known/chunked response limits, no Location following, connection-drop
+nonretry, synchronous/async cancellation and the actual ten-second deadline.
+Library/tests compile against Java8 API with source warnings as errors. Only the
+intentional Java8 target-obsolescence warning is disabled. Android supplies JSON;
+provided/test JVM JSON/TLS/mock-server dependencies are not bundled in client
+source. The Ubuntu CI job uses the same native contract command with JDK21/Maven.
+This is JVM/client transport evidence, not an Android install/build or signed
+App Link device proof. Package publication and production rollout remain open.
+
+Bare branded source hosts exposed an empty-path vs canonical-slash mismatch.
+Both clients now normalize that comparison to '/' without changing the request's
+query/fragment semantics. Swift's package and all ten contract groups pass after
+the added root regression. Existing final pre-Android PR head has no failures;
+only full tests/critical paths were still running at the latest observation.
+Deferred install/attribution, actual native app identities/signing/entitlements,
+device/provider release and the other original scope requirements remain open.
+
+Android transport errors now discard raw messages/causes (which may contain an
+upstream status line/URL), returning stable transport_failure/cancelled/client_closed
+metadata. Synchronous/async cancellation and connection-drop tests verify that
+boundary. Both clients explicitly reject ports outside0..65535 while preserving
+valid external nonstandard ports as browser fallback. Final native suites are
+repeated for those source changes. No TS/SQL production behavior changed in this
+Android/root normalization phase; broader checks from the native transport phase
+remain the relevant evidence for that unchanged code.
+
+A real TLS negative control then demonstrated that org.json accepted an unquoted
+protocol key. The Android production decoder now uses strict Moshi1.15.2 (current
+stable metadata verified at Maven Central), keeping JSON only as a test fixture
+serializer. The formerly failing case, single quotes and trailing documents now
+pass rejection tests. No Kotlin reflection/code generation or native context is
+required. Repeated full TLS/native Java8 contracts pass after the parser change.
+The final Swift package and ten groups pass, including bare roots and invalid
+ports. Pre-Android head5a8d59dec has every required CI check green, including full
+tests, critical paths, migration versions, data quality and its configured CodeQL.
+
+The two SDK workflows now initialize native-language CodeQL before their actual
+compiler commands and analyze afterward, with scoped security-events write and
+path-filtered runs. Existing CodeQL covered JS/Python/actions only; it does not
+prove Java/Swift security analysis. Fresh native CodeQL/CI must prove the new SDK
+head. No production or signed-device proof is inferred from those checks.

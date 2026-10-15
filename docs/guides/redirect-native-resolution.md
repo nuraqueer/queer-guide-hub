@@ -3,7 +3,8 @@
 This candidate adds a JSON transport on the existing canonical short URLs. It
 uses the same live resolver, password checks, targeting, atomic visit/quota
 transaction and hostname proof as ordinary web navigation. The local [Swift package](../../sdk/redirects/swift/README.md) consumes this
-protocol. Android clients, app installation/deferred attribution and signed-device
+protocol. A local [Android client](../../sdk/redirects/android/README.md) provides
+the same transport and navigation contract. App installation/deferred attribution and signed-device
 verification are still required; this transport alone does not prove an installed
 app opens correctly.
 

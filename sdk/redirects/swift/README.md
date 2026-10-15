@@ -67,7 +67,7 @@ the ordinary web redirect. Automatic post-install/deferred attribution is not
 implemented by this package. Do not substitute device fingerprint matching.
 
 From the repository root run `node scripts/test-redirect-swift.mjs`. It builds the
-actual package and compiles/runs nine native contract groups using URLSession and
+actual package and compiles/runs ten native contract groups using URLSession and
 isolated URLProtocol fixtures, without XCTest or external packages. A macOS CI
 workflow runs the same command. These tests prove the Apple Foundation client;
 they do not prove Universal Link installation, device behavior, production gateway
