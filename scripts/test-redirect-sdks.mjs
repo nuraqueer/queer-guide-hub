@@ -101,7 +101,7 @@ const sdkRootDomain=webcrypto.randomUUID();
 await db.query("INSERT INTO public.redirect_domains(id,hostname,verification_token,ownership_state,verified_at,verified_until,provider_id,routing_provider_id,routing_protocol,routing_seen_at) VALUES($1,'root-sdk.example.com',repeat('a',64),'verified',now(),now()+interval '1 day','fixture-root-provider','fixture-root-provider',1,now())",[sdkRootDomain]);
 await db.query("INSERT INTO public.redirect_domain_jobs(domain_id,zone_id,cname_target,requested_by,state,provider_status,ssl_status,checked_at) VALUES($1,repeat('a',32),'links.queer.guide',$2,'ready','active','active',now())",[sdkRootDomain,reportActor]);
 const reportOtherActor='00000000-0000-4000-8000-000000000098';
-await db.query('INSERT INTO auth.users(id) VALUES($1)',[reportOtherActor]);
+await db.query("INSERT INTO auth.users(id,email,email_confirmed_at) VALUES($1,'http-invite@example.org',now())",[reportOtherActor]);
 await db.query("INSERT INTO public.user_roles(user_id,role) VALUES($1,'admin')",[reportOtherActor]);
 const identity={auth:{getUser:async(value)=>({data:{user:['fixture-account-session','fixture-other-account-session'].includes(value)?{id:value==='fixture-account-session'?reportActor:reportOtherActor,created_at:'2026-10-01T00:00:00Z',is_anonymous:false}:null},error:null})},rpc:async()=>({data:true,error:null})};
 let dnsCalls=0,dnsMissing=false;
@@ -312,6 +312,19 @@ try {
     const response=await fetch(base+path,{method,headers:{Authorization:'Bearer '+credential,...(body?{'Content-Type':'application/json'}:{})},...(body?{body:JSON.stringify(body)}:{})});
     const data=await response.json();if(response.status!==expected)throw new Error('Report HTTP '+path+' expected '+expected+' received '+response.status+': '+JSON.stringify(data));return data;
   }
+  const invitationReceipt=await reportRequest('/invitations','POST',{email:'http-invite@example.org',label:'HTTP recipient',role:'viewer'},undefined,201);
+  const invitationSecret=new URL(invitationReceipt.invitationUrl).hash.slice('#invite='.length);
+  if(!/^qg_invite_[a-f0-9]{64}$/.test(invitationSecret))throw new Error('Invitation secret shape');
+  const invitationList=await reportRequest('/invitations');
+  if(JSON.stringify(invitationList).includes(invitationSecret)||invitationList.data.some(item=>item.token_hash))throw new Error('Invitation listing leaked secret');
+  await reportRequest('/invitations/accept','POST',{token:invitationSecret},undefined,404);
+  await reportRequest('/invitations','GET',undefined,token,403);
+  const acceptedInvite=await reportRequest('/invitations/accept','POST',{token:invitationSecret},'fixture-other-account-session');
+  const replayInvite=await reportRequest('/invitations/accept','POST',{token:invitationSecret},'fixture-other-account-session');
+  if(acceptedInvite.memberId!==replayInvite.memberId||acceptedInvite.role!=='viewer')throw new Error('Invitation acceptance/replay failed');
+  const revokedInvite=await reportRequest('/invitations','POST',{email:'http-invite@example.org',label:'Revoked',role:'member'},undefined,201);
+  await reportRequest('/invitations/'+revokedInvite.id,'DELETE');
+  await reportRequest('/invitations/accept','POST',{token:new URL(revokedInvite.invitationUrl).hash.slice('#invite='.length)},'fixture-other-account-session',404);
   const managedMember=await reportRequest('/members','POST',{label:'HTTP machine',kind:'machine',role:'viewer'},undefined,201);
   if(managedMember.kind!=='machine'||managedMember.user_id!==null)throw new Error('Membership creation response changed');
   const memberPage=await reportRequest('/members?offset=0');
@@ -329,6 +342,7 @@ try {
   // The identity boundary deliberately still reports admin: SQL must deny a stale claim.
   await db.query('DELETE FROM public.user_roles WHERE user_id=$1',[reportActor]);
   await reportRequest('/members','GET',undefined,undefined,403);
+  await reportRequest('/invitations','GET',undefined,undefined,403);
   await reportRequest('/tokens','GET',undefined,undefined,403);
   await reportRequest('/links','GET',undefined,ownerCredential.secret,403);
   await reportRequest('/tokens/'+ownerCredential.id,'DELETE',undefined,undefined,403);

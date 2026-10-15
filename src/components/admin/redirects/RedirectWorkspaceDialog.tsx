@@ -1,3 +1,4 @@
+import { RedirectInvitations } from '@/components/admin/redirects/RedirectInvitations';
 import { RedirectIntegrationSetup } from './RedirectIntegrationSetup';
 import { RedirectWebhooks } from './RedirectWebhooks';
 import { RedirectQrStyleSettings } from './RedirectQrStyleSettings';
@@ -92,7 +93,12 @@ export function RedirectWorkspaceDialog({ onClose }: { onClose: () => void }) {
         <Button variant="outline" asChild>
           <a href="/links-workspace">Open member workspace</a>
         </Button>
-        {showMembers && <RedirectWorkspaceMembers />}
+        {showMembers && (
+          <>
+            <RedirectWorkspaceMembers />
+            <RedirectInvitations />
+          </>
+        )}
         <Button variant="outline" onClick={() => setShowDomains(!showDomains)}>
           {showDomains ? 'Hide domains' : 'Manage custom domains'}
         </Button>

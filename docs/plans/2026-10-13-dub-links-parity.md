@@ -2655,3 +2655,40 @@ success. Test database, real handler and UI boundaries (recipient confirmation,
 role loss, replay, expiry, revocation, viewer preservation and account lifecycle).
 This does not introduce multiple independent tenant workspaces or claim native
 app/provider/runtime release evidence.
+
+### Recipient-bound invitation candidate (2026-10-15)
+
+Implemented owner list/create/revoke and verified-account acceptance, private
+hashed storage, seven-day validity, 20-owner/100-global hourly creation budgets
+and 200-account hourly acceptance budget. Owner authority is rechecked under the
+ACL lock. A narrow security-definer boolean Auth helper checks the actual verified
+recipient without giving the runtime direct Auth email read permissions. Pending
+links are manually shared; no message/email delivery was invoked.
+
+Acceptance preserves an existing active member's role and rejects an inactive
+member. An accepted invite cannot recreate a deleted membership. The SQL tests
+caught the latter null-membership replay and it was fixed before publication.
+Expired/revoked/wrong-recipient/unverified/lost-creator invites share the unavailable
+response. Lists never expose hashes or secrets. API credentials cannot administer
+or accept invites, and owner session loss is enforced by actual database roles.
+
+Owner settings now includes invitation creation, one-time link display/hide and
+pending/expired/revoked/accepted state. The member page accepts an explicit paste
+or fragment, clears fragment history and consumes a 15-minute, tab-scoped sign-in
+handoff once. Sign-in navigation excludes the token from the redirect query.
+Account-keyed remounts and lifetime guards discard late old-account receipts.
+No automatic mutation retry occurs. Explicit native browser fixture tests cover
+creation/acceptance and 390px layout; external requests are blocked, all data is
+simulated and no email was sent. Screenshot: shared workspace
+`outputs/redirect-dub-parity/invitation-mobile.png`.
+
+Evidence: full isolated SQL (including creation budget, current role/verified
+recipient, expiry/revocation, viewer preservation, replay and no public grants),
+actual HTTP -> handler -> migrated SQL in the existing five-SDK suite, six UI/auth
+handoff tests, member/member-administration regressions, native Deno and targeted
+lint pass. Production build passes (52.48 seconds); final ratchet check follows.
+This closes the local single-workspace invitation candidate, not multiple tenant
+workspace controls, external delivery or the overall parity/release objective.
+On the previous pushed head both migration history and critical data-quality CI
+gates now pass after the exact recorded migrations were recovered. Full CI must
+run again after the invitation changes are pushed.

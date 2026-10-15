@@ -63,6 +63,28 @@ Deno.serve(async (req: Request) => {
    if(path==='/inventory/organization'&&req.method==='POST'&&!new URL(req.url).search){const operations=inventoryOperations(await boundedJson(req,262144));const {data,error}=await db.rpc('redirect_inventory_organize',{p_manifest:redirectInventoryManifest,p_operations:operations,p_principal:principalId});if(error)return rpcError(error);return json(data);}
    return json({error:'Method not supported'},405);
   }
+  const invitation=path.match(/^\/invitations(?:\/(accept|[a-f0-9-]{36}))?$/i);
+  if(invitation){
+   if(tokenCredential||!user||user.is_anonymous)return json({error:'Account session required'},403);
+   const part=invitation[1],query=new URL(req.url).searchParams;
+   if(part==='accept'&&req.method==='POST'&&!query.size){
+    const budget=await db.rpc('redirect_report_budget',{p_bucket:'invitation-accept:'+user.id,p_limit:200,p_seconds:3600});if(budget.error)return rpcError(budget.error);if(budget.data)return new Response(JSON.stringify({error:'Invitation attempt limit reached'}),{status:429,headers:{...cors,'Content-Type':'application/json','Cache-Control':'no-store','Retry-After':String(budget.data)}});
+    const body=await boundedJson(req,4096) as Record<string,unknown>;
+    if(!body||Array.isArray(body)||Object.keys(body).some(k=>k!=='token')||typeof body.token!=='string'||!/^qg_invite_[a-f0-9]{64}$/.test(body.token))return json({error:'Invalid invitation'},400);
+    const {data,error}=await db.rpc('redirect_workspace_invitation',{p_actor:user.id,p_action:'accept',p_hash:await tokenDigest(body.token)});if(error)return rpcError(error);return json(data);
+   }
+   // The SQL routine checks the actual owner role under the ACL lock.
+   if(!part&&req.method==='GET'){
+    const offset=Number(query.get('offset')??0);if([...query.keys()].some(k=>k!=='offset')||!Number.isInteger(offset)||offset<0||offset>10000000)return json({error:'Invalid invitation page'},400);
+    const {data,error}=await db.rpc('redirect_workspace_invitation',{p_actor:user.id,p_action:'list',p_offset:offset});if(error)return rpcError(error);return json(data);
+   }
+   if(!part&&req.method==='POST'&&!query.size){
+    const values=await boundedJson(req,4096),secret=createRedirectToken().replace('qg_redirect_','qg_invite_');
+    const {data,error}=await db.rpc('redirect_workspace_invitation',{p_actor:user.id,p_action:'create',p_values:values,p_hash:await tokenDigest(secret)});if(error)return rpcError(error);return json({...data,invitationUrl:'https://queer.guide/links-workspace#invite='+secret},201);
+   }
+   if(part&&UUID.test(part)&&req.method==='DELETE'&&!query.size){const {data,error}=await db.rpc('redirect_workspace_invitation',{p_actor:user.id,p_action:'revoke',p_id:part});if(error)return rpcError(error);return json(data);}
+   return json({error:'Method not supported'},405);
+  }
   if(path==='/session'&&req.method==='GET'){if(tokenCredential)return json({error:'Account session required'},403);const principal=await sessionPrincipal('links:read');if(principal.failure)return principal.failure;return json({role:principal.role,label:principal.label??null});}
   const manual=path.match(/^\/manual-records(?:\/([a-f0-9-]{36}))?$/i);
   if(manual){

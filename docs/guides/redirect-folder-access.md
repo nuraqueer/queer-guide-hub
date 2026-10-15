@@ -66,7 +66,7 @@ and must not be cached.
   when using a credential. Returns folder default and membership overrides.
 - `PATCH /folders/{id}/access`: owner access, with `workspace:write` for keys.
   Body: `{defaultPermission?: "none"|"view"|"edit", overrides?: [{memberId,
-  permission: "none"|"view"|"edit"|"owner"|null}]}`. Null removes the override.
+permission: "none"|"view"|"edit"|"owner"|null}]}`. Null removes the override.
   Omitted overrides remain unchanged. Changes are atomic; at most 100 per call.
 
 API keys with selected-link scope cannot use workspace endpoints. Bind a key on
@@ -147,3 +147,32 @@ provider acceptance/delivery, cron activation, role downgrade and approval
 behavior, and inspect failed/queued mail. Current automated tests mock the
 provider and use isolated PostgreSQL; browser screenshots use explicitly labelled
 local simulations. No real email has been sent by verification.
+
+## Recipient-bound invitations
+
+Owners can create an invitation in Workspace settings by entering an email, name
+and viewer/member role. Save the returned link and share it with that recipient;
+creating an invitation sends no email. Links expire after seven days and can be
+revoked from the invitation list. The secret is shown once and stored only as a
+hash on the server. The list never returns it.
+
+The recipient opens `/links-workspace`, signs in or registers, verifies the exact
+invited email, then explicitly accepts. A fragment-based secret is kept out of
+HTTP request URLs. During sign-in, a browser-tab session handoff lasts at most
+15 minutes and is consumed once. The invitation can also be pasted manually if
+browser storage is unavailable. Acceptance creates only link workspace membership;
+folder defaults apply. It grants no site-admin role. Existing active members keep
+their current role; inactive members need an owner to reactivate them. Removing
+an accepted member prevents reusing the old invitation to recreate membership.
+
+Session-only REST routes: `GET /invitations?offset=0` (100 per page),
+`POST /invitations` with `{email,label,role}`, `DELETE /invitations/:id` and
+`POST /invitations/accept` with `{token}`. Owner routes check the current owner
+in the database; API credentials cannot administer or accept invitations.
+Creation returns `{id,expiresAt,invitationUrl}` once. Acceptance is idempotent for
+the same current member and checks the recipient's current verified email,
+expiry, revocation and the creator's current owner role. Unknown or unavailable
+invitations share a 404 response. Creation is limited to 20 per owner/hour and
+100 globally/hour; acceptance allows 200 attempts/account/hour. Requests do not
+retry automatically. After an uncertain create, review/revoke pending invitations
+before issuing a replacement.
