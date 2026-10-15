@@ -272,9 +272,19 @@ describe('the sentinel is wired, and gates on the things that rot', () => {
   it('only WARNS on a missing (scope,sort) combination', () => {
     // A scope with no rows legitimately produces no snapshot entry and falls through to the live
     // path, which returns the same empty list quickly. Failing on it would be cry-wolf.
-    const combos = block.slice(block.indexOf('combos < 15'));
+    //
+    // THE BOUND HERE IS LOAD-BEARING AND THE OBVIOUS ONE IS VACUOUS. Slicing to the first `}`
+    // ends at the brace inside `${combos}`, leaving ~15 characters to assert over -- a mutation
+    // that injected `FAILED = true` into this very branch SURVIVED that version. Bound on the
+    // next sibling branch instead, and assert the slice is big enough to contain the warning.
+    const start = block.indexOf('combos < 15');
+    const end = block.indexOf('age > 600');
+    expect(start).toBeGreaterThan(-1);
+    expect(end).toBeGreaterThan(start);
+    const combos = block.slice(start, end);
+    expect(combos.length).toBeGreaterThan(200);
     expect(combos).toContain('console.warn');
-    expect(combos.slice(0, combos.indexOf('}'))).not.toContain('FAILED = true');
+    expect(combos).not.toContain('FAILED = true');
   });
 });
 
