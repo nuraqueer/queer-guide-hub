@@ -2624,3 +2624,34 @@ versions against tracked files found exactly one missing file: 20261014231145,
 `venue_safety_after_geography`. Its exact recorded statement is recovered too;
 this accounts for the production trigger and preserves reproducible rebuilds.
 No trigger or data was changed by this recovery. CI must run again on this head.
+
+### Invitation design under the approved parity scope (2026-10-15)
+
+Existing member administration requires an account UUID. The next capability is
+recipient-bound invitations for the current shared link workspace. Three options
+were considered: owner account search (still excludes people who have not signed
+up), emailed invites (requires explicit delivery configuration/authorization), or
+owner-copyable invitation links bound to a verified email. Implement the last
+option first. No email is sent by creating an invitation.
+
+Only a current owner can list/create/revoke. Create generates a 256-bit random
+secret server-side, stores its hash and returns a fragment-based link once. A
+seven-day expiry, per-owner/global creation budgets and current-creator-role
+recheck constrain outstanding grants. Invites offer member/viewer roles only.
+Acceptance requires a verified account matching the invited email. It creates an
+ordinary workspace membership with existing folder defaults. An existing active
+membership retains its current role; an inactive membership requires explicit
+owner reactivation. It never grants site-admin rights or silently upgrades an
+existing viewer. Invalid/expired/revoked/mismatched invites share one response.
+Replays by the same accepted account return the same membership; other accounts
+cannot use the secret. Revoking a pending invite does not remove an accepted
+member; normal member controls manage membership after acceptance.
+
+Keep invitation tables/functions private to service_role, check authority under
+the existing ACL transaction lock, avoid logging secrets, and clear one-time link
+state on account change/unmount. The member page accepts a pasted invite or a
+fragment, strips it from browser history after capture, and refreshes access on
+success. Test database, real handler and UI boundaries (recipient confirmation,
+role loss, replay, expiry, revocation, viewer preservation and account lifecycle).
+This does not introduce multiple independent tenant workspaces or claim native
+app/provider/runtime release evidence.
