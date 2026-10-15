@@ -1,0 +1,37 @@
+BEGIN;
+SET LOCAL ROLE service_role;
+DO $$
+DECLARE actor uuid:=gen_random_uuid();user_id uuid:=gen_random_uuid();a uuid;b uuid;hidden uuid;link_a uuid;viewer uuid;key uuid;d jsonb;result jsonb;first_page jsonb;revision text;
+BEGIN
+ INSERT INTO auth.users(id) VALUES(actor),(user_id);INSERT INTO public.user_roles VALUES(actor,'admin');
+ d:=public.redirect_domain_resource('create',actor,p_values=>'{"hostname":"facet-a.example.com"}');a:=(d->>'id')::uuid;
+ d:=public.redirect_domain_resource('create',actor,p_values=>'{"hostname":"facet-b.example.com"}');b:=(d->>'id')::uuid;
+ UPDATE public.redirect_domains SET ownership_state='verified',verified_at=now(),verified_until=now()+interval '1 day',provider_id=gen_random_uuid()::text WHERE id IN(a,b);
+ INSERT INTO public.redirect_domain_jobs(domain_id,zone_id,cname_target,requested_by,state,provider_status,ssl_status,checked_at) SELECT id,repeat('a',32),'links.queer.guide',actor,'ready','active','active',now() FROM public.redirect_domains WHERE id IN(a,b);
+ PERFORM public.record_redirect_domain_route('facet-a.example.com');PERFORM public.record_redirect_domain_route('facet-b.example.com');
+ INSERT INTO public.redirect_link_folders(name,default_permission) VALUES('Facet hidden','none') RETURNING id INTO hidden;
+ result:=public.redirect_management_mutate(jsonb_build_array(jsonb_build_object('operation','create','data',jsonb_build_object('slug','facet-a1','target','/events','domainId',a))));link_a:=(result#>>'{0,link,id}')::uuid;
+ PERFORM public.redirect_management_mutate(jsonb_build_array(jsonb_build_object('operation','create','data',jsonb_build_object('slug','facet-a2','target','/events','domainId',a,'isArchived',true,'isEnabled',false)),jsonb_build_object('operation','create','data',jsonb_build_object('slug','facet-b1','target','/events','domainId',b,'folderId',hidden)),jsonb_build_object('operation','create','data',jsonb_build_object('slug','facet-builtin','target','/events'))));
+ PERFORM public.redirect_manual_record(actor,p_values=>'{"type":"PATH","source_path":"/facet-path","target":"/events"}');
+ result:=public.redirect_linked_domains();revision:=result->>'revision';
+ IF (result->>'count')::integer<>2 OR (result->>'builtinCount')::integer<>1 OR NOT EXISTS(SELECT FROM jsonb_array_elements(result->'data') v WHERE v->>'id'=a::text AND (v->>'linkCount')::integer=2) THEN RAISE EXCEPTION 'Facet counts lost archived/disabled links or included PATH';END IF;
+ IF EXISTS(SELECT FROM jsonb_array_elements(result->'data') v WHERE v-ARRAY['id','hostname','linkCount']::text[]<>'{}') THEN RAISE EXCEPTION 'Private setup fields leaked';END IF;
+ UPDATE public.redirect_domains SET disabled=true,verified_until=NULL WHERE id=a;
+ result:=public.redirect_linked_domains();IF result->>'revision'<>revision OR (result->>'count')::integer<>2 THEN RAISE EXCEPTION 'Management facets incorrectly depend on readiness';END IF;
+ first_page:=public.redirect_linked_domains(p_limit=>1);
+ result:=public.redirect_linked_domains(p_limit=>1,p_after=>(first_page->>'nextCursor')::uuid);
+ IF first_page->>'nextCursor' IS NULL OR result->>'nextCursor' IS NOT NULL OR first_page#>>'{data,0,id}'=result#>>'{data,0,id}' OR result->>'revision'<>revision THEN RAISE EXCEPTION 'Facet pagination inconsistent';END IF;
+ INSERT INTO public.redirect_workspace_members(user_id,kind,label,role) VALUES(user_id,'user','Facet viewer','viewer') RETURNING id INTO viewer;
+ result:=public.redirect_linked_domains(viewer);IF (result->>'count')::integer<>1 OR result#>>'{data,0,id}'<>a::text OR (result->>'builtinCount')::integer<>1 THEN RAISE EXCEPTION 'Viewer learned inaccessible domain';END IF;
+ INSERT INTO public.redirect_api_tokens(name,token_hash,prefix,scopes,redirect_ids,member_id,created_by,expires_at) VALUES('Facet bound',repeat('d',64),'fixture',ARRAY['links:read'],ARRAY[link_a],viewer,actor,now()+interval '1 day') RETURNING id INTO key;
+ result:=public.redirect_linked_domains(key);IF (result->>'count')::integer<>1 OR (result#>>'{data,0,linkCount}')::integer<>1 OR (result->>'builtinCount')::integer<>0 THEN RAISE EXCEPTION 'ID-bound facet count outside scope';END IF;
+ revision:=result->>'revision';
+ INSERT INTO public.redirect_link_metadata(redirect_key,folder_id) VALUES('redirects:'||link_a::text,hidden) ON CONFLICT(redirect_key) DO UPDATE SET folder_id=excluded.folder_id;
+ result:=public.redirect_linked_domains(key);IF (result->>'count')::integer<>0 OR result->>'revision'=revision THEN RAISE EXCEPTION 'Folder revocation retained facet or revision';END IF;
+ UPDATE public.redirect_workspace_members SET active=false WHERE id=viewer;
+ BEGIN PERFORM public.redirect_linked_domains(key);RAISE EXCEPTION 'Inactive member key read facets';EXCEPTION WHEN insufficient_privilege THEN NULL;END;
+ UPDATE public.redirect_api_tokens SET revoked_at=now() WHERE id=key;
+ BEGIN PERFORM public.redirect_linked_domains(key);RAISE EXCEPTION 'Revoked key read facets';EXCEPTION WHEN insufficient_privilege THEN NULL;END;
+ IF has_function_privilege('authenticated','public.redirect_linked_domains(uuid,integer,uuid)','EXECUTE') OR has_function_privilege('anon','public.redirect_linked_domains(uuid,integer,uuid)','EXECUTE') THEN RAISE EXCEPTION 'Facet RPC privilege exposed';END IF;
+END $$;
+ROLLBACK;

@@ -1,0 +1,43 @@
+BEGIN;
+SET LOCAL ROLE service_role;
+DO $$
+DECLARE owner uuid:=gen_random_uuid();recipient uuid:=gen_random_uuid();other_user uuid:=gen_random_uuid();unverified uuid:=gen_random_uuid();invite uuid;member uuid;response jsonb;i integer;
+BEGIN
+ INSERT INTO auth.users(id,email,email_confirmed_at) VALUES(owner,'owner@example.org',now()),(recipient,'recipient@example.org',now()),(other_user,'other@example.org',now()),(unverified,'pending@example.org',NULL);
+ INSERT INTO public.user_roles VALUES(owner,'admin');
+ response:=public.redirect_workspace_invitation(owner,'create',p_values=>'{"email":"Recipient@example.org","label":"New teammate","role":"member"}',p_hash=>repeat('a',64));invite:=(response->>'id')::uuid;
+ IF response?'token_hash' OR response?'email' THEN RAISE EXCEPTION 'Creation disclosed private storage';END IF;
+ BEGIN PERFORM public.redirect_workspace_invitation(other_user,'list');RAISE EXCEPTION 'Ordinary account listed invitations';EXCEPTION WHEN insufficient_privilege THEN NULL;END;
+ BEGIN PERFORM public.redirect_workspace_invitation(other_user,'accept',p_hash=>repeat('a',64));RAISE EXCEPTION 'Wrong recipient accepted';EXCEPTION WHEN no_data_found THEN NULL;END;
+ INSERT INTO public.redirect_workspace_members(user_id,kind,label,role) VALUES(recipient,'user','Existing viewer','viewer') RETURNING id INTO member;
+ response:=public.redirect_workspace_invitation(recipient,'accept',p_hash=>repeat('a',64));
+ IF response->>'role'<>'viewer' OR response->>'memberId'<>member::text THEN RAISE EXCEPTION 'Invitation upgraded an existing member';END IF;
+ IF public.redirect_workspace_invitation(recipient,'accept',p_hash=>repeat('a',64))->>'memberId'<>member::text THEN RAISE EXCEPTION 'Replay duplicated membership';END IF;
+ response:=public.redirect_workspace_invitation(owner,'list');
+ IF response#>'{data,0}'?'token_hash' OR response#>>'{data,0,accepted_at}' IS NULL THEN RAISE EXCEPTION 'List secret or missing acceptance';END IF;
+ PERFORM public.redirect_workspace_invitation(owner,'revoke',invite);
+ IF NOT EXISTS(SELECT FROM public.redirect_workspace_members WHERE id=member AND active) THEN RAISE EXCEPTION 'Revoking an accepted invite removed membership';END IF;
+ DELETE FROM public.redirect_workspace_members WHERE id=member;
+ BEGIN PERFORM public.redirect_workspace_invitation(recipient,'accept',p_hash=>repeat('a',64));RAISE EXCEPTION 'Accepted invitation recreated deleted membership';EXCEPTION WHEN no_data_found THEN NULL;END;
+ response:=public.redirect_workspace_invitation(owner,'create',p_values=>'{"email":"pending@example.org","label":"Pending","role":"viewer"}',p_hash=>repeat('b',64));
+ BEGIN PERFORM public.redirect_workspace_invitation(unverified,'accept',p_hash=>repeat('b',64));RAISE EXCEPTION 'Unverified account accepted';EXCEPTION WHEN no_data_found THEN NULL;END;
+ response:=public.redirect_workspace_invitation(owner,'create',p_values=>'{"email":"other@example.org","label":"Other","role":"member"}',p_hash=>repeat('c',64));invite:=(response->>'id')::uuid;
+ PERFORM public.redirect_workspace_invitation(owner,'revoke',invite);
+ BEGIN PERFORM public.redirect_workspace_invitation(other_user,'accept',p_hash=>repeat('c',64));RAISE EXCEPTION 'Revoked invitation accepted';EXCEPTION WHEN no_data_found THEN NULL;END;
+ response:=public.redirect_workspace_invitation(owner,'create',p_values=>'{"email":"other@example.org","label":"Other","role":"member"}',p_hash=>repeat('d',64));invite:=(response->>'id')::uuid;
+ UPDATE public.redirect_workspace_invitations SET expires_at=now()-interval '1 second' WHERE id=invite;
+ BEGIN PERFORM public.redirect_workspace_invitation(other_user,'accept',p_hash=>repeat('d',64));RAISE EXCEPTION 'Expired invitation accepted';EXCEPTION WHEN no_data_found THEN NULL;END;
+ response:=public.redirect_workspace_invitation(owner,'create',p_values=>'{"email":"other@example.org","label":"Other","role":"member"}',p_hash=>repeat('e',64));
+ DELETE FROM public.user_roles WHERE user_id=owner;
+ BEGIN PERFORM public.redirect_workspace_invitation(other_user,'accept',p_hash=>repeat('e',64));RAISE EXCEPTION 'Lost creator role accepted';EXCEPTION WHEN no_data_found THEN NULL;END;
+ BEGIN PERFORM public.redirect_workspace_invitation(owner,'list');RAISE EXCEPTION 'Lost owner listed';EXCEPTION WHEN insufficient_privilege THEN NULL;END;
+ INSERT INTO public.user_roles VALUES(owner,'admin');
+ response:=public.redirect_workspace_invitation(other_user,'accept',p_hash=>repeat('e',64));
+ IF response->>'role'<>'member' OR NOT EXISTS(SELECT FROM public.redirect_workspace_members WHERE user_id=other_user AND active) THEN RAISE EXCEPTION 'New membership not created';END IF;
+ FOR i IN 1..15 LOOP
+  PERFORM public.redirect_workspace_invitation(owner,'create',p_values=>'{"email":"budget@example.org","label":"Budget","role":"viewer"}',p_hash=>md5('invite-budget'||i)||md5('invite-budget2'||i));
+ END LOOP;
+ BEGIN PERFORM public.redirect_workspace_invitation(owner,'create',p_values=>'{"email":"budget@example.org","label":"Over budget","role":"viewer"}',p_hash=>repeat('f',64));RAISE EXCEPTION 'Owner invitation budget exceeded';EXCEPTION WHEN invalid_parameter_value THEN NULL;END;
+ IF has_table_privilege('authenticated','public.redirect_workspace_invitations','SELECT') OR has_function_privilege('authenticated','public.redirect_workspace_invitation(uuid,text,uuid,jsonb,text,integer)','EXECUTE') OR has_function_privilege('anon','public.redirect_invitation_recipient(uuid,text)','EXECUTE') THEN RAISE EXCEPTION 'Invitation API exposed';END IF;
+END $$;
+ROLLBACK;

@@ -1,0 +1,48 @@
+BEGIN;
+SET LOCAL ROLE service_role;
+SET LOCAL request.jwt.claims='{"role":"service_role"}';
+DO $$
+DECLARE a uuid;b uuid;ca uuid;cb uuid;bot uuid;folder uuid;tag uuid;report jsonb;page jsonb;cursor jsonb;first_ids text[];next_ids text[];
+BEGIN
+ INSERT INTO public.redirects(type,slug,target) VALUES('SHORT','analytics-a','https://example.com/a') RETURNING id INTO a;
+ INSERT INTO public.redirects(type,slug,target) VALUES('SHORT','analytics-b','https://example.com/b') RETURNING id INTO b;
+ ca:=public.record_redirect_visit(a,'/go/analytics-a','email=hidden','https://user:secret@example.com/path?token=hidden','fixture','CH','private-ip-hash',302,'a','https://example.com/a','{"device":"Mobile","browser":"Safari","os":"iOS","city":"Zurich","domain":"queer.guide","is_qr":true,"is_bot":false}');
+ cb:=public.record_redirect_visit(b,'/go/analytics-b',NULL,NULL,'fixture','US','private-ip-hash',302,NULL,'https://example.com/b','{"device":"Desktop","browser":"Chrome","os":"Windows","city":"New York","domain":"queer.guide","is_qr":false,"is_bot":false}');
+ bot:=public.record_redirect_visit(b,'/go/analytics-b',NULL,NULL,'fixture','DE','private-ip-hash',302,NULL,'https://example.com/b','{"device":"Bot","browser":"Chrome","os":"Linux","is_bot":true}');
+ PERFORM public.record_redirect_conversion(jsonb_build_object('kind','lead','clickId',ca,'customerExternalId','analytics-customer','eventId','analytics:lead','eventName','Sign up'));
+ PERFORM public.record_redirect_conversion('{"kind":"sale","customerExternalId":"analytics-customer","eventId":"analytics:sale","eventName":"Purchase","amount":"49.9","currency":"CHF"}');
+ report:=public.redirect_analytics_report('{}');
+ IF (report#>>'{totals,clicks}')::integer<>2 OR (report#>>'{totals,leads}')::integer<>1 OR (report#>>'{totals,sales}')::integer<>1 THEN RAISE EXCEPTION 'Wrong analytics totals or bot filtering'; END IF;
+ IF report::text LIKE '%hidden%' OR report::text LIKE '%secret%' OR report::text LIKE '%private-ip-hash%' THEN RAISE EXCEPTION 'Private visitor values disclosed by analytics'; END IF;
+ IF NOT EXISTS(SELECT FROM jsonb_array_elements(report->'revenue') r WHERE r->>'currency'='CHF' AND r->>'amount'='49.900000') THEN RAISE EXCEPTION 'Revenue precision lost'; END IF;
+ report:=public.redirect_analytics_report('{"country":"CH","device":"Mobile","qr":true}');
+ IF (report#>>'{totals,clicks}')::integer<>1 OR (report#>>'{totals,sales}')::integer<>1 THEN RAISE EXCEPTION 'Dimensions not inherited by conversions'; END IF;
+ report:=public.redirect_analytics_report('{"excludeBots":false}');
+ IF (report#>>'{totals,clicks}')::integer<>3 THEN RAISE EXCEPTION 'Bot opt-in not applied'; END IF;
+ INSERT INTO public.redirect_link_folders(name) VALUES('analytics-folder') RETURNING id INTO folder;
+ INSERT INTO public.redirect_link_tags(name,color) VALUES('analytics-tag','blue') RETURNING id INTO tag;
+ INSERT INTO public.redirect_link_metadata(redirect_key,folder_id) VALUES('redirects:'||a,folder);
+ INSERT INTO public.redirect_link_tag_assignments(redirect_key,tag_id) VALUES('redirects:'||a,tag);
+ report:=public.redirect_analytics_report(jsonb_build_object('folderId',folder,'tagId',tag));
+ IF (report#>>'{totals,clicks}')::integer<>1 THEN RAISE EXCEPTION 'Workspace filters lost'; END IF;
+ report:=public.redirect_analytics_report(jsonb_build_object('folderId',folder),ARRAY[b]);
+ IF (report#>>'{totals,clicks}')::integer<>0 THEN RAISE EXCEPTION 'Scoped API bypasses requested filters'; END IF;
+ report:=public.redirect_analytics_report(jsonb_build_object('start',(date_trunc('day',now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC')-interval '2 days','end',(date_trunc('day',now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC')+interval '1 day','interval','day'));
+ IF jsonb_array_length(report->'series')<>3 OR (report#>>'{series,0,clicks}')::integer<>0 THEN RAISE EXCEPTION 'Zero date buckets missing'; END IF;
+ page:=public.redirect_analytics_page('{}',NULL,NULL,NULL,2);cursor:=page->'nextCursor';
+ IF cursor='null'::jsonb THEN RAISE EXCEPTION 'Activity cursor missing'; END IF;
+ SELECT array_agg(value->>'id') INTO first_ids FROM jsonb_array_elements(page->'data');
+ page:=public.redirect_analytics_page('{}',(page->>'snapshot')::timestamptz,(cursor->>'at')::timestamptz,cursor->>'id',100);
+ SELECT array_agg(value->>'id') INTO next_ids FROM jsonb_array_elements(page->'data');
+ IF first_ids&&next_ids OR cardinality(first_ids)+cardinality(next_ids)<>4 THEN RAISE EXCEPTION 'Activity pagination repeats/skips events'; END IF;
+ IF page::text LIKE '%hidden%' OR page::text LIKE '%secret%' OR page::text LIKE '%private-ip-hash%' THEN RAISE EXCEPTION 'Activity exposes private query/agent/IP'; END IF;
+END $$;
+RESET ROLE;
+SET LOCAL ROLE authenticated;
+SET LOCAL request.jwt.claims='{"role":"authenticated","user_role":"user"}';
+DO $$ DECLARE r jsonb; BEGIN
+ r:=public.redirect_analytics_report('{}');IF (r#>>'{totals,clicks}')::integer<>0 THEN RAISE EXCEPTION 'Report bypasses RLS'; END IF;
+ r:=public.redirect_analytics_page('{}');IF jsonb_array_length(r->'data')<>0 THEN RAISE EXCEPTION 'Event stream bypasses RLS'; END IF;
+END $$;
+RESET ROLE;
+ROLLBACK;

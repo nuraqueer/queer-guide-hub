@@ -18,6 +18,8 @@ export interface InventoryRedirect {
     | 'Recorded';
   updatedAt: string | null;
   manualId?: string;
+  isShortLink?: boolean;
+  domainHostname?: string;
 }
 
 export interface SlugSource {
@@ -133,7 +135,14 @@ export function manualRedirect(row: Row, now = Date.now()): InventoryRedirect {
   const campaign: Record<string, string> = {};
   try {
     const target = new URL(String(row.target), 'https://queer.guide');
-    for (const key of ['utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content']) {
+    for (const key of [
+      'utm_source',
+      'utm_medium',
+      'utm_campaign',
+      'utm_term',
+      'utm_content',
+      'ref',
+    ]) {
       const value = target.searchParams.get(key);
       if (value) campaign[key] = value;
     }
@@ -152,7 +161,7 @@ export function manualRedirect(row: Row, now = Date.now()): InventoryRedirect {
     for (const [key, value] of Object.entries(row.query_override)) {
       if (
         key in campaign ||
-        ['utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content'].includes(key)
+        ['utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content', 'ref'].includes(key)
       ) {
         if (typeof value === 'string') campaign[key] = value;
       }
@@ -171,6 +180,10 @@ export function manualRedirect(row: Row, now = Date.now()): InventoryRedirect {
   return {
     id: `redirects:${row.id}`,
     manualId: String(row.id),
+    isShortLink: row.type === 'SHORT',
+    ...(row.domain_id && row.domain_hostname
+      ? { domainHostname: String(row.domain_hostname) }
+      : {}),
     clicks: Number(row.click_count ?? 0),
     campaign,
     prefill:
@@ -179,15 +192,25 @@ export function manualRedirect(row: Row, now = Date.now()): InventoryRedirect {
             Object.entries(row.query_override).filter(
               (entry): entry is [string, string] =>
                 typeof entry[1] === 'string' &&
-                !['utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content'].includes(
-                  entry[0],
-                ),
+                ![
+                  'utm_source',
+                  'utm_medium',
+                  'utm_campaign',
+                  'utm_term',
+                  'utm_content',
+                  'ref',
+                ].includes(entry[0]),
             ),
           )
         : {},
     origin: 'redirects',
     kind: 'Manual',
-    source: row.type === 'SHORT' ? `/go/${row.slug}` : String(row.source_path ?? ''),
+    source:
+      row.type === 'SHORT'
+        ? row.domain_id && row.domain_hostname
+          ? `https://${row.domain_hostname}/${row.is_domain_root ? '' : row.slug}`
+          : `/go/${row.slug}`
+        : String(row.source_path ?? ''),
     target: row.target ? String(row.target) : null,
     statusCode: Number(row.status_code),
     state,
@@ -246,7 +269,7 @@ export async function loadDatabaseInventory(read: ReadInventoryRows) {
         (
           await read(
             'redirects',
-            'id,type,slug,source_path,target,status_code,is_enabled,start_at,end_at,click_limit,click_count,utm_defaults,query_mode,query_override,updated_at',
+            'id,type,slug,domain_id,domain_hostname,is_domain_root,source_path,target,status_code,is_enabled,start_at,end_at,click_limit,click_count,utm_defaults,query_mode,query_override,updated_at',
             'id',
           )
         ).map((r) => manualRedirect(r)),
@@ -305,7 +328,8 @@ export async function loadDatabaseInventory(read: ReadInventoryRows) {
 
 /** Read the deployed rule source directly; 200 SPA rewrites are not redirects. */
 export function parseStaticRedirects(text: string): InventoryRedirect[] {
-  return text.split('\n').flatMap((line, index) => {
+  const occurrences = new Map<string, number>();
+  return text.split('\n').flatMap((line) => {
     const [source, target, code] = line.trim().split(/\s+/);
     const statusCode = Number(code?.replace('!', ''));
     if (
@@ -316,9 +340,12 @@ export function parseStaticRedirects(text: string): InventoryRedirect[] {
       !Number.isFinite(statusCode)
     )
       return [];
+    const key = [source, target, String(statusCode)].map(encodeURIComponent).join(':');
+    const occurrence = occurrences.get(key) ?? 0;
+    occurrences.set(key, occurrence + 1);
     return [
       {
-        id: `static:${index}`,
+        id: `static:${key}:${occurrence}`,
         source,
         target,
         origin: 'public/_redirects',
@@ -333,6 +360,7 @@ export function parseStaticRedirects(text: string): InventoryRedirect[] {
 
 /** Inventory declarative aliases without executing (or importing) the router. */
 export function parseClientRedirects(text: string): InventoryRedirect[] {
+  const occurrences = new Map<string, number>();
   const adminStart = text.indexOf('path="/admin"');
   const publicStart = text.indexOf('path="/:locale?"');
   const pattern =
@@ -364,10 +392,19 @@ export function parseClientRedirects(text: string): InventoryRedirect[] {
       publicStart >= 0 &&
       match.index! > adminStart &&
       match.index! < publicStart;
+    const source = `${admin ? '/admin' : ''}/${path.replace(/^\//, '')}`;
+    const scope = admin
+      ? 'admin'
+      : publicStart >= 0 && match.index! > publicStart
+        ? 'locale'
+        : 'root';
+    const key = [scope, source, target, component].map(encodeURIComponent).join(':');
+    const occurrence = occurrences.get(key) ?? 0;
+    occurrences.set(key, occurrence + 1);
     return [
       {
-        id: `client:${match.index}`,
-        source: `${admin ? '/admin' : ''}/${path.replace(/^\//, '')}`,
+        id: `client:${key}:${occurrence}`,
+        source,
         target,
         origin: 'Client router',
         kind: 'Client' as const,
@@ -379,15 +416,45 @@ export function parseClientRedirects(text: string): InventoryRedirect[] {
   });
 }
 
+export function canonicalInventoryDomain(value: string) {
+  const host = value.trim().toLowerCase();
+  return host === 'www.queer.guide' ? 'queer.guide' : host;
+}
+export function inventoryDomain(row: InventoryRedirect): string {
+  let hostname = row.domainHostname;
+  if (!hostname) {
+    try {
+      const url = new URL(row.source);
+      if (['https:', 'http:'].includes(url.protocol)) hostname = url.hostname;
+    } catch {
+      /* Relative/parameterized site paths use the builtin host. */
+    }
+  }
+  return canonicalInventoryDomain(hostname ?? 'queer.guide');
+}
+export function inventoryDomainFacets(rows: InventoryRedirect[]) {
+  const counts = new Map<string, number>();
+  for (const row of rows) {
+    const host = inventoryDomain(row);
+    counts.set(host, (counts.get(host) ?? 0) + 1);
+  }
+  return [...counts]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([hostname, count]) => ({ hostname, count }));
+}
+
 export function filterInventory(
   rows: InventoryRedirect[],
   search: string,
   origin: string,
   state: string,
+  domain = '',
 ) {
+  const selectedDomain = canonicalInventoryDomain(domain);
   const query = search.trim().toLocaleLowerCase();
   return rows.filter(
     (row) =>
+      (!selectedDomain || inventoryDomain(row) === selectedDomain) &&
       (!origin || row.origin === origin) &&
       (!state || row.state === state) &&
       (!query ||

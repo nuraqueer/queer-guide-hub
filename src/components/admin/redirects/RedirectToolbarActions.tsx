@@ -1,3 +1,4 @@
+import { RedirectManagedImportDialog } from './RedirectManagedImportDialog';
 import { useState } from 'react';
 import { Eye, Upload } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
@@ -16,6 +17,7 @@ import { useRedirects } from '@/hooks/useRedirects';
  */
 export function RedirectToolbarActions() {
   const [importOpen, setImportOpen] = useState(false);
+  const [pathImportOpen, setPathImportOpen] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
   const { bulkImport } = useRedirects();
   const queryClient = useQueryClient();
@@ -32,9 +34,18 @@ export function RedirectToolbarActions() {
       </Button>
 
       <PreviewDialog open={previewOpen} onClose={() => setPreviewOpen(false)} />
+      {importOpen && (
+        <RedirectManagedImportDialog
+          onClose={() => setImportOpen(false)}
+          onPathImport={() => {
+            setImportOpen(false);
+            setPathImportOpen(true);
+          }}
+        />
+      )}
       <BulkImportDialog
-        open={importOpen}
-        onClose={() => setImportOpen(false)}
+        open={pathImportOpen}
+        onClose={() => setPathImportOpen(false)}
         onImport={async (rows) => {
           const result = await bulkImport(rows);
           // The old page called window.location.reload(); invalidating the list

@@ -25,5 +25,6 @@
     "noFallthroughCasesInSwitch": true,
     "noImplicitReturns": true
   },
-  "include": ["functions"]
+  "include": ["functions"],
+  "exclude": ["functions/**/*.test.ts", "functions/**/*.test.tsx"]
 }

@@ -1,0 +1,133 @@
+import { useId, useState, type Dispatch, type SetStateAction } from 'react';
+import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
+import { readQrLogoFile } from '@/lib/redirects/qrLogos';
+import type { QrStyle } from '@/lib/redirects/qr';
+export function QrStyleFields({
+  style,
+  setStyle,
+  disabled = false,
+  onBusy,
+  allowLogo = true,
+}: {
+  style: QrStyle;
+  setStyle: Dispatch<SetStateAction<QrStyle>>;
+  disabled?: boolean;
+  onBusy?: (busy: boolean) => void;
+  allowLogo?: boolean;
+}) {
+  const id = useId();
+  const [uploadError, setUploadError] = useState('');
+  const [reading, setReading] = useState(false);
+  const changeStyle = <K extends keyof QrStyle>(key: K, value: QrStyle[K]) =>
+    setStyle((previous) => ({ ...previous, [key]: value }));
+  const loadLogo = async (file?: File) => {
+    setUploadError('');
+    if (!file) return;
+    setReading(true);
+    onBusy?.(true);
+    try {
+      const { data } = await readQrLogoFile(file);
+      changeStyle('logo', data);
+    } catch (error) {
+      setUploadError(error instanceof Error ? error.message : 'Could not read this logo.');
+    } finally {
+      setReading(false);
+      onBusy?.(false);
+    }
+  };
+  return (
+    <fieldset disabled={disabled || reading} className="space-y-4">
+      <div className="grid grid-cols-2 gap-4">
+        <label className="space-y-1 text-sm">
+          Dots
+          <select
+            aria-label="QR dots"
+            className="h-10 w-full rounded-element border bg-background px-4"
+            value={style.dots}
+            onChange={(event) => changeStyle('dots', event.target.value as QrStyle['dots'])}
+          >
+            <option value="square">Square</option>
+            <option value="circle">Circle</option>
+            <option value="joined">Joined</option>
+          </select>
+        </label>
+        <label className="space-y-1 text-sm">
+          Marker border
+          <select
+            aria-label="QR marker border"
+            className="h-10 w-full rounded-element border bg-background px-4"
+            value={style.border}
+            onChange={(event) => changeStyle('border', event.target.value as QrStyle['border'])}
+          >
+            <option value="square">Square</option>
+            <option value="rounded">Rounded</option>
+            <option value="circle">Circle</option>
+          </select>
+        </label>
+        <label className="space-y-1 text-sm">
+          Marker center
+          <select
+            aria-label="QR marker center"
+            className="h-10 w-full rounded-element border bg-background px-4"
+            value={style.center}
+            onChange={(event) => changeStyle('center', event.target.value as QrStyle['center'])}
+          >
+            <option value="square">Square</option>
+            <option value="circle">Circle</option>
+          </select>
+        </label>
+        <label htmlFor={id + '-qr-dot-color'} className="space-y-1 text-sm">
+          Dot color
+          <Input
+            id={id + '-qr-dot-color'}
+            aria-label="QR dot color"
+            type="color"
+            value={style.foreground}
+            onChange={(event) => changeStyle('foreground', event.target.value)}
+          />
+        </label>
+        <label htmlFor={id + '-qr-background-color'} className="space-y-1 text-sm">
+          Background color
+          <Input
+            id={id + '-qr-background-color'}
+            aria-label="QR background color"
+            type="color"
+            value={style.background}
+            onChange={(event) => changeStyle('background', event.target.value)}
+          />
+        </label>
+        {allowLogo && (
+          <label htmlFor={id + '-qr-logo'} className="space-y-1 text-sm">
+            Logo (optional)
+            <Input
+              id={id + '-qr-logo'}
+              aria-label="QR logo"
+              type="file"
+              accept="image/png,image/jpeg"
+              onChange={(event) => {
+                const file = event.target.files?.[0];
+                event.target.value = '';
+                void loadLogo(file);
+              }}
+            />
+          </label>
+        )}
+      </div>
+      {allowLogo && style.logo && (
+        <Button variant="ghost" size="sm" onClick={() => changeStyle('logo', undefined)}>
+          Remove logo
+        </Button>
+      )}
+      <p className="text-xs text-muted-foreground">
+        Keep strong contrast. Test your downloaded code with a phone before printing.
+      </p>
+      {reading && <p role="status">Preparing logo…</p>}
+      {uploadError && (
+        <p role="alert" className="text-sm text-destructive">
+          {uploadError}
+        </p>
+      )}
+    </fieldset>
+  );
+}

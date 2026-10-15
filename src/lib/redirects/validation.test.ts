@@ -112,10 +112,11 @@ describe('validateTarget', () => {
     expect(validateTarget('https://queer-guide.pages.dev/test').valid).toBe(true);
   });
 
-  it('rejects external domains not in allowlist', () => {
-    const result = validateTarget('https://evil.com/phish');
-    expect(result.valid).toBe(false);
-    expect(result.error).toContain('not in the allowlist');
+  it('supports external public destinations while rejecting credentials and private networks', () => {
+    expect(validateTarget('https://example.com/campaign').valid).toBe(true);
+    expect(validateTarget('https://user:password@example.com').valid).toBe(false);
+    expect(validateTarget('http://127.0.0.1').valid).toBe(false);
+    expect(validateTarget('http://10.0.0.2').valid).toBe(false);
   });
 
   it('rejects path traversal in relative paths', () => {

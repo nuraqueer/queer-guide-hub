@@ -16,6 +16,7 @@ export type MediaRole = 'cover' | 'gallery' | 'attachment' | 'avatar' | 'thumbna
 // ── Field Types ────────────────────────────────────────────────────
 
 export type FieldType =
+  | 'redirect_domain'
   | 'text'
   | 'textarea'
   | 'richtext'
@@ -306,6 +307,16 @@ export interface ContentTypeConfig {
   };
   /** Transactional editor IO for identity plus internal location records. */
   editorRpc?: { load: string; save: string };
+  /** Authenticated transactional IO for types managed by an Edge API. */
+  editorApi?: {
+    prepareSave?: (data: Record<string, unknown>) => Record<string, unknown>;
+    load: (id: string) => Promise<Record<string, unknown>>;
+    save: (
+      id: string | null,
+      data: Record<string, unknown>,
+      expectedUpdatedAt: string | null,
+    ) => Promise<Record<string, unknown>>;
+  };
   /** Primary key column (usually 'id') */
   primaryKey: string;
   /** Column used as title in lists */

@@ -1,3 +1,5 @@
+import { analyticsAllowed } from '@/lib/analyticsConsent';
+import { readRedirectAttribution } from '@/lib/redirects/attribution';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -49,8 +51,9 @@ export function useDonorWall(limit = 20) {
 export function useCreateCheckoutSession() {
   return useMutation({
     mutationFn: async (input: CheckoutSessionInput): Promise<string> => {
+      const attribution = readRedirectAttribution(analyticsAllowed());
       const { data, error } = await supabase.functions.invoke('create-checkout-session', {
-        body: input,
+        body: { ...input, ...(attribution ? { qg_click_id: attribution.clickId } : {}) },
       });
 
       if (error) throw new Error(error.message || 'Failed to create checkout session');
@@ -67,7 +70,9 @@ export function useMyDonations() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('donations')
-        .select('id, amount, currency, status, donation_type, recurring_interval, created_at, canceled_at')
+        .select(
+          'id, amount, currency, status, donation_type, recurring_interval, created_at, canceled_at',
+        )
         .order('created_at', { ascending: false });
 
       if (error) {

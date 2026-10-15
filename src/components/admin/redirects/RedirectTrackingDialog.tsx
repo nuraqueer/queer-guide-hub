@@ -1,3 +1,4 @@
+import { RedirectConversionsPanel } from './RedirectConversionsPanel';
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
@@ -48,7 +49,7 @@ export function RedirectTrackingDialog({
         if (!open) onClose();
       }}
     >
-      <DialogContent className="max-h-[90dvh] max-w-3xl overflow-y-auto">
+      <DialogContent className="max-h-[90dvh] max-w-3xl grid-cols-1 overflow-y-auto [&>*]:min-w-0">
         <DialogHeader>
           <DialogTitle>Visit tracking</DialogTitle>
           <DialogDescription>
@@ -136,6 +137,7 @@ export function RedirectTrackingDialog({
             )}
           </>
         )}
+        <RedirectConversionsPanel linkId={row.manualId} days={days} />
       </DialogContent>
     </Dialog>
   );
