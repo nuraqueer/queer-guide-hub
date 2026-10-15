@@ -2790,7 +2790,7 @@ Final local verification for this checkpoint: app typecheck stays at 702 inherit
 errors with none new; strict Pages production/test and branded Worker type checks
 pass. Gateway tests live in the existing Cloudflare test project, preserving its
 actual runtime types without introducing Cloudflare globals into browser types.
-All 42 focused tests plus the three gateway tests pass; full isolated SQL, all five
+All 42 focused cases pass; the three gateway cases also pass again in the Cloudflare test project; full isolated SQL, all five
 SDK/actual HTTP suites, Deno, targeted lint, manifest and routing guards pass.
 The production build passed in 33.60 seconds. Wrangler 4.148.0 dry-run bundles the
 branded Worker at 15.42 KiB (4.59 KiB gzip) and exits without upload/deployment.
@@ -2798,3 +2798,10 @@ The recipient inbox's native browser fixture shows explicit acceptance and remov
 of the pending row; screenshot `outputs/redirect-dub-parity/invitation-inbox.png`.
 All browser data is simulated, with external calls blocked. No production app,
 association, provider, DNS, database or storage state was changed.
+
+
+PR4417 merged externally at 2026-10-15 05:29 UTC as 198f18bd7 with head4ec7c8cc5.
+The new native association/inbox work is synchronized with that main and belongs
+in a focused follow-up PR. Prior-head checks and CodeQL alerts belong to the
+merged PR; require fresh analysis of the follow-up. A merged PR does not by itself
+prove successful production migrations, gateway deployment or native runtime.
