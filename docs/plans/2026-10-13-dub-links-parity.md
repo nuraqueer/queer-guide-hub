@@ -3005,3 +3005,29 @@ separate hardcoded success schema and makes a protocol producer/client mismatch
 visible. Native workflows also run when resolver/gateway/protocol inputs change.
 Local Android TLS contracts pass against that actual producer; the Swift package
 and all ten contract groups pass against the same actual backend fixture.
+
+PR4422 was updated externally by merging main as12a6639c7. Inspected the seven-file
+base change and fast-forwarded the clean checkout; native sources were unchanged.
+The new base floor99991792085742 overtook the unapplied app registry migration.
+Read-only history confirms neither native app/inbox candidate is applied; allocator
+moved only the app registry to99991792088922. The inbox remains above the floor.
+The local version check's only uncertainty is the recovered applied180715 history
+file without local remote credentials; it must not be renumbered. CI has those
+credentials. Full isolated SQL and grammar checks are repeated after synchronization.
+
+On the updated base, Android native contracts and Java CodeQL completed successfully.
+Swift's untraced package/contracts passed; its distinct traced compiler step remains
+live at job116594867235 and must be observed to completion, not restarted because
+an observation window elapsed. The deferred native design now specifies atomic
+one-visit receipts, live policy/version rechecks, original cohort preservation,
+Play delivery, App Clip/group delivery and explicit consent/lifecycle rules. Real
+platform setup/device proof and the other full-scope requirements remain required.
+
+Swift native job116594867235 subsequently completed successfully, including its
+direct traced build and CodeQL analysis. Both native language jobs are now proven
+on the synchronized base; no source changes occurred in the migration rename.
+The full isolated redirect SQL suite passes and2,339 migrations pass grammar/body
+checks after that base update. Deferred linking itself is still unimplemented;
+the committed design is the specification for the next phase, not completion
+evidence. Its iOS path has the Clip create the original receipt while serving its
+own useful functionality; the browser must not pre-mint a duplicate visit.
