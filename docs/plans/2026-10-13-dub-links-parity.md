@@ -2692,3 +2692,47 @@ workspace controls, external delivery or the overall parity/release objective.
 On the previous pushed head both migration history and critical data-quality CI
 gates now pass after the exact recorded migrations were recovered. Full CI must
 run again after the invitation changes are pushed.
+
+### Native-link association design under the approved scope (2026-10-15)
+
+The next phase supplies host-specific app registration and association documents.
+Static environment-only JSON would prevent admin configuration and multiple apps;
+generated files in the build would become stale after app/domain changes. Use a
+private, owner-managed live registry and fixed public renderers instead. This is
+one part of the full native/deferred-link requirement; resolver/SDK/deferred
+attribution and actual-device verification remain required after this foundation.
+
+Each binding names a built-in or registered custom hostname, platform, public app
+identifier, Android signing fingerprints, allowed short-link paths and enabled
+state. Start disabled. iOS uses a full application identifier (prefix plus bundle
+ID); Android uses package plus one or more release signing fingerprints. Save and
+delete use optimistic revisions. Only actual current owners can administer;
+machine/member credentials cannot publish associations. Recheck the publishing
+owner and custom-domain ownership/provider/TLS readiness for every public fetch.
+Serve only explicitly public association fields, never registry labels, creators,
+challenges or domain defaults. Disable/delete takes effect on the next fetch,
+subject to Apple/Android's own cached association lifecycle.
+
+Generate Apple's `applinks` appIDs/components and Android's Digital Asset Links
+statements plus Android 15+ dynamic path rules. Built-in paths are restricted to
+/go/; custom host paths stay under that host. Require the app's static manifest/
+entitlements to agree; Android versions below 15 do not apply dynamic rules.
+No wildcard app identifiers, arbitrary JSON, credential sharing or webcredentials
+claims are accepted. The public endpoint is JSON-only, bounded, no-store and never
+redirects or fetches submitted destinations. Pages handles both built-in hosts
+before localization/SEO/static fallback. The branded Worker handles the exact
+well-known paths before normal slug routing; HTTP methods and upstream responses
+are bounded and validated. Unconfigured/disabled hosts return empty documents;
+unready custom hosts return unavailable, with no SPA/error-HTML masquerading as JSON.
+
+The native app must resolve the received canonical link through the policy-aware
+resolver before opening app content, including password, expiry, quota, targeting
+and attribution rules. App associations alone do not prove this behavior. Keep
+all protected-link/native/deferred requirements open until the native flow and
+actual runtime evidence exist. No real identifiers were provided yet; use clearly
+labelled test identifiers only in isolated fixtures and never publish them live.
+
+Sources reviewed: Apple's Supporting associated domains and TN3155 (app IDs,
+components, per-host HTTPS without redirects), Android's Configure website
+associations and dynamic rules (signing certificates, per-host JSON and Android
+15+ path rules), and Cloudflare's current Workers/Pages routing guidance.
