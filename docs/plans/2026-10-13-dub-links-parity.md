@@ -2805,3 +2805,11 @@ The new native association/inbox work is synchronized with that main and belongs
 in a focused follow-up PR. Prior-head checks and CodeQL alerts belong to the
 merged PR; require fresh analysis of the follow-up. A merged PR does not by itself
 prove successful production migrations, gateway deployment or native runtime.
+
+PR4422 CodeQL reports success with no new alerts in changed code. Its migration
+check found applied version20261015090032 absent from Git; read-only history
+inspection recovered the sole 724-byte statement named
+`20261015080702_event_safety_flag_write_guard` exactly into its recorded version
+file. No production DDL/data was executed. The independent production quality gate
+reports 15 current safety-flag inconsistencies (venues6, organizations9). Those
+remain a release blocker; this work does not weaken that gate or rewrite data.
