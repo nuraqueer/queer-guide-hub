@@ -1203,7 +1203,7 @@ async function processPostalQueue(
     try {
       const readCurrent = async () => {
         const { data, error: readError } = await supabase.from(table)
-          .select('postal_code, latitude, longitude, safety_gated, duplicate_of_id')
+          .select('postal_code, latitude, longitude, safety_gated, duplicate_of_id, country_id')
           .eq('id', job.entity_id).maybeSingle()
         if (readError) throw readError
         return data
@@ -1240,7 +1240,8 @@ async function processPostalQueue(
       const geo = await photonReverse(Number(job.latitude), Number(job.longitude))
       // The entity may have changed during the external request. Recheck before
       // writing a postcode or parking a no-postcode result for old coordinates.
-      if (await reconcileQueue(await readCurrent())) continue
+      const currentAfterReverse = await readCurrent()
+      if (await reconcileQueue(currentAfterReverse)) continue
 
       // country_id from Photon's countrycode. This is a DIFFERENT kind of answer
       // from the free-text `country` column, which needs resolve_country_from_text's
@@ -1258,6 +1259,18 @@ async function processPostalQueue(
           .limit(1)
           .maybeSingle()
         geoCountryId = co?.id ?? null
+      }
+      if (geoCountryId && currentAfterReverse?.country_id &&
+        geoCountryId !== currentAfterReverse.country_id) {
+        // A coordinate/country contradiction needs review, not a postal code
+        // copied from the other side of a border or an incorrect old pin.
+        const { error: queueError } = await supabase.from('geo_address_queue').update({
+          next_attempt_at: new Date(Date.now() + 24 * 3600_000).toISOString(),
+          last_error: 'reverse_country_conflict',
+        }).eq('entity_type', job.entity_type).eq('entity_id', job.entity_id)
+        if (queueError) throw queueError
+        skipped++
+        continue
       }
 
       // EVERY write gets its own statement with its own `is null` guard, and
