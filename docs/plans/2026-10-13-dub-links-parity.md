@@ -2905,3 +2905,21 @@ All2,333 local versions are unique and the version check passes. The only other
 open PR4423 claims99991792083683, with no overlap. Full isolated platform SQL and
 all five server SDK/actual HTTP suites pass again using the renamed migrations.
 Cross-PR script itself lacks a local GH_TOKEN, so fresh CI remains authoritative.
+
+The renumbered head passed Swift CI and its ordering check, but concurrent postal
+work applied20261015173513 without a committed history file. Recovered the exact
+sole2,361-byte postal_drain_single_admin_begin statement from read-only history.
+It is already applied and must not be renumbered. All2,334 migrations pass SQL
+grammar/body checks. Local differential version verification warns only because
+that newly recovered low version needs remote credentials; authoritative history
+was read through the Supabase connector, and CI will recheck with its token.
+No postal cron or automation was executed or changed by this recovery.
+
+Android preparation: the official Temurin JDK21.0.12.1+1 arm64 archive was
+SHA256-verified against Adoptium metadata and extracted only under ignored tmp.
+The runtime works. No Android source is implemented yet. Official OkHttp README
+and Maven Central metadata agree on5.5.0, supporting Android21+/Java8+, with
+Okio/Kotlin runtime dependencies and AndroidX Startup initialization. Consider a
+scoped OkHttp client to guarantee per-client no-cookie/no-auth behavior rather
+than java.net.HttpURLConnection's process-global CookieHandler. Native package
+configuration and signed-device proof remain open.
