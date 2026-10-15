@@ -20,3 +20,15 @@ and late-address failures, execute the real migration, and prove insertion,
 direct flag edits, address/geography changes, nullable category, cruising, city
 fallback, unrelated updates, both drift directions and idempotence. No production
 migration application or reconciliation is part of local verification.
+
+## Superseded after authoritative history inspection
+
+Do not implement the blanket derivation above. Newly applied migration
+20261015170028 explicitly identifies these 15 records as deliberate safety review
+holds after unsupported geography was detached. They remain gated and are counted
+in a separate high-severity review backlog. The candidate migration, regression
+script and CI step were reverted without production application. Directly
+reconciling to the geography-only predicate would clear intentional protection.
+Any future write guard requires a first-class hold model and preservation rules;
+that change is outside the Redirects repair. Recover the missing applied migration
+exactly and preserve the current holds.
