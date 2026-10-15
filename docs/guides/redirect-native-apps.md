@@ -66,3 +66,8 @@ ACL lock; no direct anonymous/authenticated Data API table/function grants exist
 The public gateway endpoint is `/public-app-association?hostname=...&platform=...`.
 Registry drafts retain their reviewed version on conflict. Reload explicitly to
 replace them with current settings; mutations do not retry automatically.
+
+The policy-aware JSON transport is described in
+[Native resolution](redirect-native-resolution.md). Association files authorize a
+host; clients must still resolve each link against live policies. Native SDKs,
+deferred attribution and real signed-device verification remain required.

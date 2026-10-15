@@ -7,40 +7,40 @@ exist. Existing local tools are a foundation, not proof of parity or deployment.
 
 ## Requirements and evidence ledger
 
-| Requirement | Required behavior / evidence | Current state |
-| --- | --- | --- |
-| Branded links | Custom slug, random slug, editable destination; shorten arbitrary public HTTP(S) URLs | Candidate: public HTTP(S) destinations, random slug UI and server allocation; private/local targets rejected; hostname namespaces and signed branded routing implemented locally, pending controlled release |
-| UTM builder | Source/medium/campaign/term/content/referral; preserve queries/fragments | Candidate: six campaign fields including referral; query/fragment preservation tested |
-| Shared UTM templates | Named workspace templates, apply/save/edit/delete in builder/settings | Candidate: implemented locally; pending release |
-| Folders | Create/rename/delete/move links, folder-filtered list and analytics | Candidate: implemented locally; pending release |
-| Tags | Multiple colored tags, create/rename/delete, shareable filtered list and analytics | Candidate: implemented locally; pending release |
-| Comments | Team-visible comment on link card, clickable hyperlinks | Candidate: implemented locally; pending release |
-| Folder permissions | Explicit view/edit permissions for team members, enforced in database/API | Partial: member/machine bindings, folder defaults/overrides, scoped SQL/API, admin editors and member workspace; access request/review/inbox/email queue implemented locally; all-source semantics and delivery/runtime release pending |
-| Bulk actions | Create/update/upsert/delete, folder/tag assignment, archive, import/export, QR export | Candidate for managed links: atomic create/update/upsert/deletion API and CSV review/import/export UI, archive/restore, folder/tag assignment and verified QR ZIP; production release pending |
-| Custom previews | Uploaded OG image (1200×630, ≤1.5 MB), title≤120, description≤240, video API, crawler unfurl | Candidate: editor, scoped upload/presentation APIs and crawler HTML; native browser/Storage release pending |
-| AI previews | Generate title/description from destination content using configured AI provider | Candidate: scoped draft generator with spend limits; live provider and browser verification pending |
-| Custom domains | Verify ownership/DNS, multiple domains, primary domain, redirects on branded hostname | Partial: private registry, exact DNS verification, owner UI and stored defaults implemented locally; durable Cloudflare lifecycle/TLS checks implemented locally; hostname namespaces, signed relay/resolver, routing health, background proof renewal and inventory/CSV/QR/API/SDK fields implemented locally; ready choices, owner primary preference and tracked/member builders implemented locally; active manual CMS domain field and atomic owner saves implemented locally; URL domain filters and scoped linked-domain facets implemented locally; explicit provider validation restart implemented locally; real provider proof and release pending |
-| Domain defaults | Root/not-found redirects, default expiration URL, workspace/domain QR logos | Partial: root/not-found/expiry settings, signed-host resolver and managed root-link policies/metadata/tracking implemented locally; QR/logo precedence and release pending |
-| Deep links | iOS/Android association files, app page routes, fallback and deferred attribution | Partial: owner-managed app identities, per-host association files and gateway behavior implemented locally; policy-aware native resolver, native SDKs, deferred attribution and real device/release evidence remain open |
-| Geo targeting | Country-specific destinations and default fallback | Candidate: country rules and fallback tested |
-| Device targeting | iOS/Android destinations, evaluated before geo | Candidate: iOS/Android priority tested |
-| A/B testing | 2–5 destinations, weighted traffic≥10%, end date≤6 weeks, manual winner/end | Candidate: editor/resolver implemented locally |
-| A/B completion | Device→geo→experiment priority; choose winner by sales/conversions, rates, clicks; leads fallback | Candidate: selection/metrics now fed by verified native and scoped server conversion ingestion |
-| Password links | Password challenge, hashed secret, no disclosure/bypass, scoped access | Candidate: hashed protection, atomic throttling, signed IP relay and versioned controlled password-page branding; live release pending |
-| Expiration | Date and expired destination URL, live enforcement without stale cached rules | Candidate: date/phrase parser, custom fallback and live enforcement tested |
-| Link cloaking | Explicit iframe mode with accurate iframe limitations, standard redirect fallback | Candidate: HTTPS guarded iframe wrapper and persistent direct fallback; runtime release pending |
-| Branded QR | Dots square/circle/joined; marker center square/circle; border square/rounded/circle; colors | Partial: dot/marker/color controls, saved workspace/domain appearance and logos, scoped individual/bulk defaults and scan verification implemented locally; hosted-image publication/copy/revoke UI and five SDKs implemented locally; release pending |
-| QR logos/export | Workspace/domain/logo precedence and hide; SVG/PNG/JPG; clipboard image and image URL | Partial: saved/local logos, PNG/JPG/SVG and clipboard exports, durable logo assets/editor/cleanup implemented locally; server image-rendering service implemented locally; revocable live hosted-image profiles and five-SDK methods implemented locally; per-image custom artwork and publication/copy/revoke UI implemented locally; release pending |
-| Click analytics | Real-time totals/time series, custom date/filter/export, countries/cities/devices/browsers/OS/referrers | Candidate: SQL totals/time series, date/dimension filters, export and bounded live refresh; release pending |
-| Conversion tracking | Click attribution, leads/signup/sale/revenue, trusted conversion ingestion and application hooks | Candidate: scoped ingestion, consented signup and verified Stripe hooks implemented locally |
-| Customer insights | Customer journey across click→lead→sale with private event timeline | Candidate: private versioned name/email/avatar enrichment, scoped chronological journey API/UI and five SDKs implemented locally; production release pending |
-| Live events | Paginated live click/lead/sale stream, real events rather than demo data | Candidate: private click/lead/sale activity with keyset pages and five-second refresh |
-| Shared dashboards | Revocable scoped sharing, sanitized aggregate-only default | Candidate: saved snapshots, explicit dynamic folders, password/expiry/revoke, aggregate-only UI, date selection and live opt-in indexing implemented locally; runtime release pending |
-| Custom reports | Custom dates, granular link/folder/tag/domain/geo/device/event filters | Partial: date/dimension report UI/API, personal saved definitions and scoped sharing implemented locally; team discovery and runtime release pending |
-| Integrations | Segment and GTM adapters; native configured integrations and provider callbacks | Partial: native Segment/GTM artifacts and setup, privacy/consent gates and actual conversion/outbox handler fixtures pass; provider installation/runtime evidence pending |
-| REST API | Authenticated/scoped link CRUD/upsert/count/list, analytics/events, folders/tags, bulk operations | Partial: scoped link CRUD/upsert/count/list/mixed bulk, conversions and analytics/events; folder/tag/template resource CRUD with workspace scopes; scoped targeting/password/tracking/preview policy endpoints; domain fields/filter/canonical URLs implemented locally; deep-link fields and release pending |
-| SDKs | TypeScript, Python, Go, Ruby, PHP wrappers and runnable examples covering management/tracking | Candidate: five native clients verified through actual HTTP handler and isolated DB; publication/release pending |
-| Webhooks | Signed link create/update/delete/click and lead/sale events, retries, delivery history, replay and secret rotation | Candidate: durable signed outbox/dispatcher, management/history/replay/rotation UI and five receiver SDKs tested locally; live cron/transport/provider release pending |
+| Requirement          | Required behavior / evidence                                                                                       | Current state                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Branded links        | Custom slug, random slug, editable destination; shorten arbitrary public HTTP(S) URLs                              | Candidate: public HTTP(S) destinations, random slug UI and server allocation; private/local targets rejected; hostname namespaces and signed branded routing implemented locally, pending controlled release                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| UTM builder          | Source/medium/campaign/term/content/referral; preserve queries/fragments                                           | Candidate: six campaign fields including referral; query/fragment preservation tested                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| Shared UTM templates | Named workspace templates, apply/save/edit/delete in builder/settings                                              | Candidate: implemented locally; pending release                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| Folders              | Create/rename/delete/move links, folder-filtered list and analytics                                                | Candidate: implemented locally; pending release                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| Tags                 | Multiple colored tags, create/rename/delete, shareable filtered list and analytics                                 | Candidate: implemented locally; pending release                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| Comments             | Team-visible comment on link card, clickable hyperlinks                                                            | Candidate: implemented locally; pending release                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| Folder permissions   | Explicit view/edit permissions for team members, enforced in database/API                                          | Partial: member/machine bindings, folder defaults/overrides, scoped SQL/API, admin editors and member workspace; access request/review/inbox/email queue implemented locally; all-source semantics and delivery/runtime release pending                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| Bulk actions         | Create/update/upsert/delete, folder/tag assignment, archive, import/export, QR export                              | Candidate for managed links: atomic create/update/upsert/deletion API and CSV review/import/export UI, archive/restore, folder/tag assignment and verified QR ZIP; production release pending                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| Custom previews      | Uploaded OG image (1200×630, ≤1.5 MB), title≤120, description≤240, video API, crawler unfurl                       | Candidate: editor, scoped upload/presentation APIs and crawler HTML; native browser/Storage release pending                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| AI previews          | Generate title/description from destination content using configured AI provider                                   | Candidate: scoped draft generator with spend limits; live provider and browser verification pending                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| Custom domains       | Verify ownership/DNS, multiple domains, primary domain, redirects on branded hostname                              | Partial: private registry, exact DNS verification, owner UI and stored defaults implemented locally; durable Cloudflare lifecycle/TLS checks implemented locally; hostname namespaces, signed relay/resolver, routing health, background proof renewal and inventory/CSV/QR/API/SDK fields implemented locally; ready choices, owner primary preference and tracked/member builders implemented locally; active manual CMS domain field and atomic owner saves implemented locally; URL domain filters and scoped linked-domain facets implemented locally; explicit provider validation restart implemented locally; real provider proof and release pending |
+| Domain defaults      | Root/not-found redirects, default expiration URL, workspace/domain QR logos                                        | Partial: root/not-found/expiry settings, signed-host resolver and managed root-link policies/metadata/tracking implemented locally; QR/logo precedence and release pending                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| Deep links           | iOS/Android association files, app page routes, fallback and deferred attribution                                  | Partial: owner-managed app identities, per-host association files and gateway behavior implemented locally; policy-aware native resolver, native SDKs, deferred attribution and real device/release evidence remain open                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| Geo targeting        | Country-specific destinations and default fallback                                                                 | Candidate: country rules and fallback tested                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| Device targeting     | iOS/Android destinations, evaluated before geo                                                                     | Candidate: iOS/Android priority tested                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| A/B testing          | 2–5 destinations, weighted traffic≥10%, end date≤6 weeks, manual winner/end                                        | Candidate: editor/resolver implemented locally                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| A/B completion       | Device→geo→experiment priority; choose winner by sales/conversions, rates, clicks; leads fallback                  | Candidate: selection/metrics now fed by verified native and scoped server conversion ingestion                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| Password links       | Password challenge, hashed secret, no disclosure/bypass, scoped access                                             | Candidate: hashed protection, atomic throttling, signed IP relay and versioned controlled password-page branding; live release pending                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| Expiration           | Date and expired destination URL, live enforcement without stale cached rules                                      | Candidate: date/phrase parser, custom fallback and live enforcement tested                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| Link cloaking        | Explicit iframe mode with accurate iframe limitations, standard redirect fallback                                  | Candidate: HTTPS guarded iframe wrapper and persistent direct fallback; runtime release pending                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| Branded QR           | Dots square/circle/joined; marker center square/circle; border square/rounded/circle; colors                       | Partial: dot/marker/color controls, saved workspace/domain appearance and logos, scoped individual/bulk defaults and scan verification implemented locally; hosted-image publication/copy/revoke UI and five SDKs implemented locally; release pending                                                                                                                                                                                                                                                                                                                                                                                                        |
+| QR logos/export      | Workspace/domain/logo precedence and hide; SVG/PNG/JPG; clipboard image and image URL                              | Partial: saved/local logos, PNG/JPG/SVG and clipboard exports, durable logo assets/editor/cleanup implemented locally; server image-rendering service implemented locally; revocable live hosted-image profiles and five-SDK methods implemented locally; per-image custom artwork and publication/copy/revoke UI implemented locally; release pending                                                                                                                                                                                                                                                                                                        |
+| Click analytics      | Real-time totals/time series, custom date/filter/export, countries/cities/devices/browsers/OS/referrers            | Candidate: SQL totals/time series, date/dimension filters, export and bounded live refresh; release pending                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| Conversion tracking  | Click attribution, leads/signup/sale/revenue, trusted conversion ingestion and application hooks                   | Candidate: scoped ingestion, consented signup and verified Stripe hooks implemented locally                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| Customer insights    | Customer journey across click→lead→sale with private event timeline                                                | Candidate: private versioned name/email/avatar enrichment, scoped chronological journey API/UI and five SDKs implemented locally; production release pending                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| Live events          | Paginated live click/lead/sale stream, real events rather than demo data                                           | Candidate: private click/lead/sale activity with keyset pages and five-second refresh                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| Shared dashboards    | Revocable scoped sharing, sanitized aggregate-only default                                                         | Candidate: saved snapshots, explicit dynamic folders, password/expiry/revoke, aggregate-only UI, date selection and live opt-in indexing implemented locally; runtime release pending                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| Custom reports       | Custom dates, granular link/folder/tag/domain/geo/device/event filters                                             | Partial: date/dimension report UI/API, personal saved definitions and scoped sharing implemented locally; team discovery and runtime release pending                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| Integrations         | Segment and GTM adapters; native configured integrations and provider callbacks                                    | Partial: native Segment/GTM artifacts and setup, privacy/consent gates and actual conversion/outbox handler fixtures pass; provider installation/runtime evidence pending                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| REST API             | Authenticated/scoped link CRUD/upsert/count/list, analytics/events, folders/tags, bulk operations                  | Partial: scoped link CRUD/upsert/count/list/mixed bulk, conversions and analytics/events; folder/tag/template resource CRUD with workspace scopes; scoped targeting/password/tracking/preview policy endpoints; domain fields/filter/canonical URLs implemented locally; deep-link fields and release pending                                                                                                                                                                                                                                                                                                                                                 |
+| SDKs                 | TypeScript, Python, Go, Ruby, PHP wrappers and runnable examples covering management/tracking                      | Candidate: five native clients verified through actual HTTP handler and isolated DB; publication/release pending                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| Webhooks             | Signed link create/update/delete/click and lead/sale events, retries, delivery history, replay and secret rotation | Candidate: durable signed outbox/dispatcher, management/history/replay/rotation UI and five receiver SDKs tested locally; live cron/transport/provider release pending                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 
 ## Primary references
 
@@ -72,6 +72,7 @@ must be evidenced; unconfigured adapters are not marked fully achieved.
 ## Checkpoint: workspace foundation
 
 Implemented candidate on `feature/redirects-dub-parity`:
+
 - Shared template CRUD and application, including referral tags and replacement
   of previous UTM values without disturbing destination queries/fragments.
 - Folder/tag CRUD, multi-tag assignment, URL folder/tag filters, colored badges,
@@ -568,7 +569,6 @@ At 390 pixels the page has no horizontal overflow; the permission select was
 constrained to its 324-pixel parent. Temporary viewport/tab were cleaned up.
 These are fixture and isolated-database results, not live notifications or grants.
 
-
 ## Checkpoint: saved reports and public aggregate dashboards
 
 Personal saved reports now preserve named filters and dates, with optimistic
@@ -608,7 +608,6 @@ The existing aggregate grain stays fixed to the published report. Invalid dates
 produce an actionable error without displaying stale metrics. This increment
 does not settle the separate search-indexing option or production release.
 
-
 ## Checkpoint: viewer-controlled reporting dates
 
 Public dashboards now offer 7/30-day presets, custom UTC instants and reset to the
@@ -644,7 +643,6 @@ share HTML stays no-store/no-referrer, including failures; localized/query varia
 stay noindex. Indexable reports do not get generic locale alternates or unrelated
 hub content. Client robots metadata follows the same sanitized flag. Revocation
 can stop future publication but cannot immediately remove search-engine copies.
-
 
 ## Checkpoint: explicit search indexing for shared dashboards
 
@@ -702,7 +700,6 @@ all-source inventory. DNS controls remain explicit; do not alter existing DNS or
 provision paid external resources during local verification. Preserve all phases
 in the parity ledger until native provider and controlled-domain evidence exists.
 
-
 ## Checkpoint: private custom-domain registry and ownership checks
 
 The owner workspace now registers multiple domains and presents exact TXT
@@ -757,7 +754,6 @@ internal/admin authorized, configured with dedicated least-privilege provider
 secrets, and remains idle when configuration is absent. No provider/DNS writes
 are performed in local validation. Public hostname routing/namespaces and actual
 controlled-domain deployment remain the following required stage.
-
 
 ## Checkpoint: durable Cloudflare hostname/TLS lifecycle
 
@@ -1013,7 +1009,6 @@ never disclose its hidden hostname or silently replace the filter. Queries are
 account-keyed, cancelable and detect cursor loops. Add equivalent paged SDK reads
 and verify scoped counts, inactive domains, revocation and end-to-end filter UX.
 
-
 Implemented locally: URL-backed inventory hostname filters and member UUID/builtin
 filters, composing search, folder and archive state. Unknown/invalid bookmarks
 never fall back to all links. Filter changes and browser history clear bulk
@@ -1052,7 +1047,6 @@ permissions/account discovery and controlled real-service/release validation
 remain required. No production migrations, DNS/provider writes, deployments,
 package publication or release have occurred in this checkpoint.
 
-
 ### Restart provider validation
 
 Continue the approved domain lifecycle design with an explicit owner restart
@@ -1081,7 +1075,6 @@ timeout/non-repeat and mismatches; owner HTTP denial for keys/members; and UI
 restart eligibility/status without conflating it with read-only refresh.
 Source: Cloudflare Common API Calls, retrieved 2026-10-14:
 https://developers.cloudflare.com/cloudflare-for-platforms/cloudflare-for-saas/start/common-api-calls/
-
 
 Implemented locally: an explicit owner-only validation restart now queues a
 single-use intent on the existing provider operation. The new migration adds
@@ -1118,7 +1111,6 @@ styles, branded password pages, customer enrichment, report SDK/team discovery,
 integrations, outgoing webhooks, remaining permissions/account discovery and
 controlled real-service/release verification remain required.
 
-
 ### Managed domain-root links
 
 Represent a branded homepage as a managed SHORT link with isDomainRoot=true,
@@ -1146,7 +1138,6 @@ concurrent conversion cannot count against the wrong source. Builtin '/' stays
 outside this feature. Verify DB, actual HTTP/resolver, UI, CSV/SDK and canonical
 URLs, including password failure/HEAD/bot no-click behavior and root uniqueness.
 Reference: https://dub.co/changelog/root-domain-links (retrieved 2026-10-14).
-
 
 Implemented locally: custom domain homepages are managed SHORT rows with a
 non-null custom binding, isDomainRoot flag and a unique root index. Normal slug
@@ -1200,7 +1191,6 @@ the baseline was not regenerated. All 2,278 migration versions and PostgreSQL 17
 grammar/body-balance checks pass. Working changes are limited to this feature and
 its documented branded bulk-QR fix.
 
-
 ### Durable QR preferences and branding
 
 Add versioned owner-managed workspace QR preferences and domain overrides;
@@ -1229,7 +1219,6 @@ allow arbitrary server-side image fetches. Durable asset cleanup and release pro
 remain required alongside these follow-up pieces; saved styles alone do not
 complete the QR branding requirement.
 Reference: https://dub.co/changelog/custom-qr-code-logo (retrieved 2026-10-14).
-
 
 Implemented locally: versioned private workspace/domain appearance records,
 owner GET/PATCH/reset controls, scoped single/batch effective reads, and five SDK
@@ -1280,7 +1269,6 @@ webhooks, remaining permissions/account discovery and controlled real-service/
 release verification remain required. No production writes, Storage uploads,
 DNS/provider changes, deployments or package publication occurred.
 
-
 ### Hosted QR logo assets and precedence
 
 Use a dedicated public raster bucket with restrictive direct-write/list policies,
@@ -1316,7 +1304,6 @@ required follow-up; hosted logos do not complete that output requirement.
 References (retrieved 2026-10-14):
 https://supabase.com/docs/guides/storage/uploads/standard-uploads
 https://supabase.com/docs/guides/storage/management/delete-objects
-
 
 Hosted-logo backend implemented locally: dedicated public raster bucket with
 restrictive direct write/list policies; private immutable asset records; owner
@@ -1366,7 +1353,6 @@ native/deferred deep links, branded password pages, customer enrichment, report
 SDK/team discovery, integrations, outgoing webhooks, permissions/account discovery
 and controlled release/publication proof remain intact. No production Storage
 uploads/deletions, DNS/provider changes, deployments or publication occurred.
-
 
 ### Saved-logo editor and QR export integration
 
@@ -1444,7 +1430,6 @@ https://github.com/dubinc/dub/blob/main/apps/web/app/api/qr/route.tsx
 https://github.com/thx/resvg-js/blob/main/wasm/index.d.ts
 https://developers.cloudflare.com/workers/runtime-apis/webassembly/
 https://developers.cloudflare.com/workers/runtime-apis/bindings/rate-limit/
-
 
 ### Hosted QR rendering service checkpoint
 
@@ -1606,7 +1591,6 @@ publication/copy/revoke controls afterward, with preview/account/selection ident
 guards. Existing broad implementation approval applies; production release and
 real service-binding/gateway/Storage/cron proof remain required.
 
-
 ### Custom image artwork publication checkpoint
 
 Implemented POST /qr-images logo bytes across owner/member/key authoring and all
@@ -1657,7 +1641,6 @@ deferred deep links, branded password pages, customer enrichment, report SDK/tea
 discovery, integrations, outgoing webhooks, permissions/account discovery and
 controlled release/publication still required.
 
-
 ### Hosted QR controls design
 
 Use the existing single-code export surface for publication; a separate settings
@@ -1689,7 +1672,6 @@ versions during confirmation. Empty/loading/error/retry states and responsive
 labels use existing form, button and typography tokens. Broad approved scope
 covers this design; verify publication, failed previews, races, pagination and
 revocation in focused tests and a local desktop/mobile browser fixture.
-
 
 ### Hosted QR publication controls checkpoint
 
@@ -1735,7 +1717,6 @@ password pages, customer enrichment, report SDK/team discovery, integrations,
 outgoing webhooks, permission/account discovery and release/publication are not
 removed from scope by this checkpoint.
 
-
 ### Saved report SDK contracts design
 
 Dub Links advertises customizable reports, shared dashboards and five-language
@@ -1763,7 +1744,6 @@ conflicts, session-vs-key denial, plain/protected public reads, body date filter
 share revocation, deletion cascade and page cursors. Documentation explains the
 three credential kinds and production-release status. Existing approved feature
 scope covers this additive design; no schema or production writes are planned.
-
 
 ### Saved report SDK contracts checkpoint
 
@@ -1800,7 +1780,6 @@ signed outgoing webhooks and controlled service/infrastructure release and SDK
 publication. The full Dub parity goal remains active; this checkpoint does not
 prove production readiness or remove remaining scope.
 
-
 ### Private customer enrichment design
 
 Attach a versioned private profile (name, email, HTTPS avatar URL) to an existing
@@ -1811,8 +1790,7 @@ read requires events:read and a currently visible customer visit/conversion.
 Writes/clear require links:write plus events:read and edit authority over every
 attributed link for the customer, avoiding cross-folder identity changes through
 a partial key/member grant. Recheck current key/member/owner under the shared ACL
-lock. Members cannot impersonate another actor. Unknown/unseen identities return
-404. Use version null for first enrichment and current UUID for subsequent writes;
+lock. Members cannot impersonate another actor. Unknown/unseen identities return 404. Use version null for first enrichment and current UUID for subsequent writes;
 clear removes only identity fields and advances the version, preserving journeys
 and conflict protection. Reject arbitrary metadata/unsafe avatar URLs; no backend
 fetch or automatic enrichment from public sites.
@@ -1827,7 +1805,6 @@ reports stay aggregate-only and never include profiles. Trusted applications can
 supply consented identity through the API; no implicit disclosure during tracking.
 Verify real SQL scope/version/clear/private grants and actual owner/member/key
 HTTP plus five native SDKs, focused UI races/conflicts and desktop/mobile browser.
-
 
 ### Customer identity and scoped journeys checkpoint
 
@@ -1876,7 +1853,6 @@ Customer enrichment is implemented locally. Continue through signed outgoing
 webhooks, Segment/GTM, native/deferred deep links, branded password pages, domain
 lifecycle/DNS automation, team/account/invites/all-source permissions and controlled
 infrastructure release plus SDK publication. The full goal remains active.
-
 
 ### Durable outgoing webhooks design
 
@@ -2799,7 +2775,6 @@ of the pending row; screenshot `outputs/redirect-dub-parity/invitation-inbox.png
 All browser data is simulated, with external calls blocked. No production app,
 association, provider, DNS, database or storage state was changed.
 
-
 PR4417 merged externally at 2026-10-15 05:29 UTC as 198f18bd7 with head4ec7c8cc5.
 The new native association/inbox work is synchronized with that main and belongs
 in a focused follow-up PR. Prior-head checks and CodeQL alerts belong to the
@@ -2847,3 +2822,40 @@ passwords out of URLs, handle web fallbacks explicitly, avoid automatic retries,
 and obtain explicit consent before retaining/forwarding attribution. Native SDKs,
 deferred attribution, actual entitlements/devices and controlled rollout remain
 required after the transport foundation; no transport fixture is OS verification.
+
+### Native transport candidate checkpoint
+
+Explicit native Accept/consent headers now pass through both existing gateways
+into the actual web resolver. Success/error envelopes are closed and bounded;
+source/destination/attribution invariants are validated again at the gateway.
+There is no separate native policy or visit implementation. Password queries are
+rejected for native requests; forms/throttles still apply. Native attribution is
+absent until both link tracking and explicit consent allow it. Expiry/default
+fallbacks and cloaking return web mode, with no native app navigation promise.
+
+Tests also demonstrated an existing credential-forwarding problem: a successful
+password POST on a stored307 link returned307, preserving the form body. All
+successful password submissions now use effective303; ordinary requests keep
+configured status. This follows RFC9110 section15.4.4/15.4.8 and is tested across
+all configured redirect codes. Native transport remains HTTP200 with the effective
+status in its payload. HEAD now observes an exhausted quota without incrementing.
+
+The actual Pages/Worker -> resolver -> migrated PostgreSQL fixture covers protected
+POST/HEAD/challenges, query-secret rejection, consent off/on, iOS targeting,
+canonical roots, default and expiry fallbacks, atomic quota and disabled state.
+The harness models Node's streaming duplex requirement separately from Cloudflare
+and creates a fresh native root after the web deletion assertions. No production
+or external destination was contacted. Native SDKs, deferred attribution, actual
+app identifiers/entitlements/devices and release remain required after this phase.
+
+Native transport verification: all 44 focused tests pass, plus the actual
+Pages/Worker/resolver/PostgreSQL root-link fixture. Strict Pages production/test
+and branded Worker types, Deno resolver check, targeted lint and 2,332 migration
+grammar checks pass. App typecheck remains at 702 inherited errors with none new.
+The production build passes. Wrangler dry-run bundles 23.42 KiB (6.41 KiB gzip),
+without deployment. Prior PR4422 test/critical-path/a11y/lint/CodeQL jobs all passed;
+its migration history and independent data-quality failures require fresh CI.
+Read-only inspection confirms the 15 drifted rows have stored true/expected false
+(venues6, organizations9). Current venue/org safety triggers omit direct flag
+writes, and the org safety trigger precedes address-derived country changes.
+No production reconciliation or trigger change has been performed.
