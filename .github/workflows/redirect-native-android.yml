@@ -4,12 +4,22 @@ on:
     paths:
       - 'sdk/redirects/android/**'
       - 'scripts/test-redirect-android.mjs'
+      - 'scripts/lib/redirect-native-test-wire.mjs'
+      - 'supabase/functions/_shared/redirect-native-resolution.ts'
+      - 'supabase/functions/redirect-handler/**'
+      - 'functions/go/**'
+      - 'workers/redirect-domains/**'
       - '.github/workflows/redirect-native-android.yml'
   push:
     branches: [main]
     paths:
       - 'sdk/redirects/android/**'
       - 'scripts/test-redirect-android.mjs'
+      - 'scripts/lib/redirect-native-test-wire.mjs'
+      - 'supabase/functions/_shared/redirect-native-resolution.ts'
+      - 'supabase/functions/redirect-handler/**'
+      - 'functions/go/**'
+      - 'workers/redirect-domains/**'
       - '.github/workflows/redirect-native-android.yml'
 permissions:
   contents: read
@@ -37,13 +47,15 @@ jobs:
           java-version: '21'
           cache: maven
           cache-dependency-path: sdk/redirects/android/pom.xml
+      - name: Compile Android client Java8 API and run isolated TLS contracts
+        run: node scripts/test-redirect-android.mjs
       - name: Initialize native CodeQL
         uses: github/codeql-action/init@v4.38.2
         with:
           languages: java-kotlin
           build-mode: manual
-      - name: Compile Android client Java8 API and run isolated TLS contracts
-        run: node scripts/test-redirect-android.mjs
+      - name: Build SDK for Java CodeQL
+        run: mvn -B -ntp -f sdk/redirects/android/pom.xml clean compile
       - name: Analyze native client
         uses: github/codeql-action/analyze@v4.38.2
         with:

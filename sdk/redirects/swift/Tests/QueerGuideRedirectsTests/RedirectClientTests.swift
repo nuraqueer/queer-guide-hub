@@ -21,6 +21,8 @@ private final class StubProtocol: URLProtocol, @unchecked Sendable {
 }
 
 final class RedirectClientTests {
+    let backendWire: [String: Any]
+    init(backendWire: [String: Any]) { self.backendWire = backendWire }
     let source = URL(string: "https://queer.guide/go/example-link")!
     let id = "10000000-0000-4000-8000-000000000001"
     func client() throws -> RedirectClient {
@@ -31,9 +33,7 @@ final class RedirectClientTests {
         }
     }
     func payload(_ changes: [String: Any] = [:]) -> [String: Any] {
-        ["protocol": 1, "canonicalUrl": source.absoluteString,
-         "destination": "https://queer.guide/venues/example#details", "statusCode": 302,
-         "mode": "navigate", "clickId": NSNull()].merging(changes) { _, new in new }
+        backendWire.merging(changes) { _, new in new }
     }
     func stub(_ object: [String: Any], status: Int = 200, headers: [String: String] = [:],
               check: ((URLRequest) -> Void)? = nil) throws {
@@ -220,7 +220,10 @@ private func expectNoThrow<T>(_ expression: @autoclosure () throws -> T) {
 
 @main private struct ContractRunner {
     static func main() async throws {
-        let tests = RedirectClientTests()
+        guard CommandLine.arguments.count == 2,
+              let backendWire = try JSONSerialization.jsonObject(with: Data(contentsOf: URL(fileURLWithPath: CommandLine.arguments[1]))) as? [String: Any]
+        else { fatalError("Backend wire fixture required") }
+        let tests = RedirectClientTests(backendWire: backendWire)
         try await tests.testRealTransportSendsExplicitDeniedConsentWithoutCredentialsOrCookies()
         try await tests.testBareBrandedHostMatchesCanonicalRootSlash()
         try await tests.testPasswordUsesFormPostWithLiteralPlusAndNoQuerySecret()

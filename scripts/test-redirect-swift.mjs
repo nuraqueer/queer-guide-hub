@@ -1,5 +1,6 @@
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { nativeTestWire } from './lib/redirect-native-test-wire.mjs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -33,7 +34,9 @@ try {
     ],
     { stdio: 'inherit', timeout: 180000 },
   );
-  execFileSync(binary, [], { stdio: 'inherit', timeout: 30000 });
+  const wire = join(output, 'native-wire.json');
+  writeFileSync(wire, await nativeTestWire());
+  execFileSync(binary, [wire], { stdio: 'inherit', timeout: 30000 });
 } finally {
   rmSync(output, { recursive: true, force: true });
 }

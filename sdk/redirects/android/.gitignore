@@ -1,1 +1,4 @@
 target/
+
+# Required build descriptor overrides the repository-wide XML ignore.
+!pom.xml

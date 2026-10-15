@@ -88,14 +88,16 @@ client never fetches a resolved destination.
 
 From the repository root, run `node scripts/test-redirect-android.mjs` with JDK21
 and Maven installed. `REDIRECT_JAVA_HOME` and `REDIRECT_MAVEN_BIN` may point to
-local build tools. The runner compiles against Java8, treats source warnings as
+local build tools. The runner loads its baseline JSON from the actual backend native-response
+producer, compiles against Java8, treats source warnings as
 errors (except the intentional obsolete target warning), then executes actual
 OkHttp/TLS contracts using ephemeral certificates, fixed host allowlists, DNS
 restricted to loopback and an internal socket adapter. It proves request forms,
 consent, root identity, navigation decisions, strict payload/URL errors, cookie
 isolation, no redirects/retries, size limits, cancellation and the ten-second
 deadline. `mvn test` alone does not run this executable contract runner.
-A GitHub Actions job runs the same command. Test-only MockWebServer/TLS/fixture JSON
+A GitHub Actions job runs the same command, followed by a separate directly
+traced SDK build for native-language CodeQL. Test-only MockWebServer/TLS/fixture JSON
 artifacts are not included in the client source.
 
 This is JVM/transport evidence, not an Android build/install or App Link device

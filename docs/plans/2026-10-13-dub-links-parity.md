@@ -2979,3 +2979,29 @@ compiler commands and analyze afterward, with scoped security-events write and
 path-filtered runs. Existing CodeQL covered JS/Python/actions only; it does not
 prove Java/Swift security analysis. Fresh native CodeQL/CI must prove the new SDK
 head. No production or signed-device proof is inferred from those checks.
+
+Fresh Android CI exposed the repository-wide *.xml ignore: the locally tested POM
+was omitted from the first SDK commit. A narrow SDK/.gitignore !pom.xml exception
+now tracks that exact build descriptor. The previous native Java CI stopped in
+setup-java's cache lookup before compiling; it was not evidence about the client
+runtime. The local compiler/TLS evidence remains valid and CI must rerun.
+Concurrent production migration20261015180715 added four postal queue pruning
+triggers without a repo file. Recovered its exact3,073-byte sole statement from
+read-only history; this restores both history and trigger provenance checks. No
+production cron/queue/trigger/data mutation was performed by this recovery.
+
+The first Swift CodeQL run ended when the contract runner's180-second compiler
+cap terminated the traced build before compiler output. That job is terminal, not
+an observation timeout. Keep the regular native contracts untraced, then initialize
+CodeQL and run a separate direct SDK compiler command with persistent output and
+the job's20-minute budget before analysis. The same separation is used for Java,
+forcing a clean production-source build under tracing. No test/analysis gate was
+disabled and fresh CI is required to prove this pipeline.
+
+Both SDK contract runners now load their baseline body from the actual backend
+nativeResolution producer through a shared Node helper, with no network/DB calls.
+Malformed and policy/navigation cases mutate that real body. This removes the
+separate hardcoded success schema and makes a protocol producer/client mismatch
+visible. Native workflows also run when resolver/gateway/protocol inputs change.
+Local Android TLS contracts pass against that actual producer; the Swift package
+and all ten contract groups pass against the same actual backend fixture.

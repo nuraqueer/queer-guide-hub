@@ -51,10 +51,10 @@ public final class ContractTests {
     try { run.run(); throw new AssertionError("Expected " + reason); }
     catch (RedirectClient.RedirectException error) { equal(error.reason, reason); }
   }
+  private static String backendWire;
   private static JSONObject payload() {
-    return new JSONObject().put("protocol", 1).put("canonicalUrl", SOURCE.toString())
-      .put("destination", "https://queer.guide/venues/example#details").put("statusCode", 302)
-      .put("mode", "navigate").put("clickId", JSONObject.NULL);
+    if (backendWire == null) throw new IllegalStateException("Backend wire fixture required");
+    return new JSONObject(backendWire);
   }
   private static MockResponse.Builder response(JSONObject payload, int code) {
     return new MockResponse.Builder().code(code).addHeader("Content-Type", RedirectClient.MEDIA_TYPE).body(payload.toString());
@@ -261,6 +261,8 @@ public final class ContractTests {
     }
   }
   public static void main(String[] args) throws Exception {
+    if (args.length != 1) throw new IllegalArgumentException("Backend wire fixture required");
+    backendWire = new String(java.nio.file.Files.readAllBytes(java.nio.file.Paths.get(args[0])), java.nio.charset.StandardCharsets.UTF_8);
     transportAndPasswords();attributionAndNavigation();errorsAndValidation();limitsNoRedirectOrRetry();asyncCallbacksAndCancellation();cancellationAndWholeCallDeadline();
     System.out.println("Android native core: Java8 compilation and actual loopback TLS/OkHttp prove forms, consent, root identity, browser fallback, strict payload/URL guards, errors, no cookies/credentials/redirects/retries, 64KiB limits, cancellation and ten-second deadline. No production or installed-device requests.");
   }
