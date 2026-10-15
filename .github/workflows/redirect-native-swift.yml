@@ -1,0 +1,29 @@
+name: Redirect native Swift contracts
+on:
+  pull_request:
+    paths:
+      - 'sdk/redirects/swift/**'
+      - 'scripts/test-redirect-swift.mjs'
+      - '.github/workflows/redirect-native-swift.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'sdk/redirects/swift/**'
+      - 'scripts/test-redirect-swift.mjs'
+      - '.github/workflows/redirect-native-swift.yml'
+permissions:
+  contents: read
+concurrency:
+  group: redirect-swift-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  contracts:
+    runs-on: macos-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22.20.0'
+      - name: Compile Swift package and run native URLSession contracts
+        run: node scripts/test-redirect-swift.mjs

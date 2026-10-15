@@ -2,9 +2,10 @@
 
 This candidate adds a JSON transport on the existing canonical short URLs. It
 uses the same live resolver, password checks, targeting, atomic visit/quota
-transaction and hostname proof as ordinary web navigation. Native SDKs, app
-installation/deferred attribution and signed-device verification are still
-required; this transport alone does not prove an installed app opens correctly.
+transaction and hostname proof as ordinary web navigation. The local [Swift package](../../sdk/redirects/swift/README.md) consumes this
+protocol. Android clients, app installation/deferred attribution and signed-device
+verification are still required; this transport alone does not prove an installed
+app opens correctly.
 
 Request the actual HTTPS built-in `/go/<slug>` or branded-host link with:
 

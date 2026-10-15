@@ -21,7 +21,7 @@ exist. Existing local tools are a foundation, not proof of parity or deployment.
 | AI previews          | Generate title/description from destination content using configured AI provider                                   | Candidate: scoped draft generator with spend limits; live provider and browser verification pending                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
 | Custom domains       | Verify ownership/DNS, multiple domains, primary domain, redirects on branded hostname                              | Partial: private registry, exact DNS verification, owner UI and stored defaults implemented locally; durable Cloudflare lifecycle/TLS checks implemented locally; hostname namespaces, signed relay/resolver, routing health, background proof renewal and inventory/CSV/QR/API/SDK fields implemented locally; ready choices, owner primary preference and tracked/member builders implemented locally; active manual CMS domain field and atomic owner saves implemented locally; URL domain filters and scoped linked-domain facets implemented locally; explicit provider validation restart implemented locally; real provider proof and release pending |
 | Domain defaults      | Root/not-found redirects, default expiration URL, workspace/domain QR logos                                        | Partial: root/not-found/expiry settings, signed-host resolver and managed root-link policies/metadata/tracking implemented locally; QR/logo precedence and release pending                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
-| Deep links           | iOS/Android association files, app page routes, fallback and deferred attribution                                  | Partial: owner-managed app identities, per-host association files and gateway behavior implemented locally; policy-aware native resolver, native SDKs, deferred attribution and real device/release evidence remain open                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| Deep links           | iOS/Android association files, app page routes, fallback and deferred attribution                                  | Partial: owner-managed app identities, per-host association files and gateway behavior implemented locally; policy-aware native resolver and local Swift client implemented; Android, deferred attribution and real device/release evidence remain open                                                                                                                                                                                                                                                                                                                                                                                                       |
 | Geo targeting        | Country-specific destinations and default fallback                                                                 | Candidate: country rules and fallback tested                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 | Device targeting     | iOS/Android destinations, evaluated before geo                                                                     | Candidate: iOS/Android priority tested                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | A/B testing          | 2–5 destinations, weighted traffic≥10%, end date≤6 weeks, manual winner/end                                        | Candidate: editor/resolver implemented locally                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
@@ -2859,3 +2859,38 @@ Read-only inspection confirms the 15 drifted rows have stored true/expected fals
 (venues6, organizations9). Current venue/org safety triggers omit direct flag
 writes, and the org safety trigger precedes address-derived country changes.
 No production reconciliation or trigger change has been performed.
+
+Authoritative new history changes the safety-blocker interpretation:
+20261015170028 identifies the 15 venue/organization rows as deliberate review
+holds with detached geography. The blanket safety-write guard/reconciliation
+candidate was reverted before any production application, because it would clear
+those holds. The applied gate now counts those records in a high-severity review
+backlog; no threshold or protection is changed by Redirects. Recover its exact
+missing history file for CI, then require fresh checks.
+
+### Swift native client candidate
+
+A local iOS15+/macOS12+ Swift package now consumes the reviewed native transport
+through actual URLSession streaming, with explicit short/content host allowlists,
+form password submission, default-denied consent, no cookie/cache/credential
+storage, ten-second limits, 64KiB response budgets, cancellation and a redirect
+refusal delegate. Closed payload/source/URL/UUID invariants are validated before
+a typed result is returned. Only default-port HTTPS app-owned destinations in
+navigate mode may enter app routing; other valid destinations require a browser.
+Denied consent strips unexpected attribution from both the result and URL.
+
+The package compiles with Swift6.3.2 on Apple Foundation with warnings as errors.
+Nine executable contract groups use actual URLSession and isolated URLProtocol
+fixtures; a macOS CI workflow runs the same package build/compiler/contract runner.
+Command Line Tools here omit XCTest/Swift Testing, so the runner uses only Swift
+standard-library assertions and compiles the real SDK source unchanged. No native
+OS association/device, production endpoint, app install or deferred-attribution
+proof is claimed. Android, deterministic deferred handoff, real app identifiers/
+signing/entitlements, provider/runtime rollout and publication remain required.
+
+Read-only production verification after the independently applied hold migration:
+city_safety_gate_drift critical failures0; city_safety_review_holds high failures15
+(venues6, organizations9). Recovered version20261015170028 exact sole2,886-byte
+statement into its recorded version/name file; no SQL executed. All2,333 migration
+files pass grammar/body validation. The final native Swift package/contract check
+passes after the source-host case-insensitivity regression was added.
