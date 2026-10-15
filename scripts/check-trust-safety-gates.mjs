@@ -10,6 +10,8 @@
  * Harm-anchored gates from docs/audits/2026-06-05-trust-safety-audit.md §4.
  */
 
+import { callRpc, notEvaluated, stallReason } from './lib/gate-rpc.mjs'
+
 const BASE = process.env.SUPABASE_URL
 const KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
 
@@ -19,7 +21,7 @@ if (!BASE || !KEY) {
 }
 
 const callGates = () =>
-  fetch(`${BASE}/rest/v1/rpc/trust_safety_gate_status`, {
+  callRpc(`${BASE}/rest/v1/rpc/trust_safety_gate_status`, {
     method: 'POST',
     headers: {
       apikey: KEY,
@@ -30,13 +32,24 @@ const callGates = () =>
   })
 
 let res = await callGates()
-let body = res.ok ? null : await res.text()
 
-// 57014 is Postgres's statement_timeout on `authenticator`, NOT a gate being
-// breached. The RPC ran out of time, so NO gate was evaluated at all and the PR
-// goes red for a reason unrelated to its diff — on a REQUIRED check. Same
-// handling as check-tag-hygiene.mjs, check-data-quality-gates.mjs and
-// check-search-facets-parity.mjs; this script was the one that never got it.
+// A gate script has THREE outcomes and only two are about the gate: it passed,
+// it was breached, or IT WAS NEVER EVALUATED. The third must read as neither of
+// the others, or the PR goes red for a reason unrelated to its diff — on a
+// REQUIRED check. `notEvaluated()` (scripts/lib/gate-rpc.mjs) owns which
+// conditions count, shared with the sibling gate scripts so they cannot drift
+// apart on it.
+//
+// THERE ARE TWO SUCH CONDITIONS AND ONLY ONE WAS HANDLED HERE UNTIL 2026-10-14.
+// A Postgres 57014 is `authenticator`'s 8s statement_timeout: the server gave
+// up mid-query. The other is a TRANSPORT STALL, where `fetch` throws instead of
+// returning a response — so a branch reading `57014` out of a response body is
+// structurally unreachable and the script dies on an unhandled rejection with a
+// raw stack trace. Measured on #4404's head 09fdf873f: this script at line 32
+// (18:26:19 -> 18:31:21) and check-data-quality-gates.mjs at line 34 (18:26:22
+// -> 18:31:25) — two jobs, two runners, both the FIRST call, both dead at
+// exactly five minutes (undici's headers timeout), ending four seconds apart,
+// on a documentation-only diff. Same condition, different clock running out.
 //
 // Measured 2026-10-10 on the live instance, after this fired on #4275 (green on
 // the previous head 20 minutes earlier, with the identical diff): the function
@@ -55,18 +68,22 @@ let body = res.ok ? null : await res.text()
 // the SAME contention window and both time out seconds apart. Contention here
 // lasts minutes, not milliseconds, so an instant retry re-samples nothing.
 //
-// Gated on 57014 ONLY. Any other non-ok status still fails immediately and at
-// once — a real gate breach must never be retried into silence.
+// Gated on the two NON-EVALUATIONS only. Any other non-ok status — a 403, a
+// 404, a 500 naming a real error — is the server answering, and still fails
+// immediately: a real gate breach must never be retried into silence. And a
+// non-evaluation never becomes a pass; it still exits 1 below, because "we
+// could not look" reading as "nothing found" is the vacuous green this repo
+// keeps recording. What changed is that the run now SAYS which of the three
+// happened instead of printing a stack trace.
 const RETRY_DELAY_MS = 30_000
-if (!res.ok && body?.includes('57014')) {
+if (notEvaluated(res)) {
   console.warn(
-    `⚠ trust_safety_gate_status() hit the statement timeout (57014) — NO gate was evaluated. ` +
+    `⚠ trust_safety_gate_status() did not evaluate any gate — ${stallReason(res)}. ` +
       `Retrying ONCE in ${RETRY_DELAY_MS / 1000}s, to sample a different load window.`,
   )
   await new Promise((r) => setTimeout(r, RETRY_DELAY_MS))
   const t0 = Date.now()
   res = await callGates()
-  body = res.ok ? null : await res.text()
   console.warn(
     `⚠ retry ${res.ok ? 'SUCCEEDED' : 'FAILED'} after ${Date.now() - t0}ms. If it FAILED, the ` +
       'database was busy for >30s or the function has genuinely regressed — measure it on a quiet ' +
@@ -78,11 +95,11 @@ if (!res.ok) {
   // The body is printed because without it this line read `HTTP 500` and named
   // no cause, so diagnosing the #4275 occurrence needed a query against prod
   // rather than the CI log. A failed probe has to say WHY it failed.
-  console.error(`✗ trust_safety_gate_status RPC → HTTP ${res.status}: ${body}`)
+  console.error(`✗ trust_safety_gate_status RPC → HTTP ${res.status}: ${res.body}`)
   process.exit(1)
 }
 
-const gates = await res.json()
+const gates = res.data
 const critical = gates.filter((g) => g.severity === 'critical')
 const high = gates.filter((g) => g.severity === 'high')
 
