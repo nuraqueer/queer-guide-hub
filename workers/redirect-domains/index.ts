@@ -1,5 +1,6 @@
 // eslint-disable-next-line @typescript-eslint/triple-slash-reference -- Generated ambient Worker declarations require a type reference without a runtime import.
 /// <reference path="./worker-configuration.d.ts" />
+import { proxyAppAssociation } from '../../supabase/functions/_shared/redirect-app-association-proxy';
 import type { IncomingRequestCfProperties } from '@cloudflare/workers-types';
 import {
   DOMAIN_HEALTH_PATH,
@@ -50,6 +51,8 @@ async function passwordBody(request: Request) {
 /** Deploy only to the dedicated SaaS fallback zone after its routing is reviewed. */
 export default {
   async fetch(request: Request, env: Cloudflare.Env): Promise<Response> {
+    const association = await proxyAppAssociation(request, env);
+    if (association) return association;
     const head = request.method === 'HEAD';
     const error = (status: number, message = 'Link unavailable') =>
       new Response(head ? null : message, { status, headers: publicHeaders });

@@ -21,7 +21,7 @@ exist. Existing local tools are a foundation, not proof of parity or deployment.
 | AI previews | Generate title/description from destination content using configured AI provider | Candidate: scoped draft generator with spend limits; live provider and browser verification pending |
 | Custom domains | Verify ownership/DNS, multiple domains, primary domain, redirects on branded hostname | Partial: private registry, exact DNS verification, owner UI and stored defaults implemented locally; durable Cloudflare lifecycle/TLS checks implemented locally; hostname namespaces, signed relay/resolver, routing health, background proof renewal and inventory/CSV/QR/API/SDK fields implemented locally; ready choices, owner primary preference and tracked/member builders implemented locally; active manual CMS domain field and atomic owner saves implemented locally; URL domain filters and scoped linked-domain facets implemented locally; explicit provider validation restart implemented locally; real provider proof and release pending |
 | Domain defaults | Root/not-found redirects, default expiration URL, workspace/domain QR logos | Partial: root/not-found/expiry settings, signed-host resolver and managed root-link policies/metadata/tracking implemented locally; QR/logo precedence and release pending |
-| Deep links | iOS/Android association files, app page routes, fallback and deferred attribution | Missing |
+| Deep links | iOS/Android association files, app page routes, fallback and deferred attribution | Partial: owner-managed app identities, per-host association files and gateway behavior implemented locally; policy-aware native resolver, native SDKs, deferred attribution and real device/release evidence remain open |
 | Geo targeting | Country-specific destinations and default fallback | Candidate: country rules and fallback tested |
 | Device targeting | iOS/Android destinations, evaluated before geo | Candidate: iOS/Android priority tested |
 | A/B testing | 2–5 destinations, weighted traffic≥10%, end date≤6 weeks, manual winner/end | Candidate: editor/resolver implemented locally |
@@ -2736,3 +2736,65 @@ Sources reviewed: Apple's Supporting associated domains and TN3155 (app IDs,
 components, per-host HTTPS without redirects), Android's Configure website
 associations and dynamic rules (signing certificates, per-host JSON and Android
 15+ path rules), and Cloudflare's current Workers/Pages routing guidance.
+
+### Native association and invitation inbox checkpoint (2026-10-15)
+
+App identities, signing fingerprints, short-link path scope and explicit
+publication now have an owner-only private registry, optimistic edits/removal,
+current publisher/domain checks and a sanitized public projection. Apple and
+Android generators serve both built-in hosts and the actual branded hostname
+through the fixed public gateway before SEO/locale/asset/slug fallback. Responses
+are bounded JSON without redirects, visitor credentials or relay secrets. Public
+publication has a database byte budget with headroom for platform envelopes.
+
+Full SQL tests cover default-disabled publication, both platforms, stale versions,
+private grants, built-in path restrictions, cross-host isolation, stale TLS,
+disabled domains/bindings, current publisher revocation and byte-budget rollback.
+Five SDKs and actual owner/public HTTP -> handler -> migrated SQL checks pass.
+The test runner now refreshes its simulated domain provider heartbeat between
+native child processes; a long machine suspension had expired the original
+15-minute positive fixture before Go. Production time checks were not changed.
+The app registry/generator/Pages/Worker tests pass (25 focused cases across the
+feature and typography checks). Deno, native Worker types, app typecheck (702
+inherited, none new), production build, manifest parity and routing guard pass.
+Gateway tests exercise actual Pages middleware and branded Worker JSON output.
+The latest source changes still need final verification on their pushed head.
+
+Native-browser fixture checks verified a default-disabled iOS registration,
+edit/remove controls, Android fingerprint fields and 390px layout. No real app
+was configured/published. The fixture blocks external requests and stores only
+simulated data. Screenshot in the shared workspace:
+`outputs/redirect-dub-parity/native-app-mobile.png`. Association files alone do
+not complete native resolution, fallback/deferred attribution, app installation,
+OS caches/verification or production hosting. Those remain in scope.
+
+CodeQL on the prior head flagged two test-only writes of a fixed invitation token
+to session storage (alerts1071/1072), not a real credential leak. Instead of
+renaming the fixture to hide the warning, the runtime handoff is replaced with a
+verified-account invitation inbox. No invitation token is persisted across
+sign-in. Private inbox reads join the actual confirmed Auth email, current owner
+role and pending/unrevoked/unexpired invitations; returned fields omit email and
+secret/hash. Acceptance by ID uses the same verified-recipient and invitation
+state checks as token acceptance. IDs do not authorize a different account.
+
+The new SQL/HTTP/UI tests verify inbox scoping, confirmation, no token storage,
+wrong-recipient denial, accepted/revoked/lost-owner removal and legacy pasted-token
+support. Existing role preservation, deleted-member replay protection, expiry,
+revocation and creation/attempt budgets remain. This supersedes the earlier
+15-minute browser-storage handoff design and tests. No alerts were dismissed or
+gates weakened. CodeQL must verify the new head. The previous pushed head's full
+unit/integration test job and migration/data-quality checks passed; final release
+and all remaining parity requirements remain unproven.
+
+Final local verification for this checkpoint: app typecheck stays at 702 inherited
+errors with none new; strict Pages production/test and branded Worker type checks
+pass. Gateway tests live in the existing Cloudflare test project, preserving its
+actual runtime types without introducing Cloudflare globals into browser types.
+All 42 focused tests plus the three gateway tests pass; full isolated SQL, all five
+SDK/actual HTTP suites, Deno, targeted lint, manifest and routing guards pass.
+The production build passed in 33.60 seconds. Wrangler 4.148.0 dry-run bundles the
+branded Worker at 15.42 KiB (4.59 KiB gzip) and exits without upload/deployment.
+The recipient inbox's native browser fixture shows explicit acceptance and removal
+of the pending row; screenshot `outputs/redirect-dub-parity/invitation-inbox.png`.
+All browser data is simulated, with external calls blocked. No production app,
+association, provider, DNS, database or storage state was changed.
