@@ -2612,3 +2612,15 @@ statement is recovered verbatim as a migration file. No DDL was executed, no
 version was renumbered and no placeholder SQL was added. The independent
 production city-safety gate failure and overall parity/release requirements remain
 open; this candidate is not an overall completion claim.
+
+Final candidate verification: app typecheck is 702 inherited errors, none new;
+production build passed in 34.55 seconds, Deno check passed and targeted lint has
+zero errors (one existing-style Fast Refresh mixed-export warning). Candidate
+60981554c is pushed to draft PR4417. Production was not deployed or mutated.
+
+Latest CI additionally identified `venues.zzzzzz_venues_safety_gated` as a trigger
+without a creating migration. A read-only comparison of all 2,290 applied history
+versions against tracked files found exactly one missing file: 20261014231145,
+`venue_safety_after_geography`. Its exact recorded statement is recovered too;
+this accounts for the production trigger and preserves reproducible rebuilds.
+No trigger or data was changed by this recovery. CI must run again on this head.
