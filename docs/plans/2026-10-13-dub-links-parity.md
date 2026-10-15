@@ -2813,3 +2813,37 @@ inspection recovered the sole 724-byte statement named
 file. No production DDL/data was executed. The independent production quality gate
 reports 15 current safety-flag inconsistencies (venues6, organizations9). Those
 remain a release blocker; this work does not weaken that gate or rewrite data.
+
+### Policy-aware native resolution design under the approved scope
+
+Association files are only host authorization. The next phase resolves a canonical
+short URL for an app through the actual existing web resolver and visit transaction.
+A second native-only policy engine would drift; scraping/following web redirects
+would lose password/expiry/preview semantics. Use explicit vendor Accept content
+negotiation on the same built-in/branded URLs, with one shared policy/visit path.
+
+Accept `application/vnd.queer-guide.redirect+json`. Successful responses are HTTP200
+with protocol1, canonicalUrl, destination, original statusCode, mode(navigate/web)
+and a nullable clickId. Expiry/default-domain fallbacks and cloaking use web mode.
+Error responses keep the original status and return a closed error envelope,
+never destination/policy/password HTML. HEAD returns no body and records no visit.
+Native requests use form-encoded password POSTs only; reject password query fields.
+Wrong/missing passwords share the challenge; existing throttles remain atomic.
+
+Device/geo/A-B/expiry/disabled/quota checks and loop guards remain in the current
+resolver. Preview crawlers cannot avoid a native visit by changing their UA.
+Only presentation rendering differs. Native attribution defaults to denied and
+is exposed only when both link tracking and the explicit attribution-consent
+header are enabled. Otherwise omit clickId and strip tracking IDs from the result.
+Aggregate visit behavior remains existing behavior. Do not persist a device ID or
+fingerprint, infer consent, or implement probabilistic deferred matching.
+
+Both gateways forward only the normalized native Accept/consent flags. They keep
+existing signed IP/hostname relays, never follow a redirect, bound/revalidate the
+native response schema/canonical source, strip unexpected fields/headers and fail
+clearly on old HTML/redirect upstreams. Preserve existing ordinary web behavior.
+The native clients must use HTTPS and configured short-host allowlists, keep
+passwords out of URLs, handle web fallbacks explicitly, avoid automatic retries,
+and obtain explicit consent before retaining/forwarding attribution. Native SDKs,
+deferred attribution, actual entitlements/devices and controlled rollout remain
+required after the transport foundation; no transport fixture is OS verification.
