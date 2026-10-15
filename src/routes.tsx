@@ -101,6 +101,8 @@ const AdminPipelines = lazyRetry(() => import('./pages/admin/AdminPipelines'));
 const AdminSearchIntelligence = lazyRetry(() => import('./pages/admin/AdminSearchIntelligence'));
 const AdminDesignSystem = lazyRetry(() => import('./pages/admin/DesignSystem'));
 const AdminStyleguide = lazyRetry(() => import('./pages/admin/AdminStyleguide'));
+const SharedRedirectReport = lazyRetry(() => import('./pages/SharedRedirectReport'));
+const RedirectMemberWorkspace = lazyRetry(() => import('./pages/RedirectMemberWorkspace'));
 const AdminRedirects = lazyRetry(() => import('./pages/admin/AdminRedirects'));
 
 // New feature pages
@@ -400,6 +402,8 @@ export const AppRoutes = () => {
                 <Route path="/signin" element={<AuthAliasRedirect />} />
                 <Route path="/login" element={<AuthAliasRedirect />} />
                 <Route path="/claim-username" element={<ClaimUsername />} />
+                <Route path="/share/redirect-report/:reportId" element={<SharedRedirectReport />} />
+                <Route path="/links-workspace" element={<RedirectMemberWorkspace />} />
                 <Route path="/extension" element={<ExtensionInstall />} />
                 {import.meta.env.DEV && (
                   <Route path="/pattern-library" element={<PatternLibrary />} />

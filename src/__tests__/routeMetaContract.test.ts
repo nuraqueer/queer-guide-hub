@@ -182,6 +182,13 @@ describe('STATIC_ROUTE_META', () => {
     ).toEqual([]);
   });
 
+  it('keeps report-sharing capability URLs out of search indexes by default', () => {
+    expect(isIndexable('/share/redirect-report/00000000-0000-4000-8000-000000000001')).toBe(false);
+  });
+  it('keeps the authenticated member link workspace out of search indexes', () => {
+    expect(isIndexable('/links-workspace')).toBe(false);
+    expect(isIndexable('/links-workspace/')).toBe(false);
+  });
   it('keeps /places and /support noindexed as well as meta-less', () => {
     // Named, because deleting the meta entry alone leaves NOTHING watching the
     // noindex half: the gate above only inspects META KEYS, and these two are

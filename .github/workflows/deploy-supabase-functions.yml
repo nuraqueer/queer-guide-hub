@@ -74,6 +74,9 @@ jobs:
           # moved to Deno 2.x.
           deno-version: v2.x
 
+      - name: Prepare disposable redirect webhook TLS certificates
+        run: node scripts/test-redirect-webhooks.mjs --prepare-only
+
       - name: Run edge function tests
         # Gate the deploy on the whole deno suite under supabase/functions,
         # by discovery. Matches the ci.yml edge-fn-tests invocation (same

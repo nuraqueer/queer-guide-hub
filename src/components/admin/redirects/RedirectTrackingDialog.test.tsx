@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { RedirectTrackingDialog } from './RedirectTrackingDialog';
 import type { InventoryRedirect } from '@/lib/redirects/inventory';
 
+vi.mock('./RedirectConversionsPanel', () => ({ RedirectConversionsPanel: () => null }));
 vi.mock('@/integrations/supabase/untyped', () => ({
   untypedFrom: () => {
     const query = {

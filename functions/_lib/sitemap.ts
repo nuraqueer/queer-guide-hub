@@ -13,6 +13,7 @@ export type Env = {
   SUPABASE_URL?: string;
   SUPABASE_ANON_KEY?: string;
   SUPABASE_SERVICE_ROLE_KEY?: string;
+  REDIRECT_RELAY_SECRET?: string;
   ASSETS: { fetch: typeof fetch };
   /** NOT set on this project's deployments. Cloudflare injects it into its own
    *  Pages builds; we direct-upload from GitHub Actions and declare no such

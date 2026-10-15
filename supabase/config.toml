@@ -652,3 +652,24 @@ verify_jwt = true
 
 [functions.complete-entity-location]
 verify_jwt = false
+
+# Accepts scoped Redirects credentials or verified user JWTs. The handler owns
+# both checks; scoped tokens are not Supabase JWTs and must reach that check.
+[functions.redirect-api]
+verify_jwt = false
+
+# Scheduled notification consumer validates internal secret or an admin session.
+[functions.redirect-access-notifications]
+verify_jwt = false
+
+# Dedicated hostname lifecycle consumer; validates internal secret or admin session.
+[functions.redirect-domain-provisioner]
+verify_jwt = false
+
+# Durable orphan/replaced-logo cleanup validates internal secret or admin session.
+[functions.redirect-qr-assets-cleanup]
+verify_jwt = false
+
+# Signed outgoing webhook queue validates an internal secret or owner account.
+[functions.redirect-webhooks-dispatch]
+verify_jwt = false

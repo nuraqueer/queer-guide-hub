@@ -1,0 +1,32 @@
+BEGIN;
+SET LOCAL ROLE service_role;
+DO $$
+DECLARE owner_id uuid:=gen_random_uuid(); ordinary uuid:=gen_random_uuid(); member_id uuid; machine_id uuid; result jsonb;
+BEGIN
+ INSERT INTO auth.users(id) VALUES(owner_id),(ordinary);
+ INSERT INTO public.user_roles VALUES(owner_id,'admin');
+ BEGIN PERFORM public.redirect_member_administration(ordinary,'list');RAISE EXCEPTION 'Ordinary actor read members';EXCEPTION WHEN insufficient_privilege THEN NULL;END;
+ BEGIN PERFORM public.redirect_member_administration(NULL,'list');RAISE EXCEPTION 'Missing actor read members';EXCEPTION WHEN insufficient_privilege THEN NULL;END;
+ result:=public.redirect_member_administration(owner_id,'create',p_values=>jsonb_build_object('label','  Member  ','kind','user','user_id',ordinary,'role','viewer'));
+ member_id:=(result->>'id')::uuid;
+ IF result->>'label'<>'Member' OR result->>'user_id'<>ordinary::text OR result->>'role'<>'viewer' THEN RAISE EXCEPTION 'Member create failed';END IF;
+ result:=public.redirect_member_administration(owner_id,'create',p_values=>'{"label":"Worker","kind":"machine"}');machine_id:=(result->>'id')::uuid;
+ IF result->'user_id'<>'null'::jsonb OR NOT(result->>'active')::boolean THEN RAISE EXCEPTION 'Machine create failed';END IF;
+ result:=public.redirect_member_administration(owner_id,'list');
+ IF (result->>'count')::int<>2 OR jsonb_array_length(result->'data')<>2 THEN RAISE EXCEPTION 'Member page failed';END IF;
+ result:=public.redirect_member_administration(owner_id,'update',member_id,'{"active":false,"role":"member"}');
+ IF (result->>'active')::boolean OR result->>'role'<>'member' THEN RAISE EXCEPTION 'Update failed';END IF;
+ BEGIN PERFORM public.redirect_member_administration(owner_id,'update',member_id,'{"user_id":null}');RAISE EXCEPTION 'Identity rebound';EXCEPTION WHEN invalid_parameter_value THEN NULL;END;
+ BEGIN PERFORM public.redirect_member_administration(owner_id,'update',member_id,'{"active":"false"}');RAISE EXCEPTION 'String boolean accepted';EXCEPTION WHEN invalid_parameter_value THEN NULL;END;
+ BEGIN PERFORM public.redirect_member_administration(owner_id,'create',p_values=>'{"label":"No user","kind":"user"}');RAISE EXCEPTION 'Missing user accepted';EXCEPTION WHEN invalid_parameter_value THEN NULL;END;
+ DELETE FROM public.user_roles WHERE user_id=owner_id;
+ BEGIN PERFORM public.redirect_member_administration(owner_id,'list');RAISE EXCEPTION 'Stale admin read';EXCEPTION WHEN insufficient_privilege THEN NULL;END;
+ BEGIN PERFORM public.redirect_member_administration(owner_id,'delete',member_id);RAISE EXCEPTION 'Stale admin removed';EXCEPTION WHEN insufficient_privilege THEN NULL;END;
+ INSERT INTO public.user_roles VALUES(owner_id,'admin');
+ IF NOT(public.redirect_member_administration(owner_id,'delete',member_id)->>'deleted')::boolean THEN RAISE EXCEPTION 'Delete failed';END IF;
+ IF (public.redirect_member_administration(owner_id,'delete',member_id)->>'deleted')::boolean THEN RAISE EXCEPTION 'Repeated delete reported removal';END IF;
+END $$;
+RESET ROLE;
+SET LOCAL ROLE authenticated;
+DO $$ BEGIN IF has_function_privilege(current_user,'public.redirect_member_administration(uuid,text,uuid,jsonb,integer)','execute') THEN RAISE EXCEPTION 'Administration RPC exposed';END IF;END $$;
+ROLLBACK;

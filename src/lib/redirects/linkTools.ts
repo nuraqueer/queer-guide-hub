@@ -7,6 +7,7 @@ export const CAMPAIGN_FIELDS = [
   'utm_campaign',
   'utm_term',
   'utm_content',
+  'ref',
 ] as const;
 export type CampaignFields = Partial<Record<(typeof CAMPAIGN_FIELDS)[number], string>>;
 
@@ -40,6 +41,8 @@ export function buildCampaignDestination(
     if (keys.has(key)) throw new Error(`Parameter ${key} appears more than once.`);
     if (CAMPAIGN_FIELDS.includes(key as (typeof CAMPAIGN_FIELDS)[number]))
       throw new Error('Set campaign tags in the campaign fields.');
+    if (['qg_click_id', 'qg_qr', 'pw', 'password'].includes(key))
+      throw new Error('This parameter is reserved for link access or attribution.');
     keys.add(key);
     url.searchParams.set(key, value);
   }
@@ -66,10 +69,32 @@ export function suggestCampaignSlug(target: string) {
   return `${slug}-campaign`;
 }
 
-export function publicSourceUrl(source: string) {
+export function publicSourceUrl(source: string, managedDomain?: string) {
+  if (managedDomain) {
+    try {
+      const url = new URL(source);
+      return url.protocol === 'https:' &&
+        !url.username &&
+        !url.password &&
+        !url.port &&
+        url.hostname === managedDomain &&
+        (url.pathname === '/' || /^\/[a-z0-9][a-z0-9-]{1,62}[a-z0-9]$/.test(url.pathname))
+        ? url.href
+        : null;
+    } catch {
+      return null;
+    }
+  }
   if (!isConcretePath(source)) return null;
   const url = new URL(source, LINK_ORIGIN);
   return url.origin === LINK_ORIGIN ? url.href : null;
+}
+
+export function targetWithoutCampaign(target: string) {
+  if (!validateTarget(target).valid) return target;
+  const url = new URL(target, LINK_ORIGIN);
+  for (const key of CAMPAIGN_FIELDS) url.searchParams.delete(key);
+  return target.startsWith('/') ? url.pathname + url.search + url.hash : url.href;
 }
 
 export interface VisitEvent {

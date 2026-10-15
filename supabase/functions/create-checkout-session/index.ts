@@ -1,3 +1,4 @@
+import { UUID } from "../_shared/redirect-api.ts";
 import Stripe from "https://esm.sh/stripe@17?target=deno";
 import { corsResponse, jsonResponse, errorResponse, getServiceClient } from "../_shared/supabase-client.ts";
 
@@ -33,6 +34,7 @@ Deno.serve(async (req) => {
       email,
       message,
       is_anonymous = false,
+      qg_click_id,
     } = await req.json();
 
     // Stripe zero-decimal currencies (amount IS the charge, no minor units)
@@ -79,11 +81,18 @@ Deno.serve(async (req) => {
     const successUrl = `${origin}/donate?status=success&session_id={CHECKOUT_SESSION_ID}`;
     const cancelUrl = `${origin}/donate?status=cancel`;
 
+    let attributedClick: string | null = null;
+    if (typeof qg_click_id === "string" && UUID.test(qg_click_id)) {
+      const { data: click } = await rlClient.from("redirect_events").select("click_id")
+        .eq("click_id", qg_click_id).gte("ts", new Date(Date.now()-30*86400000).toISOString()).maybeSingle();
+      if (click) attributedClick = click.click_id;
+    }
     const metadata: Record<string, string> = {
       donor_name: donor_name || "",
       message: message || "",
       is_anonymous: String(is_anonymous),
       ...(userId ? { user_id: userId } : {}),
+      ...(attributedClick ? { qg_click_id: attributedClick } : {}),
     };
 
     let session: Stripe.Checkout.Session;
@@ -138,6 +147,7 @@ Deno.serve(async (req) => {
       amount,
       currency,
       stripe_session_id: session.id,
+      redirect_click_id: attributedClick,
       donor_name: donor_name || null,
       message: message || null,
       is_anonymous,
