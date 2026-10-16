@@ -42,9 +42,9 @@ test.describe('Admin feedback — authenticated', () => {
 
   test('Triage tab renders 5 status columns', async ({ page }) => {
     await gotoAdmin(page, '/admin/feedback?tab=triage', HEADING);
-    await expect(page.getByRole('button', { name: /Triage/i })).toBeVisible({
-      timeout: 15_000,
-    });
+    // role=tab, not role=button: these are Radix `TabsTrigger`s. The label
+    // carries a live count ("Triage (12)"), hence the prefix match.
+    await expect(page.getByRole('tab', { name: /^Triage/ })).toBeVisible({ timeout: 15_000 });
     for (const col of ['New', 'Under Review', 'Planned', 'In Progress', 'Done']) {
       await expect(page.getByText(new RegExp(`^${col}$`, 'i')).first()).toBeVisible();
     }
@@ -55,15 +55,17 @@ test.describe('Admin feedback — authenticated', () => {
     page.on('pageerror', (err) => errors.push(err.message));
     await gotoAdmin(page, '/admin/feedback', HEADING);
 
-    for (const label of ['Stories', 'Triage', 'Analytics', 'Roadmap']) {
-      await page
-        .getByRole('button', { name: new RegExp(`^${label}`, 'i') })
-        .first()
-        .click()
-        .catch(() => {
-          /* tab may be hidden if no data */
-        });
-      await page.waitForTimeout(400);
+    // All four tabs are rendered unconditionally by index.tsx, so a missing one
+    // IS a regression — the previous `.catch(() => {})` swallowed exactly that.
+    // It also cost the test its whole budget: clicking a locator that matches
+    // nothing waits out the test timeout, which is why this used to die on
+    // "Target page, context or browser has been closed" rather than on the
+    // assertion. Click by role=tab and let a real absence fail here.
+    for (const label of ['Stories', 'Triage', 'Roadmap', 'Analytics']) {
+      const tab = page.getByRole('tab', { name: new RegExp(`^${label}`) });
+      await expect(tab, `tab "${label}" is missing`).toBeVisible({ timeout: 15_000 });
+      await tab.click({ timeout: 10_000 });
+      await expect(tab).toHaveAttribute('data-state', 'active');
     }
 
     const crashErrors = errors.filter((e) => /is not defined|ReferenceError/i.test(e));
@@ -84,21 +86,46 @@ test.describe('Admin feedback — authenticated', () => {
     await expect(page.getByPlaceholder(/Type a command/i)).toBeVisible({ timeout: 5_000 });
   });
 
-  test('filters row shows priority, assignee, has-screenshot controls', async ({ page }) => {
-    await gotoAdmin(page, '/admin/feedback', HEADING);
-    await expect(page.getByText(/All priorities/i).first()).toBeVisible({ timeout: 10_000 });
-    await expect(page.getByText(/Any assignee/i).first()).toBeVisible();
-    await expect(page.getByText(/Has screenshot/i).first()).toBeVisible();
+  test('the filters popover exposes the category, status, priority and assignee controls', async ({
+    page,
+  }) => {
+    // `?tab=triage` is load-bearing: the default tab is 'stories'
+    // (useFeedbackUrlState defaults) and FeedbackFilters only mounts on triage,
+    // so this assertion could never have held on a bare /admin/feedback.
+    await gotoAdmin(page, '/admin/feedback?tab=triage', HEADING);
+
+    // Visible at rest: the search box and the Filters trigger.
+    await expect(page.getByPlaceholder(/Search title, description, URL/i)).toBeVisible({
+      timeout: 15_000,
+    });
+    const filters = page.getByRole('button', { name: /^Filters/ });
+    await expect(filters).toBeVisible();
+
+    // The controls themselves live inside a CLOSED Popover, and the option text
+    // the old assertions looked for ("All priorities", "Any assignee") sits one
+    // level deeper still, inside closed Radix Selects — so neither could ever be
+    // visible on load. Open the popover and assert the real group labels.
+    await filters.click();
+    for (const group of ['Category', 'Status', 'Priority', 'Assignee']) {
+      await expect(
+        page.getByText(new RegExp(`^${group}$`)).first(),
+        `filters popover is missing the ${group} control`,
+      ).toBeVisible({ timeout: 10_000 });
+    }
+    // A "Has screenshot" control is NOT asserted: the string does not exist
+    // anywhere in src/, so that third assertion was dead from the start.
   });
 
   test('URL state persists through reload', async ({ page }) => {
-    await gotoAdmin(page, '/admin/feedback?q=test&status=new', HEADING);
-    const searchInput = page.getByPlaceholder(/Search/i).first();
-    await expect(searchInput).toHaveValue(/test/i, { timeout: 10_000 });
+    // Same reason as above — the search input lives on the triage tab only.
+    await gotoAdmin(page, '/admin/feedback?tab=triage&q=test&status=new', HEADING);
+    const searchInput = page.getByPlaceholder(/Search title, description, URL/i);
+    await expect(searchInput).toHaveValue(/test/i, { timeout: 15_000 });
     await page.reload();
     await expect(page.getByRole('heading', { name: HEADING, exact: true })).toBeVisible({
       timeout: 15_000,
     });
+    await expect(searchInput).toHaveValue(/test/i, { timeout: 15_000 });
     expect(page.url()).toMatch(/q=test/);
     expect(page.url()).toMatch(/status=new/);
   });
