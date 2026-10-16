@@ -306,7 +306,7 @@ and reviewed domain transfer still require completion; no production mutation or
 full parity/release claim is made.
 
 
-Domain/manual/provider/mail isolation checkpoint: migration99991792131513 scopes32
+Domain/manual/provider/mail isolation checkpoint: migration99991792173343 scopes32
 functions/triggers across private domain pages/counts/choices/defaults, raw manual
 records, DNS verification/Domain Connect operations, provider reservations/receipts
 and instruction-mail draft/queue/status/claims/prepare/acknowledgement. Inserts carry
@@ -426,3 +426,12 @@ intentional corrupted policy-key collision. The complete SQL suite, five focused
 legacy policy endpoint cases,40-table backfill,2361 migration parser/version checks,
 script lint and diff checks pass locally. This audit preserves activation fences;
 new workspace ownership/creation/switching, transfer and live release proof remain.
+
+
+Main advanced with merge-gap audit scope migration99991792168441 while PR4437
+was open. Exact-head CI correctly rejected the unpublished domain allocation below
+that base. The allocator moved only the unmerged domain file from99991792131513
+to99991792173343. Previously merged allocations remain unchanged. The isolated
+loader sorts replacement files by actual deployment filename; reordered complete SQL, actual HTTP/five SDK runtimes and40-table backfill pass.
+All2363 migration version/parser checks, script lint and diff checks pass locally.
+Final-head CI and live release review remain required.
