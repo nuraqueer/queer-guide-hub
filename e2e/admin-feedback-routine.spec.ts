@@ -1,37 +1,27 @@
-import { test, expect, type BrowserContext } from '@playwright/test';
+import { test, expect } from '@playwright/test';
+import { authenticated, ADMIN_SESSION_REQUIRED, gotoAdmin } from './support/adminAuth';
 
 /**
  * Smoke for the feedback → Claude routine loop UI.
  *
- * Skipped without E2E_ADMIN_COOKIE set, like the rest of admin specs. The full
- * happy path (approve → dispatch → retest → verify → archive) is intentionally
- * not seeded here: writing through admin RPCs against the production project
- * would mutate real data. When a staging project lands, swap the SUPABASE_*
- * env vars so this can run against an isolated DB and seed its own story.
+ * The full happy path (approve → dispatch → retest → verify → archive) is
+ * intentionally not seeded here: writing through admin RPCs against the
+ * production project would mutate real data. When a staging project lands, swap
+ * the SUPABASE_* env vars so this can run against an isolated DB and seed its
+ * own story.
+ *
+ * Gating moved off `E2E_ADMIN_COOKIE` (which nothing has ever set, so this test
+ * had never run anywhere) onto the storageState session the config already
+ * attaches. See e2e/support/adminAuth.ts.
  */
 
-async function loginViaCookie(context: BrowserContext) {
-  const cookie = process.env.E2E_ADMIN_COOKIE;
-  if (!cookie) return false;
-  await context.addCookies([
-    {
-      name: 'sb-access-token',
-      value: cookie,
-      domain: new URL(process.env.E2E_BASE_URL || 'https://queer.guide').hostname,
-      path: '/',
-    },
-  ]);
-  return true;
-}
+const HEADING = 'Feedback & Errors';
 
 test.describe('Admin feedback — routine loop UI', () => {
-  test.beforeEach(async ({ context }) => {
-    const ok = await loginViaCookie(context);
-    test.skip(!ok, 'requires E2E_ADMIN_COOKIE env var');
-  });
+  test.skip(!authenticated, ADMIN_SESSION_REQUIRED);
 
   test('story drawer mounts the routine loop section', async ({ page }) => {
-    await page.goto('/admin/feedback');
+    await gotoAdmin(page, '/admin/feedback', HEADING);
 
     // Switch to Stories tab if present
     const storiesTab = page.getByRole('button', { name: /Stories/i }).first();
