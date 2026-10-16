@@ -42,6 +42,22 @@ const MIG_RAW = readFileSync(
 );
 const MIG = stripSql(MIG_RAW);
 
+/**
+ * The command literal ONLY — between `v_cmd := $cmd$` and its closing `$cmd$`.
+ *
+ * Scoping matters: `legacy_anon_key`, `Authorization`, `X-Internal-Secret` and
+ * `internal_invoke_secret` all appear a SECOND time in the postconditions that
+ * check for them. A whole-file `toContain` therefore matches the check while
+ * the header it guards has been deleted — mutation "cron drops Authorization
+ * bearer" SURVIVED exactly that way before this was added.
+ */
+const CMD = (() => {
+  const open = MIG.indexOf('$cmd$');
+  const close = MIG.indexOf('$cmd$', open + 5);
+  if (open === -1 || close === -1) throw new Error('v_cmd $cmd$ literal not found');
+  return MIG.slice(open + 5, close);
+})();
+
 describe('sync-supabase-advisors auth gate', () => {
   it('positive control: the headers really do quote these strings', () => {
     // If this fails, the stripping below is guarding nothing.
@@ -82,17 +98,26 @@ describe('sync-supabase-advisors auth gate', () => {
     expect(block).toMatch(/^verify_jwt = false$/m);
   });
 
-  it('the cron sends X-Internal-Secret from Vault', () => {
-    expect(MIG).toContain('X-Internal-Secret');
-    expect(MIG).toContain('internal_invoke_secret');
+  it('positive control: the postconditions also mention these strings', () => {
+    // This is WHY the two tests below scope to CMD. If the postconditions ever
+    // stop naming them, CMD-scoping is no longer load-bearing and these tests
+    // are weaker than they look — fail loudly so someone re-reads them.
+    const checks = MIG.slice(MIG.indexOf('$verify$'));
+    expect(checks).toContain('legacy_anon_key');
+    expect(checks).toContain('X-Internal-Secret');
   });
 
-  it('the cron KEEPS the Authorization bearer', () => {
+  it('the command literal sends X-Internal-Secret from Vault', () => {
+    expect(CMD).toContain('X-Internal-Secret');
+    expect(CMD).toContain('internal_invoke_secret');
+  });
+
+  it('the command literal KEEPS the Authorization bearer', () => {
     // Dropping it reopens the deploy-order window: db push runs before
     // functions deploy, so the new command is briefly live against the old
     // function, which still demands a JWT.
-    expect(MIG).toContain('legacy_anon_key');
-    expect(MIG).toContain('Authorization');
+    expect(CMD).toContain('legacy_anon_key');
+    expect(CMD).toMatch(/'Authorization',\s*'Bearer '/);
   });
 
   it('uses the two-argument effective-command helper', () => {
