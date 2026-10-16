@@ -6,6 +6,18 @@ export async function createRedirectTestDb({ beforeMigration } = {}) {
     await db.exec(readFileSync('supabase/tests/fixtures/redirect-platform-bootstrap.sql', 'utf8'));
     await db.exec(readFileSync('supabase/tests/fixtures/redirect-inventory-sources.sql', 'utf8'));
     const files = readdirSync('supabase/migrations');
+    // These replacements have existing dependencies on main. Exercise their
+    // actual deployment order when concurrent merges require version allocation.
+    const workspaceResourceScopes = [
+      'redirect_workspace_link_scope.sql',
+      'redirect_workspace_qr_report_scope.sql',
+      'redirect_workspace_customer_analytics_scope.sql',
+      'redirect_workspace_domain_scope.sql',
+    ].sort((a, b) =>
+      (files.find((name) => name.endsWith(a)) ?? a).localeCompare(
+        files.find((name) => name.endsWith(b)) ?? b,
+      ),
+    );
     for (const suffix of [
       'redirect_link_workspace.sql',
       'redirect_link_policies.sql',
@@ -61,9 +73,7 @@ export async function createRedirectTestDb({ beforeMigration } = {}) {
       'redirect_domain_instruction_mail_latest.sql',
       'redirect_workspace_identity.sql',
       'redirect_workspace_membership_scope.sql',
-      'redirect_workspace_link_scope.sql',
-      'redirect_workspace_qr_report_scope.sql',
-      'redirect_workspace_customer_analytics_scope.sql',
+      ...workspaceResourceScopes,
     ]) {
       const name = files.find((file) => file.endsWith(suffix));
       if (!name) throw new Error('Missing migration ' + suffix);

@@ -3817,3 +3817,45 @@ customer CI is required. Product activation fences stay intact. Public resolver,
 provider/background/cleanup writers, tenant ownership/uniqueness, creation/switching
 and reviewed domain transfer still require completion; no production mutation or
 full parity/release claim is made.
+
+
+Domain/manual/provider/mail isolation checkpoint: migration99991792131513 scopes32
+functions/triggers across private domain pages/counts/choices/defaults, raw manual
+records, DNS verification/Domain Connect operations, provider reservations/receipts
+and instruction-mail draft/queue/status/claims/prepare/acknowledgement. Inserts carry
+workspace identity; private upserts cannot attach a foreign job. Link/root/archive/
+delete triggers use authoritative row workspace. Public verified-host lookup remains
+explicitly legacy-only, with service workers selecting the sole active legacy
+workspace. Provisioning rows cannot be served, refreshed, leased or acknowledged.
+Global hostname uniqueness, global abuse caps and all activation fences remain.
+
+Rollback-only SQL seeds a ready foreign domain/provider job, queued and leased
+mail, manual record and DNS review owned by the same global admin. Private reads,
+mutations, recipient recovery, public routing, worker leases/reservations and even
+late provider delete receipts cannot touch them. Exact snapshots and budgets stay
+unchanged. Actual owner HTTP covers foreign registry/count/choices/manual/DNS/
+provider/mail paths with isolated DNS/mail adapters enabled. A transport counter
+proves zero DNS/provider/Storage/email calls throughout all workspace denials.
+Existing legacy provider races, immutable mail retries and delivery recovery pass.
+
+The focused100 cases pass with two workers and unchanged assertions/timeouts.
+One earlier parallel run timed out in a15-second API case. The Go diagnostic then
+showed its positive ready-domain fixture heartbeat was over15 minutes old after
+long compilation/suspension; production correctly excluded it. The fixture now
+models ongoing provider heartbeats per request only during positive SDK examples
+and the workspace isolation fixture. Later expiry tests opt out; no product expiry,
+owner/route condition or test assertion was weakened. Failure messages retain the
+returned domain page and sanitized readiness state. Full actual HTTP/five SDKs,
+complete SQL in deployment filename order,40-table backfill and2358 migration/body
+checks pass locally. Script lint/format/diff checks also pass; exact-head CI remains required before release.
+
+PR4432 was merged externally as ea1086e4a after its866c845e8 full test job passed
+(run38849393051). Parallel integration preserved its link migration allocation
+99991792123545 after main advanced; QR/customer allocations remain unchanged.
+The new domain migration was allocated above that version. The isolated SQL loader
+now follows actual filename order for all four resource replacement migrations.
+Domain work continues on feature/redirect-workspace-domain-isolation, based on
+current main. Checks used isolated fixtures and executed no live provider/DNS/email
+or publication writes. The domain migration has no production deployment proof. Native/webhook/cleanup and remaining public/service paths,
+tenant ownership/uniqueness, creation/switching, reviewed transfer and live release
+proof still remain; this checkpoint does not claim full parity or activation.
