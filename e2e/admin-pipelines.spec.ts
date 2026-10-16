@@ -14,10 +14,32 @@ import { authenticated, ADMIN_SESSION_REQUIRED, gotoAdmin } from './support/admi
 
 const HEADING = 'Pipelines';
 
+/** The six real top-level tabs (`TABS` in UnifiedDataOps.tsx). */
+const TOP_LEVEL_TABS = ['Overview', 'Builder', 'Monitoring', 'Sources', 'News', 'Audit'];
+
 async function waitForAppReady(page: Page) {
   await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {
     /* ignore */
   });
+}
+
+/**
+ * The Builder opens a modal first-run tour ("Welcome to the Pipeline Builder")
+ * gated on localStorage `pipeline-builder-tour-seen-v1`. Every Playwright
+ * context is a fresh profile, so it fires on EVERY run — and it is a focus-
+ * trapping dialog, which is why the toolbar was unreachable and both keyboard
+ * tests (⌘K, ?) were swallowed. Dismiss it before touching the builder.
+ *
+ * Tolerant by design: a session that has already seen the tour never shows it,
+ * so its absence is not a failure. Everything after this call is asserted
+ * strictly, so a tour that stopped being dismissable still fails loudly there.
+ */
+async function dismissBuilderTour(page: Page) {
+  const tour = page.getByRole('dialog', { name: /Welcome to the Pipeline Builder/i });
+  if (await tour.isVisible().catch(() => false)) {
+    await page.getByRole('button', { name: /Skip tour/i }).click();
+    await expect(tour).toBeHidden({ timeout: 10_000 });
+  }
 }
 
 test.describe('Admin pipelines — unauthenticated', () => {
@@ -42,37 +64,32 @@ test.describe('Admin pipelines — authenticated', () => {
 
   test('Overview tab renders with summary cards and table', async ({ page }) => {
     await gotoAdmin(page, '/admin/pipelines', HEADING);
-    await expect(page.getByRole('button', { name: /Overview/i })).toBeVisible({ timeout: 15_000 });
+    // role=tab, not role=button: UnifiedDataOps renders `<button role="tab">`,
+    // and an explicit ARIA role wins, so getByRole('button') matched nothing.
+    await expect(page.getByRole('tab', { name: 'Overview' })).toBeVisible({ timeout: 15_000 });
     await expect(page.getByText(/Active definitions/i)).toBeVisible();
     await expect(page.getByText(/Runs in last 24h/i)).toBeVisible();
     await expect(page.getByRole('columnheader', { name: /Kind/i })).toBeVisible();
   });
 
-  test('tab navigation reaches each tab without error', async ({ page }) => {
+  test('tab navigation reaches each of the six tabs without error', async ({ page }) => {
     const errors: string[] = [];
     page.on('pageerror', (err) => errors.push(err.message));
     await gotoAdmin(page, '/admin/pipelines', HEADING);
 
-    const tabs = [
-      'Builder',
-      'Monitor',
-      'Sources',
-      'Review',
-      'DLQ',
-      'Errors',
-      'Alerts',
-      'Coverage',
-      'News',
-      'Health',
-      'Audit',
-      'Integrations',
-    ];
-    for (const label of tabs) {
-      await page
-        .getByRole('button', { name: new RegExp(`^${label}$`, 'i') })
-        .first()
-        .click();
-      await page.waitForTimeout(500);
+    // The old list named twelve tabs. Eight of them (Monitor, Review, DLQ,
+    // Errors, Alerts, Coverage, Health, Integrations) are no longer top-level:
+    // the console was consolidated to six, and those live on as SUB-SECTIONS
+    // reached through TAB_ALIAS deep links — which is why the ?tab=monitor,
+    // ?tab=audit and ?tab=integrations tests below kept working. Asserting them
+    // as top-level tabs could only ever fail.
+    await expect(page.getByRole('tablist', { name: /Data ops sections/i })).toBeVisible();
+    for (const label of TOP_LEVEL_TABS) {
+      const tab = page.getByRole('tab', { name: label });
+      await expect(tab, `top-level tab "${label}" is missing`).toBeVisible({ timeout: 15_000 });
+      await tab.click({ timeout: 10_000 });
+      await expect(tab).toHaveAttribute('aria-selected', 'true');
+      if (label === 'Builder') await dismissBuilderTour(page);
     }
 
     const crashErrors = errors.filter((e) => /is not defined|ReferenceError/i.test(e));
@@ -81,13 +98,18 @@ test.describe('Admin pipelines — authenticated', () => {
 
   test('Builder toolbar shows Save, Run, Dry Run buttons', async ({ page }) => {
     await gotoAdmin(page, '/admin/pipelines?tab=builder', HEADING);
-    await expect(page.getByRole('button', { name: /Save$/i })).toBeVisible({ timeout: 10_000 });
-    await expect(page.getByRole('button', { name: /Run$/i })).toBeVisible();
-    await expect(page.getByRole('button', { name: /Dry Run/i })).toBeVisible();
+    await dismissBuilderTour(page);
+    await expect(page.getByRole('button', { name: /^Save$/ })).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByRole('button', { name: /^Run$/ })).toBeVisible();
+    await expect(page.getByRole('button', { name: /^Dry Run$/ })).toBeVisible();
   });
 
   test('Keyboard shortcut ⌘K opens quick-add palette', async ({ page }) => {
     await gotoAdmin(page, '/admin/pipelines?tab=builder', HEADING);
+    await dismissBuilderTour(page);
+    // Wait for the builder itself, not a bare timeout: the shortcut is bound by
+    // PipelineBuilder, so pressing it before the lazy chunk mounts does nothing.
+    await expect(page.getByRole('button', { name: /^Save$/ })).toBeVisible({ timeout: 15_000 });
     const isMac = await page.evaluate(() => navigator.platform.includes('Mac'));
     await page.keyboard.press(isMac ? 'Meta+k' : 'Control+k');
 
@@ -123,7 +145,11 @@ test.describe('Admin pipelines — authenticated', () => {
 
   test('Help cheat sheet opens with ? key', async ({ page }) => {
     await gotoAdmin(page, '/admin/pipelines?tab=builder', HEADING);
+    await dismissBuilderTour(page);
+    await expect(page.getByRole('button', { name: /^Save$/ })).toBeVisible({ timeout: 15_000 });
     await page.keyboard.press('Shift+Slash');
-    await expect(page.getByText(/Keyboard Shortcuts/i).first()).toBeVisible({ timeout: 5_000 });
+    await expect(page.getByRole('dialog', { name: /Keyboard Shortcuts/i })).toBeVisible({
+      timeout: 5_000,
+    });
   });
 });
