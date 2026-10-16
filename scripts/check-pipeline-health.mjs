@@ -1332,6 +1332,46 @@ if (!hygieneRes.ok) {
       FAILED = true
     }
 
+    // A run the reaper closed as "committed without issuing an HTTP request"
+    // is correct for a conditional poster and is ALSO what a DROPPED FILING
+    // looks like — and a run with zero filed requests can never increment
+    // consecutive_failures, so it is a permanent green that can neither
+    // auto-pause nor record a real failure.
+    //
+    // That is not hypothetical: pg_net's request-id sequence reset on
+    // 2026-10-12 and replayed ids admin_automation_run_requests already held,
+    // whose PRIMARY KEY was request_id alone, so `on conflict do nothing`
+    // silently swallowed the filing. Measured share of finished runs:
+    // 0.6%/day for the whole preceding week (48 runs — the genuinely
+    // conditional posters), then 9.4% → 48.0% → 24.7% → 62.8%. 5% is ~8x the
+    // measured baseline and catches it on day one.
+    //
+    // A RATE, not a zero-invariant: conditional posters are legitimate. The
+    // denominator is read first, because zero no_request out of zero finished
+    // runs is a dead reaper, not a clean bill — and an absent key must not
+    // read as a clean corpus either.
+    const noReq = gaps.no_request_24h
+    if (!noReq || noReq.finished === undefined) {
+      console.error(
+        '✗ admin_automation_tracking_gaps returned no no_request_24h — sentinel not deployed (migration 99991792174107)',
+      )
+      FAILED = true
+    } else if (Number(noReq.finished) === 0) {
+      console.error('✗ no automation run finished in 24h — the reaper is not running at all')
+      FAILED = true
+    } else if (Number(noReq.pct) > 5) {
+      console.error(
+        `✗ ${noReq.no_request} of ${noReq.finished} automation runs in 24h (${noReq.pct}%) filed NO request — ` +
+          `baseline is 0.6%. Runs with zero filed requests book as permanent greens and can never auto-pause. ` +
+          `Check whether pg_net's id sequence has reset below max(request_id) in admin_automation_run_requests.`,
+      )
+      FAILED = true
+    } else {
+      console.log(
+        `✓ no_request runs at ${noReq.pct}% of ${noReq.finished} finished runs in 24h (baseline 0.6%)`,
+      )
+    }
+
     // A client-side pg_net timeout is absence of evidence, not evidence of
     // failure, so it is recorded as 'partial' and deliberately does NOT
     // auto-pause. That makes this warning the only thing standing between an
