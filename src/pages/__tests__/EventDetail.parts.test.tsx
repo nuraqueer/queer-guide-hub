@@ -149,7 +149,6 @@ describe('Event action consolidation', () => {
     userAttendance: null,
     onAttendanceUpdate: vi.fn(),
     onExportToCalendar: vi.fn(),
-    onSendEvent: vi.fn(),
   };
 
   it('offers one ticket action and does not repeat timing or price facts', () => {
