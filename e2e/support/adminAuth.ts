@@ -39,6 +39,17 @@ export const ADMIN_SESSION_REQUIRED = 'Requires the configured admin session';
  */
 export async function gotoAdmin(page: Page, url: string, heading: string) {
   await page.goto(url);
+  await expectAdminHeading(page, url, heading);
+}
+
+/**
+ * The heading half of `gotoAdmin`, separate so a page that opens a MODAL on
+ * arrival can dismiss it first. Radix marks the rest of the document
+ * `aria-hidden` while a modal dialog is open, so the heading is genuinely
+ * unreachable until the dialog is gone — asserting it first would blame the
+ * session for a dialog. /admin/pipelines?tab=builder is exactly that case.
+ */
+export async function expectAdminHeading(page: Page, url: string, heading: string) {
   await expect(
     page.getByRole('heading', { name: heading, exact: true }),
     `Not signed in as admin: ${url} did not render its "${heading}" heading (an anonymous visit lands on /auth)`,

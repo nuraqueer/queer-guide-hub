@@ -1,5 +1,10 @@
 import { test, expect, type Page } from '@playwright/test';
-import { authenticated, ADMIN_SESSION_REQUIRED, gotoAdmin } from './support/adminAuth';
+import {
+  authenticated,
+  ADMIN_SESSION_REQUIRED,
+  gotoAdmin,
+  expectAdminHeading,
+} from './support/adminAuth';
 
 /**
  * E2E smoke tests for /admin/pipelines.
@@ -23,23 +28,45 @@ async function waitForAppReady(page: Page) {
   });
 }
 
+/** The builder's own toolbar — the marker that the lazy chunk has mounted. */
+const saveButton = (page: Page) => page.getByRole('button', { name: /^Save$/ });
+
 /**
  * The Builder opens a modal first-run tour ("Welcome to the Pipeline Builder")
  * gated on localStorage `pipeline-builder-tour-seen-v1`. Every Playwright
- * context is a fresh profile, so it fires on EVERY run — and it is a focus-
- * trapping dialog, which is why the toolbar was unreachable and both keyboard
- * tests (⌘K, ?) were swallowed. Dismiss it before touching the builder.
+ * context is a fresh profile, so it fires on EVERY run — and being a modal it
+ * (a) traps focus, so ⌘K and ? never reach the builder, and (b) makes Radix
+ * mark the rest of the document `aria-hidden`, so even the page's own
+ * <h1> is unreachable. One cause, three failures, none of which looks related
+ * from its error text.
  *
- * Tolerant by design: a session that has already seen the tour never shows it,
- * so its absence is not a failure. Everything after this call is asserted
- * strictly, so a tour that stopped being dismissable still fails loudly there.
+ * The first version of this helper used a bare `tour.isVisible()`, which is a
+ * point-in-time check with NO auto-wait — it ran before the lazy builder chunk
+ * had mounted the tour, found nothing, and skipped. So wait for the tour OR
+ * the toolbar first: once either is visible the page has settled and the
+ * branch is decided on real state rather than on a race.
  */
 async function dismissBuilderTour(page: Page) {
   const tour = page.getByRole('dialog', { name: /Welcome to the Pipeline Builder/i });
-  if (await tour.isVisible().catch(() => false)) {
+  await expect(
+    tour.or(saveButton(page)).first(),
+    'the builder rendered neither its first-run tour nor its toolbar',
+  ).toBeVisible({ timeout: 30_000 });
+  if (await tour.isVisible()) {
     await page.getByRole('button', { name: /Skip tour/i }).click();
     await expect(tour).toBeHidden({ timeout: 10_000 });
   }
+}
+
+/**
+ * Navigate to the builder, clear the tour, THEN assert the heading — in that
+ * order, because the modal hides the heading from the a11y tree.
+ */
+async function gotoBuilder(page: Page, url = '/admin/pipelines?tab=builder') {
+  await page.goto(url);
+  await dismissBuilderTour(page);
+  await expectAdminHeading(page, url, HEADING);
+  await expect(saveButton(page)).toBeVisible({ timeout: 15_000 });
 }
 
 test.describe('Admin pipelines — unauthenticated', () => {
@@ -97,19 +124,15 @@ test.describe('Admin pipelines — authenticated', () => {
   });
 
   test('Builder toolbar shows Save, Run, Dry Run buttons', async ({ page }) => {
-    await gotoAdmin(page, '/admin/pipelines?tab=builder', HEADING);
-    await dismissBuilderTour(page);
-    await expect(page.getByRole('button', { name: /^Save$/ })).toBeVisible({ timeout: 15_000 });
+    await gotoBuilder(page);
     await expect(page.getByRole('button', { name: /^Run$/ })).toBeVisible();
     await expect(page.getByRole('button', { name: /^Dry Run$/ })).toBeVisible();
   });
 
   test('Keyboard shortcut ⌘K opens quick-add palette', async ({ page }) => {
-    await gotoAdmin(page, '/admin/pipelines?tab=builder', HEADING);
-    await dismissBuilderTour(page);
-    // Wait for the builder itself, not a bare timeout: the shortcut is bound by
-    // PipelineBuilder, so pressing it before the lazy chunk mounts does nothing.
-    await expect(page.getByRole('button', { name: /^Save$/ })).toBeVisible({ timeout: 15_000 });
+    // gotoBuilder waits for the toolbar, so the shortcut cannot be pressed
+    // before PipelineBuilder has bound it.
+    await gotoBuilder(page);
     const isMac = await page.evaluate(() => navigator.platform.includes('Mac'));
     await page.keyboard.press(isMac ? 'Meta+k' : 'Control+k');
 
@@ -144,9 +167,7 @@ test.describe('Admin pipelines — authenticated', () => {
   });
 
   test('Help cheat sheet opens with ? key', async ({ page }) => {
-    await gotoAdmin(page, '/admin/pipelines?tab=builder', HEADING);
-    await dismissBuilderTour(page);
-    await expect(page.getByRole('button', { name: /^Save$/ })).toBeVisible({ timeout: 15_000 });
+    await gotoBuilder(page);
     await page.keyboard.press('Shift+Slash');
     await expect(page.getByRole('dialog', { name: /Keyboard Shortcuts/i })).toBeVisible({
       timeout: 5_000,
