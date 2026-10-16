@@ -38,8 +38,20 @@ const verify = sql.slice(sql.indexOf('do $verify$'));
 const section = (() => {
   const start = health.indexOf("console.log('Dedup sweep merge errors')");
   const rest = health.slice(start);
-  // Section ends at the final FAILED gate.
-  const end = rest.indexOf('if (FAILED) {');
+  // Section ends at the close of its OWN top-level block — the first `}` in
+  // column 0 — not at the terminal FAILED gate.
+  //
+  // Bounding on the gate only worked while this was the LAST section in the
+  // script. The moment another section is appended after it, `section` swallows
+  // that one too, and every assertion here starts describing someone else's
+  // code: `not.toMatch(/FAILED = true/)` fails the instant the next section
+  // legitimately sets it. That is an anchor wider than the claim, and it is a
+  // false FAILURE here — the more dangerous direction is the mirror, where a
+  // positive assertion keeps passing against a neighbouring block after the
+  // code it was written for has gone.
+  const own = rest.indexOf('\n}\n');
+  const gate = rest.indexOf('if (FAILED) {');
+  const end = own === -1 ? gate : gate === -1 ? own + 3 : Math.min(own + 3, gate);
   return rest
     .slice(0, end === -1 ? undefined : end)
     .split('\n')
