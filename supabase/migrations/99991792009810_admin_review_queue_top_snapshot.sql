@@ -261,12 +261,19 @@ select cron.schedule(
   $cron$select public.refresh_admin_review_queue_top()$cron$)
 where not exists (select 1 from cron.job where jobname = 'admin_review_queue_top_refresh');
 
-insert into public.admin_automations (slug, name, description, action, schedule, enabled, conditions)
+-- `trigger` is NOT NULL with no default and takes {"type":"schedule"}. Omitting it raises 23502
+-- at apply time, which aborts db push and takes every migration queued behind it. This migration
+-- shipped without it and it was caught only by dry-running the insert against prod: the SQL
+-- parses, the column list reads as complete, and every guard assertion passed. The shape is
+-- copied from admin_review_counts_refresh, the sibling cron this one sits beside.
+insert into public.admin_automations
+  (slug, name, description, trigger, action, schedule, enabled, conditions)
 select 'admin_review_queue_top_refresh',
        'Admin review queue page-1 snapshot',
        'Rebuilds admin_review_queue_top so an unfiltered /admin inbox page 1 does not execute the '
        '41-branch union. Also the relocated UNION type-mismatch canary: if this stops succeeding, '
        'the union no longer plans.',
+       jsonb_build_object('type','schedule'),
        jsonb_build_object('type','rpc','function','refresh_admin_review_queue_top'),
        '*/2 * * * *', true, '[]'::jsonb
 where not exists (select 1 from public.admin_automations where slug = 'admin_review_queue_top_refresh');

@@ -234,6 +234,21 @@ describe('the migration asserts its own postconditions', () => {
     expect(statements).toContain('insert into public.admin_automations');
     expect(statements).toContain("'admin_review_queue_top_refresh'");
   });
+
+  it('supplies admin_automations.trigger, which is NOT NULL with no default', () => {
+    // THIS DEFECT SHIPPED AND WAS CAUGHT ONLY BY DRY-RUNNING THE INSERT AGAINST PROD. Omitting
+    // `trigger` raises 23502 at apply time, which aborts db push and takes every migration queued
+    // behind it -- a repo-wide blast radius from one missing column. The SQL parses, the column
+    // list looks complete, and every other assertion here passed. Nothing short of executing it
+    // against the real table could see it, which is why the column is named explicitly.
+    const insert = statements.slice(
+      statements.indexOf('insert into public.admin_automations'),
+      statements.indexOf('where not exists (select 1 from public.admin_automations'),
+    );
+    expect(insert.length).toBeGreaterThan(200);
+    expect(insert).toMatch(/\(\s*slug,[^)]*\btrigger\b/);
+    expect(insert).toContain("jsonb_build_object('type','schedule')");
+  });
 });
 
 describe('the sentinel is wired, and gates on the things that rot', () => {
