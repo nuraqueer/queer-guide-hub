@@ -630,20 +630,47 @@ export async function verifyRedirectWorkspaceMembershipHttp(
       undefined,
       404,
     );
+    await db.exec('SAVEPOINT workspace_same_customer_keys');
+    const independent = {
+      clickId: ownClick,
+      customerExternalId: foreignCustomer,
+      eventId: foreignEvent,
+    };
+    const createdConversion = await call('/track/lead', 'POST', independent, undefined, 201);
+    assert.equal(createdConversion.duplicate, false);
+    assert.equal((await call('/track/lead', 'POST', independent)).duplicate, true);
     await call(
       '/track/lead',
       'POST',
-      { clickId: ownClick, customerExternalId: foreignCustomer, eventId: randomUUID() },
+      { ...independent, customerExternalId: 'different-local-customer' },
       undefined,
       409,
     );
+    const independentProfile = await call(
+      '/customers/profile?id=' + encodeURIComponent(foreignCustomer),
+    );
+    assert.equal(independentProfile.name, null);
     await call(
-      '/track/lead',
-      'POST',
-      { clickId: ownClick, customerExternalId: 'denied-foreign-event-key', eventId: foreignEvent },
+      '/customers/profile',
+      'PATCH',
+      {
+        customerExternalId: foreignCustomer,
+        version: customerVersion,
+        name: 'Stale foreign version',
+      },
       undefined,
       409,
     );
+    const localProfile = await call('/customers/profile', 'PATCH', {
+      customerExternalId: foreignCustomer,
+      version: null,
+      name: 'Independent local profile',
+    });
+    assert.equal(localProfile.name, 'Independent local profile');
+    assert.notEqual(localProfile.version, customerVersion);
+    assert.deepEqual(await customerSnapshot(), customersBefore);
+    await db.exec('ROLLBACK TO SAVEPOINT workspace_same_customer_keys');
+    await db.exec('RELEASE SAVEPOINT workspace_same_customer_keys');
     assert.equal(
       (
         await db.query(
@@ -890,7 +917,7 @@ export async function verifyRedirectWorkspaceMembershipHttp(
       'Workspace domain isolation: actual owner HTTP excludes foreign domain counts/choices and denies foreign registry/manual/provider/DNS discovery/mail receipt/recovery/cancellation before budgets or external work; exact foreign domain/job/operation/mail snapshots stay unchanged.',
     );
     console.log(
-      'Workspace customer/analytics isolation: actual owner HTTP totals/breakdowns/pages exclude foreign events; foreign profiles/journeys/updates/clear/click attribution and global customer/event-key collisions deny without changing foreign snapshots or inserting a local conversion.',
+      'Workspace customer/analytics isolation: actual owner HTTP excludes foreign events and denies foreign-only profiles/journeys/updates/clear/click attribution; matching external customer/event IDs create independent local attribution with idempotent replay and private profiles; foreign snapshots remain unchanged.',
     );
     console.log(
       'Workspace QR/report isolation: actual owner HTTP hides foreign QR images, branding and personal/team reports; foreign creation/revocation/style/report/run/share and public-token requests are denied, preserving foreign records and report budgets.',

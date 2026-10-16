@@ -3991,3 +3991,32 @@ script lint/format/diff checks pass. Full actual HTTP/five SDK runtime completio
 remains required before release. No new workspace is activated. Customer/event keys,
 QR/default identities, tenant owners, creation/switching, transfer and live proof
 remain open.
+
+
+Customer/event key checkpoint: migration99991792174350 makes customer anchors,
+profiles and provider event IDs unique within workspace. Composite profile/visit
+relationships retain their existing deletion behavior. Conversion/profile writers
+use matching composite conflict targets; conversion replay still compares all
+payload fields within the selected workspace and rejects changed data. Foreign
+customer keys no longer block a legitimate local click. Customer access and row
+triggers use consistent workspace-specific advisory locks, preserving the exact
+legacy lock identity and ordering old/new row keys deterministically.
+
+Rollback-only SQL creates the same customer/event IDs in two workspaces. It proves
+independent conversion IDs/anchors/profiles, local replay idempotency, changed-
+payload rejection, foreign-version rejection, within-workspace anchor uniqueness
+and profile deletion cascading only within its workspace. Existing foreign-only
+profile/journey/visit denial and authenticated legacy RLS checks still pass. The
+re-enrichment fixture now creates an independent local same-key profile instead of
+expecting a global-key collision. Exact foreign snapshots remain unchanged.
+
+Actual owner HTTP exercises same customer/event IDs, correct creation/replay
+statuses, mismatched payload/version denial and private profile enrichment, then
+rolls those positive operations back before other isolation contracts. Full SQL,
+actual HTTP/five SDK runtimes,40-table backfill and2366 migration version/parser
+checks pass locally. Script lint/format/diff checks pass. No UI or grants changed;
+activation fences remain. Final-head CI still requires review. On9b661e179, CI's
+allocation/cross-PR checks pass but remote history reports six separately applied
+missing files, alongside the unrelated event-gap trigger drift. No thresholds or
+intentional data-quality holds were altered. QR/default identities, tenant owners,
+creation/switching, reviewed transfer and live release proof remain open.
