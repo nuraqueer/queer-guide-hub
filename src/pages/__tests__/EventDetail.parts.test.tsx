@@ -8,8 +8,18 @@ import { renderWithProviders } from '@/test/test-utils';
 // The parts barrel reaches maplibre through EntityMap, whose worker URL vitest
 // refuses to resolve. Nothing here exercises the map.
 vi.mock('@/components/map/EntityMap', () => ({ EntityMap: () => <div data-testid="map" /> }));
+// Signed-out by default. `signedIn` is switchable because ShareMenu only
+// offers "Send to member…" to a signed-in reader, and that entry is the whole
+// replacement for the deleted "Send to someone" button — asserting the button
+// is gone without asserting the replacement is reachable would pass just as
+// happily against a dead `entity` prop, which is the defect being fixed.
+let signedIn = false;
 vi.mock('@/hooks/useAuth', () => ({
-  useAuth: () => ({ user: null, session: null, loading: false }),
+  useAuth: () => ({
+    user: signedIn ? { id: 'u1' } : null,
+    session: null,
+    loading: false,
+  }),
 }));
 vi.mock('@/components/admin/AdminEditButton', () => ({ AdminEditButton: () => null }));
 vi.mock('@/components/moderation/ReportButton', () => ({ ReportButton: () => null }));
@@ -195,10 +205,7 @@ describe('Event action consolidation', () => {
 
   it('keeps the event image accessible through the secondary tools', () => {
     renderWithProviders(
-      <EventActions
-        event={{ ...upcoming, images: ['https://example.org/event.jpg'] } as never}
-        onShare={() => {}}
-      />,
+      <EventActions event={{ ...upcoming, images: ['https://example.org/event.jpg'] } as never} />,
     );
     fireEvent.click(screen.getByText('More options'));
     expect(screen.getByRole('link', { name: 'View image' })).toHaveAttribute(
@@ -208,9 +215,36 @@ describe('Event action consolidation', () => {
   });
 
   it('groups utilities without introducing another ticket link', () => {
-    renderWithProviders(<EventActions event={upcoming as never} onShare={() => {}} />);
+    renderWithProviders(<EventActions event={upcoming as never} />);
     expect(screen.queryByRole('link', { name: /tickets/i })).toBeNull();
     expect(screen.getByText('More options')).toBeInTheDocument();
+  });
+
+  it('offers exactly one share affordance — no "Send to someone" beside Share', () => {
+    renderWithProviders(
+      <EventActions event={{ ...upcoming, website: 'https://example.org/pride' } as never} />,
+    );
+    fireEvent.click(screen.getByText('More options'));
+    // Positive control FIRST: the panel is open and populated, so the absence
+    // below is a real absence and not an unopened disclosure. It is the
+    // website link rather than Mark visited because the latter renders
+    // nothing at all for a signed-out reader.
+    expect(screen.getByRole('link', { name: /website/i })).toBeInTheDocument();
+    expect(screen.queryByText('Send to someone')).toBeNull();
+  });
+
+  it('routes sending through ShareMenu, which needs `entity` to offer it', async () => {
+    signedIn = true;
+    try {
+      renderWithProviders(<EventActions event={upcoming as never} />);
+      // Radix opens its trigger on pointerdown/keydown, not on a synthetic
+      // click — a `fireEvent.click` here leaves the menu closed and the
+      // assertion below would fail against perfectly correct code.
+      fireEvent.keyDown(screen.getByRole('button', { name: /share/i }), { key: 'Enter' });
+      expect(await screen.findByText('Send to member…')).toBeInTheDocument();
+    } finally {
+      signedIn = false;
+    }
   });
 });
 

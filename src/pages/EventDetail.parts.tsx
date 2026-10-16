@@ -348,23 +348,48 @@ interface HeroProps {
 }
 
 /**
+ * The in-app share payload. Built here rather than by the page, because
+ * `ShareMenu` owns its own send-to-member dialog — see the note on its
+ * `entity` prop below.
+ */
+function eventShareEntity(event: EventWithRelations) {
+  return {
+    entity_table: 'events',
+    entity_id: event.id,
+    title: event.title,
+    subtitle: [
+      formatEventDate(event.start_date, event.end_date, event.timezone),
+      event.venues?.name,
+    ]
+      .filter(Boolean)
+      .join(' · '),
+    image_url: resolveEntityImage('event', event).url ?? null,
+    path: `/events/${event.slug || event.id}`,
+    gated: Boolean((event as { safety_gated?: boolean }).safety_gated),
+  };
+}
+
+/**
  * The masthead action row (spine S5). Ticket link is the one concrete verb
  * where it exists; the rest are the report / admin / share affordances the
  * photo hero used to hide in its top-right corner.
  */
 export function EventActions({
   event,
-  onShare,
   onExportToCalendar,
 }: {
   event: EventWithRelations;
-  onShare: () => void;
   onExportToCalendar?: () => void;
 }) {
   const { t } = useTranslation();
   return (
     <div className="relative flex flex-wrap items-center gap-1">
       <FavoriteButton itemId={event.id} type="event" size="tap" />
+      {/* ONE share control. `entity` is what makes that possible: with it set,
+          ShareMenu's own first item is "Send to member…", opening the very
+          dialog the separate "Send to someone" button below used to open. The
+          prop was never passed, so that item was dead and the panel carried
+          two share affordances for one dialog. */}
       <ShareMenu
         url={
           typeof window !== 'undefined'
@@ -374,6 +399,7 @@ export function EventActions({
         title={event.title}
         label={t('events.share', 'Share')}
         variant="ghost"
+        entity={eventShareEntity(event)}
       />
       <details className="max-w-full">
         <summary className="flex min-h-11 cursor-pointer list-none items-center gap-1.5 rounded-element px-4 text-13 font-medium text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
@@ -408,9 +434,6 @@ export function EventActions({
               {t('common.website', 'Website')}
             </a>
           )}
-          <Button variant="ghost" size="sm" onClick={onShare}>
-            {t('events.detail.send', 'Send to someone')}
-          </Button>
           <MarkVisitedButton entityType="event" entityId={event.id} kind="visited" />
           <ReportButton contentType="events" contentId={event.id} contentName={event.title} />
           <AdminEditButton
@@ -751,7 +774,6 @@ interface DecisionCardProps {
   userAttendance: string | null;
   onAttendanceUpdate: (status: 'going' | 'interested' | 'not_going') => void;
   onExportToCalendar: () => void;
-  onSendEvent: () => void;
 }
 
 export function EventDecisionCard({
@@ -761,7 +783,6 @@ export function EventDecisionCard({
   userAttendance,
   onAttendanceUpdate,
   onExportToCalendar,
-  onSendEvent,
 }: DecisionCardProps) {
   const { t } = useTranslation();
   const ticketHref = event.ticket_url;
@@ -815,7 +836,7 @@ export function EventDecisionCard({
           )}
         </div>
       )}
-      <EventActions event={event} onShare={onSendEvent} onExportToCalendar={onExportToCalendar} />
+      <EventActions event={event} onExportToCalendar={onExportToCalendar} />
     </div>
   );
 }
