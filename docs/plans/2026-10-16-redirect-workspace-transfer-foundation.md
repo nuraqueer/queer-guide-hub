@@ -410,3 +410,19 @@ creation/switching or reviewed transfer, or establish live deployment/device/pro
 proof. Remaining public/service readers and resource uniqueness still need their
 activation audit. Background dispatch currently serves the sole active legacy
 workspace. Full parity and production release remain open.
+
+
+Legacy writer audit checkpoint: migration99991792173081 closes the remaining old
+service policy setter's unscoped root lookup and ON CONFLICT update. It inserts
+explicit workspace identity and rejects foreign policy-key collisions atomically.
+Legacy authenticated metadata/campaign/bulk RPCs retain fixed legacy identity with
+explicit root/folder/tag predicates and inserts; guarded metadata upserts cannot
+silently report success against an invisible foreign key. No grants were widened.
+The cloaking guard uses NEW workspace for its authoritative policy/root lookup.
+
+Rollback-only SQL verifies foreign root/policy/metadata/folder/tag denials, unchanged
+foreign snapshots, positive legacy campaign/metadata/archive/policy writes and an
+intentional corrupted policy-key collision. The complete SQL suite, five focused
+legacy policy endpoint cases,40-table backfill,2361 migration parser/version checks,
+script lint and diff checks pass locally. This audit preserves activation fences;
+new workspace ownership/creation/switching, transfer and live release proof remain.

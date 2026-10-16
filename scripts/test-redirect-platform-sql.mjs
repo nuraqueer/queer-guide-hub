@@ -15,6 +15,7 @@ try {
   await db.exec(readFileSync('supabase/tests/redirect_workspace_domain_scope.sql', 'utf8'));
   await db.exec(readFileSync('supabase/tests/redirect_workspace_webhook_scope.sql', 'utf8'));
   await db.exec(readFileSync('supabase/tests/redirect_workspace_native_asset_scope.sql', 'utf8'));
+  await db.exec(readFileSync('supabase/tests/redirect_workspace_legacy_writer_scope.sql', 'utf8'));
   await db.exec(readFileSync('supabase/tests/redirect_link_workspace.sql', 'utf8'));
   await db.exec(readFileSync('supabase/tests/redirect_link_policies.sql', 'utf8'));
   await db.exec(readFileSync('supabase/tests/redirect_conversion_attribution.sql', 'utf8'));
