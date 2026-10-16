@@ -21,27 +21,43 @@ test.describe('Admin feedback — routine loop UI', () => {
   test.skip(!authenticated, ADMIN_SESSION_REQUIRED);
 
   test('story drawer mounts the routine loop section', async ({ page }) => {
-    await gotoAdmin(page, '/admin/feedback', HEADING);
+    // 'stories' is the default tab, but name it: a later default change would
+    // otherwise silently move this test to a tab with no stories on it.
+    await gotoAdmin(page, '/admin/feedback?tab=stories', HEADING);
 
-    // Switch to Stories tab if present
-    const storiesTab = page.getByRole('button', { name: /Stories/i }).first();
-    if (await storiesTab.count()) {
-      await storiesTab.click().catch(() => {
-        /* tab may be hidden if no data */
-      });
-    }
+    // How many stories exist is on the toolbar toggle ("Active (12)"), so the
+    // skip below can state a MEASURED reason instead of guessing. The first run
+    // of this test with a real admin session (CI run 38946211881) reported
+    // "no story present" — and that was NOT true of the data: it keyed on
+    // `[data-testid="story-card"]`, a hook that exists nowhere in src/, so it
+    // would have self-skipped forever however many stories there were. That is
+    // the same vacuous-skip defect as the E2E_ADMIN_COOKIE gate itself, one
+    // layer in.
+    const activeToggle = page.getByTestId('stories-active-toggle');
+    await expect(activeToggle).toBeVisible({ timeout: 15_000 });
+    const activeLabel = (await activeToggle.textContent()) ?? '';
+    const activeCount = Number(/\((\d+)\)/.exec(activeLabel)?.[1] ?? '0');
+    test.skip(activeCount === 0, `no active story to open (toolbar reads "${activeLabel.trim()}")`);
 
-    // Open the first story card if any.
-    const firstCard = page.locator('[data-testid="story-card"], [data-story-card]').first();
-    if (!(await firstCard.count())) {
-      test.skip(true, 'no story present to exercise drawer');
-      return;
-    }
-    await firstCard.click();
+    // A story card carries a stable test id ONLY in select mode
+    // (`selectable-story-<uuid>` in StoriesKanban), so select mode is used
+    // purely as an id source. The drawer is URL-driven — StoryDetailDrawer
+    // opens on `!!state.story` — so navigating to ?story=<id> is the app's own
+    // contract and avoids depending on card-click semantics, which select mode
+    // deliberately changes from "open" to "select".
+    await page.getByTestId('enter-select-mode').click();
+    const firstCard = page.locator('[data-testid^="selectable-story-"]').first();
+    await expect(firstCard, 'select mode exposed no story card').toBeVisible({ timeout: 15_000 });
+    const storyId = (await firstCard.getAttribute('data-testid'))!.replace('selectable-story-', '');
+    expect(storyId, 'could not read a story id out of the select-mode test id').toMatch(
+      /^[0-9a-f-]{36}$/i,
+    );
+
+    await gotoAdmin(page, `/admin/feedback?tab=stories&story=${storyId}`, HEADING);
 
     // The routine loop section should render with at least one of the
     // approve/dispatch/run/verify cards visible.
-    await expect(page.getByTestId('routine-loop')).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByTestId('routine-loop')).toBeVisible({ timeout: 15_000 });
 
     // One of the action affordances must be present depending on phase.
     const anyAction = page
@@ -50,6 +66,6 @@ test.describe('Admin feedback — routine loop UI', () => {
       .or(page.getByTestId('routine-run-card'))
       .or(page.getByTestId('verify-card'))
       .or(page.getByTestId('archive-story'));
-    await expect(anyAction.first()).toBeVisible({ timeout: 5_000 });
+    await expect(anyAction.first()).toBeVisible({ timeout: 10_000 });
   });
 });
