@@ -4,13 +4,14 @@ Status: the identity/backfill and request-context foundation is implemented
 locally. Multiple-workspace activation, full tenant isolation, transfer endpoints
 and production transfer remain open.
 
-The existing Redirects workspace is global. `redirect_workspace_members.user_id`
-is unique globally, owners come from application `user_roles=admin`, resource
-rows lack a workspace identity and several permission helpers interpret a null
-principal as owner. `redirect_domain_actor` checks that global owner role. Changing
-`redirect_domains.created_by` cannot move a domain into an independently secured
-workspace. Existing service-role RPC execution bypasses table RLS, so adding only
-RLS policies would also leave the API unsafe.
+The original Redirects workspace was global. Resource identity, private lookup
+predicates, organization names and human membership uniqueness are now scoped to
+workspace. Owners still come from application `user_roles=admin` for the legacy
+workspace, and new-tenant activation remains fenced. Explicit ownership, remaining
+resource-key uniqueness and public/service activation work must precede workspace
+creation and transfer. Changing `redirect_domains.created_by` cannot establish that
+boundary. Service-role RPCs bypass table RLS, so their own workspace predicates
+remain necessary alongside direct-user RLS.
 
 ## Product contract
 
@@ -457,3 +458,24 @@ versions. Reordered complete SQL, actual HTTP/five SDKs and backfill pass locall
 Final-head CI review remains required.
 Member/customer uniqueness, owner model, creation/switching, transfer and live
 release proof remain open; no second workspace is enabled by these indexes.
+
+
+Membership uniqueness checkpoint: migration99991792173946 replaces global user
+uniqueness with UNIQUE(workspace_id,user_id), retaining the constraint name and
+machine members' nullable-user behavior. No grants, roles, active state or tenant
+activation rules change. Membership/session/invitation writers already use explicit
+workspace identity; no live function uses ON CONFLICT(user_id). The existing
+same-account SQL matrix now runs with this real constraint intact instead of
+dropping uniqueness in its fixture. Duplicates are rejected independently in both
+workspaces. Foreign deactivation leaves the local session intact; an active foreign
+membership cannot rescue an inactive local session. Invitation acceptance still
+selects the local membership and preserves the foreign invitation.
+
+Actual owner HTTP creates a legacy membership for the same account as a foreign
+membership, rejects its local duplicate, and deletes only the local membership.
+The foreign human row remains exact. Full migrated SQL, HTTP membership isolation,
+40-table existing-data backfill and2365 migration version/parser checks pass locally;
+script lint/format/diff checks pass. Full actual HTTP/five SDK runtime completion also passes. Final-head CI
+remains required before release. No new workspace is activated. Customer/event keys,
+QR/default identities, tenant owners, creation/switching, transfer and live proof
+remain open.

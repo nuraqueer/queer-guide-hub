@@ -129,10 +129,8 @@ export async function verifyRedirectWorkspaceMembershipHttp(
       "INSERT INTO public.redirect_workspace_invitations(id,workspace_id,email,label,role,token_hash,created_by) VALUES($1,$2,'http-invite@example.org','Foreign private HTTP invitation','viewer',$3,$4)",
       [invite, workspace, createHash('sha256').update(randomBytes(32)).digest('hex'), owner],
     );
-    // Access requests require a human member; this foreign account is separate
-    // from the legacy recipient so the production global-user constraint remains.
-    const foreignUser = randomUUID();
-    await db.query('INSERT INTO auth.users(id) VALUES($1)', [foreignUser]);
+    // The same authenticated account can hold independent tenant memberships.
+    const foreignUser = owner;
     const human = randomUUID();
     await db.query(
       "INSERT INTO public.redirect_workspace_members(id,workspace_id,user_id,kind,label) VALUES($1,$2,$3,'user','Foreign private HTTP requester')",
@@ -939,6 +937,38 @@ export async function verifyRedirectWorkspaceMembershipHttp(
     }
     console.log(
       'Workspace resource names: actual owner HTTP creates names already used by foreign folders/tags/templates, preserves within-workspace normalized uniqueness and keeps foreign rows unchanged.',
+    );
+    const localHuman = await call(
+      '/members',
+      'POST',
+      { kind: 'user', userId: owner, label: 'Local same-account membership', role: 'viewer' },
+      undefined,
+      201,
+    );
+    assert.equal(localHuman.workspace_id, '58aa4340-8f21-4b7f-9a10-90be2da89c01');
+    assert.notEqual(localHuman.id, human);
+    await call(
+      '/members',
+      'POST',
+      { kind: 'user', userId: owner, label: 'Duplicate local membership' },
+      undefined,
+      409,
+    );
+    assert.equal((await call('/members/' + localHuman.id, 'DELETE')).deleted, true);
+    const foreignHuman = (
+      await db.query(
+        'SELECT user_id,label,role,active FROM public.redirect_workspace_members WHERE id=$1 AND workspace_id=$2',
+        [human, workspace],
+      )
+    ).rows[0];
+    assert.deepEqual(foreignHuman, {
+      user_id: owner,
+      label: 'Foreign private HTTP requester',
+      role: 'member',
+      active: true,
+    });
+    console.log(
+      'Workspace membership identity: actual owner HTTP creates an independent membership for the same account as a foreign workspace, rejects local duplicates and deletes only the local membership.',
     );
     console.log(
       'Workspace membership isolation: actual owner HTTP -> scoped SQL hides foreign members/credentials/resources/invitations/requests; foreign IDs cannot read/change/revoke/grant or authenticate, and foreign state stays unchanged. Temporary fixture fences roll back.',

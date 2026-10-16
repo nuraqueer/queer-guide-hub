@@ -3970,3 +3970,24 @@ versions. Reordered complete SQL, actual HTTP/five SDKs and backfill pass locall
 Final-head CI review remains required.
 Member/customer uniqueness, owner model, creation/switching, transfer and live
 release proof remain open; no second workspace is enabled by these indexes.
+
+
+Membership uniqueness checkpoint: migration99991792173946 replaces global user
+uniqueness with UNIQUE(workspace_id,user_id), retaining the constraint name and
+machine members' nullable-user behavior. No grants, roles, active state or tenant
+activation rules change. Membership/session/invitation writers already use explicit
+workspace identity; no live function uses ON CONFLICT(user_id). The existing
+same-account SQL matrix now runs with this real constraint intact instead of
+dropping uniqueness in its fixture. Duplicates are rejected independently in both
+workspaces. Foreign deactivation leaves the local session intact; an active foreign
+membership cannot rescue an inactive local session. Invitation acceptance still
+selects the local membership and preserves the foreign invitation.
+
+Actual owner HTTP creates a legacy membership for the same account as a foreign
+membership, rejects its local duplicate, and deletes only the local membership.
+The foreign human row remains exact. Full migrated SQL, HTTP membership isolation,
+40-table existing-data backfill and2365 migration version/parser checks pass locally;
+script lint/format/diff checks pass. Full actual HTTP/five SDK runtime completion also passes. Final-head CI
+remains required before release. No new workspace is activated. Customer/event keys,
+QR/default identities, tenant owners, creation/switching, transfer and live proof
+remain open.

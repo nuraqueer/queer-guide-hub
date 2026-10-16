@@ -1,7 +1,7 @@
 -- Deliberately seed future-tenant data to test converted legacy readers. Fence
--- and global-user-uniqueness removals are isolated to this rollback-only fixture.
+-- removals are isolated to this rollback-only fixture. Real membership uniqueness stays.
 BEGIN;
-ALTER TABLE public.redirect_workspace_members DROP CONSTRAINT redirect_workspace_members_pending_tenant_fence,DROP CONSTRAINT redirect_workspace_members_user_id_key;
+ALTER TABLE public.redirect_workspace_members DROP CONSTRAINT redirect_workspace_members_pending_tenant_fence;
 ALTER TABLE public.redirect_api_tokens DROP CONSTRAINT redirect_api_tokens_pending_tenant_fence;
 ALTER TABLE public.redirect_link_folders DROP CONSTRAINT redirect_link_folders_pending_tenant_fence;
 ALTER TABLE public.redirect_link_tags DROP CONSTRAINT redirect_link_tags_pending_tenant_fence;
@@ -21,6 +21,8 @@ BEGIN
  INSERT INTO public.redirect_workspaces(id,name,slug,created_by) VALUES(other,'Private second workspace','membership-scope-fixture',owner_id);
  INSERT INTO public.redirect_workspace_members(id,workspace_id,user_id,kind,label,role) VALUES(foreign_member,other,account,'user','Foreign private member','member');
  INSERT INTO public.redirect_workspace_members(id,user_id,kind,label,role) VALUES(local_member,account,'user','Local member','member');
+ BEGIN INSERT INTO public.redirect_workspace_members(user_id,kind,label) VALUES(account,'user','Duplicate local');RAISE EXCEPTION 'Duplicate membership within workspace accepted';EXCEPTION WHEN unique_violation THEN NULL;END;
+ BEGIN INSERT INTO public.redirect_workspace_members(workspace_id,user_id,kind,label) VALUES(other,account,'user','Duplicate foreign');RAISE EXCEPTION 'Duplicate foreign membership accepted';EXCEPTION WHEN unique_violation THEN NULL;END;
  INSERT INTO public.redirect_link_folders(id,name,workspace_id) VALUES(foreign_folder,'Foreign private folder',other),(local_folder,'Local folder',legacy);
  INSERT INTO public.redirect_link_tags(id,name,workspace_id) VALUES(foreign_tag,'Foreign private tag',other);
  INSERT INTO public.redirect_utm_templates(id,name,workspace_id) VALUES(foreign_template,'Foreign private template',other);
@@ -28,6 +30,12 @@ BEGIN
  INSERT INTO public.redirect_api_tokens(id,name,token_hash,prefix,scopes,member_id,created_by,expires_at,workspace_id) VALUES(foreign_key,'Foreign private credential',repeat('f',64),'qg_redirect_ffffffff',ARRAY['links:read','links:write','workspace:read','workspace:write'],foreign_member,owner_id,now()+interval '1 day',other),(local_key,'Local credential',repeat('b',64),'qg_redirect_bbbbbbbb',ARRAY['links:read','links:write'],NULL,owner_id,now()+interval '1 day',legacy),(read_key,'Read credential',repeat('c',64),'qg_redirect_cccccccc',ARRAY['links:read'],NULL,owner_id,now()+interval '1 day',legacy);
  UPDATE public.redirect_api_tokens SET redirect_ids=ARRAY[local_link,foreign_link] WHERE id=local_key;
  IF public.redirect_session_principal(account,'links:read')->>'id' IS DISTINCT FROM local_member::text THEN RAISE EXCEPTION 'Session chose membership from another workspace';END IF;
+ UPDATE public.redirect_workspace_members SET active=false WHERE id=foreign_member;
+ IF public.redirect_session_principal(account,'links:read')->>'id' IS DISTINCT FROM local_member::text THEN RAISE EXCEPTION 'Foreign deactivation disabled local session';END IF;
+ UPDATE public.redirect_workspace_members SET active=true WHERE id=foreign_member;
+ UPDATE public.redirect_workspace_members SET active=false WHERE id=local_member;
+ BEGIN PERFORM public.redirect_session_principal(account,'links:read');RAISE EXCEPTION 'Foreign membership rescued inactive local session';EXCEPTION WHEN insufficient_privilege THEN NULL;END;
+ UPDATE public.redirect_workspace_members SET active=true WHERE id=local_member;
  BEGIN PERFORM public.redirect_session_principal(account,NULL);RAISE EXCEPTION 'Null session scope accepted';EXCEPTION WHEN insufficient_privilege THEN NULL;END;
  BEGIN PERFORM public.redirect_principal_member(foreign_member);RAISE EXCEPTION 'Foreign principal became implicit owner';EXCEPTION WHEN insufficient_privilege THEN NULL;END;
  BEGIN PERFORM public.redirect_principal_member(foreign_key);RAISE EXCEPTION 'Foreign credential became implicit owner';EXCEPTION WHEN insufficient_privilege THEN NULL;END;
