@@ -4053,3 +4053,10 @@ typecheck ratchet reports702 existing errors with none new; its baseline is unch
 Final-head CI remains required before release. Tenant owners,
 creation/switching, remaining shared identities/public authorization, reviewed
 transfer and live runtime/release proof remain open.
+
+
+PR4437 advanced externally to90d03c7b4 by merging main's marketplace gap-policy
+change. That merge is preserved on this branch. Post-integration lint/diff and all
+2368 migration version/parser checks pass; Redirects source and fixture deployment
+order are unchanged by the integration. Production history/trigger reconciliation
+and final-head CI remain release gates.
