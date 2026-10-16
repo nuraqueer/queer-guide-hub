@@ -166,11 +166,21 @@ describe('PATCH 1 pushes the decisions predicate into the union branches', () =>
     expect(patch).toContain("else '''' end)");
   });
 
-  it('RAISES if its anchor stops matching instead of silently no-opping', () => {
+  it('RAISES if it replaced nothing, and SEARCHES the raw body nowhere', () => {
     // This function was rewritten twice in one day. A patch that quietly matches nothing is the
-    // failure mode, not a missing feature.
-    expect(patch).toContain("raise exception 'PATCH 1 anchor not found");
-    expect(patch).toContain("raise exception 'PATCH 1 replaced nothing'");
+    // failure mode, not a missing feature — so the no-op test must raise AND carry the diagnosis,
+    // because it is now the only thing standing between a stale anchor and a silent no-op.
+    expect(patch).toContain("raise exception 'PATCH 1 replaced nothing");
+    expect(patch).toMatch(/PATCH 1 replaced nothing[\s\S]{0,200}re-cut/i);
+
+    // AND NO position()/strpos()/LIKE OVER pg_get_functiondef's OUTPUT. scripts/
+    // check-functiondef-asserts.mjs bans it because that output includes the function's comments;
+    // it aborted db push on main three times in one day. The patch block cannot strip them (it
+    // must execute the RAW body), so the pre-check is deleted rather than stripped, and
+    // `v_new = v_src` is the stronger invariant that replaces it.
+    expect(patch).not.toMatch(/position\s*\(\s*v_anchor\s+in\s+v_src\s*\)/);
+    expect(patch).not.toMatch(/\bstrpos\s*\(\s*v_src/);
+    expect(patch).not.toMatch(/v_src\s+(?:not\s+)?i?like/i);
   });
 });
 
@@ -209,9 +219,9 @@ describe('PATCH 2 serves an unfiltered page from the snapshot', () => {
     expect(patch).toContain('return public.get_admin_review_summary()');
   });
 
-  it('RAISES if its anchor stops matching', () => {
-    expect(patch).toContain("raise exception 'PATCH 2 anchor not found");
-    expect(patch).toContain("raise exception 'PATCH 2 replaced nothing'");
+  it('RAISES if it replaced nothing, carrying the diagnosis', () => {
+    expect(patch).toContain("raise exception 'PATCH 2 replaced nothing");
+    expect(patch).toMatch(/PATCH 2 replaced nothing[\s\S]{0,200}Re-cut it/i);
   });
 });
 
@@ -220,6 +230,15 @@ describe('the migration asserts its own postconditions', () => {
     expect(verify).toContain('admin_review_finding_codes f where f.queue_key=%L');
     expect(verify).toContain('public.admin_review_queue_top t where t.scope=p_scope');
     expect(occurrences(verify, 'raise exception')).toBeGreaterThanOrEqual(3);
+  });
+
+  it('strips comments before those PRESENCE checks', () => {
+    // Both assertions above are presence checks over pg_get_functiondef's output, which includes
+    // the function's own comments — so unstripped they go falsely GREEN when the symbol exists
+    // only in prose, which is the silent half of the defect check-functiondef-asserts.mjs bans
+    // and the dangerous one. Both patches insert into a function other sessions comment heavily.
+    expect(verify).toMatch(/regexp_replace\(\s*pg_get_functiondef\(p\.oid\)/);
+    expect(verify).not.toMatch(/select\s+pg_get_functiondef\(p\.oid\)\s+into\s+v_src/);
   });
 
   it('fails if the refresher is not scheduled', () => {

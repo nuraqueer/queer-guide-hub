@@ -348,10 +348,16 @@ begin
   -- NOT EXISTS keeps every other scope byte-identical, so the blast radius is one scope.
   v_anchor := '%L::boolean can_reopen from public.%I u'',
   r.risk,r.label,r.risk,r.public_impact,r.sla_hours,r.priority_weight,r.can_reopen,r.view_name)';
-  if position(v_anchor in v_src) = 0 then
-    raise exception 'PATCH 1 anchor not found in get_admin_review_queue -- the union builder was '
-      'rewritten. Re-read the live body and re-cut the anchor; do NOT widen it to match loosely.';
-  end if;
+  -- NO `position(v_anchor in v_src)` PRE-CHECK, HERE OR IN PATCH 2, AND THAT IS NOT A WEAKENING.
+  -- `pg_get_functiondef()` returns the body INCLUDING its comments, so any SEARCH over it is the
+  -- defect scripts/check-functiondef-asserts.mjs exists to stop -- it aborted db push on main three
+  -- times in one day. Stripping comments is the normal fix and is wrong here: this block must
+  -- `replace()` and then `execute` the RAW body, because executing a comment-stripped one would
+  -- permanently delete two other sessions' reasoning from the live function.
+  --
+  -- The `v_new = v_src` test below is the STRONGER invariant anyway. It proves the substitution
+  -- HAPPENED; a position() check only proves a string was present somewhere, comments included.
+  -- The cost is a less specific error message, so the no-op raise carries the diagnosis instead.
   v_new := replace(v_src, v_anchor,
     '%L::boolean can_reopen from public.%I u%s'',
   r.risk,r.label,r.risk,r.public_impact,r.sla_hours,r.priority_weight,r.can_reopen,r.view_name,'
@@ -359,7 +365,9 @@ begin
     || 'public.admin_review_finding_codes f where f.queue_key=%L and f.subtitle_match=u.subtitle)'', '
     || 'r.queue_key) else '''' end)');
   if v_new = v_src then
-    raise exception 'PATCH 1 replaced nothing';
+    raise exception 'PATCH 1 replaced nothing -- the union builder in get_admin_review_queue was '
+      'rewritten and the anchor no longer matches. Re-read the live body with pg_get_functiondef '
+      'and re-cut it; do NOT widen the anchor to match loosely.';
   end if;
   v_src := v_new;
 
@@ -373,10 +381,6 @@ begin
   -- get_admin_review_summary(), which already serves all_total/decisions_total/findings_total/
   -- overdue_total/safety_total/sources from the same counts cache.
   v_anchor := '''%''||replace(replace(replace(lower(trim(p_search)),''\'',''\\''),''%'',''\%''),''_'',''\_'')||''%'' end;';
-  if position(v_anchor in v_src) = 0 then
-    raise exception 'PATCH 2 anchor not found -- the v_search assignment was rewritten. Re-cut the '
-      'anchor against the live body; do NOT loosen it.';
-  end if;
   v_new := replace(v_src, v_anchor, v_anchor || '
  if p_queue_types is null and p_content_types is null and v_search is null
     and v_page*v_size <= public.admin_review_queue_top_depth()
@@ -411,7 +415,9 @@ begin
                   join public.admin_review_sources r on r.queue_key=c.queue_key where r.active));
  end if;');
   if v_new = v_src then
-    raise exception 'PATCH 2 replaced nothing';
+    raise exception 'PATCH 2 replaced nothing -- the v_search assignment in get_admin_review_queue '
+      'was rewritten and the anchor no longer matches. Re-cut it against the live body; do NOT '
+      'loosen it.';
   end if;
   v_src := v_new;
 
@@ -426,7 +432,13 @@ $patch$;
 do $verify$
 declare v_n int; v_src text;
 begin
-  select pg_get_functiondef(p.oid) into v_src
+  -- COMMENTS STRIPPED BEFORE ASSERTING, and the direction of the failure is why.
+  -- These are PRESENCE checks, and pg_get_functiondef() returns the body with its comments, so an
+  -- unstripped search goes falsely GREEN when the symbol exists only in prose -- which is the
+  -- silent half of the defect scripts/check-functiondef-asserts.mjs documents, and the dangerous
+  -- one: both patches insert text into a function other sessions comment heavily, so a later note
+  -- mentioning admin_review_queue_top would satisfy this check while the patch had stopped applying.
+  select regexp_replace(pg_get_functiondef(p.oid), '--[^' || chr(10) || ']*', '', 'g') into v_src
     from pg_proc p join pg_namespace n on n.oid = p.pronamespace
    where n.nspname='public' and p.proname='get_admin_review_queue';
   if position('admin_review_finding_codes f where f.queue_key=%L' in v_src) = 0 then
