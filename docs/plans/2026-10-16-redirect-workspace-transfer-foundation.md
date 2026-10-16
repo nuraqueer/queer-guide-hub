@@ -508,3 +508,36 @@ allocation/cross-PR checks pass but remote history reports six separately applie
 missing files, alongside the unrelated event-gap trigger drift. No thresholds or
 intentional data-quality holds were altered. QR/default identities, tenant owners,
 creation/switching, reviewed transfer and live release proof remain open.
+
+
+QR/default identity checkpoint: migration99991792174887 makes primary-domain
+preferences unique on(workspace_id,singleton) and QR styles on(workspace_id,scope).
+All style/logo conflict targets match those keys; another workspace's default no
+longer blocks local style edits or logo reservations. Missing primary preferences
+remain virtual on read and initialize only through an explicit version:null write.
+Existing/stale preferences still require their actual version. The owner HTTP
+boundary distinguishes explicit null from a missing or malformed version.
+
+Private style wrappers select the request workspace. New service-only internal
+style/logo helpers take authoritative row identity; owner-created public QR images
+use them and derive their URL from the scoped root row. Static and managed public
+QR fixtures retain their own styles/assets even under conflicting request headers.
+The public token lookup retains its legacy activation guard; member/key creator
+authorization and broader public activation still require the tenant-owner phase.
+No grants were widened. Cleanup references and primary/domain choices were audited
+against the composite keys and remain workspace-scoped.
+
+Rollback-only SQL covers coexisting preferences/styles, independent style/logo
+reservation/finish, first-write initialization, stale-write rejection, private
+helper grants and exact foreign snapshots. Actual owner HTTP covers independent
+style edits and preference initialization while foreign defaults stay exact.
+Full migrated SQL, actual HTTP/five SDK runtimes and40-table backfill pass locally.
+All2367 migration version/parser checks pass. The39 focused Edge API/primary-form
+cases pass, including first save and further editing after concurrent initialization.
+The draft retains an original null version rather than adopting a refreshed one.
+At1280/390px, a single capture batch confirms save/conflict states without overflow
+or runtime errors. This preserves the existing visual interface. Frozen Edge API checking, lint and the single design detector pass. The project
+typecheck ratchet reports702 existing errors with none new; its baseline is unchanged.
+Final-head CI remains required before release. Tenant owners,
+creation/switching, remaining shared identities/public authorization, reviewed
+transfer and live runtime/release proof remain open.

@@ -63,6 +63,7 @@ export async function verifyRedirectWorkspaceMembershipHttp(
       'redirect_access_requests',
       'redirects',
       'redirect_domains',
+      'redirect_domain_preferences',
       'redirect_link_metadata',
       'redirect_link_tag_assignments',
       'redirect_link_policies',
@@ -245,6 +246,20 @@ export async function verifyRedirectWorkspaceMembershipHttp(
         ).rows;
       return state;
     }
+    await db.query(
+      'INSERT INTO public.redirect_domain_preferences(workspace_id,singleton,domain_id) VALUES($1,true,$2)',
+      [workspace, domain],
+    );
+    await db.query(
+      "INSERT INTO public.redirect_qr_styles(workspace_id,scope,style,logo_mode) VALUES($1,'workspace','{\"dots\":\"circle\"}','none')",
+      [workspace],
+    );
+    const foreignDefaults = (
+      await db.query(
+        "SELECT (SELECT to_jsonb(p) FROM public.redirect_domain_preferences p WHERE workspace_id=$1) AS preference,(SELECT to_jsonb(s) FROM public.redirect_qr_styles s WHERE workspace_id=$1 AND scope='workspace') AS style",
+        [workspace],
+      )
+    ).rows[0];
     const foreignMetadata = (
       await db.query(
         "INSERT INTO public.redirect_link_metadata(workspace_id,redirect_key,folder_id,comment) VALUES($1,$2,$3,'Foreign private HTTP link comment') RETURNING metadata_revision",
@@ -964,6 +979,39 @@ export async function verifyRedirectWorkspaceMembershipHttp(
     }
     console.log(
       'Workspace resource names: actual owner HTTP creates names already used by foreign folders/tags/templates, preserves within-workspace normalized uniqueness and keeps foreign rows unchanged.',
+    );
+    await db.exec('SAVEPOINT workspace_independent_defaults');
+    const currentStyle = await call('/qr-styles/workspace');
+    const updatedStyle = await call('/qr-styles/workspace', 'PATCH', {
+      version: currentStyle.version,
+      style: { dots: 'joined' },
+    });
+    assert.equal(updatedStyle.effectiveStyle.dots, 'joined');
+    await db.query(
+      "DELETE FROM public.redirect_domain_preferences WHERE workspace_id='58aa4340-8f21-4b7f-9a10-90be2da89c01'",
+    );
+    const missingPreference = await call('/domain-preference');
+    assert.equal(missingPreference.version, null);
+    await call('/domain-preference', 'PATCH', { domainId: null }, undefined, 400);
+    const initializedPreference = await call('/domain-preference', 'PATCH', {
+      version: null,
+      domainId: null,
+    });
+    assert.equal(typeof initializedPreference.version, 'string');
+    await call('/domain-preference', 'PATCH', { version: null, domainId: null }, undefined, 409);
+    assert.deepEqual(
+      (
+        await db.query(
+          "SELECT (SELECT to_jsonb(p) FROM public.redirect_domain_preferences p WHERE workspace_id=$1) AS preference,(SELECT to_jsonb(s) FROM public.redirect_qr_styles s WHERE workspace_id=$1 AND scope='workspace') AS style",
+          [workspace],
+        )
+      ).rows[0],
+      foreignDefaults,
+    );
+    await db.exec('ROLLBACK TO SAVEPOINT workspace_independent_defaults');
+    await db.exec('RELEASE SAVEPOINT workspace_independent_defaults');
+    console.log(
+      'Workspace defaults: actual owner HTTP changes local QR appearance and initializes its primary preference while foreign defaults stay exact.',
     );
     const localHuman = await call(
       '/members',

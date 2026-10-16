@@ -361,7 +361,7 @@ Deno.serve(async (req: Request) => {
    let values=null;
    if(req.method==='PATCH'){
     const body=await boundedJson(req,16384);
-    if(!body||typeof body!=='object'||Array.isArray(body)||Object.keys(body).some(key=>!['domainId','version'].includes(key))||!Object.hasOwn(body,'domainId')||body.domainId!==null&&(typeof body.domainId!=='string'||!UUID.test(body.domainId))||typeof body.version!=='string'||!UUID.test(body.version))return json({error:'Provide a domain ID or null and the current preference version'},400);
+    if(!body||typeof body!=='object'||Array.isArray(body)||Object.keys(body).some(key=>!['domainId','version'].includes(key))||!Object.hasOwn(body,'domainId')||body.domainId!==null&&(typeof body.domainId!=='string'||!UUID.test(body.domainId))||!Object.hasOwn(body,'version')||body.version!==null&&(typeof body.version!=='string'||!UUID.test(body.version)))return json({error:'Provide a domain ID or null and the current preference version'},400);
     values=body;
    }
    const result=await db.rpc('redirect_domain_preference',{p_actor:user!.id,p_values:values});if(result.error)return rpcError(result.error);return json(result.data);

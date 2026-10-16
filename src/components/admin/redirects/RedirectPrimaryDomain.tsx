@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 interface Preference {
   domainId: string | null;
   hostname: string | null;
-  version: string;
+  version: string | null;
   ready: boolean;
 }
 export function RedirectPrimaryDomain({ userId }: { userId: string }) {
@@ -25,7 +25,7 @@ export function RedirectPrimaryDomain({ userId }: { userId: string }) {
       ? { id: preference.data.domainId, hostname: preference.data.hostname }
       : undefined,
   );
-  const [draft, setDraft] = useState<{ version: string; value: string } | null>(null);
+  const [draft, setDraft] = useState<{ version: string | null; value: string } | null>(null);
   const [saved, setSaved] = useState(false);
   const change = useMutation({
     mutationFn: () =>
@@ -73,7 +73,7 @@ export function RedirectPrimaryDomain({ userId }: { userId: string }) {
               setSelected: (value) => {
                 domain.setSelected(value);
                 setDraft((current) => ({
-                  version: current?.version ?? preference.data.version,
+                  version: current ? current.version : preference.data.version,
                   value,
                 }));
                 setSaved(false);
