@@ -912,6 +912,34 @@ export async function verifyRedirectWorkspaceMembershipHttp(
       invitation: true,
       request: 'pending',
     });
+    for (const [kind, label] of [
+      ['folders', 'folder'],
+      ['tags', 'tag'],
+      ['templates', 'template'],
+    ]) {
+      const name = 'Foreign private HTTP ' + label;
+      const created = await call('/' + kind, 'POST', { name }, undefined, 201);
+      assert.equal(created.workspace_id, '58aa4340-8f21-4b7f-9a10-90be2da89c01');
+      assert.equal((await call('/' + kind + '/' + created.id)).name, name);
+      await call('/' + kind, 'POST', { name: ' ' + name.toUpperCase() + ' ' }, undefined, 409);
+      await call('/' + kind + '/' + created.id, 'DELETE');
+      const foreignId = kind === 'folders' ? folder : kind === 'tags' ? tag : template;
+      const table =
+        kind === 'folders'
+          ? 'redirect_link_folders'
+          : kind === 'tags'
+            ? 'redirect_link_tags'
+            : 'redirect_utm_templates';
+      const foreignRow = (
+        await db.query('SELECT name,workspace_id FROM public.' + table + ' WHERE id=$1', [
+          foreignId,
+        ])
+      ).rows[0];
+      assert.deepEqual(foreignRow, { name, workspace_id: workspace });
+    }
+    console.log(
+      'Workspace resource names: actual owner HTTP creates names already used by foreign folders/tags/templates, preserves within-workspace normalized uniqueness and keeps foreign rows unchanged.',
+    );
     console.log(
       'Workspace membership isolation: actual owner HTTP -> scoped SQL hides foreign members/credentials/resources/invitations/requests; foreign IDs cannot read/change/revoke/grant or authenticate, and foreign state stays unchanged. Temporary fixture fences roll back.',
     );

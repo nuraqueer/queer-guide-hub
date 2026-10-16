@@ -348,7 +348,7 @@ tenant ownership/uniqueness, creation/switching, reviewed transfer and live rele
 proof still remain; this checkpoint does not claim full parity or activation.
 
 
-Webhook isolation checkpoint: migration99991792168542 scopes private webhook
+Webhook isolation checkpoint: migration99991792173751 scopes private webhook
 administration, metadata/body/attempt serialization, link filters, rotation/test/
 replay, worker claim/prepare/finish and retention. Resource quotas are workspace-
 scoped; existing global abuse budgets remain. Event source-key uniqueness is now
@@ -386,7 +386,7 @@ reviewed domain transfer and live release proof remain open. No activation or
 production/provider/publication proof is claimed by these isolated checks.
 
 
-Native and asset isolation checkpoint: migration99991792172005 adds28 function
+Native and asset isolation checkpoint: migration99991792173761 adds28 function
 definitions across native app administration, public host-derived resolution,
 association/install/handoff paths, password branding and maintenance. Public calls
 use authoritative hostname identity; caller workspace headers cannot redirect public
@@ -435,3 +435,25 @@ to99991792173343. Previously merged allocations remain unchanged. The isolated
 loader sorts replacement files by actual deployment filename; reordered complete SQL, actual HTTP/five SDK runtimes and40-table backfill pass.
 All2363 migration version/parser checks, script lint and diff checks pass locally.
 Final-head CI and live release review remain required.
+
+
+Resource-name checkpoint: migration99991792173543 changes normalized folder, tag
+and UTM-template name uniqueness to (workspace_id,lower(btrim(name))). Existing
+values and within-workspace duplicate rejection are preserved. All name writers
+were audited; none uses a name-based ON CONFLICT target. Rollback-only SQL and
+actual owner HTTP create a name already used by each foreign resource, reject a
+normalized duplicate within the selected workspace and preserve foreign rows.
+The complete SQL suite, actual HTTP/five SDK runtimes,40-table backfill and2364
+migration parser/version checks pass locally, along with script lint/format/diff.
+
+CI on e3630a80e passed migration allocation, cross-PR collision and SQL parsing,
+but its remote-history check found separately applied event_gap_automation
+(20261016175824) and marketplace_batch_gap_policy (99991792172698) missing from
+that checkout. The latter already has its authoring file in open PR4439. No
+unrelated production schema was changed here. To preserve deployment order above
+the newly applied history, the allocator moved only unmerged webhook68542 to73751
+and native72005 to73761 (full prefix999917921). Merged migrations retain their
+versions. Reordered complete SQL, actual HTTP/five SDKs and backfill pass locally.
+Final-head CI review remains required.
+Member/customer uniqueness, owner model, creation/switching, transfer and live
+release proof remain open; no second workspace is enabled by these indexes.
