@@ -2,7 +2,12 @@ import assert from 'node:assert/strict';
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 // This fixture runs only in the isolated migrated database. The rollback restores
 // every activation fence; no second workspace is enabled by the product migration.
-export async function verifyRedirectWorkspaceMembershipHttp(db, request, owner) {
+export async function verifyRedirectWorkspaceMembershipHttp(
+  db,
+  request,
+  owner,
+  { cleanupAssets } = {},
+) {
   const paths = [
     '/members',
     '/tokens',
@@ -17,6 +22,7 @@ export async function verifyRedirectWorkspaceMembershipHttp(db, request, owner) 
     '/domains?archive=all',
     '/webhooks',
     '/webhooks?archived=true',
+    '/apps',
   ];
   const before = new Map();
   for (const path of paths) before.set(path, (await request(path)).count);
@@ -27,6 +33,9 @@ export async function verifyRedirectWorkspaceMembershipHttp(db, request, owner) 
   const imagesBefore = await request('/qr-images');
   const analyticsBefore = await request('/analytics', 'POST', { filters: {} });
   const domainChoicesBefore = await request('/domain-choices');
+  const associationBefore = await request(
+    '/public-app-association?hostname=queer.guide&platform=ios',
+  );
   await db.exec('BEGIN');
   async function call(...args) {
     await db.exec('SAVEPOINT workspace_http_call');
@@ -74,6 +83,8 @@ export async function verifyRedirectWorkspaceMembershipHttp(db, request, owner) 
       'redirect_webhook_events',
       'redirect_webhook_deliveries',
       'redirect_webhook_attempts',
+      'redirect_native_apps',
+      'redirect_password_branding',
     ];
     for (const table of tables)
       await db.exec(`ALTER TABLE public.${table} DROP CONSTRAINT ${table}_pending_tenant_fence`);
@@ -198,6 +209,44 @@ export async function verifyRedirectWorkspaceMembershipHttp(db, request, owner) 
       return state;
     }
     const domainsBefore = await domainSnapshot();
+    const foreignApp = randomUUID(),
+      foreignCleanupAsset = randomUUID(),
+      foreignPasswordAsset = randomUUID();
+    const foreignAppVersion = (
+      await db.query(
+        "INSERT INTO public.redirect_native_apps(id,workspace_id,label,platform,app_id,app_clip_id,public_name,store_id,app_group_id,handoff_enabled,enabled,created_by,paths) VALUES($1,$2,'Foreign private HTTP native app','ios','ABCDE12345.org.qg.ForeignHttp','ABCDE12345.org.qg.ForeignHttp.Clip','Foreign HTTP app','12345','group.org.qg.ForeignHttp',true,true,$3,ARRAY['/go/*']) RETURNING revision",
+        [foreignApp, workspace, owner],
+      )
+    ).rows[0].revision;
+    await db.query(
+      "INSERT INTO public.redirect_qr_assets(id,workspace_id,target_scope,requested_by,mime,bytes,width,height,sha256,state,next_cleanup_at) VALUES($1,$2,'workspace',$3,'image/png',8,1,1,$4,'active',now()-interval '1 day')",
+      [foreignCleanupAsset, workspace, owner, 'a'.repeat(64)],
+    );
+    await db.query(
+      "INSERT INTO public.redirect_qr_assets(id,workspace_id,target_scope,password_link_id,requested_by,mime,bytes,width,height,sha256,state) VALUES($1,$2,'password:'||$3::uuid::text,$3::uuid,$4,'image/png',8,1,1,$5,'active')",
+      [foreignPasswordAsset, workspace, link, owner, 'b'.repeat(64)],
+    );
+    await db.query(
+      "INSERT INTO public.redirect_password_branding(workspace_id,link_id,brand_name,logo_asset_id) VALUES($1,$2,'Foreign private HTTP brand',$3)",
+      [workspace, link, foreignPasswordAsset],
+    );
+    async function nativeAssetSnapshot() {
+      const state = {};
+      for (const table of [
+        'redirect_native_apps',
+        'redirect_password_branding',
+        'redirect_qr_assets',
+      ])
+        state[table] = (
+          await db.query(
+            'SELECT to_jsonb(r) AS row FROM public.' +
+              table +
+              ' r WHERE workspace_id=$1 ORDER BY to_jsonb(r)::text',
+            [workspace],
+          )
+        ).rows;
+      return state;
+    }
     const foreignMetadata = (
       await db.query(
         "INSERT INTO public.redirect_link_metadata(workspace_id,redirect_key,folder_id,comment) VALUES($1,$2,$3,'Foreign private HTTP link comment') RETURNING metadata_revision",
@@ -333,6 +382,7 @@ export async function verifyRedirectWorkspaceMembershipHttp(db, request, owner) 
     const webhookBudgetsBefore = (
       await db.query('SELECT * FROM public.redirect_webhook_budgets ORDER BY bucket')
     ).rows;
+    const nativeAssetsBefore = await nativeAssetSnapshot();
     const foreignSnapshot = (
       await db.query(
         'SELECT to_jsonb(r) AS link,(SELECT to_jsonb(m) FROM public.redirect_link_metadata m WHERE redirect_key=$2) AS metadata,(SELECT to_jsonb(p) FROM public.redirect_link_policies p WHERE redirect_id=$1) AS policy FROM public.redirects r WHERE id=$1',
@@ -774,6 +824,66 @@ export async function verifyRedirectWorkspaceMembershipHttp(db, request, owner) 
     assert.deepEqual(
       (await db.query('SELECT * FROM public.redirect_webhook_budgets ORDER BY bucket')).rows,
       webhookBudgetsBefore,
+    );
+    await call(
+      '/apps/' + foreignApp,
+      'PATCH',
+      { version: foreignAppVersion, label: 'Denied foreign app' },
+      undefined,
+      404,
+    );
+    await call('/apps/' + foreignApp, 'DELETE', { version: foreignAppVersion }, undefined, 404);
+    await call(
+      '/apps',
+      'POST',
+      {
+        label: 'Denied domain app',
+        platform: 'ios',
+        appId: 'ABCDE12345.org.qg.DeniedHttp',
+        domainId: domain,
+      },
+      undefined,
+      400,
+    );
+    assert.deepEqual(
+      await call('/public-app-association?hostname=queer.guide&platform=ios'),
+      associationBefore,
+    );
+    await call(
+      '/public-app-association?hostname=foreign-scope.example.com&platform=ios',
+      'GET',
+      undefined,
+      undefined,
+      404,
+    );
+    await call(
+      '/links/' + link + '/password-branding',
+      'PATCH',
+      { version: null, brandName: 'Denied foreign brand' },
+      undefined,
+      404,
+    );
+    await call(
+      '/links/' + link + '/password-branding/logo',
+      'POST',
+      {
+        version: null,
+        image:
+          'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+nmfEAAAAASUVORK5CYII=',
+      },
+      undefined,
+      404,
+    );
+    // Isolate maintenance from unrelated legacy tombstones. This transaction
+    // rolls back the scheduling change; the positive cleanup suite still runs.
+    await db.query(
+      "UPDATE public.redirect_qr_assets SET next_cleanup_at=clock_timestamp()+interval '1 day' WHERE workspace_id='58aa4340-8f21-4b7f-9a10-90be2da89c01'",
+    );
+    assert.equal(typeof cleanupAssets, 'function');
+    await cleanupAssets();
+    assert.deepEqual(await nativeAssetSnapshot(), nativeAssetsBefore);
+    console.log(
+      'Workspace native/asset isolation: actual owner HTTP hides foreign app counts and public associations; foreign app/domain/branding mutations deny before Storage. The actual cleanup dispatcher leaves foreign due assets unclaimed with zero transport calls.',
     );
     console.log(
       'Workspace webhook isolation: actual owner HTTP hides foreign active/archived counts and rejects foreign settings, secret rotation, test events, link filters, payload/attempt history and replay without changing foreign outbox state or budgets. Live source triggers remain enabled.',

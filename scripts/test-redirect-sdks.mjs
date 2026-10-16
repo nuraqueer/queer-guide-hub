@@ -373,7 +373,7 @@ try {
   }
   const workspaceFixtureConfig={domainConnectEnabled,instructionMailEnabled,sdkHeartbeatEnabled},workspaceFixtureRequests=fixtureExternalRequests;
   domainConnectEnabled=true;instructionMailEnabled=true;sdkHeartbeatEnabled=true;
-  try {await verifyRedirectWorkspaceMembershipHttp(db,reportRequest,reportActor);}
+  try {await verifyRedirectWorkspaceMembershipHttp(db,reportRequest,reportActor,{cleanupAssets:()=>policyRuntime.dispatchRedirectQrAssetCleanup(service,sdkArtworkStorage,fixtureDnsFetch)});}
   finally {domainConnectEnabled=workspaceFixtureConfig.domainConnectEnabled;instructionMailEnabled=workspaceFixtureConfig.instructionMailEnabled;sdkHeartbeatEnabled=workspaceFixtureConfig.sdkHeartbeatEnabled;}
   if(fixtureExternalRequests!==workspaceFixtureRequests)throw new Error('Workspace boundary fixture reached DNS/provider/Storage/mail transport');
   const lostRoleEvent='owner-context-race:'+webcrypto.randomUUID();

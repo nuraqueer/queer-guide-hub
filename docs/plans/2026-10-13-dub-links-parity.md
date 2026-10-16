@@ -3897,3 +3897,29 @@ Worker dispatch still defaults to the sole active legacy workspace; native/publi
 cleanup paths, multi-workspace ownership/model/dispatch, creation/switching,
 reviewed domain transfer and live release proof remain open. No activation or
 production/provider/publication proof is claimed by these isolated checks.
+
+
+Native and asset isolation checkpoint: migration99991792172005 adds28 function
+definitions across native app administration, public host-derived resolution,
+association/install/handoff paths, password branding and maintenance. Public calls
+use authoritative hostname identity; caller workspace headers cannot redirect public
+reads. Builtin hosts and public verified-domain lookup remain legacy-only while
+activation fences stay intact. Private app/branding operations and cleanup workers
+use selected workspace identity; triggers use OLD/NEW identity. Asset serialization
+uses an explicit private workspace helper rather than ambient request headers.
+
+Legacy resolution fingerprints retain the pre-migration golden hash. Nonlegacy
+fingerprints include workspace identity, so moving a link invalidates its prior
+receipt. Foreign apps, policies, visits, handoffs, branding, cleanup leases, QR
+history and password budgets remain unchanged in rollback-only SQL. Positive legacy
+consent, quota, replay, receipt and asset cleanup paths still pass. Actual owner HTTP
+and all five SDK runtimes pass; the isolated cleanup dispatcher makes zero external
+Storage/provider calls for foreign assets. Existing-data backfill across40 tables,
+2360 migration version/parser checks and script lint/format/diff checks pass locally.
+No UI changed; exact-head CI remains required before release.
+
+This checkpoint does not activate tenants, define tenant ownership, implement
+creation/switching or reviewed transfer, or establish live deployment/device/provider
+proof. Remaining public/service readers and resource uniqueness still need their
+activation audit. Background dispatch currently serves the sole active legacy
+workspace. Full parity and production release remain open.
