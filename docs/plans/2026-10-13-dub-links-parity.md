@@ -3859,3 +3859,41 @@ current main. Checks used isolated fixtures and executed no live provider/DNS/em
 or publication writes. The domain migration has no production deployment proof. Native/webhook/cleanup and remaining public/service paths,
 tenant ownership/uniqueness, creation/switching, reviewed transfer and live release
 proof still remain; this checkpoint does not claim full parity or activation.
+
+
+Webhook isolation checkpoint: migration99991792168542 scopes private webhook
+administration, metadata/body/attempt serialization, link filters, rotation/test/
+replay, worker claim/prepare/finish and retention. Resource quotas are workspace-
+scoped; existing global abuse budgets remain. Event source-key uniqueness is now
+(workspace_id,source_key), with once-only behavior within a workspace and independent
+same-key events across workspaces. All source-key readers/writers were audited;
+there are no application readers outside the converted webhook SQL family.
+
+A private internal producer takes authoritative source-row workspace identity.
+The existing elevated capture trigger passes OLD/NEW workspace, scopes conversion/
+root/metadata lookups and retains all current branches including password branding.
+The public service-only enqueue wrapper validates selected-workspace root/receiver
+identity. Caller headers cannot choose a trigger event's tenant. Deleted-root and
+coalesced lifecycle payloads keep their source identity. Authenticated callers gain
+no internal-schema usage or producer execution. Activation fences remain intact.
+
+Rollback-only SQL runs active subscriptions in both workspaces, owned by the same
+global admin, under contradictory request headers. Each receives only its own
+click/conversion/lifecycle data. A foreign generic inventory key under a local root
+cannot leak the local link through the elevated trigger. Private foreign metadata,
+credentials, payload/signing preparation and receipts are denied. Worker expired-
+lease recovery and retention cannot change foreign attempts, expired secrets,
+terminal histories, orphan events or budgets. Source-key reuse is independently
+idempotent. Exact foreign snapshots remain unchanged while local claims succeed.
+
+Actual owner HTTP/five SDKs pass, including foreign active/archived counts,
+settings/archive/rotation/test, foreign link filters, delivery bodies/attempts/replay
+and unchanged foreign outbox/budgets with live capture triggers enabled. The bounded
+fixture makes zero DNS/provider/Storage/email transport calls. Complete migrated
+SQL and2359 migration version/body checks pass; script lint and diff checks pass.
+The40-table existing-data backfill and script format checks also pass; exact-head CI remains required.
+This is12 function definitions (including a new private producer), with no UI change.
+Worker dispatch still defaults to the sole active legacy workspace; native/public/
+cleanup paths, multi-workspace ownership/model/dispatch, creation/switching,
+reviewed domain transfer and live release proof remain open. No activation or
+production/provider/publication proof is claimed by these isolated checks.

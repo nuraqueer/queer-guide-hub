@@ -15,6 +15,8 @@ export async function verifyRedirectWorkspaceMembershipHttp(db, request, owner) 
     '/inventory',
     '/reports?view=all',
     '/domains?archive=all',
+    '/webhooks',
+    '/webhooks?archived=true',
   ];
   const before = new Map();
   for (const path of paths) before.set(path, (await request(path)).count);
@@ -68,6 +70,10 @@ export async function verifyRedirectWorkspaceMembershipHttp(db, request, owner) 
       'redirect_domain_jobs',
       'redirect_domain_connect_operations',
       'redirect_domain_instruction_mail',
+      'redirect_webhooks',
+      'redirect_webhook_events',
+      'redirect_webhook_deliveries',
+      'redirect_webhook_attempts',
     ];
     for (const table of tables)
       await db.exec(`ALTER TABLE public.${table} DROP CONSTRAINT ${table}_pending_tenant_fence`);
@@ -125,9 +131,8 @@ export async function verifyRedirectWorkspaceMembershipHttp(db, request, owner) 
       "INSERT INTO public.redirect_access_requests(id,workspace_id,folder_id,member_id,message) VALUES($1,$2,$3,$4,'Foreign private HTTP request')",
       [access, workspace, folder, human],
     );
-    // Producers are a separate conversion boundary. The existing native SDK
-    // tests archive their subscriptions; this fixture must never hide a live
-    // cross-tenant webhook by disabling its trigger or weakening its assertions.
+    // SDK subscriptions are archived before this fixture. Keep the trigger live
+    // while seeding an active foreign receiver and its authoritative source rows.
     assert.equal(
       (
         await db.query(
@@ -136,6 +141,13 @@ export async function verifyRedirectWorkspaceMembershipHttp(db, request, owner) 
       ).rows[0].n,
       0,
     );
+    const foreignWebhook = randomUUID();
+    const foreignWebhookVersion = (
+      await db.query(
+        "INSERT INTO public.redirect_webhooks(id,workspace_id,created_by,name,url,event_types,secret,include_customer_id) VALUES($1,$2,$3,'Foreign private HTTP webhook','https://foreign-receiver.example.org/events',ARRAY['link.created','link.updated','link.deleted','link.clicked','lead.created','sale.created'],$4,true) RETURNING version",
+        [foreignWebhook, workspace, owner, 'whsec_' + 'Q'.repeat(43) + '='],
+      )
+    ).rows[0].version;
     const foreignSlug = 'foreign-scope-' + link.slice(0, 8);
     await db.query(
       "INSERT INTO public.redirect_domains(id,workspace_id,hostname,created_by) VALUES($1,$2,'foreign-scope.example.com',$3)",
@@ -292,6 +304,35 @@ export async function verifyRedirectWorkspaceMembershipHttp(db, request, owner) 
       return state;
     }
     const customersBefore = await customerSnapshot();
+    const foreignDelivery = (
+      await db.query(
+        'SELECT id,version FROM public.redirect_webhook_deliveries WHERE webhook_id=$1 ORDER BY sequence LIMIT 1',
+        [foreignWebhook],
+      )
+    ).rows[0];
+    assert.ok(foreignDelivery, 'Live source trigger did not enqueue the foreign event');
+    async function webhookSnapshot() {
+      const state = {};
+      for (const table of [
+        'redirect_webhooks',
+        'redirect_webhook_events',
+        'redirect_webhook_deliveries',
+        'redirect_webhook_attempts',
+      ])
+        state[table] = (
+          await db.query(
+            'SELECT to_jsonb(r) AS row FROM public.' +
+              table +
+              ' r WHERE workspace_id=$1 ORDER BY to_jsonb(r)::text',
+            [workspace],
+          )
+        ).rows;
+      return state;
+    }
+    const webhooksBefore = await webhookSnapshot();
+    const webhookBudgetsBefore = (
+      await db.query('SELECT * FROM public.redirect_webhook_budgets ORDER BY bucket')
+    ).rows;
     const foreignSnapshot = (
       await db.query(
         'SELECT to_jsonb(r) AS link,(SELECT to_jsonb(m) FROM public.redirect_link_metadata m WHERE redirect_key=$2) AS metadata,(SELECT to_jsonb(p) FROM public.redirect_link_policies p WHERE redirect_id=$1) AS policy FROM public.redirects r WHERE id=$1',
@@ -672,6 +713,70 @@ export async function verifyRedirectWorkspaceMembershipHttp(db, request, owner) 
     assert.deepEqual(
       (await db.query('SELECT * FROM public.redirect_report_budgets ORDER BY bucket')).rows,
       domainBudgetsBefore,
+    );
+    await call('/webhooks/' + foreignWebhook, 'GET', undefined, undefined, 404);
+    await call(
+      '/webhooks/' + foreignWebhook,
+      'PATCH',
+      { version: foreignWebhookVersion, name: 'Denied' },
+      undefined,
+      404,
+    );
+    await call(
+      '/webhooks/' + foreignWebhook,
+      'DELETE',
+      { version: foreignWebhookVersion },
+      undefined,
+      404,
+    );
+    for (const action of ['test', 'rotate'])
+      await call(
+        '/webhooks/' + foreignWebhook + '/' + action,
+        'POST',
+        { version: foreignWebhookVersion },
+        undefined,
+        404,
+      );
+    await call(
+      '/webhooks',
+      'POST',
+      {
+        name: 'Denied foreign filter',
+        url: 'https://local-receiver.example.org/events',
+        linkIds: [link],
+      },
+      undefined,
+      400,
+    );
+    await call('/webhooks/' + foreignWebhook + '/deliveries', 'GET', undefined, undefined, 404);
+    await call(
+      '/webhooks/' + foreignWebhook + '/deliveries/' + foreignDelivery.id,
+      'GET',
+      undefined,
+      undefined,
+      404,
+    );
+    await call(
+      '/webhooks/' + foreignWebhook + '/deliveries/' + foreignDelivery.id + '/attempts',
+      'GET',
+      undefined,
+      undefined,
+      404,
+    );
+    await call(
+      '/webhooks/' + foreignWebhook + '/deliveries/' + foreignDelivery.id + '/replay',
+      'POST',
+      { version: foreignDelivery.version },
+      undefined,
+      404,
+    );
+    assert.deepEqual(await webhookSnapshot(), webhooksBefore);
+    assert.deepEqual(
+      (await db.query('SELECT * FROM public.redirect_webhook_budgets ORDER BY bucket')).rows,
+      webhookBudgetsBefore,
+    );
+    console.log(
+      'Workspace webhook isolation: actual owner HTTP hides foreign active/archived counts and rejects foreign settings, secret rotation, test events, link filters, payload/attempt history and replay without changing foreign outbox state or budgets. Live source triggers remain enabled.',
     );
     console.log(
       'Workspace domain isolation: actual owner HTTP excludes foreign domain counts/choices and denies foreign registry/manual/provider/DNS discovery/mail receipt/recovery/cancellation before budgets or external work; exact foreign domain/job/operation/mail snapshots stay unchanged.',
