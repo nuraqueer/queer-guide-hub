@@ -22,11 +22,17 @@
  *
  * ANON-READABILITY WAS MEASURED, NOT ASSUMED
  *
- * All four host terms carry `is_sensitive = false` and `verification_status`
- * in ('reviewed','auto'), so `tag_is_anon_gated` is false for each and the
- * crawler gets a real page rather than the sign-in fallback. Measured on prod
- * before this file was written — a sensitive term would serve
- * `gatedDetailResult()` and every assertion below would pass vacuously.
+ * All five host terms carry `is_sensitive = false`, so `tag_is_anon_gated` is
+ * false for each and the crawler gets a real page rather than the sign-in
+ * fallback. A sensitive term would serve `gatedDetailResult()` and every
+ * assertion below would pass vacuously.
+ *
+ * This paragraph said "all four host terms" and added `verification_status in
+ * ('reviewed','auto')`; re-measured on prod 2026-10-16, there are FIVE hosts and
+ * `kink-burnout` is `unverified`. The gate is `is_sensitive AND NOT
+ * reviewed/locked`, so `is_sensitive = false` alone is what makes all five
+ * readable — the verification half was never load-bearing here, and quoting it
+ * would make a correct row look like a regression the day it is reviewed.
  */
 
 import { test, expect } from '@playwright/test';
@@ -64,6 +70,59 @@ async function crawl(path: string) {
   return { status: res.status, html: await res.text() };
 }
 
+/**
+ * The `DefinedTerm` JSON-LD node a crawler is served for a readable tag, or null.
+ *
+ * THIS IS THE POSITIVE CONTROL, and it replaced an assertion on
+ * `<main data-prerendered="bot-ua">` + `<article>` that COULD NOT PASS FOR ANY
+ * TAG. `functions/_middleware.ts:593` computes `isBot = indexable && isBotUserAgent(...)`
+ * and only that branch injects `detail.body`, while `indexable` (line 432) is
+ * vetoed by the row's own `seo_indexable` — and `tagDetail` returns
+ * `indexable: row.seo_indexable !== false`. All five hosts are
+ * `seo_indexable=false`, so the body is never injected and the marker never
+ * appears. Measured on prod 2026-10-16: 0 occurrences on all five hosts, 1 on
+ * `/city/berlin`, which is indexable. It had failed every scheduled nightly
+ * since the file shipped.
+ *
+ * `tags-gated-sign-in.spec.ts` had already measured this on 2026-09-04 and
+ * recorded the same conclusion — "that block is absent from BOTH a gated tag and
+ * a readable one ... asserting its presence would fail nightly while proving
+ * nothing" — and reached for `DefinedTerm` for exactly this reason. This file was
+ * written a month later and did not inherit it.
+ *
+ * The JSON-LD discriminates where the body cannot, because
+ * `_middleware.ts:527` pushes `detail.jsonLd` with NO indexability gate, and
+ * `gatedDetailResult()` sets `jsonLd: ''`. Measured three ways on prod the same
+ * day: readable host → present with this term's `name`/`url`/`description`;
+ * gated term (`rainbow-kiss`, `sex-worker`, `labia`) → absent, title "Sign in to
+ * view"; nonexistent slug → HTTP 404, absent.
+ *
+ * It is also the right surface rather than a convenient one: `description`
+ * carries the term's own prose, so a prompt emitted server-side into a tag's
+ * description WOULD land here. The absence asserted below is checked against a
+ * document that could have leaked.
+ */
+function definedTermOf(html: string): { name?: string; description?: string; url?: string } | null {
+  for (const m of html.matchAll(/<script[^>]*application\/ld\+json[^>]*>([\s\S]*?)<\/script>/gi)) {
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(m[1]);
+    } catch {
+      continue; // A malformed block is not this term's document.
+    }
+    for (const node of Array.isArray(parsed) ? parsed : [parsed]) {
+      if (
+        node &&
+        typeof node === 'object' &&
+        (node as { '@type'?: string })['@type'] === 'DefinedTerm'
+      ) {
+        return node as { name?: string; description?: string; url?: string };
+      }
+    }
+  }
+  return null;
+}
+
 test.describe('workbook prompts never reach a crawler', () => {
   for (const { tag } of HOSTS) {
     test(`/tags/${tag} serves its own prose and no workbook prompt`, async () => {
@@ -71,13 +130,21 @@ test.describe('workbook prompts never reach a crawler', () => {
       expect(status, `/tags/${tag} did not render`).toBe(200);
 
       // ── POSITIVE CONTROL ──────────────────────────────────────────────────
-      // Without this, "no prompt text" is also true of a 404 or a gate.
-      expect(html, 'the crawler page carries no prerendered article').toContain(
-        'data-prerendered="bot-ua"',
-      );
-      expect(html).toContain('<article');
-      // And it is this term's page, not a generic shell.
-      expect(html.toLowerCase()).toContain(tag.split('-')[0]);
+      // Without this, "no prompt text" is also true of a 404 or a gate. See
+      // definedTermOf() for why this is the JSON-LD and not the body.
+      const term = definedTermOf(html);
+      expect(term, `/tags/${tag} published no DefinedTerm — gated, 404 or empty`).not.toBeNull();
+      // And it is THIS term's document, not another tag's. Asserted on `url`
+      // rather than a substring of the slug: the slug is echoed in
+      // `<link rel="canonical">` and `og:url` on a gate too, so a substring
+      // match is satisfied by the document this control exists to reject.
+      expect(term!.url ?? '', `DefinedTerm is not /tags/${tag}`).toContain(`/tags/${tag}`);
+      // Its own prose reached the crawler, which is what makes the absence
+      // below a measurement of a document that COULD have leaked.
+      expect(
+        (term!.description ?? '').length,
+        `/tags/${tag} published a DefinedTerm with no description`,
+      ).toBeGreaterThan(0);
 
       // ── THE ASSERTION ─────────────────────────────────────────────────────
       for (const fragment of PROMPT_FRAGMENTS) {
@@ -119,9 +186,14 @@ test.describe('the runner is gated and unlisted', () => {
   });
 
   test('the glossary sitemap does not list a deindexed host term', async () => {
-    // All five hosts are publication_role='utility', which forces
-    // seo_indexable=false, and sitemap-tags filters on it. A host term
-    // appearing here would mean the role gate stopped applying.
+    // All five hosts are seo_indexable=false, and sitemap-tags filters on that,
+    // so a host term appearing here would mean the filter stopped applying.
+    //
+    // This said "all five hosts are publication_role='utility', which forces
+    // seo_indexable=false". Re-measured on prod 2026-10-16: four are 'utility'
+    // and `consensual-non-consent-cnc` is 'article', yet all five are
+    // seo_indexable=false. The role is not what this test rests on, and naming
+    // it as the cause would send the next reader to the wrong column.
     const res = await fetch(`${BASE}/sitemap-tags.xml`);
     expect(res.status).toBe(200);
     const xml = await res.text();
