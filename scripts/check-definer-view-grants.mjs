@@ -33,6 +33,8 @@
  * view `WITH (security_invoker = on)` so base-table RLS applies to writes.
  */
 
+import { callRpc as rpc, notEvaluated, stallReason } from './lib/gate-rpc.mjs'
+
 const BASE = process.env.SUPABASE_URL
 const KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
 
@@ -50,22 +52,44 @@ if (!BASE || !KEY) {
  *   any other error still fails.
  */
 async function callRpc(name, optional = false) {
-  const res = await fetch(`${BASE}/rest/v1/rpc/${name}`, {
+  const init = {
     method: 'POST',
     headers: { apikey: KEY, Authorization: `Bearer ${KEY}`, 'Content-Type': 'application/json' },
     body: '{}',
-  })
+  }
+  const url = `${BASE}/rest/v1/rpc/${name}`
+
+  // RETRY ONLY A NON-EVALUATION, via the shared classifier so this script
+  // cannot drift from the other four on what that means.
+  //
+  // This script had no retry at all, and on 2026-10-17 it failed #4470 with
+  // `HTTP 503 PGRST002 — could not query the database for the schema cache`
+  // during a prod stall. That reported a SECURITY gate it never ran as a
+  // security failure. A gate that could not look must not read as a breach —
+  // and equally must not read as a pass, which is why a non-evaluation that
+  // survives the retry still exits 1 below.
+  let res = await rpc(url, init)
+  if (notEvaluated(res)) {
+    console.warn(`⚠ ${name}() did not evaluate — ${stallReason(res)}. Retrying ONCE in 30s.`)
+    await new Promise((r) => setTimeout(r, 30_000))
+    res = await rpc(url, init)
+  }
+
   if (!res.ok) {
-    const body = await res.text()
     // PostgREST answers an unknown function with 404 PGRST202.
-    if (optional && res.status === 404 && body.includes('PGRST202')) {
+    if (optional && res.status === 404 && res.body?.includes('PGRST202')) {
       console.warn(`⚠ ${name}() is not on prod yet — skipping that check until its migration lands.`)
       return null
     }
-    console.error(`${name} → HTTP ${res.status}: ${body}`)
+    if (notEvaluated(res)) {
+      console.error(`✗ ${name}() did not evaluate after a retry — ${stallReason(res)}.`)
+      console.error('  This check measured NOTHING — it did not pass.')
+    } else {
+      console.error(`${name} → HTTP ${res.status}: ${res.body}`)
+    }
     process.exit(1)
   }
-  return res.json()
+  return res.data
 }
 
 // Both checks run before exiting so one CI run reports everything that is wrong.
