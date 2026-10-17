@@ -33,8 +33,6 @@ BEGIN
  IF EXISTS(SELECT FROM public.redirect_analytics_filtered(jsonb_build_object('linkIds',jsonb_build_array(foreign_link)),ARRAY[foreign_link])) THEN RAISE EXCEPTION 'Explicit IDs bypassed analytics workspace';END IF;
  BEGIN PERFORM public.record_redirect_conversion(event||jsonb_build_object('clickId',foreign_click,'eventId','denied-foreign-click'));RAISE EXCEPTION 'Foreign click conversion attributed';EXCEPTION WHEN no_data_found THEN NULL;END;
  BEGIN PERFORM public.record_redirect_conversion((event-'clickId')||'{"customerExternalId":"foreign-customer:ü","eventId":"denied-foreign-anchor"}');RAISE EXCEPTION 'Foreign customer anchor attributed';EXCEPTION WHEN no_data_found THEN NULL;END;
- BEGIN PERFORM public.record_redirect_conversion(event||'{"customerExternalId":"foreign-customer:ü","eventId":"denied-customer-collision"}');RAISE EXCEPTION 'Global customer key collision ignored';EXCEPTION WHEN unique_violation THEN NULL;END;
- BEGIN PERFORM public.record_redirect_conversion(event||'{"eventId":"foreign-customer-event"}');RAISE EXCEPTION 'Foreign event idempotency response leaked';EXCEPTION WHEN unique_violation THEN NULL;END;
  BEGIN PERFORM public.record_redirect_conversion(event||jsonb_build_object('clickId',foreign_click,'eventId','denied-native-foreign'),NULL,now());RAISE EXCEPTION 'Native signup attributed foreign click';EXCEPTION WHEN no_data_found THEN NULL;END;
  IF EXISTS(SELECT FROM public.redirect_link_conversions WHERE provider_event_id LIKE 'denied-%') OR (SELECT count(*) FROM public.redirect_link_conversions WHERE workspace_id='58aa4340-8f21-4b7f-9a10-90be2da89c01')<>1 THEN RAISE EXCEPTION 'Denied conversion left local mutation';END IF;
  -- Independently exercise the profile predicate when the same external key
@@ -44,7 +42,8 @@ BEGIN
  IF result->>'name' IS NOT NULL OR result->>'email' IS NOT NULL OR result->>'version' IS NOT NULL THEN RAISE EXCEPTION 'Foreign identity leaked through local customer activity';END IF;
  result:=public.redirect_customer_events('foreign-customer:ü',actor,NULL);
  IF jsonb_array_length(result->'data')<>2 OR result::text LIKE '%foreign-private%' OR result::text LIKE '%Foreign private%' THEN RAISE EXCEPTION 'Same-key customer journey crossed workspace';END IF;
- BEGIN PERFORM public.redirect_customer_profile('patch','foreign-customer:ü',actor,NULL,'{"version":null,"name":"Denied collision"}');RAISE EXCEPTION 'Profile conflict crossed foreign anchor';EXCEPTION WHEN unique_violation THEN NULL;END;
+ result:=public.redirect_customer_profile('patch','foreign-customer:ü',actor,NULL,'{"version":null,"name":"Local independent profile"}');
+ IF result->>'name'<>'Local independent profile' OR result->>'version'=foreign_version::text THEN RAISE EXCEPTION 'Local same-key enrichment crossed workspace';END IF;
  IF (SELECT jsonb_build_object('events',(SELECT jsonb_agg(to_jsonb(e)) FROM public.redirect_events e WHERE workspace_id=other),'conversions',(SELECT jsonb_agg(to_jsonb(c)) FROM public.redirect_link_conversions c WHERE workspace_id=other),'customers',(SELECT jsonb_agg(to_jsonb(c)) FROM public.redirect_link_customers c WHERE workspace_id=other),'profiles',(SELECT jsonb_agg(to_jsonb(p)) FROM public.redirect_customer_profiles p WHERE workspace_id=other)))<>snapshot THEN RAISE EXCEPTION 'Denied customer/tracking work changed foreign data';END IF;
 END $$;
 -- The existing browser RPCs keep legacy current-role RLS and gain no ability to

@@ -1,0 +1,51 @@
+BEGIN;
+ALTER TABLE public.redirects DROP CONSTRAINT redirects_pending_tenant_fence;
+ALTER TABLE public.redirect_link_policies DROP CONSTRAINT redirect_link_policies_pending_tenant_fence;
+-- Deliberate corrupted-key fixture proves fail-closed upsert defense independently.
+ALTER TABLE public.redirect_link_policies DROP CONSTRAINT redirect_link_policies_redirect_id_fkey;
+ALTER TABLE public.redirect_link_metadata DROP CONSTRAINT redirect_link_metadata_pending_tenant_fence;
+ALTER TABLE public.redirect_link_folders DROP CONSTRAINT redirect_link_folders_pending_tenant_fence;
+ALTER TABLE public.redirect_link_tags DROP CONSTRAINT redirect_link_tags_pending_tenant_fence;
+SET LOCAL ROLE service_role;
+SET LOCAL request.jwt.claims='{"role":"service_role","sub":"00000000-0000-4000-8000-000000000092"}';
+DO $$
+DECLARE actor uuid:='00000000-0000-4000-8000-000000000092';other uuid:=gen_random_uuid();foreign_link uuid:=gen_random_uuid();local_link uuid;folder uuid:=gen_random_uuid();tag uuid:=gen_random_uuid();foreign_key text;snapshot jsonb;result jsonb;
+BEGIN
+ INSERT INTO auth.users(id) VALUES(actor);INSERT INTO public.user_roles VALUES(actor,'admin');
+ INSERT INTO public.redirect_workspaces(id,name,slug) VALUES(other,'Legacy writer fixture','legacy-writer-fixture');
+ INSERT INTO public.redirects(id,workspace_id,type,slug,target) VALUES(foreign_link,other,'SHORT','legacy-writer-foreign','https://example.org/foreign');
+ INSERT INTO public.redirect_link_policies(workspace_id,redirect_id,policy) VALUES(other,foreign_link,'{"preview":{"title":"Private title"}}');
+ INSERT INTO public.redirect_link_metadata(workspace_id,redirect_key,comment) VALUES(other,'static:/legacy-writer-collision','Private comment');
+ INSERT INTO public.redirect_link_folders(id,workspace_id,name) VALUES(folder,other,'Private folder');
+ INSERT INTO public.redirect_link_tags(id,workspace_id,name) VALUES(tag,other,'Private tag');
+ foreign_key:='redirects:'||foreign_link::text;
+ snapshot:=jsonb_build_object('root',(SELECT to_jsonb(r) FROM public.redirects r WHERE id=foreign_link),'policy',(SELECT to_jsonb(p) FROM public.redirect_link_policies p WHERE redirect_id=foreign_link),'metadata',(SELECT to_jsonb(m) FROM public.redirect_link_metadata m WHERE redirect_key='static:/legacy-writer-collision'));
+ BEGIN PERFORM public.set_redirect_link_policy(foreign_link,'{"expires_at":"2030-01-01T00:00:00Z"}','{"algorithm":"denied"}',true);RAISE EXCEPTION 'Legacy service setter changed foreign policy';EXCEPTION WHEN no_data_found THEN NULL;END;
+ EXECUTE 'SET LOCAL ROLE authenticated';
+ BEGIN PERFORM public.set_redirect_link_metadata(foreign_key,NULL,'{}','denied');RAISE EXCEPTION 'Legacy metadata targeted foreign root';EXCEPTION WHEN no_data_found THEN NULL;END;
+ BEGIN PERFORM public.set_redirect_link_metadata('static:/legacy-writer-collision',NULL,'{}','denied');RAISE EXCEPTION 'Legacy metadata changed foreign key';EXCEPTION WHEN unique_violation OR insufficient_privilege THEN NULL;END;
+ BEGIN PERFORM public.bulk_redirect_organization(ARRAY[foreign_key],'archive');RAISE EXCEPTION 'Legacy bulk changed foreign root';EXCEPTION WHEN no_data_found THEN NULL;END;
+ BEGIN PERFORM public.bulk_redirect_organization(ARRAY['static:/legacy-writer-collision'],'archive');RAISE EXCEPTION 'Legacy bulk changed foreign key';EXCEPTION WHEN unique_violation OR insufficient_privilege THEN NULL;END;
+ BEGIN PERFORM public.set_redirect_link_metadata('static:/legacy-writer-local',folder,'{}','denied');RAISE EXCEPTION 'Legacy setter selected foreign folder';EXCEPTION WHEN foreign_key_violation THEN NULL;END;
+ BEGIN PERFORM public.set_redirect_link_metadata('static:/legacy-writer-local',NULL,ARRAY[tag],'denied');RAISE EXCEPTION 'Legacy setter selected foreign tag';EXCEPTION WHEN foreign_key_violation THEN NULL;END;
+ BEGIN PERFORM public.bulk_redirect_organization(ARRAY['static:/legacy-writer-local'],'folder',folder);RAISE EXCEPTION 'Legacy bulk selected foreign folder';EXCEPTION WHEN foreign_key_violation THEN NULL;END;
+ BEGIN PERFORM public.bulk_redirect_organization(ARRAY['static:/legacy-writer-local'],'add-tag',tag);RAISE EXCEPTION 'Legacy bulk selected foreign tag';EXCEPTION WHEN foreign_key_violation THEN NULL;END;
+ EXECUTE 'SET LOCAL ROLE service_role';
+ IF jsonb_build_object('root',(SELECT to_jsonb(r) FROM public.redirects r WHERE id=foreign_link),'policy',(SELECT to_jsonb(p) FROM public.redirect_link_policies p WHERE redirect_id=foreign_link),'metadata',(SELECT to_jsonb(m) FROM public.redirect_link_metadata m WHERE redirect_key='static:/legacy-writer-collision'))<>snapshot THEN RAISE EXCEPTION 'Legacy denial mutated foreign data';END IF;
+ EXECUTE 'SET LOCAL ROLE authenticated';
+ result:=public.create_redirect_campaign_link('legacy-writer-positive','https://example.org/local');local_link:=(result->>'id')::uuid;
+ EXECUTE 'SET LOCAL ROLE service_role';
+ result:=public.set_redirect_link_policy(local_link,'{"track_conversions":true}',NULL,false);
+ IF result->'policy'->>'track_conversions'<>'true' THEN RAISE EXCEPTION 'Positive policy setter failed';END IF;
+ EXECUTE 'SET LOCAL ROLE authenticated';
+ PERFORM public.set_redirect_link_metadata('redirects:'||local_link::text,NULL,'{}','Local comment');
+ IF public.bulk_redirect_organization(ARRAY['redirects:'||local_link::text],'archive')<>1 THEN RAISE EXCEPTION 'Positive legacy bulk count failed';END IF;
+ IF NOT EXISTS(SELECT FROM public.redirect_link_metadata WHERE redirect_key='redirects:'||local_link::text AND is_archived AND comment='Local comment') THEN RAISE EXCEPTION 'Positive legacy metadata failed';END IF;
+ EXECUTE 'SET LOCAL ROLE service_role';
+ -- A corrupted global policy key must not let ON CONFLICT rewrite another tenant.
+ DELETE FROM public.redirect_link_policies WHERE redirect_id=local_link;
+ INSERT INTO public.redirect_link_policies(workspace_id,redirect_id,policy) VALUES(other,local_link,'{"preview":{"title":"Foreign collision"}}');
+ BEGIN PERFORM public.set_redirect_link_policy(local_link,'{}',NULL,false);RAISE EXCEPTION 'Legacy policy collision crossed workspace';EXCEPTION WHEN unique_violation THEN NULL;END;
+ IF NOT EXISTS(SELECT FROM public.redirect_link_policies WHERE workspace_id=other AND redirect_id=local_link AND policy='{"preview":{"title":"Foreign collision"}}'::jsonb) THEN RAISE EXCEPTION 'Policy collision changed foreign record';END IF;
+END $$;
+ROLLBACK;

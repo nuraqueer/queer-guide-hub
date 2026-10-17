@@ -2,7 +2,12 @@ import assert from 'node:assert/strict';
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 // This fixture runs only in the isolated migrated database. The rollback restores
 // every activation fence; no second workspace is enabled by the product migration.
-export async function verifyRedirectWorkspaceMembershipHttp(db, request, owner) {
+export async function verifyRedirectWorkspaceMembershipHttp(
+  db,
+  request,
+  owner,
+  { cleanupAssets } = {},
+) {
   const paths = [
     '/members',
     '/tokens',
@@ -14,6 +19,10 @@ export async function verifyRedirectWorkspaceMembershipHttp(db, request, owner) 
     '/links',
     '/inventory',
     '/reports?view=all',
+    '/domains?archive=all',
+    '/webhooks',
+    '/webhooks?archived=true',
+    '/apps',
   ];
   const before = new Map();
   for (const path of paths) before.set(path, (await request(path)).count);
@@ -23,6 +32,10 @@ export async function verifyRedirectWorkspaceMembershipHttp(db, request, owner) 
   const facetsBefore = await request('/linked-domains');
   const imagesBefore = await request('/qr-images');
   const analyticsBefore = await request('/analytics', 'POST', { filters: {} });
+  const domainChoicesBefore = await request('/domain-choices');
+  const associationBefore = await request(
+    '/public-app-association?hostname=queer.guide&platform=ios',
+  );
   await db.exec('BEGIN');
   async function call(...args) {
     await db.exec('SAVEPOINT workspace_http_call');
@@ -50,6 +63,7 @@ export async function verifyRedirectWorkspaceMembershipHttp(db, request, owner) 
       'redirect_access_requests',
       'redirects',
       'redirect_domains',
+      'redirect_domain_preferences',
       'redirect_link_metadata',
       'redirect_link_tag_assignments',
       'redirect_link_policies',
@@ -63,6 +77,15 @@ export async function verifyRedirectWorkspaceMembershipHttp(db, request, owner) 
       'redirect_link_conversions',
       'redirect_link_customers',
       'redirect_customer_profiles',
+      'redirect_domain_jobs',
+      'redirect_domain_connect_operations',
+      'redirect_domain_instruction_mail',
+      'redirect_webhooks',
+      'redirect_webhook_events',
+      'redirect_webhook_deliveries',
+      'redirect_webhook_attempts',
+      'redirect_native_apps',
+      'redirect_password_branding',
     ];
     for (const table of tables)
       await db.exec(`ALTER TABLE public.${table} DROP CONSTRAINT ${table}_pending_tenant_fence`);
@@ -107,10 +130,8 @@ export async function verifyRedirectWorkspaceMembershipHttp(db, request, owner) 
       "INSERT INTO public.redirect_workspace_invitations(id,workspace_id,email,label,role,token_hash,created_by) VALUES($1,$2,'http-invite@example.org','Foreign private HTTP invitation','viewer',$3,$4)",
       [invite, workspace, createHash('sha256').update(randomBytes(32)).digest('hex'), owner],
     );
-    // Access requests require a human member; this foreign account is separate
-    // from the legacy recipient so the production global-user constraint remains.
-    const foreignUser = randomUUID();
-    await db.query('INSERT INTO auth.users(id) VALUES($1)', [foreignUser]);
+    // The same authenticated account can hold independent tenant memberships.
+    const foreignUser = owner;
     const human = randomUUID();
     await db.query(
       "INSERT INTO public.redirect_workspace_members(id,workspace_id,user_id,kind,label) VALUES($1,$2,$3,'user','Foreign private HTTP requester')",
@@ -120,9 +141,8 @@ export async function verifyRedirectWorkspaceMembershipHttp(db, request, owner) 
       "INSERT INTO public.redirect_access_requests(id,workspace_id,folder_id,member_id,message) VALUES($1,$2,$3,$4,'Foreign private HTTP request')",
       [access, workspace, folder, human],
     );
-    // Producers are a separate conversion boundary. The existing native SDK
-    // tests archive their subscriptions; this fixture must never hide a live
-    // cross-tenant webhook by disabling its trigger or weakening its assertions.
+    // SDK subscriptions are archived before this fixture. Keep the trigger live
+    // while seeding an active foreign receiver and its authoritative source rows.
     assert.equal(
       (
         await db.query(
@@ -131,6 +151,13 @@ export async function verifyRedirectWorkspaceMembershipHttp(db, request, owner) 
       ).rows[0].n,
       0,
     );
+    const foreignWebhook = randomUUID();
+    const foreignWebhookVersion = (
+      await db.query(
+        "INSERT INTO public.redirect_webhooks(id,workspace_id,created_by,name,url,event_types,secret,include_customer_id) VALUES($1,$2,$3,'Foreign private HTTP webhook','https://foreign-receiver.example.org/events',ARRAY['link.created','link.updated','link.deleted','link.clicked','lead.created','sale.created'],$4,true) RETURNING version",
+        [foreignWebhook, workspace, owner, 'whsec_' + 'Q'.repeat(43) + '='],
+      )
+    ).rows[0].version;
     const foreignSlug = 'foreign-scope-' + link.slice(0, 8);
     await db.query(
       "INSERT INTO public.redirect_domains(id,workspace_id,hostname,created_by) VALUES($1,$2,'foreign-scope.example.com',$3)",
@@ -140,6 +167,99 @@ export async function verifyRedirectWorkspaceMembershipHttp(db, request, owner) 
       "INSERT INTO public.redirects(id,workspace_id,type,slug,target) VALUES($1,$2,'SHORT',$3,'https://example.org/foreign-private-http-link')",
       [link, workspace, foreignSlug],
     );
+    const providerId = randomUUID(),
+      domainOperation = randomUUID(),
+      domainMail = randomUUID(),
+      domainRequest = randomUUID();
+    const domainVersion = (
+      await db.query(
+        "UPDATE public.redirect_domains SET provider_id=$2,ownership_state='verified',verified_at=now(),verified_until=now()+interval '3 hours',routing_provider_id=$2,routing_protocol=1,routing_seen_at=now() WHERE id=$1 RETURNING version",
+        [domain, providerId],
+      )
+    ).rows[0].version;
+    await db.query(
+      "INSERT INTO public.redirect_domain_jobs(workspace_id,domain_id,zone_id,cname_target,requested_by,state,provider_status,ssl_status,checked_at) VALUES($1,$2,$3,'links.queer.guide',$4,'ready','active','active',now())",
+      [workspace, domain, 'a'.repeat(32), owner],
+    );
+    await db.query(
+      'INSERT INTO public.redirect_domain_connect_operations(id,workspace_id,domain_id,actor_id,domain_version,configuration) VALUES($1,$2,$3,$4,$5,$6)',
+      [domainOperation, workspace, domain, owner, domainVersion, 'b'.repeat(64)],
+    );
+    await db.query(
+      "INSERT INTO public.redirect_domain_instruction_mail(id,workspace_id,domain_id,actor_id,request_id,domain_version,snapshot,hostname,cname_target,records,recipient_email) VALUES($1,$2,$3,$4,$5,$6,$7,'foreign-scope.example.com','links.queer.guide','[]','foreign-domain@example.org')",
+      [domainMail, workspace, domain, owner, domainRequest, domainVersion, 'c'.repeat(64)],
+    );
+    async function domainSnapshot() {
+      const state = {};
+      for (const table of [
+        'redirect_domains',
+        'redirect_domain_jobs',
+        'redirect_domain_connect_operations',
+        'redirect_domain_instruction_mail',
+      ])
+        state[table] = (
+          await db.query(
+            'SELECT to_jsonb(r) AS row FROM public.' +
+              table +
+              ' r WHERE workspace_id=$1 ORDER BY to_jsonb(r)::text',
+            [workspace],
+          )
+        ).rows;
+      return state;
+    }
+    const domainsBefore = await domainSnapshot();
+    const foreignApp = randomUUID(),
+      foreignCleanupAsset = randomUUID(),
+      foreignPasswordAsset = randomUUID();
+    const foreignAppVersion = (
+      await db.query(
+        "INSERT INTO public.redirect_native_apps(id,workspace_id,label,platform,app_id,app_clip_id,public_name,store_id,app_group_id,handoff_enabled,enabled,created_by,paths) VALUES($1,$2,'Foreign private HTTP native app','ios','ABCDE12345.org.qg.ForeignHttp','ABCDE12345.org.qg.ForeignHttp.Clip','Foreign HTTP app','12345','group.org.qg.ForeignHttp',true,true,$3,ARRAY['/go/*']) RETURNING revision",
+        [foreignApp, workspace, owner],
+      )
+    ).rows[0].revision;
+    await db.query(
+      "INSERT INTO public.redirect_qr_assets(id,workspace_id,target_scope,requested_by,mime,bytes,width,height,sha256,state,next_cleanup_at) VALUES($1,$2,'workspace',$3,'image/png',8,1,1,$4,'active',now()-interval '1 day')",
+      [foreignCleanupAsset, workspace, owner, 'a'.repeat(64)],
+    );
+    await db.query(
+      "INSERT INTO public.redirect_qr_assets(id,workspace_id,target_scope,password_link_id,requested_by,mime,bytes,width,height,sha256,state) VALUES($1,$2,'password:'||$3::uuid::text,$3::uuid,$4,'image/png',8,1,1,$5,'active')",
+      [foreignPasswordAsset, workspace, link, owner, 'b'.repeat(64)],
+    );
+    await db.query(
+      "INSERT INTO public.redirect_password_branding(workspace_id,link_id,brand_name,logo_asset_id) VALUES($1,$2,'Foreign private HTTP brand',$3)",
+      [workspace, link, foreignPasswordAsset],
+    );
+    async function nativeAssetSnapshot() {
+      const state = {};
+      for (const table of [
+        'redirect_native_apps',
+        'redirect_password_branding',
+        'redirect_qr_assets',
+      ])
+        state[table] = (
+          await db.query(
+            'SELECT to_jsonb(r) AS row FROM public.' +
+              table +
+              ' r WHERE workspace_id=$1 ORDER BY to_jsonb(r)::text',
+            [workspace],
+          )
+        ).rows;
+      return state;
+    }
+    await db.query(
+      'INSERT INTO public.redirect_domain_preferences(workspace_id,singleton,domain_id) VALUES($1,true,$2)',
+      [workspace, domain],
+    );
+    await db.query(
+      "INSERT INTO public.redirect_qr_styles(workspace_id,scope,style,logo_mode) VALUES($1,'workspace','{\"dots\":\"circle\"}','none')",
+      [workspace],
+    );
+    const foreignDefaults = (
+      await db.query(
+        "SELECT (SELECT to_jsonb(p) FROM public.redirect_domain_preferences p WHERE workspace_id=$1) AS preference,(SELECT to_jsonb(s) FROM public.redirect_qr_styles s WHERE workspace_id=$1 AND scope='workspace') AS style",
+        [workspace],
+      )
+    ).rows[0];
     const foreignMetadata = (
       await db.query(
         "INSERT INTO public.redirect_link_metadata(workspace_id,redirect_key,folder_id,comment) VALUES($1,$2,$3,'Foreign private HTTP link comment') RETURNING metadata_revision",
@@ -246,6 +366,36 @@ export async function verifyRedirectWorkspaceMembershipHttp(db, request, owner) 
       return state;
     }
     const customersBefore = await customerSnapshot();
+    const foreignDelivery = (
+      await db.query(
+        'SELECT id,version FROM public.redirect_webhook_deliveries WHERE webhook_id=$1 ORDER BY sequence LIMIT 1',
+        [foreignWebhook],
+      )
+    ).rows[0];
+    assert.ok(foreignDelivery, 'Live source trigger did not enqueue the foreign event');
+    async function webhookSnapshot() {
+      const state = {};
+      for (const table of [
+        'redirect_webhooks',
+        'redirect_webhook_events',
+        'redirect_webhook_deliveries',
+        'redirect_webhook_attempts',
+      ])
+        state[table] = (
+          await db.query(
+            'SELECT to_jsonb(r) AS row FROM public.' +
+              table +
+              ' r WHERE workspace_id=$1 ORDER BY to_jsonb(r)::text',
+            [workspace],
+          )
+        ).rows;
+      return state;
+    }
+    const webhooksBefore = await webhookSnapshot();
+    const webhookBudgetsBefore = (
+      await db.query('SELECT * FROM public.redirect_webhook_budgets ORDER BY bucket')
+    ).rows;
+    const nativeAssetsBefore = await nativeAssetSnapshot();
     const foreignSnapshot = (
       await db.query(
         'SELECT to_jsonb(r) AS link,(SELECT to_jsonb(m) FROM public.redirect_link_metadata m WHERE redirect_key=$2) AS metadata,(SELECT to_jsonb(p) FROM public.redirect_link_policies p WHERE redirect_id=$1) AS policy FROM public.redirects r WHERE id=$1',
@@ -495,20 +645,47 @@ export async function verifyRedirectWorkspaceMembershipHttp(db, request, owner) 
       undefined,
       404,
     );
+    await db.exec('SAVEPOINT workspace_same_customer_keys');
+    const independent = {
+      clickId: ownClick,
+      customerExternalId: foreignCustomer,
+      eventId: foreignEvent,
+    };
+    const createdConversion = await call('/track/lead', 'POST', independent, undefined, 201);
+    assert.equal(createdConversion.duplicate, false);
+    assert.equal((await call('/track/lead', 'POST', independent)).duplicate, true);
     await call(
       '/track/lead',
       'POST',
-      { clickId: ownClick, customerExternalId: foreignCustomer, eventId: randomUUID() },
+      { ...independent, customerExternalId: 'different-local-customer' },
       undefined,
       409,
     );
+    const independentProfile = await call(
+      '/customers/profile?id=' + encodeURIComponent(foreignCustomer),
+    );
+    assert.equal(independentProfile.name, null);
     await call(
-      '/track/lead',
-      'POST',
-      { clickId: ownClick, customerExternalId: 'denied-foreign-event-key', eventId: foreignEvent },
+      '/customers/profile',
+      'PATCH',
+      {
+        customerExternalId: foreignCustomer,
+        version: customerVersion,
+        name: 'Stale foreign version',
+      },
       undefined,
       409,
     );
+    const localProfile = await call('/customers/profile', 'PATCH', {
+      customerExternalId: foreignCustomer,
+      version: null,
+      name: 'Independent local profile',
+    });
+    assert.equal(localProfile.name, 'Independent local profile');
+    assert.notEqual(localProfile.version, customerVersion);
+    assert.deepEqual(await customerSnapshot(), customersBefore);
+    await db.exec('ROLLBACK TO SAVEPOINT workspace_same_customer_keys');
+    await db.exec('RELEASE SAVEPOINT workspace_same_customer_keys');
     assert.equal(
       (
         await db.query(
@@ -518,8 +695,244 @@ export async function verifyRedirectWorkspaceMembershipHttp(db, request, owner) 
       localConversionsBefore,
     );
     assert.deepEqual(await customerSnapshot(), customersBefore);
+    const domainBudgetsBefore = (
+      await db.query('SELECT * FROM public.redirect_report_budgets ORDER BY bucket')
+    ).rows;
+    assert.deepEqual(await call('/domain-choices'), domainChoicesBefore);
+    await call('/domains/' + domain, 'GET', undefined, undefined, 404);
+    await call(
+      '/domains/' + domain,
+      'PATCH',
+      { version: domainVersion, archived: true },
+      undefined,
+      404,
+    );
+    await call('/domains/' + domain, 'DELETE', { version: domainVersion }, undefined, 404);
+    await call(
+      '/domains/' + domain + '/verify',
+      'POST',
+      { version: domainVersion },
+      undefined,
+      404,
+    );
+    for (const action of ['connect', 'refresh', 'disconnect', 'restart-validation'])
+      await call(
+        '/domains/' + domain + '/provider/' + action,
+        'POST',
+        { version: domainVersion },
+        undefined,
+        404,
+      );
+    const primary = await call('/domain-preference');
+    await call(
+      '/domain-preference',
+      'PATCH',
+      { version: primary.version, domainId: domain },
+      undefined,
+      400,
+    );
+    await call('/manual-records/' + link, 'GET', undefined, undefined, 404);
+    const manualVersion = (
+      await db.query('SELECT updated_at FROM public.redirects WHERE id=$1', [link])
+    ).rows[0].updated_at.toISOString();
+    await call(
+      '/manual-records/' + link,
+      'PATCH',
+      { expectedUpdatedAt: manualVersion, values: { notes: 'Denied foreign manual edit' } },
+      undefined,
+      404,
+    );
+    await call(
+      '/manual-records',
+      'POST',
+      {
+        values: {
+          type: 'SHORT',
+          slug: 'denied-http-domain',
+          target: 'https://example.org/denied',
+          domain_id: domain,
+        },
+      },
+      undefined,
+      404,
+    );
+    await call(
+      '/domains/' + domain + '/dns-setup/discover',
+      'POST',
+      { version: domainVersion },
+      undefined,
+      404,
+    );
+    await call('/domain-connect/' + domainOperation, 'GET', undefined, undefined, 404);
+    await call('/domains/' + domain + '/instructions', 'GET', undefined, undefined, 404);
+    await call(
+      '/domains/' + domain + '/instructions',
+      'POST',
+      {
+        version: domainVersion,
+        snapshot: 'c'.repeat(64),
+        email: 'foreign-domain@example.org',
+        requestId: domainRequest,
+      },
+      undefined,
+      404,
+    );
+    await call('/domains/' + domain + '/instruction-emails', 'GET', undefined, undefined, 404);
+    await call(
+      '/domains/' + domain + '/instruction-emails?requestId=' + domainRequest,
+      'GET',
+      undefined,
+      undefined,
+      404,
+    );
+    await call(
+      '/domains/' + domain + '/instruction-emails/' + domainMail,
+      'GET',
+      undefined,
+      undefined,
+      404,
+    );
+    await call(
+      '/domains/' + domain + '/instruction-emails/' + domainMail + '/cancel',
+      'POST',
+      {},
+      undefined,
+      404,
+    );
+    assert.deepEqual(await domainSnapshot(), domainsBefore);
+    assert.deepEqual(
+      (await db.query('SELECT * FROM public.redirect_report_budgets ORDER BY bucket')).rows,
+      domainBudgetsBefore,
+    );
+    await call('/webhooks/' + foreignWebhook, 'GET', undefined, undefined, 404);
+    await call(
+      '/webhooks/' + foreignWebhook,
+      'PATCH',
+      { version: foreignWebhookVersion, name: 'Denied' },
+      undefined,
+      404,
+    );
+    await call(
+      '/webhooks/' + foreignWebhook,
+      'DELETE',
+      { version: foreignWebhookVersion },
+      undefined,
+      404,
+    );
+    for (const action of ['test', 'rotate'])
+      await call(
+        '/webhooks/' + foreignWebhook + '/' + action,
+        'POST',
+        { version: foreignWebhookVersion },
+        undefined,
+        404,
+      );
+    await call(
+      '/webhooks',
+      'POST',
+      {
+        name: 'Denied foreign filter',
+        url: 'https://local-receiver.example.org/events',
+        linkIds: [link],
+      },
+      undefined,
+      400,
+    );
+    await call('/webhooks/' + foreignWebhook + '/deliveries', 'GET', undefined, undefined, 404);
+    await call(
+      '/webhooks/' + foreignWebhook + '/deliveries/' + foreignDelivery.id,
+      'GET',
+      undefined,
+      undefined,
+      404,
+    );
+    await call(
+      '/webhooks/' + foreignWebhook + '/deliveries/' + foreignDelivery.id + '/attempts',
+      'GET',
+      undefined,
+      undefined,
+      404,
+    );
+    await call(
+      '/webhooks/' + foreignWebhook + '/deliveries/' + foreignDelivery.id + '/replay',
+      'POST',
+      { version: foreignDelivery.version },
+      undefined,
+      404,
+    );
+    assert.deepEqual(await webhookSnapshot(), webhooksBefore);
+    assert.deepEqual(
+      (await db.query('SELECT * FROM public.redirect_webhook_budgets ORDER BY bucket')).rows,
+      webhookBudgetsBefore,
+    );
+    await call(
+      '/apps/' + foreignApp,
+      'PATCH',
+      { version: foreignAppVersion, label: 'Denied foreign app' },
+      undefined,
+      404,
+    );
+    await call('/apps/' + foreignApp, 'DELETE', { version: foreignAppVersion }, undefined, 404);
+    await call(
+      '/apps',
+      'POST',
+      {
+        label: 'Denied domain app',
+        platform: 'ios',
+        appId: 'ABCDE12345.org.qg.DeniedHttp',
+        domainId: domain,
+      },
+      undefined,
+      400,
+    );
+    assert.deepEqual(
+      await call('/public-app-association?hostname=queer.guide&platform=ios'),
+      associationBefore,
+    );
+    await call(
+      '/public-app-association?hostname=foreign-scope.example.com&platform=ios',
+      'GET',
+      undefined,
+      undefined,
+      404,
+    );
+    await call(
+      '/links/' + link + '/password-branding',
+      'PATCH',
+      { version: null, brandName: 'Denied foreign brand' },
+      undefined,
+      404,
+    );
+    await call(
+      '/links/' + link + '/password-branding/logo',
+      'POST',
+      {
+        version: null,
+        image:
+          'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+nmfEAAAAASUVORK5CYII=',
+      },
+      undefined,
+      404,
+    );
+    // Isolate maintenance from unrelated legacy tombstones. This transaction
+    // rolls back the scheduling change; the positive cleanup suite still runs.
+    await db.query(
+      "UPDATE public.redirect_qr_assets SET next_cleanup_at=clock_timestamp()+interval '1 day' WHERE workspace_id='58aa4340-8f21-4b7f-9a10-90be2da89c01'",
+    );
+    assert.equal(typeof cleanupAssets, 'function');
+    await cleanupAssets();
+    assert.deepEqual(await nativeAssetSnapshot(), nativeAssetsBefore);
     console.log(
-      'Workspace customer/analytics isolation: actual owner HTTP totals/breakdowns/pages exclude foreign events; foreign profiles/journeys/updates/clear/click attribution and global customer/event-key collisions deny without changing foreign snapshots or inserting a local conversion.',
+      'Workspace native/asset isolation: actual owner HTTP hides foreign app counts and public associations; foreign app/domain/branding mutations deny before Storage. The actual cleanup dispatcher leaves foreign due assets unclaimed with zero transport calls.',
+    );
+    console.log(
+      'Workspace webhook isolation: actual owner HTTP hides foreign active/archived counts and rejects foreign settings, secret rotation, test events, link filters, payload/attempt history and replay without changing foreign outbox state or budgets. Live source triggers remain enabled.',
+    );
+    console.log(
+      'Workspace domain isolation: actual owner HTTP excludes foreign domain counts/choices and denies foreign registry/manual/provider/DNS discovery/mail receipt/recovery/cancellation before budgets or external work; exact foreign domain/job/operation/mail snapshots stay unchanged.',
+    );
+    console.log(
+      'Workspace customer/analytics isolation: actual owner HTTP excludes foreign events and denies foreign-only profiles/journeys/updates/clear/click attribution; matching external customer/event IDs create independent local attribution with idempotent replay and private profiles; foreign snapshots remain unchanged.',
     );
     console.log(
       'Workspace QR/report isolation: actual owner HTTP hides foreign QR images, branding and personal/team reports; foreign creation/revocation/style/report/run/share and public-token requests are denied, preserving foreign records and report budgets.',
@@ -539,6 +952,99 @@ export async function verifyRedirectWorkspaceMembershipHttp(db, request, owner) 
       invitation: true,
       request: 'pending',
     });
+    for (const [kind, label] of [
+      ['folders', 'folder'],
+      ['tags', 'tag'],
+      ['templates', 'template'],
+    ]) {
+      const name = 'Foreign private HTTP ' + label;
+      const created = await call('/' + kind, 'POST', { name }, undefined, 201);
+      assert.equal(created.workspace_id, '58aa4340-8f21-4b7f-9a10-90be2da89c01');
+      assert.equal((await call('/' + kind + '/' + created.id)).name, name);
+      await call('/' + kind, 'POST', { name: ' ' + name.toUpperCase() + ' ' }, undefined, 409);
+      await call('/' + kind + '/' + created.id, 'DELETE');
+      const foreignId = kind === 'folders' ? folder : kind === 'tags' ? tag : template;
+      const table =
+        kind === 'folders'
+          ? 'redirect_link_folders'
+          : kind === 'tags'
+            ? 'redirect_link_tags'
+            : 'redirect_utm_templates';
+      const foreignRow = (
+        await db.query('SELECT name,workspace_id FROM public.' + table + ' WHERE id=$1', [
+          foreignId,
+        ])
+      ).rows[0];
+      assert.deepEqual(foreignRow, { name, workspace_id: workspace });
+    }
+    console.log(
+      'Workspace resource names: actual owner HTTP creates names already used by foreign folders/tags/templates, preserves within-workspace normalized uniqueness and keeps foreign rows unchanged.',
+    );
+    await db.exec('SAVEPOINT workspace_independent_defaults');
+    const currentStyle = await call('/qr-styles/workspace');
+    const updatedStyle = await call('/qr-styles/workspace', 'PATCH', {
+      version: currentStyle.version,
+      style: { dots: 'joined' },
+    });
+    assert.equal(updatedStyle.effectiveStyle.dots, 'joined');
+    await db.query(
+      "DELETE FROM public.redirect_domain_preferences WHERE workspace_id='58aa4340-8f21-4b7f-9a10-90be2da89c01'",
+    );
+    const missingPreference = await call('/domain-preference');
+    assert.equal(missingPreference.version, null);
+    await call('/domain-preference', 'PATCH', { domainId: null }, undefined, 400);
+    const initializedPreference = await call('/domain-preference', 'PATCH', {
+      version: null,
+      domainId: null,
+    });
+    assert.equal(typeof initializedPreference.version, 'string');
+    await call('/domain-preference', 'PATCH', { version: null, domainId: null }, undefined, 409);
+    assert.deepEqual(
+      (
+        await db.query(
+          "SELECT (SELECT to_jsonb(p) FROM public.redirect_domain_preferences p WHERE workspace_id=$1) AS preference,(SELECT to_jsonb(s) FROM public.redirect_qr_styles s WHERE workspace_id=$1 AND scope='workspace') AS style",
+          [workspace],
+        )
+      ).rows[0],
+      foreignDefaults,
+    );
+    await db.exec('ROLLBACK TO SAVEPOINT workspace_independent_defaults');
+    await db.exec('RELEASE SAVEPOINT workspace_independent_defaults');
+    console.log(
+      'Workspace defaults: actual owner HTTP changes local QR appearance and initializes its primary preference while foreign defaults stay exact.',
+    );
+    const localHuman = await call(
+      '/members',
+      'POST',
+      { kind: 'user', userId: owner, label: 'Local same-account membership', role: 'viewer' },
+      undefined,
+      201,
+    );
+    assert.equal(localHuman.workspace_id, '58aa4340-8f21-4b7f-9a10-90be2da89c01');
+    assert.notEqual(localHuman.id, human);
+    await call(
+      '/members',
+      'POST',
+      { kind: 'user', userId: owner, label: 'Duplicate local membership' },
+      undefined,
+      409,
+    );
+    assert.equal((await call('/members/' + localHuman.id, 'DELETE')).deleted, true);
+    const foreignHuman = (
+      await db.query(
+        'SELECT user_id,label,role,active FROM public.redirect_workspace_members WHERE id=$1 AND workspace_id=$2',
+        [human, workspace],
+      )
+    ).rows[0];
+    assert.deepEqual(foreignHuman, {
+      user_id: owner,
+      label: 'Foreign private HTTP requester',
+      role: 'member',
+      active: true,
+    });
+    console.log(
+      'Workspace membership identity: actual owner HTTP creates an independent membership for the same account as a foreign workspace, rejects local duplicates and deletes only the local membership.',
+    );
     console.log(
       'Workspace membership isolation: actual owner HTTP -> scoped SQL hides foreign members/credentials/resources/invitations/requests; foreign IDs cannot read/change/revoke/grant or authenticate, and foreign state stays unchanged. Temporary fixture fences roll back.',
     );

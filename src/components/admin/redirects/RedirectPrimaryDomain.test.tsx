@@ -8,7 +8,7 @@ const domainId = '00000000-0000-4000-8000-000000000001';
 let preference: {
   domainId: string | null;
   hostname: string | null;
-  version: string;
+  version: string | null;
   ready: boolean;
 };
 beforeEach(() => {
@@ -62,6 +62,34 @@ describe('versioned primary domain controls', () => {
     });
     expect(screen.getByRole('button', { name: 'Save primary domain' })).toBeDisabled();
     expect(mocks.api.mock.calls.some(([path]) => path.startsWith('/links'))).toBe(false);
+  });
+  it('initializes a missing workspace preference with an explicit null version', async () => {
+    preference = { ...preference, version: null };
+    show();
+    await waitFor(() => expect(screen.getByLabelText('Short-link domain')).toBeEnabled());
+    fireEvent.change(screen.getByLabelText('Short-link domain'), { target: { value: domainId } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save primary domain' }));
+    expect(await screen.findByText('Primary domain saved.')).toBeVisible();
+    expect(mocks.api).toHaveBeenCalledWith('/domain-preference', 'PATCH', {
+      version: null,
+      domainId,
+    });
+  });
+  it('retains a missing-row version through refresh and further editing', async () => {
+    preference = { ...preference, version: null };
+    const client = show();
+    await waitFor(() => expect(screen.getByLabelText('Short-link domain')).toBeEnabled());
+    fireEvent.change(screen.getByLabelText('Short-link domain'), { target: { value: domainId } });
+    preference = { ...preference, version: 'concurrent-initialization' };
+    await client.invalidateQueries({ queryKey: ['redirect-domain-preference', 'owner'] });
+    fireEvent.change(screen.getByLabelText('Short-link domain'), { target: { value: '' } });
+    fireEvent.change(screen.getByLabelText('Short-link domain'), { target: { value: domainId } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save primary domain' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Primary domain changed');
+    expect(mocks.api).toHaveBeenCalledWith('/domain-preference', 'PATCH', {
+      version: null,
+      domainId,
+    });
   });
   it('retains the editing version when a concurrent refresh changes the primary', async () => {
     const client = show();

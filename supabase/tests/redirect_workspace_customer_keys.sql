@@ -1,0 +1,35 @@
+BEGIN;
+ALTER TABLE public.redirects DROP CONSTRAINT redirects_pending_tenant_fence;
+ALTER TABLE public.redirect_events DROP CONSTRAINT redirect_events_pending_tenant_fence;
+ALTER TABLE public.redirect_link_conversions DROP CONSTRAINT redirect_link_conversions_pending_tenant_fence;
+ALTER TABLE public.redirect_link_customers DROP CONSTRAINT redirect_link_customers_pending_tenant_fence;
+ALTER TABLE public.redirect_customer_profiles DROP CONSTRAINT redirect_customer_profiles_pending_tenant_fence;
+SET LOCAL ROLE service_role;
+DO $$
+DECLARE actor uuid:=gen_random_uuid();other uuid:=gen_random_uuid();legacy uuid:='58aa4340-8f21-4b7f-9a10-90be2da89c01';root uuid;foreign_root uuid;click uuid:=gen_random_uuid();foreign_click uuid:=gen_random_uuid();foreign_conversion uuid;foreign_version uuid;first_id uuid;result jsonb;event jsonb;snapshot jsonb;
+BEGIN
+ INSERT INTO auth.users(id) VALUES(actor);INSERT INTO public.user_roles VALUES(actor,'admin');
+ INSERT INTO public.redirect_workspaces(id,name,slug) VALUES(other,'Customer keys fixture','customer-keys-fixture');
+ INSERT INTO public.redirects(type,slug,target) VALUES('SHORT','customer-keys-local','https://example.org/local') RETURNING id INTO root;
+ INSERT INTO public.redirects(workspace_id,type,slug,target) VALUES(other,'SHORT','customer-keys-foreign','https://example.org/foreign') RETURNING id INTO foreign_root;
+ INSERT INTO public.redirect_events(workspace_id,redirect_id,click_id,path,status) VALUES(legacy,root,click,'/go/customer-keys-local',302),(other,foreign_root,foreign_click,'/go/customer-keys-foreign',302);
+ INSERT INTO public.redirect_link_conversions(workspace_id,click_id,kind,customer_key,provider_event_id,event_name) VALUES(other,foreign_click,'lead','shared-customer:ü','shared-event:ü','Foreign event') RETURNING id INTO foreign_conversion;
+ INSERT INTO public.redirect_link_customers(workspace_id,customer_key,click_id) VALUES(other,'shared-customer:ü',foreign_click);
+ INSERT INTO public.redirect_customer_profiles(workspace_id,customer_key,name) VALUES(other,'shared-customer:ü','Private foreign profile') RETURNING version INTO foreign_version;
+ snapshot:=jsonb_build_object('conversion',(SELECT to_jsonb(c) FROM public.redirect_link_conversions c WHERE id=foreign_conversion),'anchor',(SELECT to_jsonb(c) FROM public.redirect_link_customers c WHERE workspace_id=other),'profile',(SELECT to_jsonb(p) FROM public.redirect_customer_profiles p WHERE workspace_id=other));
+ PERFORM set_config('request.headers',jsonb_build_object('x-qg-redirect-session-actor',actor)::text,true);
+ event:=jsonb_build_object('clickId',click,'customerExternalId','shared-customer:ü','eventId','shared-event:ü','kind','lead','eventName','Local event');
+ result:=public.record_redirect_conversion(event);first_id:=(result->>'id')::uuid;
+ IF (result->>'duplicate')::boolean OR first_id=foreign_conversion OR result->>'clickId'<>click::text THEN RAISE EXCEPTION 'Same external IDs failed independent attribution';END IF;
+ result:=public.record_redirect_conversion(event);
+ IF NOT (result->>'duplicate')::boolean OR (result->>'id')::uuid<>first_id THEN RAISE EXCEPTION 'Within-workspace idempotency failed';END IF;
+ BEGIN PERFORM public.record_redirect_conversion(event||'{"eventName":"Changed payload"}');RAISE EXCEPTION 'Event key reused with different payload';EXCEPTION WHEN unique_violation THEN NULL;END;
+ BEGIN PERFORM public.redirect_customer_profile('patch','shared-customer:ü',actor,NULL,jsonb_build_object('version',foreign_version,'name','Wrong version'));RAISE EXCEPTION 'Foreign profile version accepted';EXCEPTION WHEN unique_violation THEN NULL;END;
+ result:=public.redirect_customer_profile('patch','shared-customer:ü',actor,NULL,'{"version":null,"name":"Local independent profile"}');
+ IF result->>'name'<>'Local independent profile' OR result->>'version'=foreign_version::text THEN RAISE EXCEPTION 'Local profile collided with foreign profile';END IF;
+ BEGIN INSERT INTO public.redirect_link_customers(customer_key,click_id) VALUES('shared-customer:ü',click);RAISE EXCEPTION 'Local duplicate anchor accepted';EXCEPTION WHEN unique_violation THEN NULL;END;
+ DELETE FROM public.redirect_link_customers WHERE workspace_id=legacy AND customer_key='shared-customer:ü';
+ IF EXISTS(SELECT FROM public.redirect_customer_profiles WHERE workspace_id=legacy AND customer_key='shared-customer:ü') THEN RAISE EXCEPTION 'Local profile cascade failed';END IF;
+ IF jsonb_build_object('conversion',(SELECT to_jsonb(c) FROM public.redirect_link_conversions c WHERE id=foreign_conversion),'anchor',(SELECT to_jsonb(c) FROM public.redirect_link_customers c WHERE workspace_id=other),'profile',(SELECT to_jsonb(p) FROM public.redirect_customer_profiles p WHERE workspace_id=other))<>snapshot THEN RAISE EXCEPTION 'Independent customer operations changed foreign data';END IF;
+END $$;
+ROLLBACK;

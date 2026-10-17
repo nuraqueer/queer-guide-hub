@@ -134,7 +134,8 @@ async function verifyArtworkFixture(request) {
  const render=await artworkVerifierPromise;
  return render(request,'https://fixture.supabase.co',async()=>true,async()=>{},async()=>{throw new Error('Artwork verifier attempted an external fetch');});
 }
-const fixtureDnsFetch=async (input,options)=>{const url=new URL(String(input));
+let fixtureExternalRequests=0;
+const fixtureDnsFetch=async (input,options)=>{const url=new URL(String(input));fixtureExternalRequests++;
 if(url.origin==='https://api.resend.com'){
  if(url.pathname!=='/emails'||options.method!=='POST'||options.redirect!=='error'||new Headers(options.headers).get('Authorization')!=='Bearer fixture-mail-provider')throw new Error('Unexpected instruction email transport');
  const messageId=new Headers(options.headers).get('Idempotency-Key');if(!/^qg-domain-instructions\/v1\/[a-f0-9-]{36}$/.test(messageId))throw new Error('Missing stable email identity');
@@ -218,8 +219,14 @@ await db.exec(
 );
 let traps = 0,
   limited = 0;
+let sdkHeartbeatEnabled=false;
+async function refreshSdkRootDomain(){
+  await db.query("UPDATE public.redirect_domains SET verified_until=clock_timestamp()+interval '1 day',routing_seen_at=clock_timestamp() WHERE id=$1",[sdkRootDomain]);
+  await db.query('UPDATE public.redirect_domain_jobs SET checked_at=clock_timestamp() WHERE domain_id=$1',[sdkRootDomain]);
+}
 const server = createServer(async (req, res) => {
   try {
+    if(sdkHeartbeatEnabled)await refreshSdkRootDomain();
     if (req.url === '/api/redirects/redirect-probe') {
       res.writeHead(302, { Location: '/trap' });
       res.end();
@@ -272,20 +279,25 @@ const env = {
   REDIRECT_TEST_QR_LOGO:(await sharp({create:{width:64,height:64,channels:3,background:'#652895'}}).png().toBuffer()).toString('base64'),
 };
 async function run(command, args, extra = {}) {
-  // Each child gets a fresh simulated provider heartbeat. Long local suspension
-  // between language runs must not turn a positive ready-domain fixture stale.
-  await db.query("UPDATE public.redirect_domains SET verified_until=clock_timestamp()+interval '1 day',routing_seen_at=clock_timestamp() WHERE id=$1",[sdkRootDomain]);
-  await db.query('UPDATE public.redirect_domain_jobs SET checked_at=clock_timestamp() WHERE domain_id=$1',[sdkRootDomain]);
-  await new Promise((resolve, reject) => {
+  // Positive SDK examples have a simulated provider heartbeat, including after
+  // long compilation or host suspension mid-child. Later expiry tests opt out.
+  await refreshSdkRootDomain();
+  sdkHeartbeatEnabled=true;
+  try {await new Promise((resolve, reject) => {
     const child = spawn(command, args, { env, ...extra, stdio: ['ignore', 'pipe', 'pipe'] });
     let output = '';
     child.stdout.on('data', (chunk) => (output += chunk));
     child.stderr.on('data', (chunk) => (output += chunk));
     child.on('error', reject);
-    child.on('exit', (code) =>
-      code === 0 ? resolve() : reject(new Error(command + ' failed: ' + output)),
-    );
-  });
+    child.on('exit', async (code) => {
+      if(code===0){resolve();return;}
+      let diagnostic;
+      try {
+        diagnostic=(await db.query(`SELECT clock_timestamp() AS observed_at,d.workspace_id,d.archived,d.disabled,d.provider_id,d.ownership_state,d.verified_until,d.routing_seen_at,d.routing_protocol,d.routing_provider_id,j.state,j.desired,j.provider_status,j.ssl_status,j.checked_at,EXISTS(SELECT FROM public.user_roles WHERE user_id=j.requested_by AND role='admin') AS current_owner FROM public.redirect_domains d LEFT JOIN public.redirect_domain_jobs j ON j.domain_id=d.id AND j.workspace_id=d.workspace_id WHERE d.id=$1`,[sdkRootDomain])).rows;
+      } catch { /* Preserve the original child failure when diagnostics are unavailable. */ }
+      reject(new Error(command+' failed: '+output+(diagnostic?'\nReady-domain fixture: '+JSON.stringify(diagnostic):'')));
+    });
+  });}finally{sdkHeartbeatEnabled=false;}
   console.log(command + ' SDK: live HTTP → actual edge handler → isolated PostgreSQL passed');
 }
 try {
@@ -359,7 +371,11 @@ try {
     const response=await fetch(base+path,{method,headers:{Authorization:'Bearer '+credential,...(body?{'Content-Type':'application/json'}:{})},...(body?{body:JSON.stringify(body)}:{})});
     const data=await response.json();if(response.status!==expected)throw new Error('Report HTTP '+path+' expected '+expected+' received '+response.status+': '+JSON.stringify(data));return data;
   }
-  await verifyRedirectWorkspaceMembershipHttp(db,reportRequest,reportActor);
+  const workspaceFixtureConfig={domainConnectEnabled,instructionMailEnabled,sdkHeartbeatEnabled},workspaceFixtureRequests=fixtureExternalRequests;
+  domainConnectEnabled=true;instructionMailEnabled=true;sdkHeartbeatEnabled=true;
+  try {await verifyRedirectWorkspaceMembershipHttp(db,reportRequest,reportActor,{cleanupAssets:()=>policyRuntime.dispatchRedirectQrAssetCleanup(service,sdkArtworkStorage,fixtureDnsFetch)});}
+  finally {domainConnectEnabled=workspaceFixtureConfig.domainConnectEnabled;instructionMailEnabled=workspaceFixtureConfig.instructionMailEnabled;sdkHeartbeatEnabled=workspaceFixtureConfig.sdkHeartbeatEnabled;}
+  if(fixtureExternalRequests!==workspaceFixtureRequests)throw new Error('Workspace boundary fixture reached DNS/provider/Storage/mail transport');
   const lostRoleEvent='owner-context-race:'+webcrypto.randomUUID();
   loseConversionOwnerAfterContext=true;
   await reportRequest('/track/lead','POST',{clickId:click.rows[0].id,customerExternalId:'owner-context-race',eventId:lostRoleEvent},undefined,403);
