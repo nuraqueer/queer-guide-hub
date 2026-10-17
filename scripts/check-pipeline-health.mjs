@@ -1457,7 +1457,7 @@ if (!hygieneRes.ok) {
     const noReq = gaps.no_request_24h
     if (!noReq || noReq.finished === undefined) {
       console.error(
-        '✗ admin_automation_tracking_gaps returned no no_request_24h — sentinel not deployed (migration 99991792211841)',
+        '✗ admin_automation_tracking_gaps returned no no_request_24h — sentinel not deployed (migration 99991792224357)',
       )
       FAILED = true
     } else if (Number(noReq.finished) === 0) {
@@ -5831,7 +5831,7 @@ const DISOWNED_PROSE_CEILING = 380
 
 // ---------------------------------------------------------------------------
 // §  The admin review queue serves page 1 of an unfiltered request from a
-//    snapshot (2026-10-15, 99991792215935)
+//    snapshot (2026-10-15, 99991792224392)
 // ---------------------------------------------------------------------------
 // The counts cache above fixed the TOTALS. The row list was still a 41-branch
 // union sorted to take 50: measured 3,009ms for scope=all and two calls over
@@ -5856,7 +5856,7 @@ const DISOWNED_PROSE_CEILING = 380
   if (res.status === 404) {
     // Same deploy-window allowance as the counts cache above: the nightly run
     // checks out `main` and calls the LIVE backend.
-    console.warn('⚠ admin_review_top_signals() not deployed yet (migration 99991792215935?) — skipping')
+    console.warn('⚠ admin_review_top_signals() not deployed yet (migration 99991792224392?) — skipping')
   } else if (!res.ok) {
     console.error(`✗ admin_review_top_signals() returned HTTP ${res.status} — measured nothing`)
     FAILED = true

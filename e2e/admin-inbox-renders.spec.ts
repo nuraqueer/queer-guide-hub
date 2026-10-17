@@ -9,7 +9,7 @@ test.describe('unified admin review queue', () => {
   // list used to lead with them. `total` is compared against decisions_total here and against
   // all_total in the scope=all test below. Both contracts are asserted, neither dropped.
   //
-  // THIS REQUEST IS NO LONGER THE UNION CANARY. That changed in 99991792215935. The claim this
+  // THIS REQUEST IS NO LONGER THE UNION CANARY. That changed in 99991792224392. The claim this
   // replaces -- that the union is built before the scope filter, so every registered view executes
   // on every landing request and a plan-time type mismatch therefore surfaces right here -- was
   // true until then, and one such mismatch took this page down for six weeks. An unfiltered page-1
