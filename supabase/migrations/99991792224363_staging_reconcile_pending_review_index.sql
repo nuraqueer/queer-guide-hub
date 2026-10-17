@@ -116,7 +116,7 @@ create index if not exists idx_ingestion_staging_pending_review
 comment on index public.idx_ingestion_staging_pending_review is
   'Serves all three scans in run_staging_reconcile_committed (both cand CTEs and the closing '
   'still_pending count). Partial so its size tracks the pending backlog, not the corpus. '
-  'Before: 267,742 buffers / ~20s per run. After: 41 buffers / 0.32 ms. See 99991792212251.';
+  'Before: 267,742 buffers / ~20s per run. After: 41 buffers / 0.32 ms. See 99991792224363.';
 
 do $verify$
 declare

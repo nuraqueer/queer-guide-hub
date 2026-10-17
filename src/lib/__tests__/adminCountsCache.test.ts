@@ -1,5 +1,5 @@
 /**
- * Guards 99991792213105_admin_counts_cache.sql.
+ * Guards 99991792224368_admin_counts_cache.sql.
  *
  * `get_admin_counts()` was 4.9% of all database execution time — ~44
  * full-corpus aggregates re-run on every poll from every open admin tab. The
@@ -23,7 +23,7 @@ import { describe, expect, it } from 'vitest';
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 
-const MIGRATION = '99991792213105_admin_counts_cache.sql';
+const MIGRATION = '99991792224368_admin_counts_cache.sql';
 const MIGRATIONS_DIR = join(process.cwd(), 'supabase', 'migrations');
 
 function migrationSql(): string {

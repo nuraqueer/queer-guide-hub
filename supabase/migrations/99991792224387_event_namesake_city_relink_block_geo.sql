@@ -71,7 +71,7 @@ set city_id = v.right_city,
            coalesce(e.enrichment_status -> 'event_city_link', '{}'::jsonb)
              || jsonb_build_object(
                   'relinked_at', now(),
-                  'relinked_by', 'migration:99991792215136',
+                  'relinked_by', 'migration:99991792224387',
                   'relinked_from', v.wrong_city::text,
                   'evidence', 'event.state matches the target city region_name'
                 )
@@ -98,7 +98,7 @@ set city_id = null,
              || jsonb_build_object(
                   'blocked', v.reason,
                   'blocked_at', now(),
-                  'blocked_by', 'migration:99991792215136'
+                  'blocked_by', 'migration:99991792224387'
                 )
          )
 from (values
@@ -127,7 +127,7 @@ set latitude = null,
            coalesce(e.enrichment_status -> 'event_city_link', '{}'::jsonb)
              || jsonb_build_object(
                   'coords_retracted_at', now(),
-                  'coords_retracted_by', 'migration:99991792215136',
+                  'coords_retracted_by', 'migration:99991792224387',
                   'reason', 'coordinates were the 46.0/2.0 centroid-of-France placeholder; city link corroborated by state and postal 75011'
                 )
          )

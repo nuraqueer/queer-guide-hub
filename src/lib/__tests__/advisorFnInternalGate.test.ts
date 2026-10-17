@@ -37,7 +37,7 @@ const FN_RAW = readFileSync(root('supabase/functions/sync-supabase-advisors/inde
 const FN = stripTs(FN_RAW);
 const TOML = readFileSync(root('supabase/config.toml'), 'utf8');
 const MIG_RAW = readFileSync(
-  root('supabase/migrations/99991792213827_advisor_fn_internal_secret_gate.sql'),
+  root('supabase/migrations/99991792224378_advisor_fn_internal_secret_gate.sql'),
   'utf8',
 );
 const MIG = stripSql(MIG_RAW);
