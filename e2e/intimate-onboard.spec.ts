@@ -36,7 +36,20 @@ test.describe('intimate onboarding', () => {
 
     // POSITIVE CONTROL FIRST. Without it "no email wall" is equally true of a
     // loading state, a sign-in gate and a 404.
-    await expect(page.getByRole('heading', { name: /intimate profile/i })).toBeVisible({
+    //
+    // The control is the STEPPER'S OWN advance button, and the first draft of
+    // this fix got it wrong in a way worth recording: it waited for a heading
+    // "Intimate profile", which `IntimateOnboard.tsx` renders ONLY in its `!user`
+    // branch — the signed-out gate. The signed-in path renders `StepperShell`,
+    // whose only headings are the active step's label, so the control asserted a
+    // heading a signed-in user never sees and failed on correct code. Caught by
+    // the control itself failing in CI, not by reading. Grep found the string;
+    // it did not say which branch owned it.
+    //
+    // `nextLabel` is 'Next', or 'Activate' on the last step, so both are
+    // accepted — a one-step wizard must not read as a missing stepper. Disabled
+    // still satisfies toBeVisible, which is what the consent branch below needs.
+    await expect(page.getByRole('button', { name: /next|activate/i })).toBeVisible({
       timeout: 15_000,
     });
     await expect(page.getByText(/Verify your email first/i)).toHaveCount(0);
