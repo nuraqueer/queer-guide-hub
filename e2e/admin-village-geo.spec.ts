@@ -2,8 +2,10 @@
  * Queer Villages CMS geography — the fix in #2487, asserted against production.
  *
  * The reported symptom was "City / Country / Latitude / Longitude are empty, run
- * a backfill". The data was never missing (190/190 villages carry all four, and
- * city_id/country_id are NOT NULL so a gap is impossible). The CMS could not
+ * a backfill". The data was never missing (181/181 villages carry all four, and
+ * city_id/country_id are NOT NULL so a gap is impossible — the count was 190 when
+ * this was written and is 181 since the 14 whole-city villages were merged away
+ * by 20260928100000; re-measure rather than trusting either figure). The CMS could not
  * read them: `queer_villages` stores geography as FKs only, `relatedFields` is a
  * write-only name→FK map, and the two picker fields named columns that do not
  * exist — so the editor showed placeholders, and picking a city put `city` in
