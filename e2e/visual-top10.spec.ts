@@ -39,7 +39,29 @@ const ROUTES = [
 // 1px dimension mismatch fails BEFORE maxDiffPixelRatio applies — it broke the
 // nightly every run from 07-27 on. A viewport crop is dimension-stable, so the
 // page is still guarded above the fold instead of being flaky-red below it.
-const STATIC_ROUTES = new Set(['/trips']);
+//
+// /trips left it 2026-10-16, by the same rule and for a bigger reason: IT IS NO
+// LONGER A PAGE. The Hub consolidation made it a CLIENT-SIDE redirect onto
+// /hub/plans — the edge still answers /trips with 200, which is why `curl -L`
+// sees no redirect and only a browser lands on the Hub — so what this route
+// screenshots is the Hub's plans module behind its signed-out gate. Measured on
+// prod 2026-10-16: 991px tall against a 1280x720 baseline, i.e. a dimension
+// mismatch that failed before the 0.03 ratio was ever consulted, which is why
+// the tightest threshold in the file was also the one asserting the least.
+//
+// Its height is now whatever the Hub renders, so by this set's own criterion it
+// is not a static page. The route stays in ROUTES — it is a URL readers still
+// hit and the gate should render — but as a dimension-stable viewport crop.
+// EXPECT A HUB SCREENSHOT UNDER A `-trips-` BASELINE NAME: that is the redirect
+// working, not a mislabelled file.
+//
+// THE SET IS NOW EMPTY, so the `fullPage` + 0.03 branch below is unreachable and
+// every route is a viewport crop. Said out loud because an unreachable threshold
+// reads as an active gate: nothing in this file is currently guarded at 0.03.
+// The mechanism stays rather than being deleted — it is the re-entry point for a
+// page that is genuinely dimension-stable, and the criterion above is what to
+// judge that by.
+const STATIC_ROUTES = new Set<string>();
 
 // "The page has actually rendered", per route.
 //
