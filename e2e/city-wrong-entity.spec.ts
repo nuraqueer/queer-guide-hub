@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { anonHeaders } from './support/anonKey';
 
 // City pages must not publish another PLACE's encyclopaedia article.
 //
@@ -26,6 +27,7 @@ import { test, expect } from '@playwright/test';
 
 const BOT_UA = 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)';
 const BASE = process.env.PROD_BASE_URL ?? 'https://queer.guide';
+const SUPABASE_URL = process.env.VITE_SUPABASE_URL ?? 'https://xqeacpakadqfxjxjcewc.supabase.co';
 
 interface Case {
   slug: string;
@@ -35,6 +37,22 @@ interface Case {
   absent: RegExp[];
   /** What the row had been mistaken for, for the failure message. */
   was: string;
+  /**
+   * Set when the row has since been MERGED into a canonical city, in which case
+   * `/city/<slug>` is a 301 and the document to check is the canonical's.
+   *
+   * `arabkir` is the first: it is a DISTRICT of Yerevan, and was merged into it
+   * (`shell_status='merged'`, `duplicate_of_id` -> yerevan). Measured on prod
+   * 2026-10-17, `/city/arabkir` answers 301 -> `/city/yerevan`, and Playwright's
+   * `request.get` follows redirects by default — so this case was fetching
+   * Yerevan's HTML and asserting "Arabkir" was in it, which is why it reported
+   * "did not render its own name" rather than anything about the wrong entity.
+   *
+   * The guard is not dropped, because the question it asks still matters after a
+   * merge: the wrong place's facts must not have travelled to the survivor.
+   * Measured on the canonical: Arapgir 0, Malatya 0, Yerevan 27, Armenia 5.
+   */
+  mergedInto?: string;
 }
 
 const CASES: Case[] = [
@@ -77,7 +95,10 @@ const CASES: Case[] = [
   {
     slug: 'arabkir',
     was: 'Arapgir, Malatya, Turkey (Q626165) — 531 km away',
-    present: /Arabkir/i,
+    // Merged into Yerevan (it is a district of it), so the canonical's own name
+    // is what must be published. See `mergedInto` on the interface.
+    mergedInto: 'yerevan',
+    present: /Yerevan/i,
     absent: [/Arapgir/i, /Malatya/i, /Erebgir/i],
   },
   {
@@ -109,38 +130,82 @@ const CASES: Case[] = [
 test.describe('city pages do not publish another place’s article', () => {
   for (const c of CASES) {
     test(`/city/${c.slug} is not ${c.was}`, async ({ request }) => {
-      const res = await request.get(`${BASE}/city/${c.slug}`, {
+      // A merged row is a redirect, not a page. Assert the hop itself — with
+      // `maxRedirects: 0`, since the default follow is what hid this — and then
+      // read the canonical, where the wrong place's facts must also be absent.
+      if (c.mergedInto) {
+        const hop = await request.get(`${BASE}/city/${c.slug}`, {
+          headers: { 'User-Agent': BOT_UA },
+          maxRedirects: 0,
+        });
+        expect(hop.status(), `/city/${c.slug} should 301 once merged`).toBe(301);
+        expect(
+          hop.headers()['location'] ?? '',
+          `/city/${c.slug} should redirect to its canonical`,
+        ).toContain(`/city/${c.mergedInto}`);
+      }
+
+      const target = c.mergedInto ?? c.slug;
+      const res = await request.get(`${BASE}/city/${target}`, {
         headers: { 'User-Agent': BOT_UA },
       });
-      expect(res.status(), `/city/${c.slug} should render for a crawler`).toBe(200);
+      expect(res.status(), `/city/${target} should render for a crawler`).toBe(200);
       const html = await res.text();
 
       // POSITIVE half. Without this every `absent` assertion below is satisfied by a
       // 404, an empty body, or a page that failed to render.
-      expect(html, `/city/${c.slug} did not render its own name`).toMatch(c.present);
+      expect(html, `/city/${target} did not render its own name`).toMatch(c.present);
 
       for (const bad of c.absent) {
-        expect(
-          html,
-          `/city/${c.slug} still publishes ${c.was}: matched ${bad}`,
-        ).not.toMatch(bad);
+        expect(html, `/city/${c.slug} still publishes ${c.was}: matched ${bad}`).not.toMatch(bad);
       }
     });
   }
 
   // CONTROL. Burj Hammoud was in the same 167-row candidate set and was deliberately
-  // NOT repaired: its longitude is exactly 0.000000, so the 3,264 km measures OUR
-  // coordinate defect, and its identifier Q895235 and its article are both correct.
-  // If a later pass "cleans" it, this fails — the sweep is a candidate generator, not
-  // the decision.
-  test('/city/burj-hammoud keeps its CORRECT article (excluded by hand)', async ({ request }) => {
-    const res = await request.get(`${BASE}/city/burj-hammoud`, {
-      headers: { 'User-Agent': BOT_UA },
-    });
-    expect(res.status()).toBe(200);
-    const html = await res.text();
-    expect(html).toMatch(/Bourj Hammoud|Burj Hammoud/i);
-    expect(html, 'Burj Hammoud lost its correct Lebanon article').toMatch(/Lebanon|Beirut/i);
+  // NOT repaired: its identifier Q895235 and its article are both correct, so the
+  // 3,264 km measured OUR coordinate defect. If a later pass "cleans" it, this
+  // fails — the sweep is a candidate generator, not the decision.
+  //
+  // READ OVER REST, NOT THE CRAWLER HTML, and both halves of why are measured.
+  // This asserted a 200 and got 404 on 2026-10-17 while passing in the 10-15
+  // nightly; the row was touched at 2026-10-15 16:29, after that run. Two things
+  // changed and NEITHER is the thing this control guards:
+  //
+  //   1. It is now `shell_status='ghost'` + `seo_indexable=false` — zero venues
+  //      and events, so the city recompute deindexed it and `cityDetail` answers
+  //      a crawler with 404. Legitimate, and nothing to do with the identifier.
+  //   2. Its longitude is no longer 0.000000 but 35.54119, i.e. the coordinate
+  //      defect this control's own comment was built around HAS BEEN REPAIRED.
+  //      That is why the old premise no longer describes the row.
+  //
+  // So the question — is the correct article still on the row? — can no longer be
+  // asked of a page that deliberately does not render. Measured on the anon REST
+  // surface 2026-10-17: `wikidata_qid` is still Q895235 and the description still
+  // opens "Bourj Hammoud is a town and municipality in Lebanon". Asserting that
+  // keeps the control answering its real question instead of reporting a deindex
+  // as a retraction.
+  test('burj-hammoud keeps its CORRECT article and identifier (excluded by hand)', async ({
+    request,
+  }) => {
+    const res = await request.get(
+      `${SUPABASE_URL}/rest/v1/cities?select=slug,wikidata_qid,description&slug=eq.burj-hammoud`,
+      { headers: await anonHeaders(request) },
+    );
+    expect(res.ok(), `cities REST -> HTTP ${res.status()}`).toBeTruthy();
+    const rows = (await res.json()) as {
+      slug: string;
+      wikidata_qid: string | null;
+      description: string | null;
+    }[];
+
+    // Positive control for the control: a missing row would satisfy every
+    // assertion below vacuously.
+    expect(rows.length, 'burj-hammoud is not readable at all').toBe(1);
+    expect(rows[0].wikidata_qid, 'burj-hammoud lost its correct identifier').toBe('Q895235');
+    expect(rows[0].description ?? '', 'burj-hammoud lost its correct Lebanon article').toMatch(
+      /Lebanon|Beirut/i,
+    );
   });
 
   // The thirteenth row of this class, found by the coordinate sweep in 99991790619179
@@ -169,7 +234,9 @@ test.describe('city pages do not publish another place’s article', () => {
   // COORDINATES, so they are flagged for a human, not stripped. Denver is the largest
   // (117 venues) and its own prose is CORRECT — if a later pass starts auto-clearing on
   // distance alone, this page loses a good description and this test fails.
-  test('/city/denver keeps its correct article while flagged, not auto-cleared', async ({ request }) => {
+  test('/city/denver keeps its correct article while flagged, not auto-cleared', async ({
+    request,
+  }) => {
     const res = await request.get(`${BASE}/city/denver`, { headers: { 'User-Agent': BOT_UA } });
     expect(res.status()).toBe(200);
     const html = await res.text();
