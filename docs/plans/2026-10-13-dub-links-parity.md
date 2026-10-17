@@ -3819,7 +3819,7 @@ and reviewed domain transfer still require completion; no production mutation or
 full parity/release claim is made.
 
 
-Domain/manual/provider/mail isolation checkpoint: migration99991792173343 scopes32
+Domain/manual/provider/mail isolation checkpoint: migration99991792216123 scopes32
 functions/triggers across private domain pages/counts/choices/defaults, raw manual
 records, DNS verification/Domain Connect operations, provider reservations/receipts
 and instruction-mail draft/queue/status/claims/prepare/acknowledgement. Inserts carry
@@ -3861,7 +3861,7 @@ tenant ownership/uniqueness, creation/switching, reviewed transfer and live rele
 proof still remain; this checkpoint does not claim full parity or activation.
 
 
-Webhook isolation checkpoint: migration99991792173751 scopes private webhook
+Webhook isolation checkpoint: migration99991792216136 scopes private webhook
 administration, metadata/body/attempt serialization, link filters, rotation/test/
 replay, worker claim/prepare/finish and retention. Resource quotas are workspace-
 scoped; existing global abuse budgets remain. Event source-key uniqueness is now
@@ -3899,7 +3899,7 @@ reviewed domain transfer and live release proof remain open. No activation or
 production/provider/publication proof is claimed by these isolated checks.
 
 
-Native and asset isolation checkpoint: migration99991792173761 adds28 function
+Native and asset isolation checkpoint: migration99991792216142 adds28 function
 definitions across native app administration, public host-derived resolution,
 association/install/handoff paths, password branding and maintenance. Public calls
 use authoritative hostname identity; caller workspace headers cannot redirect public
@@ -3925,7 +3925,7 @@ activation audit. Background dispatch currently serves the sole active legacy
 workspace. Full parity and production release remain open.
 
 
-Legacy writer audit checkpoint: migration99991792173081 closes the remaining old
+Legacy writer audit checkpoint: migration99991792216117 closes the remaining old
 service policy setter's unscoped root lookup and ON CONFLICT update. It inserts
 explicit workspace identity and rejects foreign policy-key collisions atomically.
 Legacy authenticated metadata/campaign/bulk RPCs retain fixed legacy identity with
@@ -3944,13 +3944,13 @@ new workspace ownership/creation/switching, transfer and live release proof rema
 Main advanced with merge-gap audit scope migration99991792168441 while PR4437
 was open. Exact-head CI correctly rejected the unpublished domain allocation below
 that base. The allocator moved only the unmerged domain file from99991792131513
-to99991792173343. Previously merged allocations remain unchanged. The isolated
+to99991792216123. Previously merged allocations remain unchanged. The isolated
 loader sorts replacement files by actual deployment filename; reordered complete SQL, actual HTTP/five SDK runtimes and40-table backfill pass.
 All2363 migration version/parser checks, script lint and diff checks pass locally.
 Final-head CI and live release review remain required.
 
 
-Resource-name checkpoint: migration99991792173543 changes normalized folder, tag
+Resource-name checkpoint: migration99991792216130 changes normalized folder, tag
 and UTM-template name uniqueness to (workspace_id,lower(btrim(name))). Existing
 values and within-workspace duplicate rejection are preserved. All name writers
 were audited; none uses a name-based ON CONFLICT target. Rollback-only SQL and
@@ -3972,7 +3972,7 @@ Member/customer uniqueness, owner model, creation/switching, transfer and live
 release proof remain open; no second workspace is enabled by these indexes.
 
 
-Membership uniqueness checkpoint: migration99991792173946 replaces global user
+Membership uniqueness checkpoint: migration99991792216148 replaces global user
 uniqueness with UNIQUE(workspace_id,user_id), retaining the constraint name and
 machine members' nullable-user behavior. No grants, roles, active state or tenant
 activation rules change. Membership/session/invitation writers already use explicit
@@ -3993,7 +3993,7 @@ QR/default identities, tenant owners, creation/switching, transfer and live proo
 remain open.
 
 
-Customer/event key checkpoint: migration99991792174350 makes customer anchors,
+Customer/event key checkpoint: migration99991792216156 makes customer anchors,
 profiles and provider event IDs unique within workspace. Composite profile/visit
 relationships retain their existing deletion behavior. Conversion/profile writers
 use matching composite conflict targets; conversion replay still compares all
@@ -4022,7 +4022,7 @@ intentional data-quality holds were altered. QR/default identities, tenant owner
 creation/switching, reviewed transfer and live release proof remain open.
 
 
-QR/default identity checkpoint: migration99991792174887 makes primary-domain
+QR/default identity checkpoint: migration99991792216164 makes primary-domain
 preferences unique on(workspace_id,singleton) and QR styles on(workspace_id,scope).
 All style/logo conflict targets match those keys; another workspace's default no
 longer blocks local style edits or logo reservations. Missing primary preferences
