@@ -38,10 +38,24 @@ test('dictionary terms are the default and explicit All survives reload', async 
     'aria-pressed',
     'true',
   );
-  await expect(page.locator('main a[href="/tags/size-m"]')).toHaveCount(0);
+  // ASKED THROUGH SEARCH, because the default grid is no longer the whole corpus.
+  //
+  // This asserted `size-m` absent from the unsearched grid and present after
+  // switching to All. Measured on prod 2026-10-17: the landing grid renders ~31
+  // links and most are CATEGORY links (`/tags/c/...`), not terms — `size-m` is in
+  // NEITHER kind's default view and there is no Load more, so the positive half
+  // failed for a reason that has nothing to do with the kind filter.
+  //
+  // The claim worth keeping is the DISCRIMINATION — a label-kind term is withheld
+  // from Terms and included in All — and search is where that stays observable
+  // however much of the corpus the grid chooses to show. Measured both ways on the
+  // same page: 0 under Terms, 1 under All.
+  const search = page.getByRole('searchbox', { name: /search the glossary/i });
+  await search.fill('size m');
+  await expect(page.locator('main a[href^="/tags/size-m"]')).toHaveCount(0);
   await kinds.getByRole('button', { name: 'All', exact: true }).click();
   await expect(page).toHaveURL(/kind=all/);
-  await expect(page.locator('main a[href="/tags/size-m"]')).toBeVisible();
+  await expect(page.locator('main a[href^="/tags/size-m"]')).toBeVisible();
   await page.reload();
   await expect(kinds.getByRole('button', { name: 'All', exact: true })).toHaveAttribute(
     'aria-pressed',
@@ -59,19 +73,31 @@ test('labels remain searchable without unrelated encyclopedia previews', async (
 
 test('category changes expose the correct subcategories', async ({ page }) => {
   const rail = page.getByRole('navigation', { name: 'Topic lines', exact: true });
+  // THE CATEGORY NAME IS AN h2, NOT THE h1. Measured on prod 2026-10-17: on
+  // /tags/c/identity the only h1 is "Knowledge" — the page-level title shared by
+  // every category — and the category itself is the first h2 ("Identity", followed
+  // by "Looking for something else?"). So `heading level 1` resolved to
+  // "Knowledge" and all three assertions here failed on a heading that is not the
+  // one this test is about.
+  //
+  // Located BY NAME at level 2 rather than positionally: `main h2` carries more
+  // than one heading, so `.first()` would pass today and silently start asserting
+  // a different heading the moment one is inserted above it.
   await rail.getByRole('link', { name: /^Identity/ }).click();
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Identity');
+  await expect(
+    page.getByRole('heading', { level: 2, name: 'Identity', exact: true }),
+  ).toBeVisible();
   await expect(
     rail.getByRole('button', { name: 'Hide stops on Identity', exact: true }),
   ).toHaveAttribute('aria-expanded', 'true');
   await rail.getByRole('link', { name: /^Health/ }).click();
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Health');
+  await expect(page.getByRole('heading', { level: 2, name: 'Health', exact: true })).toBeVisible();
   await expect(
     rail.getByRole('button', { name: 'Hide stops on Health', exact: true }),
   ).toHaveAttribute('aria-expanded', 'true');
   await rail.getByRole('link', { name: /^Mental/ }).click();
   await expect(page).toHaveURL(/\/tags\/c\/mental-health$/);
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Mental');
+  await expect(page.getByRole('heading', { level: 2, name: 'Mental', exact: true })).toBeVisible();
   await expect(page.getByText(/terms · .* lines · .* stops/)).toHaveCount(0);
 });
 
