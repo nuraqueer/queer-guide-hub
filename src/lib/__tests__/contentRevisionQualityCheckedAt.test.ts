@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-const MIGRATION = '99991792178678_content_revision_ignore_quality_checked_at.sql';
+const MIGRATION = '99991792214774_content_revision_ignore_quality_checked_at.sql';
 const sql = readFileSync(join(process.cwd(), 'supabase/migrations', MIGRATION), 'utf8')
   .split('\n')
   .filter((l) => !l.trim().startsWith('--'))
