@@ -10,7 +10,6 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { Skeleton } from '@/components/ui/skeleton';
 import { GatedDetailFallback } from '@/components/safety/GatedDetailFallback';
-import { ShareEntityDialog } from '@/components/messaging/ShareEntityDialog';
 import { EventMoreEvents } from '@/components/events/EventMoreEvents';
 import { useBreadcrumbs } from '@/contexts/BreadcrumbContext';
 import { useAuth } from '@/hooks/useAuth';
@@ -40,7 +39,6 @@ import {
   EventWhere,
   fetchEvent,
   exportEventToCalendar,
-  formatEventDate,
   resolveEventCountry,
 } from './EventDetail.parts';
 import { PageContainer } from '@/components/layout/PageContainer';
@@ -67,7 +65,6 @@ export default function EventDetail() {
   const { user } = useAuth();
   const [userAttendance, setUserAttendance] = useState<string | null>(null);
   const [showEventTz, setShowEventTz] = useState(true);
-  const [sendEventOpen, setSendEventOpen] = useState(false);
   const venueRef = useRef<HTMLDivElement>(null);
 
   const { track } = useTrackEvent();
@@ -401,7 +398,6 @@ export default function EventDetail() {
       userAttendance={userAttendance}
       onAttendanceUpdate={handleAttendanceUpdate}
       onExportToCalendar={handleExportToCalendar}
-      onSendEvent={() => setSendEventOpen(true)}
     />
   );
 
@@ -502,25 +498,6 @@ export default function EventDetail() {
             </ErrorBoundary>
           </div>
         }
-      />
-
-      <ShareEntityDialog
-        open={sendEventOpen}
-        onOpenChange={setSendEventOpen}
-        entity={{
-          entity_table: 'events',
-          entity_id: event.id,
-          title: event.title,
-          subtitle: [
-            formatEventDate(event.start_date, event.end_date, event.timezone),
-            event.venues?.name,
-          ]
-            .filter(Boolean)
-            .join(' · '),
-          image_url: resolveEntityImage('event', event).url ?? null,
-          path: `/events/${event.slug || event.id}`,
-          gated: Boolean((event as { safety_gated?: boolean }).safety_gated),
-        }}
       />
     </>
   );
