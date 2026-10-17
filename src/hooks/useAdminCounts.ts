@@ -9,14 +9,22 @@ import { useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 
 /**
- * The RPC payload is *almost* a flat count map — `sla_hours` is a nested object
- * of per-queue SLA hours. Typing it as a bare Record<string, number> is a lie
- * that only holds while nothing enumerates the payload; anything doing
- * `Object.entries(counts)` would treat `sla_hours` as a queue with an object
+ * The RPC payload is *almost* a flat count map — two keys are not counts:
+ * `sla_hours` is a nested object of per-queue SLA hours, and `counts_as_of` is
+ * an ISO timestamp. Typing it as a bare Record<string, number> is a lie that
+ * only holds while nothing enumerates the payload; anything doing
+ * `Object.entries(counts)` would treat them as queues with an object or string
  * count. Consumers should look keys up by name (see config/adminQueues).
+ *
+ * `counts_as_of` exists because the payload is served from a cache refreshed by
+ * the `admin_counts_refresh` cron every 5 minutes, so the numbers lag by up to
+ * one interval by design — the probe used to run ~44 full-corpus aggregates on
+ * every poll from every open admin tab. Surfacing the age makes the lag visible
+ * rather than hidden; it is deliberately not used to invalidate the query.
  */
 export type AdminCounts = Record<string, number> & {
   sla_hours?: Record<string, number>;
+  counts_as_of?: string;
 };
 
 export async function fetchAdminCounts(): Promise<AdminCounts> {
