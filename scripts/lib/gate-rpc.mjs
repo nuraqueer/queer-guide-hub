@@ -114,20 +114,35 @@ export async function callRpc(url, init) {
 /**
  * Did this call fail to EVALUATE the gate, as opposed to finding it breached?
  *
- * Only these two, and the narrowness is the point: anything else — a 403, a
+ * Only these three, and the narrowness is the point: anything else — a 403, a
  * 404, a 500 naming a real error — is the server answering, and retrying it
  * would retry a genuine breach into silence.
+ *
+ * THE THIRD WAS MEASURED 2026-10-17. PostgREST answers
+ *   503 {"code":"PGRST002","message":"Could not query the database for the
+ *        schema cache. Retrying."}
+ * when it cannot reach Postgres at all — it could not even load the schema to
+ * route the call, so it evaluated nothing. Observed failing `No API-role
+ * writes on SECURITY DEFINER views` on #4470 during one of that day's
+ * saturation stalls, i.e. reporting a security gate it never ran as a security
+ * FAILURE. That is the same category error as the 57014 and the transport
+ * throw, one layer further out.
+ *
+ * Matched on the PGRST002 CODE, not on a bare 503: a 503 carrying some other
+ * body is not necessarily PostgREST declining to serve, and widening this is
+ * exactly how a real breach gets retried into silence.
  */
 export function notEvaluated(result) {
   if (!result || result.ok) return false
   if (result.status === NO_RESPONSE) return true
+  if (result.body?.includes('PGRST002')) return true
   return Boolean(result.body?.includes('57014'))
 }
 
 /** Human-readable reason, for a log line that has to name which happened. */
 export function stallReason(result) {
   if (!notEvaluated(result)) return null
-  return result.status === NO_RESPONSE
-    ? 'no HTTP response (transport stall)'
-    : 'Postgres statement_timeout (57014)'
+  if (result.status === NO_RESPONSE) return 'no HTTP response (transport stall)'
+  if (result.body?.includes('PGRST002')) return 'PostgREST could not reach Postgres (PGRST002)'
+  return 'Postgres statement_timeout (57014)'
 }

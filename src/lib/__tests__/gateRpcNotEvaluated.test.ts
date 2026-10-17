@@ -66,16 +66,52 @@ describe('scripts/lib/gate-rpc.mjs', () => {
     expect(stallReason(r)).toBe('Postgres statement_timeout (57014)');
   });
 
-  it('names the two non-evaluations APART, so a log says which happened', async () => {
-    // They need different fixes — one is the network, one is the query — so
-    // collapsing them into one message loses the only actionable half.
+  it('classifies a 503 PGRST002 as NOT EVALUATED', async () => {
+    // Measured 2026-10-17: PostgREST answers this when it cannot reach
+    // Postgres at all, so it never loaded the schema to route the call, let
+    // alone ran the gate. Before this arm existed it failed `No API-role
+    // writes on SECURITY DEFINER views` on #4470 during a saturation stall —
+    // reporting a security gate that never ran as a security FAILURE.
+    globalThis.fetch = vi.fn().mockResolvedValue(
+      res({
+        ok: false,
+        status: 503,
+        text: async () =>
+          '{"code":"PGRST002","message":"Could not query the database for the schema cache. Retrying."}',
+      }),
+    );
+    const r = await callRpc('https://example.invalid/x', {});
+    expect(notEvaluated(r)).toBe(true);
+    expect(stallReason(r)).toBe('PostgREST could not reach Postgres (PGRST002)');
+  });
+
+  it('does NOT widen to a bare 503 carrying some other body', async () => {
+    // The arm matches the PGRST002 CODE, not the status. A 503 that is not
+    // PostgREST declining to serve is the server answering, and retrying it is
+    // how a genuine breach gets retried into silence.
+    globalThis.fetch = vi
+      .fn()
+      .mockResolvedValue(res({ ok: false, status: 503, text: async () => 'upstream unavailable' }));
+    const r = await callRpc('https://example.invalid/x', {});
+    expect(notEvaluated(r)).toBe(false);
+    expect(stallReason(r)).toBeNull();
+  });
+
+  it('names the three non-evaluations APART, so a log says which happened', async () => {
+    // They need different fixes — the network, the query, or PostgREST's link
+    // to Postgres — so collapsing them loses the only actionable half.
     globalThis.fetch = vi.fn().mockRejectedValue(new TypeError('fetch failed'));
     const transport = await callRpc('https://example.invalid/x', {});
     globalThis.fetch = vi
       .fn()
       .mockResolvedValue(res({ ok: false, status: 500, text: async () => '57014' }));
     const timeout = await callRpc('https://example.invalid/x', {});
-    expect(stallReason(transport)).not.toBe(stallReason(timeout));
+    globalThis.fetch = vi
+      .fn()
+      .mockResolvedValue(res({ ok: false, status: 503, text: async () => 'PGRST002' }));
+    const schema = await callRpc('https://example.invalid/x', {});
+    const reasons = [stallReason(transport), stallReason(timeout), stallReason(schema)];
+    expect(new Set(reasons).size, `reasons collapsed: ${reasons.join(' | ')}`).toBe(3);
   });
 
   it('does NOT treat a real server answer as a non-evaluation', async () => {
