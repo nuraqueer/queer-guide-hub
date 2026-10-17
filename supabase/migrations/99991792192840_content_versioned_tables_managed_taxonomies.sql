@@ -75,7 +75,6 @@ DO $verify$
 DECLARE
   v_missing text;
   v_wrong   text;
-  v_armed   int;
 BEGIN
   -- P1. Every one of the nine new types is registered. Named individually
   -- rather than counted, because a count passes if one is missing and an
@@ -114,17 +113,23 @@ BEGIN
     RAISE EXCEPTION 'P3 failed: feedback must map to community_submissions, not to a feedback table';
   END IF;
 
-  -- P4. This migration armed nothing. Scoped to the nine it inserts, so an
-  -- operator having deliberately enabled one of the original 25 does not fail it.
-  SELECT count(*) INTO v_armed
-  FROM public.content_versioned_tables
-  WHERE enabled
-    AND registry_key IN (
-      'amenities','competitions','event_categories','kink_categories','kink_items',
-      'marketplace_categories','news_categories','tag_categories','taxonomy_terms'
-    );
-  IF v_armed <> 0 THEN
-    RAISE EXCEPTION 'P4 failed: % newly registered table(s) ship enabled; the rollout is table-by-table', v_armed;
-  END IF;
+  -- NO POSTCONDITION ON `enabled`, and removing one is the point of this edit.
+  --
+  -- P4 used to assert the nine ship disabled. That pins a TRANSIENT: the column
+  -- default is `false`, so the migration does arm nothing, but whether a row is
+  -- enabled in PRODUCTION afterwards is an operator decision. Measured on prod
+  -- 2026-10-17, all 34 rows are enabled — the rollout simply completed — so the
+  -- assertion was false about the live database while remaining true about this
+  -- file. Left in, it would have RAISEd on the next `db push` and aborted the
+  -- push for EVERY queued migration in the repo, which is the blast radius
+  -- 20810101100100 already paid for once.
+  --
+  -- The claim worth keeping is about the FILE, not the database, and it is
+  -- asserted where it belongs: `arms nothing — every row ships disabled` in
+  -- contentVersionedTablesDrift.test.ts parses this migration's SQL and fails
+  -- if it ever writes `enabled` in the VALUES list or SETs it true.
+  --
+  -- General rule this is an instance of: assert what must never be true again,
+  -- not what is momentarily true.
 END
 $verify$;
