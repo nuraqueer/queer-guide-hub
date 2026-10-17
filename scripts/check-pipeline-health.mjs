@@ -1353,7 +1353,7 @@ if (!hygieneRes.ok) {
     const noReq = gaps.no_request_24h
     if (!noReq || noReq.finished === undefined) {
       console.error(
-        '✗ admin_automation_tracking_gaps returned no no_request_24h — sentinel not deployed (migration 99991792174107)',
+        '✗ admin_automation_tracking_gaps returned no no_request_24h — sentinel not deployed (migration 99991792211841)',
       )
       FAILED = true
     } else if (Number(noReq.finished) === 0) {

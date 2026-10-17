@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
-// Guard for 99991792174107_pgnet_request_id_recycling.
+// Guard for 99991792211841_pgnet_request_id_recycling.
 //
 // pg_net's request-id sequence reset on 2026-10-12 and began replaying ids
 // that public.admin_automation_run_requests already held. request_id was that
@@ -11,7 +11,7 @@ import { describe, expect, it } from 'vitest';
 // filing; the run then had zero requests, which the reaper books as a
 // legitimate conditional no-op — a permanent green that can neither
 // auto-pause nor record a real failure. 0.6% of runs/day before, 62.8% after.
-const MIGRATION = '99991792174107_pgnet_request_id_recycling.sql';
+const MIGRATION = '99991792211841_pgnet_request_id_recycling.sql';
 
 const ROOT = join(__dirname, '..', '..', '..');
 const sql = readFileSync(join(ROOT, 'supabase/migrations', MIGRATION), 'utf8');
