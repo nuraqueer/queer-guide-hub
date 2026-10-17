@@ -138,32 +138,33 @@ test.describe('Admin pipelines — authenticated', () => {
     await expect(page.getByPlaceholder(/Type to search nodes/i)).toBeVisible({ timeout: 10_000 });
   });
 
-  test('⌘K in the builder opens the ADMIN palette, not quick-add (known conflict)', async ({
-    page,
-  }) => {
-    // This asserts the CURRENT behaviour, and it is a defect rather than a
-    // preference. AdminCommandPaletteHost and PipelineBuilder both bind
-    // `mod+k` on `window` with no capture flag and neither stops propagation,
-    // so both fire; the shell's palette mounts higher, registers first, and
-    // renders over the builder's. Measured from the run-38947937095 snapshot:
-    // pressing ⌘K in the builder produces the admin palette's combobox
-    // ("Quality: Events", "New Event", …), never "Type to search nodes".
+  test('⌘K in the builder opens quick-add, and the admin palette stays shut', async ({ page }) => {
+    // Re-pointed deliberately, which is exactly what the previous version of
+    // this test asked for. It pinned the DEFECT — AdminCommandPaletteHost and
+    // PipelineBuilder both bound `mod+k` on `window` in the bubble phase with
+    // neither stopping propagation, so both fired and the shell's palette,
+    // mounting higher, rendered over the builder's — and said in as many words:
+    // "whoever fixes the binding sees this test go red and updates it
+    // deliberately". The builder now registers in the CAPTURE phase and calls
+    // stopPropagation() on ⌘K, so the builder's quick-add wins.
     //
-    // The old spec asserted the builder's palette here and could not pass. It
-    // is NOT quietly re-pointed at the admin palette as though that were
-    // intended: pinning the observed behaviour keeps the conflict visible, so
-    // whoever fixes the binding sees this test go red and updates it
-    // deliberately. Fixing the shortcut itself is a product decision and is
-    // tracked separately.
+    // BOTH directions are asserted. "quick-add is visible" alone still passes
+    // when both palettes open, which is the original defect — the whole point
+    // is that the admin one no longer opens here.
     await gotoBuilder(page);
     const isMac = await page.evaluate(() => navigator.platform.includes('Mac'));
     await page.keyboard.press(isMac ? 'Meta+k' : 'Control+k');
 
+    await expect(
+      page.getByPlaceholder(/Type to search nodes/i),
+      'the builder quick-add palette did not open on ⌘K — the capture-phase binding may have regressed',
+    ).toBeVisible({ timeout: 10_000 });
+
     const adminPalette = page.getByRole('dialog').filter({ hasText: /New Personality/i });
     await expect(
       adminPalette,
-      'the admin command palette no longer swallows ⌘K — re-point this test at the builder quick-add palette',
-    ).toBeVisible({ timeout: 10_000 });
+      'the admin command palette opened over the builder again — stopPropagation on ⌘K regressed',
+    ).toBeHidden();
   });
 
   test('Audit tab shows event timeline', async ({ page }) => {
