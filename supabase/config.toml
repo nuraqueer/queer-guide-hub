@@ -173,6 +173,14 @@ verify_jwt = false
 [functions.import-ilga-data]
 verify_jwt = false
 
+# verify_jwt only proves a JWT is VALID, never what role it carries — so with
+# it on, the publishable anon key (public, it ships in the client bundle) was
+# enough to invoke this and write api_error rows. Measured on prod 2026-10-16.
+# The real gate is now requireInternalOrAdmin in the function body, reached by
+# cron with X-Internal-Secret from Vault.
+[functions.sync-supabase-advisors]
+verify_jwt = false
+
 # Same shape as import-ilga-data: invoked by pg_cron through net.http_post, and
 # it gates itself with requireInternalOrAdmin (x-internal-secret or admin JWT).
 [functions.import-tgeu-tmm]

@@ -1436,6 +1436,46 @@ if (!hygieneRes.ok) {
       FAILED = true
     }
 
+    // A run the reaper closed as "committed without issuing an HTTP request"
+    // is correct for a conditional poster and is ALSO what a DROPPED FILING
+    // looks like — and a run with zero filed requests can never increment
+    // consecutive_failures, so it is a permanent green that can neither
+    // auto-pause nor record a real failure.
+    //
+    // That is not hypothetical: pg_net's request-id sequence reset on
+    // 2026-10-12 and replayed ids admin_automation_run_requests already held,
+    // whose PRIMARY KEY was request_id alone, so `on conflict do nothing`
+    // silently swallowed the filing. Measured share of finished runs:
+    // 0.6%/day for the whole preceding week (48 runs — the genuinely
+    // conditional posters), then 9.4% → 48.0% → 24.7% → 62.8%. 5% is ~8x the
+    // measured baseline and catches it on day one.
+    //
+    // A RATE, not a zero-invariant: conditional posters are legitimate. The
+    // denominator is read first, because zero no_request out of zero finished
+    // runs is a dead reaper, not a clean bill — and an absent key must not
+    // read as a clean corpus either.
+    const noReq = gaps.no_request_24h
+    if (!noReq || noReq.finished === undefined) {
+      console.error(
+        '✗ admin_automation_tracking_gaps returned no no_request_24h — sentinel not deployed (migration 99991792224357)',
+      )
+      FAILED = true
+    } else if (Number(noReq.finished) === 0) {
+      console.error('✗ no automation run finished in 24h — the reaper is not running at all')
+      FAILED = true
+    } else if (Number(noReq.pct) > 5) {
+      console.error(
+        `✗ ${noReq.no_request} of ${noReq.finished} automation runs in 24h (${noReq.pct}%) filed NO request — ` +
+          `baseline is 0.6%. Runs with zero filed requests book as permanent greens and can never auto-pause. ` +
+          `Check whether pg_net's id sequence has reset below max(request_id) in admin_automation_run_requests.`,
+      )
+      FAILED = true
+    } else {
+      console.log(
+        `✓ no_request runs at ${noReq.pct}% of ${noReq.finished} finished runs in 24h (baseline 0.6%)`,
+      )
+    }
+
     // A client-side pg_net timeout is absence of evidence, not evidence of
     // failure, so it is recorded as 'partial' and deliberately does NOT
     // auto-pause. That makes this warning the only thing standing between an
@@ -5788,6 +5828,106 @@ const DISOWNED_PROSE_CEILING = 380
     }
   }
 }
+
+// ---------------------------------------------------------------------------
+// §  The admin review queue serves page 1 of an unfiltered request from a
+//    snapshot (2026-10-15, 99991792224392)
+// ---------------------------------------------------------------------------
+// The counts cache above fixed the TOTALS. The row list was still a 41-branch
+// union sorted to take 50: measured 3,009ms for scope=all and two calls over
+// the 8s timeout in one session. admin_review_queue_top holds the page-1
+// ordering; measured after, all=95ms and decisions=37ms, with the items array
+// byte-identical to the live path on all five scopes.
+//
+// THIS SECTION ALSO WATCHES THE RELOCATED CANARY, which is the part worth
+// knowing. e2e/admin-inbox-renders.spec.ts used to rely on the landing request
+// executing every registered view, so a plan-time UNION type mismatch surfaced
+// there (one once took the page down for six weeks). Serving page 1 from a
+// snapshot moves that signal off the user request and into
+// refresh_admin_review_queue_top, which builds the SAME full-projection union.
+// So a stale snapshot here is not only "the ordering is old" -- it is also
+// "the union may no longer plan and nothing else is looking".
+{
+  const res = await fetch(`${BASE}/rest/v1/rpc/admin_review_top_signals`, {
+    method: 'POST',
+    headers: { ...headers, 'Content-Type': 'application/json' },
+    body: '{}',
+  })
+  if (res.status === 404) {
+    // Same deploy-window allowance as the counts cache above: the nightly run
+    // checks out `main` and calls the LIVE backend.
+    console.warn('⚠ admin_review_top_signals() not deployed yet (migration 99991792224392?) — skipping')
+  } else if (!res.ok) {
+    console.error(`✗ admin_review_top_signals() returned HTTP ${res.status} — measured nothing`)
+    FAILED = true
+  } else {
+    const sig = await res.json()
+    if (sig?.probe_ok !== true) {
+      console.error('✗ admin_review_top_signals() probe_ok is not true — measured nothing')
+      FAILED = true
+    } else {
+      // DENOMINATOR FIRST, for the same reason as every other block here: an
+      // empty snapshot, a revoked grant and a healthy one all report 0 stale.
+      const rows = Number(sig.rows ?? 0)
+      const combos = Number(sig.combos ?? 0)
+      const depth = Number(sig.depth ?? 0)
+      console.log(`  review queue page-1 snapshot: ${rows} rows / ${combos} of 15 (scope,sort) combinations / depth ${depth}`)
+      if (rows <= 0) {
+        console.error(
+          '✗ admin_review_queue_top is EMPTY, so every unfiltered /admin request falls back to ' +
+            'the 41-branch union — silently, because the read path just takes the slow branch. ' +
+            'That is the 3-12s latency and the `Critical paths` flake returning with nothing ' +
+            'saying so. Run select public.refresh_admin_review_queue_top();',
+        )
+        FAILED = true
+      } else if (Number(sig.refresh_cron_active ?? 0) !== 1) {
+        console.error(
+          '✗ the admin_review_queue_top_refresh cron is absent or inactive, so the snapshot is ' +
+            'frozen AND the relocated UNION type-mismatch canary is no longer firing. An ' +
+            "action->>'type'='rpc' row carries no command the reconciler can reschedule from, so " +
+            're-enabling the registry row alone leaves it on-but-unscheduled.',
+        )
+        FAILED = true
+      } else {
+        // Staleness here is NOT the counts-cache failure mode. The item payload
+        // is read live on every request, so a stale snapshot cannot publish a
+        // stale title -- what goes wrong is the ORDERING ages, and rows decided
+        // since the refresh drop out, so page 1 quietly shrinks below 50.
+        const age = Number(sig.age_seconds ?? 0)
+        if (age > 3600) {
+          console.error(
+            `✗ the page-1 snapshot is ${Math.round(age / 60)} minutes old against a */2 cron. ` +
+              'Either the refresh is failing — check cron.job_run_details for ' +
+              'admin_review_queue_top_refresh — or the union it builds no longer plans, which is ' +
+              'the type mismatch this job exists to catch. Read the job output before assuming ' +
+              'the former: a refresher that cannot build its union fails exactly like a dead cron.',
+          )
+          FAILED = true
+        } else {
+          console.log(`✓ review queue page-1 snapshot fresh (${age}s old), refresher scheduled`)
+          if (combos < 15) {
+            // NOT a failure. A scope with no matching rows produces no snapshot
+            // entry, the read path's EXISTS check misses, and that request falls
+            // through to the live path — which returns the same empty list
+            // quickly, because the filter matches nothing. Worth printing so a
+            // combination disappearing for a worse reason is visible.
+            console.warn(
+              `⚠ only ${combos} of 15 (scope,sort) combinations are cached — expected when a ` +
+                'scope legitimately has no rows; those requests take the live path.',
+            )
+          }
+          if (age > 600) {
+            console.warn(
+              `⚠ page-1 snapshot is ${Math.round(age / 60)} min old — more than a few missed */2 ` +
+                'ticks, but inside the gate.',
+            )
+          }
+        }
+      }
+    }
+  }
+}
+
 
 if (FAILED) {
   console.error('')

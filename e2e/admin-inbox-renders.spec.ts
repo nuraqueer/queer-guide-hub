@@ -6,11 +6,22 @@ test.describe('unified admin review queue', () => {
   test.skip(!authenticated, 'Requires the configured admin session');
   // The landing scope is 'decisions' since 99991791872772: all_total also counts ~281k machine
   // detector findings ("this field is empty") on which no human decision exists, so the default
-  // list used to lead with them. The union itself is built BEFORE the scope filter, so every
-  // registered view still executes on this request -- the plan-time UNION type mismatch that took
-  // this page down for six weeks is caught here exactly as before. What moved is only which rows
-  // survive into `filtered`, which is why `total` is compared against decisions_total here and
-  // against all_total in the scope=all test below. Both contracts are asserted, neither dropped.
+  // list used to lead with them. `total` is compared against decisions_total here and against
+  // all_total in the scope=all test below. Both contracts are asserted, neither dropped.
+  //
+  // THIS REQUEST IS NO LONGER THE UNION CANARY. That changed in 99991792224392. The claim this
+  // replaces -- that the union is built before the scope filter, so every registered view executes
+  // on every landing request and a plan-time type mismatch therefore surfaces right here -- was
+  // true until then, and one such mismatch took this page down for six weeks. An unfiltered page-1
+  // request is now served from admin_review_queue_top without touching the union at all (measured
+  // 3,009ms -> 95ms for scope=all), so a mismatch would NOT red this test.
+  //
+  // The canary moved to refresh_admin_review_queue_top, which builds the SAME full-projection
+  // union on a */2 cron: if it stops planning, the refresh fails, the snapshot goes stale, and
+  // check-pipeline-health's admin_review_top_signals section fails. Do NOT restore the old claim
+  // on the grounds that this test still passes -- it passes either way, which is precisely why
+  // the protection had to be relocated rather than left implied. The lever for putting the union
+  // back into a user request is admin_review_queue_top_depth(), not this spec.
   test('the landing queue renders the full registered source contract', async ({ page }) => {
     const responsePromise = page.waitForResponse(
       (r) =>

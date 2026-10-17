@@ -34,9 +34,7 @@ BEGIN
  BEGIN PERFORM public.finish_redirect_qr_image_logo(actor,NULL,foreign_draft,foreign_asset);RAISE EXCEPTION 'Foreign draft upload attached';EXCEPTION WHEN no_data_found THEN NULL;END;
  BEGIN PERFORM public.redirect_qr_styles_for_links(ARRAY[foreign_link]);RAISE EXCEPTION 'Foreign root QR style obtained';EXCEPTION WHEN no_data_found THEN NULL;END;
  BEGIN PERFORM public.redirect_qr_style_resource(actor,foreign_domain);RAISE EXCEPTION 'Foreign domain QR branding read';EXCEPTION WHEN no_data_found THEN NULL;END;
- BEGIN PERFORM public.redirect_qr_style_resource(actor,p_values=>'{"version":null,"style":{"dots":"circle"}}');RAISE EXCEPTION 'Foreign workspace style overwritten';EXCEPTION WHEN unique_violation THEN NULL;END;
  BEGIN PERFORM public.reserve_redirect_qr_logo(actor,foreign_domain,NULL,'image/png',8,1,1,repeat('e',64));RAISE EXCEPTION 'Foreign domain logo reserved';EXCEPTION WHEN no_data_found THEN NULL;END;
- BEGIN PERFORM public.reserve_redirect_qr_logo(actor,NULL,NULL,'image/png',8,1,1,repeat('e',64));RAISE EXCEPTION 'Foreign workspace style upload reserved';EXCEPTION WHEN unique_violation THEN NULL;END;
  BEGIN PERFORM public.finish_redirect_qr_logo(actor,foreign_asset);RAISE EXCEPTION 'Foreign logo attached';EXCEPTION WHEN invalid_parameter_value THEN NULL;END;
  IF public.redirect_saved_report_resource('list',actor,NULL,p_values=>'{"view":"all"}')->>'count'<>'0' THEN RAISE EXCEPTION 'Foreign report page/count leaked';END IF;
   BEGIN PERFORM public.redirect_saved_report_resource('get',actor,NULL,foreign_report);RAISE EXCEPTION 'Foreign report read';EXCEPTION WHEN no_data_found THEN NULL;END;

@@ -66,9 +66,34 @@
  *                            prefix for user-defined secrets, so we drop it)
  *   SUPABASE_URL             (auto — used to derive project ref)
  *   SUPABASE_SERVICE_ROLE_KEY (auto)
+ *   INTERNAL_INVOKE_SECRET   (the real gate — see AUTH below)
+ *
+ * AUTH (changed 2026-10-16). This ran with `verify_jwt = true` and NO gate of
+ * its own, which is weaker than it looks: the gateway's verify_jwt checks only
+ * that the JWT is VALID, never what role it carries. The publishable anon key
+ * ships in the client bundle (src/integrations/supabase/client.ts) and is
+ * therefore public, so it was enough to invoke this. Measured on prod: a plain
+ * curl with that key ran the function. And it is not read-only — it writes
+ * `api_error` rows via `upsert_api_error` and auto-resolves others — so any
+ * visitor could flood the triage board or force repeated Management-API
+ * advisor pulls against an already strained project.
+ *
+ * It now uses the posture the pipeline-* and source-* functions already use:
+ * `verify_jwt = false` at the gateway plus `requireInternalOrAdmin` in the
+ * body, which accepts X-Internal-Secret (held in Vault, so it never leaves the
+ * database), a service-role bearer, or an admin JWT — and refuses the anon key.
+ *
+ * The cron deliberately keeps sending its `Authorization: Bearer
+ * <legacy_anon_key>` header ALONGSIDE the new X-Internal-Secret. That is what
+ * makes the rollout window-free in BOTH orders: the deploy workflow runs
+ * `db push` before `functions deploy`, so the new cron command is briefly live
+ * against the OLD function (which still demands a JWT and ignores the extra
+ * header), and after the deploy the new function short-circuits on the secret
+ * before it ever looks at the bearer.
  */
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.50.5';
+import { requireInternalOrAdmin } from '../_shared/supabase-client.ts';
 
 interface AdvisorLint {
   name: string;
@@ -135,6 +160,13 @@ Deno.serve(async (req) => {
   if (!ref) return json({ error: 'Cannot derive project ref from SUPABASE_URL' }, 500);
 
   const svc = createClient(supabaseUrl, serviceKey);
+
+  // 0. Gate. MUST come before the Management-API pull and before any write:
+  //    an unauthorised caller should cost nothing, not an advisor fetch. The
+  //    service client is built first only because the gate needs it to resolve
+  //    an admin JWT; it is not used for anything until the gate passes.
+  const auth = await requireInternalOrAdmin(req, svc);
+  if (auth instanceof Response) return auth;
 
   // 1. Pull advisor findings.
   let security: AdvisorLint[];

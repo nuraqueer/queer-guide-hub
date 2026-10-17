@@ -4,13 +4,14 @@ Status: the identity/backfill and request-context foundation is implemented
 locally. Multiple-workspace activation, full tenant isolation, transfer endpoints
 and production transfer remain open.
 
-The existing Redirects workspace is global. `redirect_workspace_members.user_id`
-is unique globally, owners come from application `user_roles=admin`, resource
-rows lack a workspace identity and several permission helpers interpret a null
-principal as owner. `redirect_domain_actor` checks that global owner role. Changing
-`redirect_domains.created_by` cannot move a domain into an independently secured
-workspace. Existing service-role RPC execution bypasses table RLS, so adding only
-RLS policies would also leave the API unsafe.
+The original Redirects workspace was global. Resource identity, private lookup
+predicates, organization names and human membership uniqueness are now scoped to
+workspace. Owners still come from application `user_roles=admin` for the legacy
+workspace, and new-tenant activation remains fenced. Explicit ownership, remaining
+resource-key uniqueness and public/service activation work must precede workspace
+creation and transfer. Changing `redirect_domains.created_by` cannot establish that
+boundary. Service-role RPCs bypass table RLS, so their own workspace predicates
+remain necessary alongside direct-user RLS.
 
 ## Product contract
 
@@ -304,3 +305,246 @@ customer CI is required. Product activation fences stay intact. Public resolver,
 provider/background/cleanup writers, tenant ownership/uniqueness, creation/switching
 and reviewed domain transfer still require completion; no production mutation or
 full parity/release claim is made.
+
+
+Domain/manual/provider/mail isolation checkpoint: migration99991792216123 scopes32
+functions/triggers across private domain pages/counts/choices/defaults, raw manual
+records, DNS verification/Domain Connect operations, provider reservations/receipts
+and instruction-mail draft/queue/status/claims/prepare/acknowledgement. Inserts carry
+workspace identity; private upserts cannot attach a foreign job. Link/root/archive/
+delete triggers use authoritative row workspace. Public verified-host lookup remains
+explicitly legacy-only, with service workers selecting the sole active legacy
+workspace. Provisioning rows cannot be served, refreshed, leased or acknowledged.
+Global hostname uniqueness, global abuse caps and all activation fences remain.
+
+Rollback-only SQL seeds a ready foreign domain/provider job, queued and leased
+mail, manual record and DNS review owned by the same global admin. Private reads,
+mutations, recipient recovery, public routing, worker leases/reservations and even
+late provider delete receipts cannot touch them. Exact snapshots and budgets stay
+unchanged. Actual owner HTTP covers foreign registry/count/choices/manual/DNS/
+provider/mail paths with isolated DNS/mail adapters enabled. A transport counter
+proves zero DNS/provider/Storage/email calls throughout all workspace denials.
+Existing legacy provider races, immutable mail retries and delivery recovery pass.
+
+The focused100 cases pass with two workers and unchanged assertions/timeouts.
+One earlier parallel run timed out in a15-second API case. The Go diagnostic then
+showed its positive ready-domain fixture heartbeat was over15 minutes old after
+long compilation/suspension; production correctly excluded it. The fixture now
+models ongoing provider heartbeats per request only during positive SDK examples
+and the workspace isolation fixture. Later expiry tests opt out; no product expiry,
+owner/route condition or test assertion was weakened. Failure messages retain the
+returned domain page and sanitized readiness state. Full actual HTTP/five SDKs,
+complete SQL in deployment filename order,40-table backfill and2358 migration/body
+checks pass locally. Script lint/format/diff checks also pass; exact-head CI remains required before release.
+
+PR4432 was merged externally as ea1086e4a after its866c845e8 full test job passed
+(run38849393051). Parallel integration preserved its link migration allocation
+99991792123545 after main advanced; QR/customer allocations remain unchanged.
+The new domain migration was allocated above that version. The isolated SQL loader
+now follows actual filename order for all four resource replacement migrations.
+Domain work continues on feature/redirect-workspace-domain-isolation, based on
+current main. Checks used isolated fixtures and executed no live provider/DNS/email
+or publication writes. The domain migration has no production deployment proof. Native/webhook/cleanup and remaining public/service paths,
+tenant ownership/uniqueness, creation/switching, reviewed transfer and live release
+proof still remain; this checkpoint does not claim full parity or activation.
+
+
+Webhook isolation checkpoint: migration99991792216136 scopes private webhook
+administration, metadata/body/attempt serialization, link filters, rotation/test/
+replay, worker claim/prepare/finish and retention. Resource quotas are workspace-
+scoped; existing global abuse budgets remain. Event source-key uniqueness is now
+(workspace_id,source_key), with once-only behavior within a workspace and independent
+same-key events across workspaces. All source-key readers/writers were audited;
+there are no application readers outside the converted webhook SQL family.
+
+A private internal producer takes authoritative source-row workspace identity.
+The existing elevated capture trigger passes OLD/NEW workspace, scopes conversion/
+root/metadata lookups and retains all current branches including password branding.
+The public service-only enqueue wrapper validates selected-workspace root/receiver
+identity. Caller headers cannot choose a trigger event's tenant. Deleted-root and
+coalesced lifecycle payloads keep their source identity. Authenticated callers gain
+no internal-schema usage or producer execution. Activation fences remain intact.
+
+Rollback-only SQL runs active subscriptions in both workspaces, owned by the same
+global admin, under contradictory request headers. Each receives only its own
+click/conversion/lifecycle data. A foreign generic inventory key under a local root
+cannot leak the local link through the elevated trigger. Private foreign metadata,
+credentials, payload/signing preparation and receipts are denied. Worker expired-
+lease recovery and retention cannot change foreign attempts, expired secrets,
+terminal histories, orphan events or budgets. Source-key reuse is independently
+idempotent. Exact foreign snapshots remain unchanged while local claims succeed.
+
+Actual owner HTTP/five SDKs pass, including foreign active/archived counts,
+settings/archive/rotation/test, foreign link filters, delivery bodies/attempts/replay
+and unchanged foreign outbox/budgets with live capture triggers enabled. The bounded
+fixture makes zero DNS/provider/Storage/email transport calls. Complete migrated
+SQL and2359 migration version/body checks pass; script lint and diff checks pass.
+The40-table existing-data backfill and script format checks also pass; exact-head CI remains required.
+This is12 function definitions (including a new private producer), with no UI change.
+Worker dispatch still defaults to the sole active legacy workspace; native/public/
+cleanup paths, multi-workspace ownership/model/dispatch, creation/switching,
+reviewed domain transfer and live release proof remain open. No activation or
+production/provider/publication proof is claimed by these isolated checks.
+
+
+Native and asset isolation checkpoint: migration99991792216142 adds28 function
+definitions across native app administration, public host-derived resolution,
+association/install/handoff paths, password branding and maintenance. Public calls
+use authoritative hostname identity; caller workspace headers cannot redirect public
+reads. Builtin hosts and public verified-domain lookup remain legacy-only while
+activation fences stay intact. Private app/branding operations and cleanup workers
+use selected workspace identity; triggers use OLD/NEW identity. Asset serialization
+uses an explicit private workspace helper rather than ambient request headers.
+
+Legacy resolution fingerprints retain the pre-migration golden hash. Nonlegacy
+fingerprints include workspace identity, so moving a link invalidates its prior
+receipt. Foreign apps, policies, visits, handoffs, branding, cleanup leases, QR
+history and password budgets remain unchanged in rollback-only SQL. Positive legacy
+consent, quota, replay, receipt and asset cleanup paths still pass. Actual owner HTTP
+and all five SDK runtimes pass; the isolated cleanup dispatcher makes zero external
+Storage/provider calls for foreign assets. Existing-data backfill across40 tables,
+2360 migration version/parser checks and script lint/format/diff checks pass locally.
+No UI changed; exact-head CI remains required before release.
+
+This checkpoint does not activate tenants, define tenant ownership, implement
+creation/switching or reviewed transfer, or establish live deployment/device/provider
+proof. Remaining public/service readers and resource uniqueness still need their
+activation audit. Background dispatch currently serves the sole active legacy
+workspace. Full parity and production release remain open.
+
+
+Legacy writer audit checkpoint: migration99991792216117 closes the remaining old
+service policy setter's unscoped root lookup and ON CONFLICT update. It inserts
+explicit workspace identity and rejects foreign policy-key collisions atomically.
+Legacy authenticated metadata/campaign/bulk RPCs retain fixed legacy identity with
+explicit root/folder/tag predicates and inserts; guarded metadata upserts cannot
+silently report success against an invisible foreign key. No grants were widened.
+The cloaking guard uses NEW workspace for its authoritative policy/root lookup.
+
+Rollback-only SQL verifies foreign root/policy/metadata/folder/tag denials, unchanged
+foreign snapshots, positive legacy campaign/metadata/archive/policy writes and an
+intentional corrupted policy-key collision. The complete SQL suite, five focused
+legacy policy endpoint cases,40-table backfill,2361 migration parser/version checks,
+script lint and diff checks pass locally. This audit preserves activation fences;
+new workspace ownership/creation/switching, transfer and live release proof remain.
+
+
+Main advanced with merge-gap audit scope migration99991792168441 while PR4437
+was open. Exact-head CI correctly rejected the unpublished domain allocation below
+that base. The allocator moved only the unmerged domain file from99991792131513
+to99991792216123. Previously merged allocations remain unchanged. The isolated
+loader sorts replacement files by actual deployment filename; reordered complete SQL, actual HTTP/five SDK runtimes and40-table backfill pass.
+All2363 migration version/parser checks, script lint and diff checks pass locally.
+Final-head CI and live release review remain required.
+
+
+Resource-name checkpoint: migration99991792216130 changes normalized folder, tag
+and UTM-template name uniqueness to (workspace_id,lower(btrim(name))). Existing
+values and within-workspace duplicate rejection are preserved. All name writers
+were audited; none uses a name-based ON CONFLICT target. Rollback-only SQL and
+actual owner HTTP create a name already used by each foreign resource, reject a
+normalized duplicate within the selected workspace and preserve foreign rows.
+The complete SQL suite, actual HTTP/five SDK runtimes,40-table backfill and2364
+migration parser/version checks pass locally, along with script lint/format/diff.
+
+CI on e3630a80e passed migration allocation, cross-PR collision and SQL parsing,
+but its remote-history check found separately applied event_gap_automation
+(20261016175824) and marketplace_batch_gap_policy (99991792172698) missing from
+that checkout. The latter already has its authoring file in open PR4439. No
+unrelated production schema was changed here. To preserve deployment order above
+the newly applied history, the allocator moved only unmerged webhook68542 to73751
+and native72005 to73761 (full prefix999917921). Merged migrations retain their
+versions. Reordered complete SQL, actual HTTP/five SDKs and backfill pass locally.
+Final-head CI review remains required.
+Member/customer uniqueness, owner model, creation/switching, transfer and live
+release proof remain open; no second workspace is enabled by these indexes.
+
+
+Membership uniqueness checkpoint: migration99991792216148 replaces global user
+uniqueness with UNIQUE(workspace_id,user_id), retaining the constraint name and
+machine members' nullable-user behavior. No grants, roles, active state or tenant
+activation rules change. Membership/session/invitation writers already use explicit
+workspace identity; no live function uses ON CONFLICT(user_id). The existing
+same-account SQL matrix now runs with this real constraint intact instead of
+dropping uniqueness in its fixture. Duplicates are rejected independently in both
+workspaces. Foreign deactivation leaves the local session intact; an active foreign
+membership cannot rescue an inactive local session. Invitation acceptance still
+selects the local membership and preserves the foreign invitation.
+
+Actual owner HTTP creates a legacy membership for the same account as a foreign
+membership, rejects its local duplicate, and deletes only the local membership.
+The foreign human row remains exact. Full migrated SQL, HTTP membership isolation,
+40-table existing-data backfill and2365 migration version/parser checks pass locally;
+script lint/format/diff checks pass. Full actual HTTP/five SDK runtime completion also passes. Final-head CI
+remains required before release. No new workspace is activated. Customer/event keys,
+QR/default identities, tenant owners, creation/switching, transfer and live proof
+remain open.
+
+
+Customer/event key checkpoint: migration99991792216156 makes customer anchors,
+profiles and provider event IDs unique within workspace. Composite profile/visit
+relationships retain their existing deletion behavior. Conversion/profile writers
+use matching composite conflict targets; conversion replay still compares all
+payload fields within the selected workspace and rejects changed data. Foreign
+customer keys no longer block a legitimate local click. Customer access and row
+triggers use consistent workspace-specific advisory locks, preserving the exact
+legacy lock identity and ordering old/new row keys deterministically.
+
+Rollback-only SQL creates the same customer/event IDs in two workspaces. It proves
+independent conversion IDs/anchors/profiles, local replay idempotency, changed-
+payload rejection, foreign-version rejection, within-workspace anchor uniqueness
+and profile deletion cascading only within its workspace. Existing foreign-only
+profile/journey/visit denial and authenticated legacy RLS checks still pass. The
+re-enrichment fixture now creates an independent local same-key profile instead of
+expecting a global-key collision. Exact foreign snapshots remain unchanged.
+
+Actual owner HTTP exercises same customer/event IDs, correct creation/replay
+statuses, mismatched payload/version denial and private profile enrichment, then
+rolls those positive operations back before other isolation contracts. Full SQL,
+actual HTTP/five SDK runtimes,40-table backfill and2366 migration version/parser
+checks pass locally. Script lint/format/diff checks pass. No UI or grants changed;
+activation fences remain. Final-head CI still requires review. On9b661e179, CI's
+allocation/cross-PR checks pass but remote history reports six separately applied
+missing files, alongside the unrelated event-gap trigger drift. No thresholds or
+intentional data-quality holds were altered. QR/default identities, tenant owners,
+creation/switching, reviewed transfer and live release proof remain open.
+
+
+QR/default identity checkpoint: migration99991792216164 makes primary-domain
+preferences unique on(workspace_id,singleton) and QR styles on(workspace_id,scope).
+All style/logo conflict targets match those keys; another workspace's default no
+longer blocks local style edits or logo reservations. Missing primary preferences
+remain virtual on read and initialize only through an explicit version:null write.
+Existing/stale preferences still require their actual version. The owner HTTP
+boundary distinguishes explicit null from a missing or malformed version.
+
+Private style wrappers select the request workspace. New service-only internal
+style/logo helpers take authoritative row identity; owner-created public QR images
+use them and derive their URL from the scoped root row. Static and managed public
+QR fixtures retain their own styles/assets even under conflicting request headers.
+The public token lookup retains its legacy activation guard; member/key creator
+authorization and broader public activation still require the tenant-owner phase.
+No grants were widened. Cleanup references and primary/domain choices were audited
+against the composite keys and remain workspace-scoped.
+
+Rollback-only SQL covers coexisting preferences/styles, independent style/logo
+reservation/finish, first-write initialization, stale-write rejection, private
+helper grants and exact foreign snapshots. Actual owner HTTP covers independent
+style edits and preference initialization while foreign defaults stay exact.
+Full migrated SQL, actual HTTP/five SDK runtimes and40-table backfill pass locally.
+All2367 migration version/parser checks pass. The39 focused Edge API/primary-form
+cases pass, including first save and further editing after concurrent initialization.
+The draft retains an original null version rather than adopting a refreshed one.
+At1280/390px, a single capture batch confirms save/conflict states without overflow
+or runtime errors. This preserves the existing visual interface. Frozen Edge API checking, lint and the single design detector pass. The project
+typecheck ratchet reports702 existing errors with none new; its baseline is unchanged.
+Final-head CI remains required before release. Tenant owners,
+creation/switching, remaining shared identities/public authorization, reviewed
+transfer and live runtime/release proof remain open.
+
+
+PR4437 advanced externally to90d03c7b4 by merging main's marketplace gap-policy
+change. That merge is preserved on this branch. Post-integration lint/diff and all
+2368 migration version/parser checks pass; Redirects source and fixture deployment
+order are unchanged by the integration. Production history/trigger reconciliation
+and final-head CI remain release gates.

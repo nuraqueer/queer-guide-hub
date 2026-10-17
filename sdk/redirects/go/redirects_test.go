@@ -54,8 +54,8 @@ func TestSDKIntegration(t *testing.T) {
 	if organizedRows[0].(map[string]any)["comment"] != "SDK source metadata" {
 		t.Fatal("Inventory metadata roundtrip failed")
 	}
-	if must(api.ListDomainChoices(ctx, 100, ""))["count"].(interface{ String() string }).String() != "1" {
-		t.Fatal("Unexpected domain choices")
+	if choices := must(api.ListDomainChoices(ctx, 100, "")); choices["count"].(interface{ String() string }).String() != "1" {
+		t.Fatalf("Unexpected domain choices: %#v", choices)
 	}
 	if must(api.ListLinkedDomains(ctx, 100, ""))["builtinCount"] == nil {
 		t.Fatal("Missing builtin facet count")
