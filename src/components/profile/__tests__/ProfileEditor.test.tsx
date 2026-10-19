@@ -39,7 +39,6 @@ vi.mock('@/components/profile/TravelPreferencesEditor', () => ({
   TravelPreferencesEditor: () => null,
 }));
 vi.mock('@/components/status/StatusEditor', () => ({ StatusEditor: () => null }));
-vi.mock('@/components/profile/IdentityPreviewCard', () => ({ IdentityPreviewCard: () => null }));
 vi.mock('@/components/profile/AvatarChooser', () => ({
   AvatarChooser: () => <div>Avatar editor</div>,
 }));
