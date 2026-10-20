@@ -507,7 +507,7 @@
       "countriesHeading": "여행 대상 국가",
       "crossBorderTitle": "{{from}}에서 {{to}}로 큰 폭 하락",
       "crossBorderBody": "평등 점수가 {{drop}} 점 떨어져요. 이동 전에 현지 법률과 위험을 확인하세요.",
-      "dataSource": "데이터는 ILGA World 데이터베이스에서 제공되며 매년 최신화돼요. 점수는 참고용이며, 여행 전에 최신 뉴스를 확인하세요.",
+      "dataSource": "데이터는 ILGA World 데이터베이스에서 제공되며 매년 최신화돼요. 점수는 참고용이며 안전을 보장하지 않아요. 여행 전에 최신 뉴스를 확인하세요.",
       "basedOn_other": "여행 대상 {{count}} 개국의 LGBTQ+ 평등 데이터를 기반으로 해요.",
       "worstCountry": "가장 낮은 점수: {{country}} ({{score}}/100).",
       "stops_other": "{{count}} 개 경유지",
@@ -3015,7 +3015,7 @@
       "favorited": "즐겨찾기에 저장했어요",
       "census": {
         "stops": "정거장 {{n}} 개",
-        "districts": "행정구 {{n}} 개",
+        "districts": "퀴어 빌리지 {{n}} 개",
         "departures": "출발 {{n}} 편"
       },
       "section": {
@@ -3032,7 +3032,7 @@
       },
       "stats": {
         "venues": "장소",
-        "districts": "행정구",
+        "districts": "퀴어 빌리지",
         "events": "다가오는 이벤트"
       },
       "about": {
@@ -3334,7 +3334,7 @@
       "conversionTherapy": "전환 치료",
       "intersex": "인터섹스 신체 온전성",
       "ilgaLink": "ILGA World Database",
-      "deathPenaltyPossible": "사형이 가능성으로 존재, 법적 확정 없음"
+      "deathPenaltyPossible": "사형이 적용될 가능성이 있지만 법적으로 확실하지 않아요"
     },
     "planTripHighRisk": "신중하게 계획해 주세요 — 안전 브리핑 포함",
     "eyebrow": "국가",
@@ -4299,7 +4299,7 @@
       "breadcrumb": "출처",
       "eyebrow": "방법",
       "title": "이 데이터의 출처",
-      "lede": "저희가 다루는 모든 국가와 지역의 LGBTQ+ 법적 지위를 공개해요. 이 페이지는 누가 기록했는지, 얼마나 자주 새로 고치지, 실제로 얼마나 갖고 있는지, 그리고 답할 수 없는 질문이 무엇인지 설명해요.",
+      "lede": "저희가 다루는 모든 국가와 지역의 LGBTQ+ 법적 지위를 공개해요. 이 페이지는 누가 기록했는지, 얼마나 자주 새로 고치는지, 실제로 얼마나 갖고 있는지, 그리고 답할 수 없는 질문이 무엇인지 설명해요.",
       "metaTitle": "LGBTQ+ 권리 데이터의 출처",
       "metaDescription": "모든 국가와 지역에 게시하는 법적 지위의 출처, 갱신 주기, 범위, 알려진 한계를 설명해요.",
       "backToRights": "권리로 돌아가기",
@@ -5147,7 +5147,7 @@
       "peopleOffTitle": "사람 레이어가 꺼져 있어요",
       "peopleOffBody": "친밀한 프로필을 만들어 데이트 프로필을 확인하고 선택적으로 대략적인 도시 지역에 나타나세요.",
       "hiddenTitle": "지도에 표시되지 않음",
-      "toastEnabled": "1 시간 동안 볼 수 있음",
+      "toastEnabled": "1 시간 동안 다른 사람에게 표시돼요",
       "createProfile": "친밀한 프로필 만들기",
       "toastError": "표시 상태를 변경하지 못했어요",
       "toastEnabledBody": "대략적인 도시 풍선만 표시돼요.",
