@@ -153,3 +153,4 @@ grant execute on function public.admin_review_link_event_venue(text,uuid,uuid,ti
 -- enabled/paused switch. This changes cadence, not its authorization policy.
 update public.admin_automations set schedule='*/5 * * * *' where slug='event_venue_link';
 select cron.schedule('event_venue_link','*/5 * * * *','SELECT public.run_event_venue_link();');
+

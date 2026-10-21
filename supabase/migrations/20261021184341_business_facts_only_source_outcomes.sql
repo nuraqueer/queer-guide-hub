@@ -1,17 +1,3 @@
--- RECOVERED FROM PROD BY scripts/recover-migration-drift.mjs.
---
--- Applied to prod as version 20261021184341 with no repo file — the signature of
--- MCP `apply_migration`, which stamps a version and commits nothing. An applied
--- version with no file fails migration-versions on every PR in the repo and
--- makes `db push` refuse to run.
---
--- Reconstructed from `schema_migrations.statements`, which holds the PARSED
--- statements: trailing semicolons are stripped (re-added here) and any original
--- comment header is NOT recorded, so the reasoning that accompanied this
--- migration is lost. Verified by md5 against a server-computed digest.
---
--- Never re-run: `db push` matches on version and skips an applied one. The file
--- exists so history is complete and a rebuild from zero works.
 -- The existing Gays-Cruising importer intentionally exposes facts only. Its
 -- CruisingSpot type excludes prose; contacts and licensed media are not supplied.
 -- Preserve those absences as explicit source-unavailable outcomes instead of
@@ -154,4 +140,3 @@ end $$;
 revoke all on function public.invalidate_business_source_contract() from public,anon,authenticated;
 create trigger invalidate_business_source_contract after insert or update of payload_hash,source_slug,venue_id or delete
 on public.venue_sources for each row execute function public.invalidate_business_source_contract();
-;
