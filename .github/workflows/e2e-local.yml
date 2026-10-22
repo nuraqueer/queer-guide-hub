@@ -34,11 +34,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Restore snapshot
         id: snap
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: db-snapshot.tgz.enc
           key: db-snapshot-none
@@ -54,7 +54,7 @@ jobs:
           echo "snapshot: $HIT" >> "$GITHUB_STEP_SUMMARY"
           openssl enc -d -aes-256-cbc -pbkdf2 -pass env:KEY -in db-snapshot.tgz.enc | tar -xzf -
 
-      - uses: supabase/setup-cli@v3
+      - uses: supabase/setup-cli@45a513f8c64c0bc8e0e3dfe572b5c95be85f6359 # v3
         with:
           version: 2.98.2
       - name: Start local Supabase and load the snapshot
@@ -92,7 +92,7 @@ jobs:
           psql "$DB_URL" -X -v ON_ERROR_STOP=1 -c "insert into public.user_roles (user_id, role) values ('$uid', 'admin')"
           { echo "E2E_ADMIN_EMAIL=$email"; echo "E2E_ADMIN_PASSWORD=$pw"; } >> "$GITHUB_ENV"
 
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version: 22
           cache: npm
@@ -125,7 +125,7 @@ jobs:
             --grep-invert "visual snapshots" --reporter=line,json || status=$?
           node -e "const r=require('./results.json').stats;console.log(r)" | tee -a "$GITHUB_STEP_SUMMARY" || true
           exit ${status:-0}
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: failure()
         continue-on-error: true
         with:

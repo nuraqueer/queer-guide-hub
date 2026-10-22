@@ -56,14 +56,27 @@ jobs:
     # timed out).
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - name: Detect relevant changes
         id: changes
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          EVENT_NAME: ${{ github.event_name }}
+          REPOSITORY: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.number }}
+          MERGE_GROUP_BASE_SHA: ${{ github.event.merge_group.base_sha }}
         run: |
-          files=$(gh api "repos/${{ github.repository }}/pulls/${{ github.event.number }}/files" \
-            --paginate --jq '.[].filename')
+          set -euo pipefail
+          if [ "$EVENT_NAME" = "merge_group" ]; then
+            # Merge groups have no PR number. Compare the queued merge against
+            # its actual base, including every PR batched into the group.
+            [[ "$MERGE_GROUP_BASE_SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "::error::Missing merge-group base SHA"; exit 1; }
+            git fetch --no-tags --depth=1 origin "$MERGE_GROUP_BASE_SHA"
+            files=$(git diff --name-only "$MERGE_GROUP_BASE_SHA" HEAD)
+          else
+            files=$(gh api "repos/$REPOSITORY/pulls/$PR_NUMBER/files" \
+              --paginate --jq '.[].filename')
+          fi
           echo "Changed files:"; echo "$files" | sed 's/^/  /'
           # `supabase/migrations/` is in the list because the specs below run a
           # LOCAL build of this PR against the LIVE backend, so a schema change
@@ -107,7 +120,7 @@ jobs:
             echo "relevant=false" >> "$GITHUB_OUTPUT"
             echo "::notice::No app/e2e paths changed - skipping specs, reporting success."
           fi
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         if: steps.changes.outputs.relevant == 'true'
         with:
           node-version: 22
@@ -260,7 +273,7 @@ jobs:
             --reporter=line
       - name: Upload report
         if: failure()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         # Non-blocking: storing a diagnostic report must not fail a job whose
         # assertions already passed. See the long note in a11y.yml — GitHub's
         # artifact service returned a persistent 403 on FinalizeArtifact on
