@@ -23,11 +23,18 @@ create table source_reliability(source_slug text,entity_type text,weight numeric
 create table ingestion_staging(id uuid primary key,created_at timestamptz,entity_type text,target_table text,
  source_name text,ai_validation_status text,review_status text,disposition text,enriched_data jsonb,
  ai_confidence_score numeric,pipeline_run_id uuid);
+create table review_queue(id uuid primary key default gen_random_uuid(),entity_type text,entity_id uuid,
+ review_type text,details jsonb,status text,resolved_by uuid,resolved_at timestamptz);
 """
 paths = list((ROOT / 'supabase/migrations').glob('*_actionable_review_gate_candidates.sql'))
 if len(paths) != 1:
     raise SystemExit('Exactly one candidate-selection migration required')
-sql = schema + paths[0].read_text() + (Path(__file__).parent / 'review_gate_candidates.sql').read_text()
+outcomes = list((ROOT / 'supabase/migrations').glob('*_staging_gate_review_outcomes.sql'))
+if len(outcomes) != 1:
+    raise SystemExit('Exactly one staging outcome migration required')
+sql = schema + paths[0].read_text() + outcomes[0].read_text()
+sql += (Path(__file__).parent / 'review_gate_candidates.sql').read_text()
+sql += (Path(__file__).parent / 'staging_gate_review_outcomes.sql').read_text()
 with tempfile.TemporaryDirectory(prefix='qg-review-gate-') as tmp:
     data = Path(tmp) / 'data'
     subprocess.run([binary('initdb'), '-D', str(data), '-A', 'trust', '--no-locale'], check=True, stdout=subprocess.DEVNULL)

@@ -1,7 +1,7 @@
 import { getServiceClient, jsonResponse, errorResponse, corsResponse, requireInternalOrAdmin } from '../_shared/supabase-client.ts'
 import { withErrorReporting } from '../_shared/report-api-error.ts'
 
-const SELECTION_REVISION = '2026-10-22.actionable-verdicts'
+const SELECTION_REVISION = '2026-10-22.actionable-verdicts-v2'
 
 // ============================================================
 // Pipeline Review Gate Node
@@ -36,6 +36,15 @@ Deno.serve(withErrorReporting('pipeline-review-gate', async (req) => {
     // node config { "force_review": true } in pipeline_definitions.
     const forceReview = body.force_review === true
 
+    let staleReviewsReconciled = 0
+    if (!dryRun) {
+      const { data: reconciliation, error: reconciliationError } = await supabase.rpc('reconcile_staging_gate_reviews', {
+        p_staging_id: null, p_batch: 500, p_dry_run: false,
+      })
+      if (reconciliationError) return errorResponse(`Failed to reconcile completed gate reviews: ${reconciliationError.message}`, 500, req)
+      staleReviewsReconciled = reconciliation?.reviews_reconciled ?? 0
+    }
+
     // Filter actionable verdicts before limiting. Unchanged manual-review news
     // otherwise occupies every old-first batch and starves newer ready verdicts.
     const { data, error } = await supabase.rpc('pipeline_review_gate_candidates', {
@@ -49,7 +58,7 @@ Deno.serve(withErrorReporting('pipeline-review-gate', async (req) => {
       target_table: string | null; source_name: string | null; entity_type: string | null;
     }> | null
     if (!items || items.length === 0) {
-      return jsonResponse({ success: true, selection_revision: SELECTION_REVISION, items: 0, message: 'No items to review-gate' }, 200, req)
+      return jsonResponse({ success: true, selection_revision: SELECTION_REVISION, stale_reviews_reconciled: staleReviewsReconciled, items: 0, message: 'No items to review-gate' }, 200, req)
     }
 
     // Auto-downrank: load source_reliability for the (source, entity) pairs
@@ -311,6 +320,7 @@ Deno.serve(withErrorReporting('pipeline-review-gate', async (req) => {
     return jsonResponse({
       success: true,
       selection_revision: SELECTION_REVISION,
+      stale_reviews_reconciled: staleReviewsReconciled,
       items: approved,
       items_total: items.length,
       items_processed: approved + sentToReview + rejected + failed,

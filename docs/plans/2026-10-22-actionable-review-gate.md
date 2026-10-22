@@ -1,0 +1,9 @@
+# Actionable review-gate selection
+
+The user's target remains fewer than 100 pending items across all review queues. Ready review verdicts were blocked by an oldest-first batch full of unchanged manual-review/no-verdict news rows: the oldest 200 had no actionable verdict, while 81 pending-review rows had existing passed/auto-publish or rejected verdicts.
+
+Select actionable work before limiting. A service-only, read-only RPC keeps the existing entity/run/sweep scope and prioritizes verdict-bearing items. Pending-review news (identified by target table, including legacy rows) is eligible only for a rejection or an existing auto-publish verdict with sufficient source reliability and no forced review. Initial non-sweep work and other domains retain their original route. Unchanged human-review rows remain pending and visible. No queue view or decision threshold changes.
+
+The edge gate still performs the existing relevance, reliability, trust, forced-review and score checks. Candidate selection cannot approve content. Its response reports the selection revision, and processed totals include rejections. The existing steward-trust note now handles an override without a submitter-history row, avoiding an undefined-property access without changing the trust rule.
+
+Validation: disposable PostgreSQL fixtures cover 1,000 blocking rows, entity/run/sweep scopes, forced review, low/null/changed reliability, legacy news, validation/disposition guards, priority, batch bounds and service-only grants. Deno typecheck and forced scoped ESLint pass. The production-schema read-only rollback regression checks actual row state and guards. Deploy only after comparing the served shared dependencies and confirming the preceding all-functions release is terminal; verify runtime revision with a bounded dry run before applying a sweep. Final success still requires a fresh full-queue count below 100.
