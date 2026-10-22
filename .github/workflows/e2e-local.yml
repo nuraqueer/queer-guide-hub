@@ -19,7 +19,7 @@ on:
     paths:
       - '.github/workflows/e2e-local.yml'
       - '.github/workflows/db-snapshot.yml'
-      - 'scripts/ci/db-snapshot.sh'
+      - 'scripts/ci/**'
 
 concurrency:
   group: e2e-local-${{ github.head_ref || github.ref }}
@@ -55,8 +55,9 @@ jobs:
         env:
           KEY: ${{ secrets.DB_SNAPSHOT_KEY }}
           HIT: ${{ steps.snap.outputs.cache-matched-key }}
+          EXPECTED_KEY: ${{ needs.snapshot.outputs.cache_key }}
         run: |
-          if [ -z "$HIT" ] || [ -z "$KEY" ]; then
+          if [ -z "$HIT" ] || [ "$HIT" != "$EXPECTED_KEY" ] || [ -z "$KEY" ]; then
             echo "::error::Snapshot prerequisite failed or DB_SNAPSHOT_KEY is unavailable."; exit 1
           fi
           echo "snapshot: $HIT" >> "$GITHUB_STEP_SUMMARY"
@@ -99,6 +100,12 @@ jobs:
             -d "{\"email\":\"$email\",\"password\":\"$pw\",\"email_confirm\":true}" | jq -r .id)
           psql "$DB_URL" -X -v ON_ERROR_STOP=1 -c "insert into public.user_roles (user_id, role) values ('$uid', 'admin')"
           { echo "E2E_ADMIN_EMAIL=$email"; echo "E2E_ADMIN_PASSWORD=$pw"; } >> "$GITHUB_ENV"
+
+      - name: Seed and verify synthetic local review fixtures
+        run: |
+          node scripts/ci/snapshot-fixtures.mjs seed-admin > /tmp/ci-review-fixtures.sql
+          psql "$DB_URL" -X -v ON_ERROR_STOP=1 -f /tmp/ci-review-fixtures.sql
+          node scripts/ci/snapshot-fixtures.mjs verify
 
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:

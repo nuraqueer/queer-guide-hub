@@ -27,17 +27,12 @@ dump)
   "$(dirname "$0")/supabase-retry.sh" db dump --db-url "$db" -f "$dir/schema.sql"
   psqlq -At -c "select version from supabase_migrations.schema_migrations order by 1" > "$dir/versions.txt"
 
-  # table|non-generated columns|limit clause, for every table anon may SELECT.
-  psqlq -At -F'|' -c "
-    select c.relname,
-           string_agg(quote_ident(a.attname), ',' order by a.attnum),
-           case when pg_table_size(c.oid) > $FULL_MAX_BYTES then ' limit $ROW_CAP' else '' end
-    from pg_class c
-    join pg_namespace n on n.oid = c.relnamespace
-    join pg_attribute a on a.attrelid = c.oid and a.attnum > 0 and not a.attisdropped and a.attgenerated = ''
-    where n.nspname = 'public' and c.relkind = 'r'
-      and has_table_privilege('anon', c.oid, 'SELECT')
-    group by c.oid, c.relname order by c.relname" > "$dir/manifest.txt"
+  # Bound the export while prioritizing actual browser route fixtures and
+  # their parent cities. The COPY session below still runs entirely as anon.
+  FULL_MAX_BYTES="$FULL_MAX_BYTES" ROW_CAP="$ROW_CAP" \
+    node "$(dirname "$0")/snapshot-fixtures.mjs" manifest > "$dir/manifest-query.sql"
+  psqlq -At -F'|' -f "$dir/manifest-query.sql" > "$dir/manifest.txt"
+  rm "$dir/manifest-query.sql"
 
   {
     echo "set role anon;"
