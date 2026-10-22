@@ -7,6 +7,7 @@ Deno.test('internal suggestion rejection preserves system audit ownership and ne
   const savedServe = Deno.serve
   let handler: ((req: Request) => Promise<Response>) | undefined
   const writes: Array<{ path: string; body: Record<string, unknown> }> = []
+  let stale = false
   const id = '00000000-0000-0000-0000-000000000001'
   const before = { id, entity_type: 'unified_tags', suggestion_type: 'description', status: 'pending', proposed_value: { field: 'description', value: 'Unsupported model claim' } }
   Deno.env.set(env[0], 'https://fixture-db.example.test')
@@ -17,6 +18,11 @@ Deno.test('internal suggestion rejection preserves system audit ownership and ne
     const url = new URL(input instanceof Request ? input.url : String(input))
     const method = init?.method ?? 'GET'
     if (method === 'PATCH' && url.pathname.endsWith('/ai_suggestions')) {
+      if (stale) {
+        assertEquals(url.searchParams.get('status'), 'eq.pending')
+        assertEquals(url.searchParams.get('updated_at'), 'eq.2026-10-22T00:00:00Z')
+        return new Response(JSON.stringify({ code: 'PGRST116', message: 'No matching revision' }), { status: 406, headers: { 'Content-Type': 'application/json' } })
+      }
       const body = JSON.parse(String(init?.body))
       writes.push({ path: url.pathname, body })
       return new Response(JSON.stringify({ ...before, ...body }), { headers: { 'Content-Type': 'application/json' } })
@@ -44,6 +50,13 @@ Deno.test('internal suggestion rejection preserves system audit ownership and ne
     assertEquals(writes[0].body.reviewer_id, null)
     assertEquals(writes[1].body.actor_id, null)
     assertEquals(writes[1].body.action, 'suggestion.update')
+    stale = true
+    const changed = await handler(new Request(`https://fixture.test/functions/v1/search-intelligence/suggestions/${id}`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json', 'X-Internal-Secret': 'fixture-internal-secret' },
+      body: JSON.stringify({ status: 'rejected', expected_status: 'pending', expected_updated_at: '2026-10-22T00:00:00Z' }),
+    }))
+    assertEquals(changed.status, 409)
+    assertEquals(writes.length, 2)
   } finally {
     globalThis.fetch = savedFetch
     Object.defineProperty(Deno, 'serve', { configurable: true, writable: true, value: savedServe })
