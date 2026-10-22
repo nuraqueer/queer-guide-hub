@@ -13,9 +13,9 @@ Existing strengths: automatic deletion of merged branches, default read-only wor
 
 ## Changes proposed in this PR
 
-- Pin all 168 external Action references across 47 workflows and the Playwright composite action to full commit SHAs resolved and checked through the upstream repositories' Git APIs. Keep the existing version/branch as a comment. This fixes the selected Action code; it does not freeze runner images, packages downloaded at runtime, or every transitive dependency.
+- Pin all 171 external Action references across 48 workflows and the Playwright composite action to full commit SHAs resolved and checked through the upstream repositories' Git APIs. Keep the existing version/branch as a comment. This fixes the selected Action code; it does not freeze runner images, packages downloaded at runtime, or every transitive dependency.
 - Schedule grouped weekly Actions updates. Extend npm Dependabot coverage from 10 to all 18 tracked package directories, adding infrastructure, the redirect SDK, person-db, and five worker packages. Preserve existing major-version exclusions.
-- Set explicit timeouts on 33 previously unbounded jobs; all 70 runner jobs now have a timeout. Retain existing measured budgets.
+- Set explicit timeouts on 33 previously unbounded jobs; all 71 runner jobs now have a timeout. Retain existing measured budgets.
 - Cancel superseded runs of CodeQL, ESLint reporting, bundle checks, and extension CI. Serialize worker deployments and stop cancelling active mirror deployments when another run starts.
 - Use `.nvmrc` for the ESLint scanning job, replacing its Node 20 setting with the project's Node 22 version.
 - Fix `Critical paths` change detection on `merge_group`: fetch and compare against the event's base SHA instead of querying a nonexistent PR number. Preserve full-app, migration-only, and irrelevant-diff scope decisions. Invalid base SHAs, failed fetches, and failed PR API calls fail the job.
@@ -25,8 +25,8 @@ The initial GitHub alert query reported three DOMPurify advisories against 3.4.1
 
 ## Validation
 
-- Actionlint 1.7.12: all 47 workflows pass. Optional ShellCheck/Pyflakes integrations were disabled; this is workflow validation, not a full shell/Python audit.
-- Configuration assertions: all 18 npm package directories covered exactly once, all 168 external Actions pinned, all 70 runner jobs bounded.
+- Actionlint 1.7.12: all 48 workflows pass. Optional ShellCheck/Pyflakes integrations were disabled; this is workflow validation, not a full shell/Python audit.
+- Configuration assertions: all 18 npm package directories covered exactly once, all 171 external Actions pinned, all 71 runner jobs bounded.
 - Semantic comparison against the base: workflow triggers, job names, permissions, existing timeout values, and unrelated configuration preserved.
 - Nine change-detection regression scenarios: app/migration/docs diffs on both PR and merge-group events; missing and unavailable merge-group bases; failed PR API call. Merge-group tests use real shallow Git clones and fetches against disposable local repositories.
 - person-db: clean lockfile installation, TypeScript and Vite production build; npm audit checked after the Nano ID update. The build retains its existing large-chunk warning.
