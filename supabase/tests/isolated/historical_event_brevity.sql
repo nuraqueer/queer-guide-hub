@@ -196,3 +196,26 @@ begin
  assert (select status from event_quality_issues where id=(select i from fixture_ids where n=37))='open';
  r:=reconcile_historical_event_copy_absence(1000,false);assert (r->>'accepted')::int=0,'Unknown schema silently reaccepted';
 end $schema_change$;
+
+-- Interactive admin repairs retain their existing behavior; automatic outcome
+-- helpers remain internal-only even when called directly by an admin.
+do $admin_compatibility$
+declare r jsonb; helper text; rejected boolean;
+begin
+ perform set_config('test.actor',gen_random_uuid()::text,true);
+ r:=run_event_quality_repairs(10,true);
+ assert r->>'dry_run'='true' and r->>'candidates'='0' and r->>'changed'='0';
+ assert r#>>'{source_brevity,reason}'='internal_source_outcomes_only';
+ assert r#>>'{source_copy_absence,reason}'='internal_source_outcomes_only';
+ foreach helper in array array['reconcile_historical_event_brevity','reconcile_historical_event_copy_absence'] loop
+  rejected:=false;
+  begin
+   execute format('select %I(10,true)',helper);
+  exception when raise_exception then
+   assert sqlerrm='Automatic source outcomes require an internal actor';
+   rejected:=true;
+  end;
+  assert rejected,'Direct admin source outcome unexpectedly allowed';
+ end loop;
+ perform set_config('test.actor','',true);
+end $admin_compatibility$;

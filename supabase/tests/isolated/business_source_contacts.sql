@@ -48,6 +48,13 @@ begin
  select md5(jsonb_agg(jsonb_build_object('org',to_jsonb(o)-'website'-'phone'-'social'-'updated_at'-'field_provenance'-'quality_dimensions',
  'human_provenance',o.field_provenance,'quality',o.quality_dimensions-'contact') order by id)::text) into b from organizations o;
  select md5(jsonb_agg(to_jsonb(f) order by id)::text) into bf from entity_quality_findings f where dimension<>'contact';
+ update organizations set website_domain='different.example' where id=(select o from fixture_ids where n=1);
+ r:=reconcile_business_source_websites(100,true);assert (r->>'candidates')::int=0,'Curated conflicting domain was ignored';
+ update organizations set website_domain='venue-1.example' where id=(select o from fixture_ids where n=1);
+ r:=reconcile_business_source_websites(100,true);assert (r->>'candidates')::int=1,'Matching domain blocked';
+ update organizations set website_domain=null,field_provenance='{"website_domain":{"human_reviewed":true}}' where id=(select o from fixture_ids where n=1);
+ r:=reconcile_business_source_websites(100,true);assert (r->>'candidates')::int=0,'Owned domain metadata was ignored';
+ update organizations set field_provenance='{}' where id=(select o from fixture_ids where n=1);
  r:=reconcile_business_source_websites(100,true);assert (r->>'candidates')::int=1,r::text;
  r:=reconcile_business_source_phones(100,true);assert (r->>'candidates')::int=1,r::text;
  r:=reconcile_business_source_socials(100,true);assert (r->>'candidates')::int=1,r::text;

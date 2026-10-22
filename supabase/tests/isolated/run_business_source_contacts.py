@@ -23,7 +23,7 @@ create function assert_admin_or_internal() returns void language sql as 'select'
 create table countries(id uuid primary key,code text);
 create table organizations(id uuid primary key,name text,status text default 'active',duplicate_of_id uuid,
  primary_venue_id uuid,city_id uuid,country_id uuid,roles text[] default array['venue'],
- website text,email text,phone text,social jsonb default '{}',field_provenance jsonb default '{}',
+ website text,website_domain text,email text,phone text,social jsonb default '{}',field_provenance jsonb default '{}',
  quality_dimensions jsonb default '{"identity":{"state":"pass"}}',updated_at timestamptz default now(),
  last_verified_at timestamptz,safety_score int default 42);
 create table venues(id uuid primary key,organization_id uuid,name text,city_id uuid,country_id uuid,

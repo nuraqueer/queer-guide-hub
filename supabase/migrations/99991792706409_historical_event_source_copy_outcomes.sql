@@ -209,9 +209,14 @@ begin
   raise exception 'Event quality repair automation hook changed';
  end if;
  src:=replace(src,decl_anchor,decl_anchor||' v_source_brevity jsonb; v_source_copy_absence jsonb;');
- src:=replace(src,loop_anchor,'v_source_brevity := public.reconcile_historical_event_brevity(p_batch,p_dry_run);
-  v_source_copy_absence := public.reconcile_historical_event_copy_absence(p_batch,p_dry_run);
-  '||loop_anchor);
+ src:=replace(src,loop_anchor,$hook$if auth.uid() is null then
+   v_source_brevity := public.reconcile_historical_event_brevity(p_batch,p_dry_run);
+   v_source_copy_absence := public.reconcile_historical_event_copy_absence(p_batch,p_dry_run);
+  else
+   v_source_brevity := jsonb_build_object('skipped',true,'reason','internal_source_outcomes_only');
+   v_source_copy_absence := v_source_brevity;
+  end if;
+  $hook$||loop_anchor);
  src:=replace(src,return_anchor,'return jsonb_build_object(''dry_run'',p_dry_run,''candidates'',v_candidates,''changed'',v_changed,''source_brevity'',v_source_brevity,''source_copy_absence'',v_source_copy_absence);');
  execute src;
 end $patch$;

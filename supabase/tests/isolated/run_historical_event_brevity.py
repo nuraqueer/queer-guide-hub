@@ -18,7 +18,7 @@ def binary(name):
 
 schema = """
 create role anon;create role authenticated;create role service_role;create schema auth;
-create function auth.uid() returns uuid language sql stable as 'select null::uuid';
+create function auth.uid() returns uuid language sql stable as $$select nullif(current_setting('test.actor',true),'')::uuid$$;
 create function assert_admin_or_internal() returns void language sql as 'select';
 create function dedup_despace(t text) returns text language sql immutable as
  'select regexp_replace(lower(t),''[^[:alnum:]]'','''',''g'')';

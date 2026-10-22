@@ -30,7 +30,7 @@ eligible as materialized (
   and not exists(select 1 from public.venues x where x.organization_id=o.id
    and x.id<>v.id and x.duplicate_of_id is null)
   and o.website is null and o.email is null and o.phone is null and o.social='{}'::jsonb
-  and not(o.field_provenance ? 'website')
+  and not(o.field_provenance ? 'website') and not(o.field_provenance ? 'website_domain')
  order by o.id for update of o,v,f skip locked
 ), source_rows as materialized (
  select s.id,s.venue_id,s.source_slug,s.source_url,s.payload_hash,s.last_seen_at,
@@ -49,8 +49,9 @@ eligible as materialized (
 ), agreed as (
  select id from claims group by id having count(distinct host)=1
 ), selected as materialized (
- select distinct on(c.id) c.* from claims c join agreed a using(id)
- where c.source_slug in('spartacus','foursquare','google','osm','agendaq','gay-ch','milchjugend','planet-randy','patroc')
+ select distinct on(c.id) c.* from claims c join agreed a using(id) join public.organizations profile on profile.id=c.id
+ where (profile.website_domain is null or lower(profile.website_domain)=c.host)
+  and c.source_slug in('spartacus','foursquare','google','osm','agendaq','gay-ch','milchjugend','planet-randy','patroc')
   and c.source_url~'^https?://'
   and c.host!~'(^|\.)(google\.[a-z.]+|facebook\.com|instagram\.com|twitter\.com|x\.com|tinyurl\.com|bit\.ly|t\.co|linktr\.ee|spartacus\.gayguide\.travel|agendaq\.fr|planet-randy\.com|foursquare\.com|tripadvisor\.[a-z.]+|gayout\.com|booking\.com|yelp\.[a-z.]+)$'
   and c.host<>lower(substring(c.source_url from '^https?://(?:www\.)?([^/:?#]+)'))
