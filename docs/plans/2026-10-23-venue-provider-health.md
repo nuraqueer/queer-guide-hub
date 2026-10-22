@@ -1,0 +1,9 @@
+# Preserve provider failures as failures
+
+The existing read-only venue enrichment preview returned HTTP 200 with `success:true` and no source results while its configured providers rejected every request: Foursquare HTTP 401, TomTom HTTP 403 and TripAdvisor HTTP 403. Native function logs confirmed the statuses. It also assigned source names by array position, incorrectly labelling results when an earlier provider had no key. Empty previews therefore could not substantiate absent contacts or justify a bulk enrichment run.
+
+Configured providers now carry their own names. Every configured result remains visible as found, empty or unavailable. All-unavailable and unconfigured previews return HTTP 503 with `success:false`; partial availability remains explicit. HTTP and network failures are sanitized so fetch URLs containing API keys are not exposed. Requests reject redirects and have a 15-second timeout. Google API-level errors and failed details requests remain failures too. This endpoint is still a read-only preview, and first-ranked search hits are not accepted as automatic identity proof.
+
+Four Deno regressions cover missing-provider labels, credential failures, body cancellation, network errors and secret redaction. Deno check and scoped ESLint pass. The original native entry exactly matched the branch base before replacement. Production version 486 preserves the existing shared authentication source and JWT setting; source credentials and database content were not changed. Subsequent full function releases must retain this patch until the normal PR release lands.
+
+The configured credentials remain unavailable. No contact gap is labelled source-unavailable or resolved merely because these requests fail. A future bulk collector must corroborate name, country and physical location against current supported provider documentation before registering any contact evidence.
