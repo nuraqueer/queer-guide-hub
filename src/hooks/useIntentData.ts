@@ -348,38 +348,16 @@ export function useAllCountriesRights() {
     queryKey: ['intent-rights-countries', 'core'],
     staleTime: 600_000,
     queryFn: async (): Promise<RightsCountry[]> => {
-      // lgbti_criminalization is ~5 KB of jsonb per country (1.2 MB for the
-      // list); the helpers these pages call read four keys of it. Select those
-      // keys by JSON path (12 KB gzipped for the list) and rebuild the object.
       const { data, error } = await supabase
         .from('countries')
         .select(
-          'id, name, slug, code, equality_score, lgbti_same_sex_unions, crim_legal:lgbti_criminalization->legal, crim_death_penalty:lgbti_criminalization->death_penalty, crim_max_prison:lgbti_criminalization->max_prison, crim_penalty:lgbti_criminalization->penalty',
+          'id, name, slug, code, equality_score, lgbti_criminalization, lgbti_same_sex_unions',
         )
         .order('name', { ascending: true });
       if (error) throw error;
-      return ((data ?? []) as unknown as NarrowRightsRow[]).map(toRightsCountry);
+      return (data ?? []) as RightsCountry[];
     },
   });
-}
-
-interface NarrowRightsRow extends Omit<RightsCountry, 'lgbti_criminalization'> {
-  crim_legal: unknown;
-  crim_death_penalty: unknown;
-  crim_max_prison: unknown;
-  crim_penalty: unknown;
-}
-
-export function toRightsCountry(row: NarrowRightsRow): RightsCountry {
-  const { crim_legal, crim_death_penalty, crim_max_prison, crim_penalty, ...rest } = row;
-  const crim = {
-    legal: crim_legal,
-    death_penalty: crim_death_penalty,
-    max_prison: crim_max_prison,
-    penalty: crim_penalty,
-  };
-  const empty = Object.values(crim).every((v) => v == null);
-  return { ...rest, lgbti_criminalization: empty ? null : crim };
 }
 
 /**

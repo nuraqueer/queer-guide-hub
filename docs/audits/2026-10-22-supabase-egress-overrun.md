@@ -17,7 +17,10 @@ data"). So:
   replayed with the anon key and their gzipped size multiplied by the count.
   Whether Supabase bills compressed or uncompressed bytes is not documented;
   both are given. The billing page (`/dashboard/org/_/usage`) is the only exact
-  source and was not reachable from this session.
+  source and was not reachable from this session. The sibling report (#4581)
+  quotes it for 2026-10-21, after #4549: 3.1 GB total, of which PostgREST
+  3.03 GB, Storage 51 MB, Functions 1 MB, Realtime 14 MB — i.e. billing counts
+  PostgREST roughly at the gzipped estimates used here.
 
 ## Top 5 contributors (sample day 2026-10-10, one full day)
 
@@ -26,8 +29,8 @@ data"). So:
 | 1 | Storage `village-images` + `city-images` + `marketplace-images` (direct object downloads) | ~25k | 0.3–4 MB | **~3.9** (2026-10-10), ~0.8 (10-20) | on 10-20 ~78% from Microsoft ASNs: the a11y scanner (by UA) plus desktop-Chrome UAs that are most likely Playwright CI; rest browsers/Meta crawler |
 | 2 | `unified_tags?select=*` (venue filters) + paginated full tag list | ~2.1k + ~4.8k | 2.85 MB / 645 KB; 443 KB / 142 KB | 1.35 + 0.68 | browsers — **fixed by #4549** (select trimmed) |
 | 3 | `cities?select=*&limit=500` (/map city layer) | ~550 | 5.6 MB / 1.83 MB | **1.0** | browsers — **fixed here** (→ 29 KB) |
-| 4 | `countries` rights lists (/travel, /rights/sources, /rights) | ~2.3k | 1.2–1.7 MB / 0.5 MB | **1.2** | browsers — narrow list **fixed here** (→ 12 KB) |
-| 5 | `news_sources` list + unfiltered `news_articles limit=200` + 10 category-count HEADs, fired on every city/country page | ~4.4k + ~4.8k | 290 KB / 111 KB; 237 KB / 84 KB | 0.9 | browsers — **fixed here** |
+| 4 | `countries` rights lists (/travel, /rights/sources, /rights) | ~2.3k | 1.2–1.7 MB / 0.5 MB | **1.2** | browsers — **fixed by #4581** |
+| 5 | `news_sources` list + unfiltered `news_articles limit=200` + 10 category-count HEADs, fired on every city/country page | ~4.4k + ~4.8k | 290 KB / 111 KB; 237 KB / 84 KB | 0.9 | browsers — city/country mount fetch **fixed here**; `news_sources` by #4581 |
 
 Also large: `queer_villages?select=*` (0.49 GB/day, fixed by #4549) and
 `tag_category_assignments` paginated 10×1000 (0.25 GB/day).
@@ -63,18 +66,15 @@ On 2026-10-20 (1.5 M REST calls):
 1. `/map` city + country layers select only the columns the pins render
    (`usePlaces` gained a `columns` option; default stays `*`).
    cities 1.83 MB → 29 KB gz per call.
-2. `/travel` + `/rights/sources` read 4 keys of `lgbti_criminalization` via
-   JSON-path selects instead of the 5 KB/country jsonb. 1.24 MB raw → 12 KB gz.
-   Verified the four safety helpers (`hasAnyCriminalizationSignal`,
-   `hasDeathPenalty`, `deathPenaltyRisk`, `isCriminalized`) return identical
-   results for all 250 countries.
-3. `useNews({ autoload: false })` on city/country pages: drops the unfiltered
+2. `useNews({ autoload: false })` on city/country pages: drops the unfiltered
    200-article list, all sources, all categories and ~11 count queries per page
    view (and a race where the unfiltered list could overwrite the filtered one).
-   `news_sources` list no longer ships `description` (~40% of it).
-4. a11y axe scanner stubs Supabase Storage image bytes with a 1×1 PNG.
+3. a11y axe scanner stubs Supabase Storage image bytes with a 1×1 PNG.
 
-Estimated saving with #4549: **~4–5 GB/day gzipped** of PostgREST egress plus
+The `countries` rights lists and the `news_sources` list (#4 and part of #5
+above) are fixed in the sibling PR #4581, not here.
+
+Estimated saving with #4549 + #4581: **~4–5 GB/day gzipped** of PostgREST egress plus
 ~0.3 GB/day of Storage.
 
 ## Recommended next (not in this PR)

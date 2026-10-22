@@ -284,9 +284,7 @@ export const useNews = ({ autoload = true }: { autoload?: boolean } = {}) => {
       // a typed select collapses the whole builder to SelectQueryError.
       const { data, error: fetchError } = await untypedFrom('news_sources')
         .select(
-          // No `description`: the source picker and sourcesMap read name/url
-          // only, and descriptions were ~40% of this 290 KB list.
-          'id, name, slug, url, website_url, category, feed_type, artwork_url, is_active, is_aggregator, organization_id, episode_count',
+          'id, name, slug, description, url, website_url, category, feed_type, artwork_url, is_active, is_aggregator, organization_id, episode_count',
         )
         .eq('is_active', true)
         .or('is_aggregator.is.null,is_aggregator.eq.false')
