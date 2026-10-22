@@ -8,6 +8,7 @@ import { assertPublicHttpUrl } from './ssrf-guard.ts'
 import { gateImages } from './image-gate.ts'
 import { readImageDimensions } from './image-dimensions.ts'
 import { evaluateCover } from './image-probe.ts'
+import { storedAgendaqDescription } from './event-source-copy.ts'
 import { boundedInt, cleanDescription, hasUnverifiedLongRange, supportedContentPatch, imageCandidates, mapConcurrent, sourceArtwork, sourceUrls, storedDescription, structuredEvent, text, type GapEvent, type GapLane, type GapPatch, type SourceEvidence } from './event-gap-core.ts'
 
 type Candidate = { event_id: string; event: GapEvent; sources: SourceEvidence[] }
@@ -83,7 +84,7 @@ export function serveEventGaps(lane: GapLane) {
     if (error) return errorResponse(`claim: ${error.message}`, 500, req)
     const candidates = (data ?? []) as Candidate[]
     // A dry run is genuinely read-only: no lease, page requests or AI spend.
-    if (dryRun) return jsonResponse({ success: true, dry_run: true, lane, candidates: candidates.map(c => ({ id: c.event_id, urls: sourceUrls(c.event, c.sources), stored_description: !!storedDescription(c.sources) })) }, 200, req)
+    if (dryRun) return jsonResponse({ success: true, dry_run: true, lane, candidates: candidates.map(c => ({ id: c.event_id, urls: sourceUrls(c.event, c.sources), stored_description: !!(storedAgendaqDescription(c.sources, c.event) ?? storedDescription(c.sources)) })) }, 200, req)
     const budgetProbe = lane === 'content' ? await consumeLlmBudget(db, 'event-agentic-enrich', 0) : null
     const deadline = Date.now() + 90_000
     const pages = new Map<string, Promise<Awaited<ReturnType<typeof fetchPrefix>>>>()
@@ -123,8 +124,12 @@ export function serveEventGaps(lane: GapLane) {
           if (knownUrl) return await finish(c, { website: knownUrl }, { source_url: knownUrl, confidence: 1 }, 'updated', { method: 'source_registry' })
         }
         if (lane === 'content' && text(c.event.description).length < 80) {
-          const stored = storedDescription(c.sources)
-          if (stored) return await finish(c, { description: stored.description }, { source_url: stored.source_url, confidence: 1 }, 'updated', { method: 'raw_source' })
+          const captured = storedAgendaqDescription(c.sources, c.event)
+          const stored = captured ?? storedDescription(c.sources)
+          if (stored) return await finish(c, { description: stored.description }, { source_url: stored.source_url, confidence: 1 }, 'updated', {
+            method: captured ? 'captured_source_html' : 'raw_source',
+            ...(captured ? { source_id: captured.source_id, source_payload_hash: captured.source_payload_hash } : {}),
+          })
         }
         if (lane === 'content' && text(c.event.description).length >= 80 && (budgetProbe?.degraded || !budgetProbe?.allowed || (budgetProbe.remaining ?? 0) <= 0)) {
           return await finish(c, {}, {}, 'capped', { reason: 'daily_budget_before_fetch' })
