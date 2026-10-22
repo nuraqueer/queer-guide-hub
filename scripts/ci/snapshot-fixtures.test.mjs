@@ -43,6 +43,9 @@ test('fixture discovery reads source without executing it', () => {
 test('sampling stays bounded and anonymous while retaining breadcrumb parents', () => {
   const sql = manifestSql({ slugs: ["fixture's"], rowCap: 3000 });
   assert(sql.includes("has_table_privilege('anon'"));
+  const exporter = readFileSync(new URL('./db-snapshot.sh', import.meta.url), 'utf8');
+  assert(exporter.includes('echo "set role anon;"'));
+  assert(exporter.includes(String.raw`set request.jwt.claims = '{\"role\":\"anon\"}';`));
   assert(sql.includes("fixture''''s"));
   assert(sql.includes('public.venues'));
   assert(sql.includes('public.hotels'));

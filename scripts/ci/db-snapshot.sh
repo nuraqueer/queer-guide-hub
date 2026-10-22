@@ -36,6 +36,9 @@ dump)
 
   {
     echo "set role anon;"
+    # Match an anonymous PostgREST request: auth.role() reads JWT claims,
+    # not the SQL role. No subject or authenticated/service claim is set.
+    echo "set request.jwt.claims = '{\"role\":\"anon\"}';"
     while IFS='|' read -r t cols lim; do
       echo "\\copy (select $cols from public.\"$t\"$lim) to '$dir/data/$t.csv' csv"
     done < "$dir/manifest.txt"
