@@ -44,8 +44,22 @@ export function manifestSql({
   }
   const array = 'ARRAY[' + slugs.map(literal).join(',') + ']::text[]';
   const priority = ' order by case when slug = any(' + array + ') then 0 else 1 end, slug';
-  // A venue/hotel/event breadcrumb also needs its parent city. Select these
-  // references as anon, under the same RLS rules as the exported child rows.
+  // Keep complete public reference sets for safety charts, representative
+  // commerce groups, and upcoming Pride events rather than alphabetic slices.
+  const upcomingPride =
+    "(event_type ilike '%pride%' or event_type ilike '%festival%') and start_date between now() and now()+interval '120 days' and duplicate_of_id is null";
+  const eventPredicate = '(slug = any(' + array + ') or (' + upcomingPride + '))';
+  const eventPriority = ' order by case when ' + eventPredicate + ' then 0 else 1 end, slug';
+  const tagPriority =
+    ' order by case when slug = any(' +
+    array +
+    ') or id in (' +
+    'select tag_id from public.sti_profiles union select tag_a_id from public.substance_interactions union select tag_b_id from public.substance_interactions' +
+    ') then 0 else 1 end, slug';
+  const marketplacePriority =
+    " order by case when status='active' and overview_eligible and content_rating in ('sfw','suggestive') then 0 else 1 end, " +
+    'row_number() over(partition by subcategory_group,status,overview_eligible,content_rating order by id), id';
+  // Preserve the city side of each sampled route/upcoming event breadcrumb.
   const cityPriority =
     ' order by case when slug = any(' +
     array +
@@ -56,14 +70,16 @@ export function manifestSql({
     'select city_id from public.hotels where slug = any(' +
     array +
     ') union ' +
-    'select city_id from public.events where slug = any(' +
-    array +
-    ')' +
+    'select city_id from public.events where ' +
+    eventPredicate +
     ') then 0 else 1 end, slug';
   return [
     "select c.relname, string_agg(quote_ident(a.attname), ',' order by a.attnum),",
     'case when pg_table_size(c.oid) > ' + maxBytes + ' then',
     " (case when c.relname='cities' then " + literal(cityPriority),
+    " when c.relname='unified_tags' then " + literal(tagPriority),
+    " when c.relname='marketplace_listings' then " + literal(marketplacePriority),
+    " when c.relname='events' then " + literal(eventPriority),
     " when bool_or(a.attname='slug') then " + literal(priority),
     " when bool_or(a.attname='id') then ' order by id' else '' end) || ' limit " + rowCap + "'",
     "else '' end",
@@ -112,6 +128,9 @@ export function adminSeedSql() {
     'insert into public.venues(id,name,address,category,slug,review_status)',
     "select '00000000-0000-4000-a000-000000004575','CI archived venue','Synthetic CI address',",
     "category,'ci-archived-venue','archived' from public.venues limit 1 on conflict(id) do nothing;",
+    // The legacy admin venues URL resolves to the organisations directory.
+    'insert into public.organizations(id,name,slug,status)',
+    "values ('00000000-0000-4000-a000-000000004579','CI archived organization','ci-archived-organization','archived') on conflict(id) do nothing;",
     'insert into public.review_queue(id,entity_type,entity_id,review_type,details,status,created_at)',
     "values ('00000000-0000-4000-a000-000000004576','venue','00000000-0000-4000-a000-000000004575',",
     "'CI_MANUAL_REVIEW','{\"title\":\"CI synthetic review decision\"}','pending',now()-interval '8 days'),",
@@ -138,6 +157,10 @@ export function adminSeedSql() {
     "if (select count(*) from public.venues where slug in ('scum-and-villainy-cantina','checkpoint-zuerich','demask','lehighton'))<>4 then raise exception 'CI venue route fixtures are missing'; end if;",
     "if (select count(*) from public.unified_tags where slug in ('lesbian','acceptance','transgender'))<>3 then raise exception 'CI glossary route fixtures are missing'; end if;",
     "if not exists(select 1 from public.organizations where slug='supergayunderwear') then raise exception 'CI merchant organization fixture is missing'; end if;",
+    "if not exists(select 1 from public.organizations where slug='ci-archived-organization' and status='archived') then raise exception 'CI archived organization fixture is missing'; end if;",
+    "if exists(select 1 from public.sti_profiles p left join public.unified_tags t on t.id=p.tag_id where t.id is null) or exists(select 1 from (select tag_a_id id from public.substance_interactions union select tag_b_id from public.substance_interactions) i left join public.unified_tags t on t.id=i.id where t.id is null) then raise exception 'CI safety charts lost referenced tags'; end if;",
+    "if (select count(distinct subcategory_group) from public.marketplace_listings where status='active' and overview_eligible and content_rating in ('sfw','suggestive') and subcategory_group is not null and subcategory_group<>'other')<=20 then raise exception 'CI marketplace sample lacks group coverage'; end if;",
+    "if not exists(select 1 from public.events where (event_type ilike '%pride%' or event_type ilike '%festival%') and start_date between now() and now()+interval '120 days' and duplicate_of_id is null) then raise exception 'CI upcoming Pride sample is empty'; end if;",
     'end $fixtures$;',
   ].join('\n');
 }
@@ -157,16 +180,29 @@ export async function verifyLocalFixtures(env = process.env) {
   if (!login.ok) throw new Error('CI admin sign-in failed: HTTP ' + login.status);
   const session = await login.json();
   if (!session.access_token) throw new Error('CI admin sign-in returned no access token');
-  async function rpc(name, body) {
+  async function rpc(name, body, token = session.access_token) {
     const result = await fetch(new URL('/rest/v1/rpc/' + name, api), {
       method: 'POST',
-      headers: { ...headers, Authorization: 'Bearer ' + session.access_token },
+      headers: { ...headers, Authorization: 'Bearer ' + token },
       body: JSON.stringify(body),
       signal: AbortSignal.timeout(20_000),
     });
     if (!result.ok)
       throw new Error(name + ' failed: HTTP ' + result.status + ' ' + (await result.text()));
     return result.json();
+  }
+  const archivedResponse = await fetch(
+    new URL(
+      '/rest/v1/organizations?select=id&slug=eq.ci-archived-organization&status=eq.archived',
+      api,
+    ),
+    {
+      headers: { ...headers, Authorization: 'Bearer ' + session.access_token },
+      signal: AbortSignal.timeout(20_000),
+    },
+  );
+  if (!archivedResponse.ok || (await archivedResponse.json()).length !== 1) {
+    throw new Error('CI archived organization is not visible to the real admin API');
   }
   const ready = await rpc('get_admin_review_worklist', { p_scope: 'ready' });
   if (!(
@@ -185,10 +221,28 @@ export async function verifyLocalFixtures(env = process.env) {
   if (!(all.total === all.all_total && all.total > all.decisions_total)) {
     throw new Error('CI raw review queue is missing its finding/decision partition');
   }
+  const transmission = await rpc('sti_transmission_matrix', {}, env.ANON_KEY);
+  const protection = await rpc('sti_protection_matrix', {}, env.ANON_KEY);
+  const interactions = await rpc('substance_interaction_matrix', {}, env.ANON_KEY);
+  const groups = await rpc(
+    'get_marketplace_subcategory_group_counts',
+    { p_include_adult: false },
+    env.ANON_KEY,
+  );
+  if (!(
+    transmission.stis?.length >= 8 &&
+    transmission.cells?.length > 50 &&
+    protection.testing?.length >= 8 &&
+    interactions.axis?.length >= 45 &&
+    interactions.cells?.length >= 460 &&
+    groups.length > 20
+  )) {
+    throw new Error('CI public safety/marketplace fixtures lack browser-test coverage');
+  }
   console.log(
     'CI fixtures verified: public route records, archived venue, ' +
       ready.sources.length +
-      ' review sources, and real local review RPCs.',
+      ' review sources, real review RPCs, and public safety/marketplace RPCs.',
   );
 }
 

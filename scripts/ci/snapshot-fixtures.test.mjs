@@ -50,6 +50,10 @@ test('sampling stays bounded and anonymous while retaining breadcrumb parents', 
   assert(sql.includes('public.venues'));
   assert(sql.includes('public.hotels'));
   assert(sql.includes('public.events'));
+  assert(sql.includes('public.sti_profiles'));
+  assert(sql.includes('public.substance_interactions'));
+  assert(sql.includes('partition by subcategory_group,status,overview_eligible,content_rating'));
+  assert(sql.includes("interval ''120 days''"));
   assert(sql.includes('limit 3000'));
   assert.throws(() => manifestSql({ rowCap: 0 }));
   assert.throws(() => manifestSql({ rowCap: NaN }));
