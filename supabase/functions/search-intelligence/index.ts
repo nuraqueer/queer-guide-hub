@@ -48,7 +48,8 @@ Deno.serve(async (req) => {
 
     const auth = await requireAdmin(req, service)
     if (auth instanceof Response) return auth
-    const actorId = auth.userId
+    // Internal secrets identify a system invocation, not a UUID reviewer.
+    const actorId = auth.originalActorId ?? (auth.isServiceRole ? 'service-role' : auth.userId)
 
     const ctx: RouteContext = {
       req,
