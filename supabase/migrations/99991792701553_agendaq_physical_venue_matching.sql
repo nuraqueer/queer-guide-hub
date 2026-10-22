@@ -1,6 +1,5 @@
--- 99991792697447_agendaq_physical_venue_matching
+-- 99991792701553_agendaq_physical_venue_matching
 --
--- TODO: why this migration exists.
 
 -- Source location IDs distinguish physical destinations from event organizers.
 -- Service-only, bounded and idempotent; every event update has native revision

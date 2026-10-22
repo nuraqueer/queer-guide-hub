@@ -187,3 +187,12 @@ begin
  assert not exists(select 1 from event_quality_issues where issue_code='IMAGE_MISSING' and status<>'open');
  assert not exists(select 1 from event_quality_current where not('IMAGE_MISSING'=any(open_issue_codes)));
 end $absence_test$;
+
+-- Unknown schema additions invalidate the prior absence proof atomically.
+do $schema_change$
+declare r jsonb;
+begin
+ update event_sources set payload=jsonb_set(payload,'{raw,data,article}','"New provider narrative field"') where id=(select s from fixture_ids where n=37);
+ assert (select status from event_quality_issues where id=(select i from fixture_ids where n=37))='open';
+ r:=reconcile_historical_event_copy_absence(1000,false);assert (r->>'accepted')::int=0,'Unknown schema silently reaccepted';
+end $schema_change$;

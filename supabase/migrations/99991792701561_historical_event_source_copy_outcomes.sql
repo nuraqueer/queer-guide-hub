@@ -1,7 +1,3 @@
--- 99991792699148_historical_event_source_brevity
---
--- TODO: why this migration exists.
-
 -- Accept only complete, corroborated historical source copy. Preserve every
 -- content value, score and original detector evidence; this is an explicit
 -- source limitation outcome, not a fabricated repair or human verification.
@@ -29,10 +25,18 @@ begin
    and i.evidence->>'length'=length(btrim(e.description))::text
    and public.dedup_despace(e.description)<>public.dedup_despace(e.title)
    and e.description!~'(…|\.{3})[[:space:]]*$'
+   and not exists(select 1 from jsonb_object_keys(case when jsonb_typeof(s.payload->'raw')='object' then s.payload->'raw' else '{}' end) k where k not in(
+    'name','slug','start','end','dates','updatedOn','data','description','descShort','tags','taxons','locations','assets','businesses','people','price','parent','super','children'))
+   and not exists(select 1 from jsonb_object_keys(case when jsonb_typeof(s.payload#>'{raw,data}')='object' then s.payload#>'{raw,data}' else '{}' end) k where k not in('url','payment','socials','currency','mandatorydrink'))
    and e.description!~*'(accept cookies|cookie policy|sign in to read|subscribe to continue|all rights reserved|privacy policy|en savoir plus|voir plus|read more|coming soon)'
    and s.source_url='https://www.agendaq.fr/fr/agenda/'||s.source_entity_id
    and s.source_entity_id=e.external_id and s.source_entity_id=s.payload#>>'{raw,slug}'
    and e.title=s.payload#>>'{raw,name}' and s.payload_hash~'^[a-f0-9]{64}$'
+   and not exists(select 1 from public.event_sources copy_source
+    cross join lateral(values(copy_source.payload#>>'{normalized,description}'),(copy_source.payload#>>'{enriched,description}'),
+     (copy_source.payload#>>'{raw,jsonLd,description}'),(copy_source.payload#>>'{raw,data,desc}'),(copy_source.payload#>>'{raw,data,description}')) copy(value)
+    where copy_source.event_id=e.id and nullif(btrim(copy.value),'') is not null
+     and btrim(copy.value) is distinct from nullif(btrim(e.description),''))
    and not exists(select 1 from public.event_sources dup where dup.event_id=e.id and dup.source_slug='agendaq' and dup.id<s.id)
    and e.start_date=case when pg_input_is_valid(s.payload#>>'{raw,start}','timestamp with time zone')
     then (s.payload#>>'{raw,start}')::timestamptz end
@@ -92,6 +96,11 @@ begin
    and s.source_url='https://www.agendaq.fr/fr/agenda/'||s.source_entity_id
    and s.source_entity_id=e.external_id and s.source_entity_id=s.payload#>>'{raw,slug}'
    and e.title=s.payload#>>'{raw,name}' and s.payload_hash~'^[a-f0-9]{64}$'
+   and not exists(select 1 from public.event_sources copy_source
+    cross join lateral(values(copy_source.payload#>>'{normalized,description}'),(copy_source.payload#>>'{enriched,description}'),
+     (copy_source.payload#>>'{raw,jsonLd,description}'),(copy_source.payload#>>'{raw,data,desc}'),(copy_source.payload#>>'{raw,data,description}')) copy(value)
+    where copy_source.event_id=e.id and nullif(btrim(copy.value),'') is not null
+     and btrim(copy.value) is distinct from nullif(btrim(e.description),''))
    and not exists(select 1 from public.event_sources dup where dup.event_id=e.id and dup.source_slug='agendaq' and dup.id<s.id)
    and e.start_date=case when pg_input_is_valid(s.payload#>>'{raw,start}','timestamp with time zone')
     then (s.payload#>>'{raw,start}')::timestamptz end
@@ -140,13 +149,13 @@ declare affected uuid[];r record;
 begin
  if tg_table_name='event_sources' then
   if tg_op='UPDATE' then
+   -- Compare all captured semantic fields, including unknown/new schema keys
+   -- and normalized copy. Only the known asset/timestamp fields are irrelevant.
    if row(old.event_id,old.source_slug,old.source_entity_id,old.source_url,
-     old.payload#>'{raw,name}',old.payload#>'{raw,slug}',old.payload#>'{raw,start}',old.payload#>'{raw,end}',
-     old.payload#>'{raw,description}',old.payload#>'{raw,descShort}')
+     case when jsonb_typeof(old.payload->'raw')='object' then jsonb_set(old.payload,'{raw}',(old.payload->'raw')-'assets'-'updatedOn') else old.payload end)
     is not distinct from
     row(new.event_id,new.source_slug,new.source_entity_id,new.source_url,
-     new.payload#>'{raw,name}',new.payload#>'{raw,slug}',new.payload#>'{raw,start}',new.payload#>'{raw,end}',
-     new.payload#>'{raw,description}',new.payload#>'{raw,descShort}') then return new; end if;
+     case when jsonb_typeof(new.payload->'raw')='object' then jsonb_set(new.payload,'{raw}',(new.payload->'raw')-'assets'-'updatedOn') else new.payload end) then return new; end if;
    affected:=array[old.event_id,new.event_id];
   elsif tg_op='DELETE' then affected:=array[old.event_id];
   else affected:=array[new.event_id]; end if;

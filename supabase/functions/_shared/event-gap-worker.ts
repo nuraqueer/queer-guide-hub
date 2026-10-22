@@ -114,7 +114,7 @@ export function serveEventGaps(lane: GapLane) {
             networkRequests++; stats.get(c.event_id)!.network_requests++
             const probe = await fetchPrefix(asset.url, 65_536, true).catch(() => null)
             const dims = probe ? readImageDimensions(probe.bytes) : null
-            if (!probe || probe.bytes.length < 20_000 || !dims || evaluateCover({ width: dims.width, height: dims.height, bytes: probe.totalBytes }, 'cover')) continue
+            if (!probe || probe.bytes.length < 20_000 || !dims || evaluateCover({ width: dims.width, height: dims.height, bytes: probe.totalBytes }, 'event_artwork')) continue
             return await finish(c, { images: [asset.url] }, { source_url: asset.source_url, confidence: 1, previous_images: c.event.images }, 'updated', { method: 'raw_source_artwork', width: dims.width, height: dims.height })
           }
         }
@@ -142,7 +142,7 @@ export function serveEventGaps(lane: GapLane) {
               const probe = await fetchPrefix(image, 65_536, true).catch(() => null)
               const dims = probe ? readImageDimensions(probe.bytes) : null
               // Same minimum as cover auditor; do not swap one poor image for another.
-              if (!probe || probe.bytes.length < 20_000 || !dims || evaluateCover({ width: dims.width, height: dims.height, bytes: probe.totalBytes }, 'cover')) continue
+              if (!probe || probe.bytes.length < 20_000 || !dims || evaluateCover({ width: dims.width, height: dims.height, bytes: probe.totalBytes }, 'event_artwork')) continue
               return await finish(c, { images: [image] }, { source_url: fetched.url, confidence: 1, previous_images: c.event.images }, 'updated', { method: 'source_artwork', width: dims.width, height: dims.height })
             }
             continue
