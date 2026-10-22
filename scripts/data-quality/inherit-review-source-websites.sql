@@ -22,7 +22,7 @@ eligible as materialized (
  join public.venues v on v.id=o.primary_venue_id and v.organization_id=o.id
  join public.entity_quality_findings f on f.entity_type='organization' and f.entity_id=o.id
   and f.dimension='contact' and f.state in('fail','pending') and f.waived_at is null
- where o.duplicate_of_id is null and v.duplicate_of_id is null and v.closed_at is null
+ where o.status='active' and o.duplicate_of_id is null and v.duplicate_of_id is null and v.closed_at is null
   and lower(btrim(o.name))=lower(btrim(v.name))
   and (o.country_id is null or o.country_id=v.country_id)
   and (o.city_id is null or o.city_id=v.city_id)
