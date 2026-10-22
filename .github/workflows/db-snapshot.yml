@@ -12,12 +12,17 @@ on:
   schedule:
     - cron: '20 2 * * *'
   workflow_dispatch: {}
-  # A PR changing the snapshot machinery builds its own (PR-scoped cache), so
-  # e2e-local.yml on that PR tests the change instead of last night's main.
-  pull_request:
-    paths:
-      - '.github/workflows/db-snapshot.yml'
-      - 'scripts/ci/db-snapshot.sh'
+  # Called by e2e-local so its consumer waits for this exact snapshot.
+  workflow_call:
+    secrets:
+      SUPABASE_DB_URL:
+        required: true
+      DB_SNAPSHOT_KEY:
+        required: true
+    outputs:
+      cache_key:
+        description: Encrypted snapshot cache produced by this run
+        value: ${{ jobs.snapshot.outputs.cache_key }}
 
 concurrency:
   group: db-snapshot-${{ github.ref }}
@@ -28,6 +33,8 @@ permissions:
 
 jobs:
   snapshot:
+    outputs:
+      cache_key: db-snapshot-${{ github.run_id }}-${{ github.run_attempt }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -50,4 +57,4 @@ jobs:
       - uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: db-snapshot.tgz.enc
-          key: db-snapshot-${{ github.run_id }}
+          key: db-snapshot-${{ github.run_id }}-${{ github.run_attempt }}

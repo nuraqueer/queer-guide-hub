@@ -29,7 +29,15 @@ permissions:
   contents: read
 
 jobs:
+  snapshot:
+    # Production is read once; no consumer runs until its cache is saved.
+    uses: ./.github/workflows/db-snapshot.yml
+    secrets:
+      SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+      DB_SNAPSHOT_KEY: ${{ secrets.DB_SNAPSHOT_KEY }}
+
   critical-local:
+    needs: [snapshot]
     name: Critical paths (local DB)
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -41,15 +49,15 @@ jobs:
         uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: db-snapshot.tgz.enc
-          key: db-snapshot-none
-          restore-keys: db-snapshot-
+          key: ${{ needs.snapshot.outputs.cache_key }}
+          fail-on-cache-miss: true
       - name: Stop if no snapshot or no key
         env:
           KEY: ${{ secrets.DB_SNAPSHOT_KEY }}
           HIT: ${{ steps.snap.outputs.cache-matched-key }}
         run: |
           if [ -z "$HIT" ] || [ -z "$KEY" ]; then
-            echo "::error::No DB snapshot (run db-snapshot.yml) or no DB_SNAPSHOT_KEY (fork PR)."; exit 1
+            echo "::error::Snapshot prerequisite failed or DB_SNAPSHOT_KEY is unavailable."; exit 1
           fi
           echo "snapshot: $HIT" >> "$GITHUB_STEP_SUMMARY"
           openssl enc -d -aes-256-cbc -pbkdf2 -pass env:KEY -in db-snapshot.tgz.enc | tar -xzf -

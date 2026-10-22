@@ -39,3 +39,9 @@ The complete application suite and GitHub-hosted event execution remain subject 
 A broader CI redesign should measure runner time and distinguish production health checks from change-specific tests before changing gates. Existing incidents document why path filters, deployment cancellation, and remote schema checks need care. The current pass preserves those gates and the root toolchain's compatibility exclusions.
 
 GitHub references: [secure use of Actions](https://docs.github.com/en/actions/reference/security/secure-use), [protected branches](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-protected-branches/about-protected-branches).
+
+## Snapshot and CI follow-up
+
+The initial local-DB E2E failure exposed an ordering bug: independent snapshot and E2E workflows raced, and another PR's cache was inaccessible. Snapshot production is now a reusable workflow called as an explicit prerequisite of local E2E. Its output supplies the exact cache key, including the run attempt, and restore fails if that key is missing. The independent PR producer trigger was removed to avoid duplicate production reads; nightly and manual main-branch production remain available. A main-branch bootstrap was dispatched to seed the shared cache.
+
+The initial migration gate also identified production-applied version `20261022190025`. Its original file was recovered unchanged from PR #4574 (`fix/review-worklist-refresh-ledger-20261022`) and included in this PR. No migration was reapplied to production.
