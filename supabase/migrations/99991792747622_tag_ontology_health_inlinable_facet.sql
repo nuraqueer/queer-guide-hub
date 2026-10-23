@@ -205,7 +205,7 @@ begin
   -- P4: the slow shape is gone and the join is in, twice. This is the
   --     regression guard -- a later CREATE OR REPLACE that reinstates the
   --     correlated subquery fails here.
-  select pg_get_functiondef(p.oid) into v_def
+  select regexp_replace(pg_get_functiondef(p.oid), '--[^' || chr(10) || ']*', '', 'g') into v_def
   from pg_proc p join pg_namespace n2 on n2.oid = p.pronamespace
   where n2.nspname = 'api_private' and p.proname = 'tag_ontology_health';
   if position('(select usage_count from public.tag_usage_summary s where s.id=t.id)' in v_def) > 0 then
