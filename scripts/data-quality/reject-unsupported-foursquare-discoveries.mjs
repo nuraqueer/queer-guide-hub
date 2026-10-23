@@ -23,18 +23,18 @@ const scope=`s.source_type='foursquare' and s.source_name='foursquare' and s.tar
  and not exists(select 1 from public.venues v where v.foursquare_id=s.source_entity_id)
  and not exists(select 1 from public.venue_sources v where v.source_entity_id=s.source_entity_id and v.source_slug in('foursquare','foursquare_os'))
  and not exists(select 1 from public.review_queue q where q.entity_id=s.id and (q.resolved_by is not null or q.resolved_at is not null or q.status<>'pending' or q.review_type<>'foursquare_independent_corroboration'))`
-const candidates=await sql(`select s.id,to_jsonb(s) snapshot from public.ingestion_staging s where ${scope} order by s.id limit ${limit}`)
+const candidates=await sql(`select s.id,md5(to_jsonb(s)::text) snapshot_hash,to_jsonb(s) snapshot from public.ingestion_staging s where ${scope} order by s.id limit ${limit}`)
 const eligible=candidates.filter(r=>!hasFoursquareDiscoveryEvidence(r.snapshot.raw_data))
 const report={started_at:new Date().toISOString(),apply,rollback,limit,candidates:candidates.length,retained_explicit:candidates.length-eligible.length,eligible,receipts:[],complete:false}
 await mkdir(dirname(output),{recursive:true})
 const save=async()=>{await writeFile(output+'.tmp',JSON.stringify(report,null,2));await rename(output+'.tmp',output)}
 await save()
 if(apply||rollback){
- const literal=JSON.stringify(eligible).replace(/'/g,"''")
+ const literal=JSON.stringify(eligible.map(({id,snapshot_hash})=>({id,snapshot_hash}))).replace(/'/g,"''")
  const query=`begin;set local lock_timeout='3s';set local statement_timeout='60s';
  do $repair$ declare item jsonb;r public.ingestion_staging%rowtype;changed integer:=0;begin
  for item in select value from jsonb_array_elements('${literal}'::jsonb) loop
-  select s.* into r from public.ingestion_staging s where s.id=(item->>'id')::uuid and ${scope} and to_jsonb(s)=item->'snapshot' for update skip locked;
+  select s.* into r from public.ingestion_staging s where s.id=(item->>'id')::uuid and ${scope} and md5(to_jsonb(s)::text)=item->>'snapshot_hash' for update skip locked;
   if not found then continue;end if;
   perform 1 from public.review_queue q where q.entity_id=r.id for update;
   if exists(select 1 from public.review_queue q where q.entity_id=r.id and (q.resolved_by is not null or q.resolved_at is not null or q.status<>'pending' or q.review_type<>'foursquare_independent_corroboration')) then continue;end if;
