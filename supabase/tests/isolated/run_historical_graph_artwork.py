@@ -73,7 +73,7 @@ previous = list((ROOT / 'supabase/migrations').glob('*_historical_event_source_c
 paths = list((ROOT / 'supabase/migrations').glob('*_historical_graph_artwork_source_outcomes.sql'))
 if len(paths) != 1 or len(previous) != 1:
     raise SystemExit('Exactly one migration per historical source contract required')
-sql = schema + function('decide_event_quality_issue') + function('run_event_quality_scan') + previous[0].read_text() + paths[0].read_text() + (HERE / 'historical_graph_artwork.sql').read_text()
+sql = schema + function('decide_event_quality_issue') + function('run_event_quality_scan') + previous[0].read_text() + paths[0].read_text() + next((ROOT / 'supabase/migrations').glob('*_historical_graph_artwork_batch_iteration.sql')).read_text() + (HERE / 'historical_graph_artwork.sql').read_text()
 with tempfile.TemporaryDirectory(prefix='qg-graph-artwork-') as tmp:
     data = Path(tmp) / 'data'
     subprocess.run([binary('initdb'), '-D', str(data), '-A', 'trust', '--no-locale'], check=True, stdout=subprocess.DEVNULL)
