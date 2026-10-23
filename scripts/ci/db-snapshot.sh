@@ -79,6 +79,7 @@ load)
     psql "$db" -X -q -At -c "select format('refresh materialized view %I.%I;', schemaname, matviewname) from pg_matviews where not ispopulated" \
       | psql "$db" -X -q 2>&1 | grep -i error || true
   done
+  psql "$db" -X -q -v ON_ERROR_STOP=1 -f "$(dirname "$0")/neutralize-dangling-redirects.sql"
   ;;
 
 *) echo "usage: $0 dump|load <db-url> <dir>" >&2; exit 2 ;;
