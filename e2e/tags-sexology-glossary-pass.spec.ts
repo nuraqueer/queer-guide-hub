@@ -1,3 +1,5 @@
+import { reviewerTagRows, hasReviewerSession } from './support/reviewerRegistry';
+import { assertCurrentTagSitemap, currentArticleTagSlug } from './support/tagSitemap';
 import { expect, test, type APIRequestContext } from '@playwright/test';
 import { anonHeaders } from './support/anonKey';
 
@@ -192,10 +194,7 @@ test.describe('sexology glossary pass — crawler surface', () => {
     const res = await request.get('/sitemap-tags.xml', { headers: { 'User-Agent': BOT_UA } });
     expect(res.status()).toBe(200);
     const sitemap = await res.text();
-    expect(
-      (sitemap.match(/<loc>/g) ?? []).length,
-      'a near-empty tag sitemap would make the noindex assertions vacuous',
-    ).toBeGreaterThan(500);
+    await assertCurrentTagSitemap(request, sitemap);
   });
 
   test('the twelve created terms resolve, carry prose, and stay unpublished', async ({
@@ -365,7 +364,8 @@ test.describe('sexology glossary pass — crawler surface', () => {
     // reads the <head> meta description, and <head> never carries article
     // anchors. The control below therefore only has to prove the crawler path
     // renders a body at all, against an INDEXABLE row.
-    const res = await request.get('/tags/bondage', { headers: { 'User-Agent': BOT_UA } });
+    const slug = await currentArticleTagSlug(request);
+    const res = await request.get(`/tags/${slug}`, { headers: { 'User-Agent': BOT_UA } });
     expect(res.status()).toBe(200);
     const html = await res.text();
     const article = html.match(/<article[\s\S]*?<\/article>/i)?.[0] ?? '';
@@ -429,31 +429,15 @@ test.describe('sexology glossary pass — anon data surface', () => {
     // TEXT, so such a row is uncategorised on its own page and categorised in
     // search. This is the 194-row finding of 50100101100100.
     //
-    // SCOPED TO THE ROWS ANON CAN READ, asked per run rather than filtered
-    // against a frozen set. A gated creation cannot be returned by this query at
-    // all — the shape in which this assertion previously failed — and its three
-    // representations are asserted by the migration's postconditions as
-    // service_role instead.
-    //
-    // This read `.toBe(11)` against a hardcoded gated set, and it still passes
-    // today only by luck: exactly one creation (`antiretroviral`) is gated now,
-    // and it was one of the four in that set. The other three went readable,
-    // which would have made the number wrong the moment a second creation was
-    // marked sensitive.
-    const gated = await withheldFromAnon(
-      request,
-      CREATED.map(([slug]) => slug),
+    // Sensitivity is editorial state: use the configured reviewer to check ALL
+    // twelve rows, including those the anonymous registry correctly withholds.
+    test.skip(
+      !hasReviewerSession,
+      'All twelve category invariants require the configured reviewer session',
     );
-    const visible = CREATED.filter(([slug]) => !gated.has(slug));
-    // POSITIVE CONTROL, and a partition rather than a number: a filter that
-    // silently emptied would make the loop below vacuous, and a hardcoded count
-    // is a second place to keep in step. Most of the twelve must be visible.
-    expect(visible.length + gated.size, 'every creation is either visible or gated').toBe(
-      CREATED.length,
-    );
-    expect(visible.length, 'most created rows are anon-visible').toBeGreaterThanOrEqual(10);
+    const visible = CREATED;
     const slugs = visible.map(([s]) => s).join(',');
-    const rows = await rest<{
+    const rows = await reviewerTagRows<{
       slug: string;
       status: string;
       seo_indexable: boolean;
@@ -462,10 +446,12 @@ test.describe('sexology glossary pass — anon data surface', () => {
       category_id: string | null;
     }>(
       request,
-      `unified_tags?select=slug,status,seo_indexable,human_reviewed,category,category_id&slug=in.(${slugs})`,
+      `select=slug,status,seo_indexable,human_reviewed,category,category_id&slug=in.(${slugs})`,
     );
 
-    expect(rows.length, 'every anon-visible created row should exist').toBe(visible.length);
+    expect(rows.length, 'all twelve created rows should exist for the reviewer').toBe(
+      visible.length,
+    );
 
     const categories = await rest<{ id: string; slug: string; name: string }>(
       request,
@@ -611,9 +597,13 @@ test.describe('sexology glossary pass — anon data surface', () => {
   test('pulling-out exists as its own row rather than an alias of withdrawal', async ({
     request,
   }) => {
-    const [row] = await rest<{ slug: string; status: string; category: string | null }>(
+    test.skip(
+      !hasReviewerSession,
+      'Sensitive content invariants require the configured reviewer session',
+    );
+    const [row] = await reviewerTagRows<{ slug: string; status: string; category: string | null }>(
       request,
-      'unified_tags?select=slug,status,category&slug=eq.pulling-out',
+      'select=slug,status,category&slug=eq.pulling-out',
     );
     expect(row, 'pulling-out should be its own row').toBeTruthy();
     expect(row.status).toBe('active');
