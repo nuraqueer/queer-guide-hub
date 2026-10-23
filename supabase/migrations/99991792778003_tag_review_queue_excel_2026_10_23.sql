@@ -388,6 +388,33 @@ begin
 end
 $verify_merges$;
 
+-- pubic-lice was human-reviewed (verification_status 'reviewed'); its merge
+-- target pubic-lice-crabs is is_sensitive and only 'auto', so without this the
+-- Pubic lice page would become sign-in-only for anon (tag_is_anon_gated).
+-- Carry the review across, decided 2026-10-23. Copied from the source row, so
+-- it does nothing if the source was never reviewed.
+update public.unified_tags c
+   set verification_status = s.verification_status
+  from public.unified_tags s
+ where c.slug = 'pubic-lice-crabs' and c.status = 'active'
+   and s.slug = 'pubic-lice' and s.merged_into_id = c.id
+   and s.verification_status in ('reviewed', 'locked')
+   and c.verification_status is distinct from s.verification_status;
+
+do $verify_review$
+declare v_bad int;
+begin
+  select count(*) into v_bad
+  from public.unified_tags s join public.unified_tags c on c.id = s.merged_into_id
+  where s.slug = 'pubic-lice' and c.slug = 'pubic-lice-crabs'
+    and s.verification_status in ('reviewed', 'locked')
+    and c.verification_status is distinct from s.verification_status;
+  if v_bad <> 0 then
+    raise exception 'pubic-lice-crabs did not inherit the reviewed status of pubic-lice';
+  end if;
+end
+$verify_review$;
+
 -- ---------------------------------------------------------------- 2. queue
 create temp table _rq (slug text primary key, target text, review_type text, label text, note text, qa text) on commit drop;
 insert into _rq values
