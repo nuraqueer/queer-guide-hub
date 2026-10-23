@@ -35,7 +35,17 @@ Deno.serve(async req => {
       Deno.env.get('TRIP_INBOX_ROUTING_API_TOKEN') || Deno.env.get('CLOUDFLARE_API_TOKEN') || '',
       Deno.env.get('CLOUDFLARE_ZONE_ID') || 'fe9b9da8a08af32e10bb3ba7fdb04440',
     )
-    if (action === 'status') return jsonResponse({ configured: true, rule_count: (await routing.list()).length }, 200, req)
+    if (action === 'status') {
+      const config = {
+        zone_id: Deno.env.get('CLOUDFLARE_ZONE_ID') || 'fe9b9da8a08af32e10bb3ba7fdb04440',
+        dedicated_token_configured: Boolean(Deno.env.get('TRIP_INBOX_ROUTING_API_TOKEN')),
+      }
+      try {
+        return jsonResponse({ ...config, configured: true, rule_count: (await routing.list()).length }, 200, req)
+      } catch (error) {
+        return jsonResponse({ ...config, configured: false, error: error instanceof RoutingError ? error.message : 'Provider unavailable' }, 503, req)
+      }
+    }
 
     async function provision(inbox: { id: string; short_id: string }) {
       try {
