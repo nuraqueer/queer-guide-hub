@@ -25,6 +25,7 @@ import {
   merchantListConfig,
   partnerListConfig,
 } from '@/components/admin/business/organisationListConfigs';
+import { getContentType } from '@/config/contentTypes';
 import { unifiedTagsContentType } from '@/config/contentTypes/tag';
 
 /**
@@ -203,6 +204,29 @@ describe('ContentListPanel toolbarActions', () => {
       expect.any(Object),
     );
   });
+
+  it('keeps Excel and CSV when a page hides the header to own its title (Milestones)', () => {
+    renderPanel(baseConfig(), { hideHeader: true });
+    expect(screen.queryByRole('button', { name: 'List tools' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Content tools' }));
+    expect(screen.getByRole('button', { name: 'Export Excel' })).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Export CSV' })).toBeVisible();
+  });
+
+  it.each(['personalities', 'milestones', 'events', 'cities'])(
+    'the real %s config offers Excel and CSV',
+    (id) => {
+      renderPanel(getContentType(id)!);
+      fireEvent.click(screen.getByRole('button', { name: 'Content tools' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Export CSV' }));
+      expect(exportContentType).toHaveBeenLastCalledWith(
+        getContentType(id),
+        controller.allListColumns,
+        'CSV',
+        expect.any(Object),
+      );
+    },
+  );
 
   it('renders nothing extra when a type declares none', () => {
     renderPanel(baseConfig());
