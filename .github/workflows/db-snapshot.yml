@@ -14,7 +14,7 @@ on:
   schedule:
     - cron: '20 2 * * *'
   workflow_dispatch: {}
-  # Called by e2e-local so its consumer waits for this exact snapshot.
+  # Reusable prerequisite (no caller since e2e-local.yml folded into e2e-pr.yml).
   workflow_call:
     secrets:
       SUPABASE_DB_URL:
