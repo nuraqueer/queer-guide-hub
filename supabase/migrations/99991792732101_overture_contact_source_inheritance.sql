@@ -1,4 +1,4 @@
--- 99991792730545_overture_contact_source_inheritance
+-- 99991792732101_overture_contact_source_inheritance
 
 -- Only registered, complete public Overture captures may participate in the
 -- existing primary-venue inheritance. Keep the original ownership/consensus,
@@ -14,6 +14,9 @@ begin
   and (c.source_slug<>'overture' or exists(
    select 1 from public.venue_sources captured where captured.id=c.source_id
     and captured.payload->>'contract'='overture_contact_capture:v1'
+    and captured.source_url='https://stac.overturemaps.org/2026-10-21.0/places/place/collection.json'
+    and captured.payload#>>'{capture,source_url}'=captured.source_url
+    and captured.payload#>>'{capture,release}'='2026-10-21.0'
     and captured.payload#>>'{capture,window_complete}'='true'
     and captured.payload#>>'{raw,id}'=captured.source_entity_id
     and captured.payload#>>'{raw,operating_status}'='open'
@@ -21,6 +24,8 @@ begin
     and (captured.payload#>>'{raw,confidence}')::numeric>=.9
     and captured.payload#>>'{capture,website_probe,usable}'='true'
     and captured.payload#>>'{capture,website_probe,status}'='200'
+    and captured.payload#>>'{capture,website_probe,identity,name_match}'='true'
+    and captured.payload#>>'{capture,website_probe,identity,street_match}'='true'
     and captured.payload#>>'{capture,website_probe,prefix_sha256}'~'^[a-f0-9]{64}$'
     and captured.payload#>>'{normalized,contacts,website}'=captured.payload#>>'{raw,websites,0}'
     and jsonb_array_length(captured.payload#>'{raw,websites}')=1
