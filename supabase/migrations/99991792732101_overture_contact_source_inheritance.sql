@@ -21,6 +21,8 @@ begin
     and (captured.payload#>>'{raw,confidence}')::numeric>=.9
     and captured.payload#>>'{capture,website_probe,usable}'='true'
     and captured.payload#>>'{capture,website_probe,status}'='200'
+    and captured.payload#>>'{capture,website_probe,identity,name_match}'='true'
+    and captured.payload#>>'{capture,website_probe,identity,street_match}'='true'
     and captured.payload#>>'{capture,website_probe,prefix_sha256}'~'^[a-f0-9]{64}$'
     and captured.payload#>>'{normalized,contacts,website}'=captured.payload#>>'{raw,websites,0}'
     and jsonb_array_length(captured.payload#>'{raw,websites}')=1

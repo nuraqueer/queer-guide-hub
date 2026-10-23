@@ -7,6 +7,7 @@ public Parquet range reads, not a gated Foursquare download or paid Places API.
 import argparse
 import datetime
 import hashlib
+from html import unescape
 import ipaddress
 import json
 import math
@@ -101,7 +102,31 @@ class PublicRedirect(urllib.request.HTTPRedirectHandler):
         return super().redirect_request(req, fp, code, msg, headers, newurl)
 
 
-def website_probe(url):
+def website_identity(venue, place, title, body):
+    city_words = set(normalized(venue.get('city_name')).split())
+    generic = {'the', 'and', 'at', 'of', 'la', 'le', 'el', 'de', 'der', 'die', 'das', 'ag', 'gmbh', 'ltd', 'inc',
+               'bar', 'cafe', 'restaurant', 'hotel', 'lounge', 'club', 'center', 'centre', 'theater', 'theatre', 'gastropub'}
+    brand = [word for word in normalized(venue['name']).split() if word not in city_words | generic and len(word) >= 2]
+    heading_words = set(normalized(title).split())
+    name_match = bool(brand) and all(word in heading_words for word in brand)
+
+    def street(value):
+        words = normalized(value).split()
+        if venue['country_code'] in ('US', 'CA', 'GB', 'IE', 'AU', 'NZ'):
+            expansions = {'st': 'street', 'ave': 'avenue', 'av': 'avenue', 'blvd': 'boulevard', 'rd': 'road', 'dr': 'drive', 'ln': 'lane', 'pl': 'place', 'hwy': 'highway'}
+            words = [expansions.get(word, word) for word in words]
+        return ' '.join(words)
+    # Source freeform addresses usually contain a house number missing from a
+    # legacy native street. Require that more specific location when available.
+    addresses = [a.get('freeform') for a in place.get('addresses') or [] if a.get('country') == venue['country_code'] and a.get('freeform')]
+    address = max(addresses + [venue.get('address') or ''], key=len)
+    document = street(unescape(re.sub(r'<[^>]+>', ' ', body)))
+    expected = street(address)
+    street_match = len(expected) >= 5 and ' ' + expected + ' ' in ' ' + document + ' '
+    return {'name_match': name_match, 'street_match': street_match, 'brand_words': brand, 'street_address': address}
+
+
+def website_probe(url, venue, place):
     if url.startswith('http://'):
         url = 'https://' + url[7:]
     try:
@@ -111,10 +136,12 @@ def website_probe(url):
             body = response.read(500001)
             text = body.decode('utf-8', 'replace')
             title = re.search(r'<title[^>]*>(.*?)</title>', text, re.I | re.S)
+            title_text = unescape(title[1]).strip() if title else ''
+            identity = website_identity(venue, place, title_text, text)
             return {'status': response.status, 'url': response.url, 'observed_at': now(),
                     'prefix_sha256': hashlib.sha256(body).hexdigest(), 'bytes_read': len(body),
-                    'title': title[1].strip() if title else None,
-                    'usable': response.status == 200 and len(body) > 2000 and 'text/html' in response.headers.get('Content-Type', '') and not any(marker in text.lower() for marker in ('hugedomains.com', 'domain is for sale', 'buy this domain', 'domain has expired'))}
+                    'title': title_text or None, 'identity': identity,
+                    'usable': identity['name_match'] and identity['street_match'] and response.status == 200 and len(body) > 2000 and 'text/html' in response.headers.get('Content-Type', '') and not any(marker in text.lower() for marker in ('hugedomains.com', 'domain is for sale', 'buy this domain', 'domain has expired'))}
     except Exception as error:
         return {'usable': False, 'outcome_unknown': type(error).__name__}
 
@@ -174,7 +201,7 @@ def main():
                  'observed_at': now(), 'release': RELEASE, 'source_url': collection_url, 'assets': assets,
                  'window_complete': complete, 'window_bounds': args.bounds, 'window_rows': len(rows),
                  'payload_text': payload, 'payload_sha256': hashlib.sha256(payload.encode()).hexdigest(),
-                 'website_probe': website_probe(place['websites'][0])}
+                 'website_probe': website_probe(place['websites'][0], venue, place)}
         proofs.append(proof)
     report = {'read_only': True, 'release': RELEASE, 'observed_at': now(), 'assets': assets,
               'bounds': args.bounds, 'rows': len(rows), 'complete': complete, 'proofs': proofs}

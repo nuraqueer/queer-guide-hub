@@ -1,5 +1,5 @@
 -- New source contracts cannot turn an arbitrary imported URL into a pass.
-insert into fixture_ids select n,gen_random_uuid(),gen_random_uuid(),gen_random_uuid() from generate_series(46,53) n;
+insert into fixture_ids select n,gen_random_uuid(),gen_random_uuid(),gen_random_uuid() from generate_series(46,56) n;
 insert into organizations(id,name,primary_venue_id,city_id,country_id)
  select o,'Source venue '||n,v,'00000000-0000-0000-0000-000000000002','00000000-0000-0000-0000-000000000001'
  from fixture_ids where n>=46;
@@ -13,7 +13,8 @@ insert into venue_sources(id,venue_id,source_slug,source_entity_id,source_url,pa
  'normalized',jsonb_build_object('contacts',jsonb_build_object('website','https://venue-'||f.n||'.example')),
  'capture',jsonb_build_object('window_complete',true,'payload_text',jsonb_build_array(raw.place)::text,
  'payload_sha256',encode(extensions.digest(jsonb_build_array(raw.place)::text,'sha256'),'hex'),
- 'website_probe',jsonb_build_object('usable',true,'status',200,'prefix_sha256',repeat('a',64))))
+ 'website_probe',jsonb_build_object('usable',true,'status',200,'prefix_sha256',repeat('a',64),
+ 'identity',jsonb_build_object('name_match',true,'street_match',true))))
  from fixture_ids f cross join lateral(select jsonb_build_object('id',f.o,'operating_status','open','confidence',.99,
  'websites',jsonb_build_array('https://venue-'||f.n||'.example'),'sources',jsonb_build_array(jsonb_build_object('license','CDLA-Permissive-2.0')))place)raw
  where f.n>=46;
@@ -24,6 +25,9 @@ update venue_sources set payload=jsonb_set(payload,'{raw,confidence}','0.5') whe
 update venue_sources set payload=jsonb_set(payload,'{raw,sources}','[{"license":"unknown"}]') where id=(select s from fixture_ids where n=51);
 update venue_sources set payload=jsonb_set(payload,'{raw,websites}','["https://one.example","https://two.example"]') where id=(select s from fixture_ids where n=52);
 update venue_sources set payload=jsonb_set(payload,'{capture,window_complete}','false') where id=(select s from fixture_ids where n=53);
+update venue_sources set payload=jsonb_set(payload,'{capture,website_probe,identity,name_match}','false') where id=(select s from fixture_ids where n=54);
+update venue_sources set payload=jsonb_set(payload,'{capture,website_probe,identity,street_match}','false') where id=(select s from fixture_ids where n=55);
+update venue_sources set payload=payload#-'{capture,website_probe,identity}' where id=(select s from fixture_ids where n=56);
 do $test$
 declare r jsonb;
 begin

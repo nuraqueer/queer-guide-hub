@@ -53,6 +53,22 @@ class ContactEvidenceTests(unittest.TestCase):
         self.assertEqual(module.normalized('ホテル Sunshine'), 'ホテル sunshine')
         self.assertNotEqual(module.normalized('ホテル Sunshine'), module.normalized('クラブ Sunshine'))
 
+    def test_live_name_and_street_are_both_required(self):
+        for title, body, expected in [
+            ('B2 Boutique Hotel Zurich', '<p>Brandschenkestrasse 152</p>', (True, True)),
+            ('Unrelated Casino', '<p>Brandschenkestrasse 152</p>', (False, True)),
+            ('B2 Boutique Hotel Zurich', '<p>Another street 152</p>', (True, False)),
+        ]:
+            identity = module.website_identity(self.venue, self.place, title, body)
+            self.assertEqual((identity['name_match'], identity['street_match']), expected)
+
+    def test_reused_brand_word_with_a_different_address_is_insufficient(self):
+        venue = dict(name='Myriad Gastropub', city_name='San Francisco', country_code='US', address='2491 Mission Street')
+        place = dict(addresses=[dict(country='US', freeform='2491 Mission St')])
+        result = module.website_identity(venue, place, 'Myriad Hospitality Solutions', '<p>1300 Other Avenue</p>')
+        self.assertTrue(result['name_match'])
+        self.assertFalse(result['street_match'])
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -52,6 +52,7 @@ begin
  and (i.p->>'observed_at')::timestamptz between now()-interval '1 hour' and now()+interval '5 minutes'
  and (i.p->'website_probe'->>'observed_at')::timestamptz between now()-interval '1 hour' and now()+interval '5 minutes'
  and i.p#>>'{website_probe,usable}'='true' and i.p#>>'{website_probe,status}'='200'
+ and i.p#>>'{website_probe,identity,name_match}'='true' and i.p#>>'{website_probe,identity,street_match}'='true'
  and i.p#>>'{website_probe,prefix_sha256}'~'^[a-f0-9]{64}$'
  and (i.p#>>'{website_probe,bytes_read}')::integer>2000
  and regexp_replace(public.extract_website_domain(i.p#>>'{website_probe,url}'),'^www\.','')
