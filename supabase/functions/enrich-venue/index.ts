@@ -1,5 +1,8 @@
 import { getCorsHeaders, getServiceClient, requireAdmin } from '../_shared/supabase-client.ts'
 import { providerFetch, providerResults, ProviderUnavailable } from './provider-outcomes.ts'
+import { searchFoursquare } from './foursquare.ts'
+import { collectContactEvidence, type ContactVenue } from './contact-evidence.ts'
+import { reserveFoursquareApiCalls, type FoursquareBudgetVerdict } from '../_shared/foursquare-budget.ts'
 
 interface VenueData {
   name?: string;
@@ -33,7 +36,46 @@ Deno.serve(async (req) => {
     const authResult = await requireAdmin(req, serviceClient)
     if (authResult instanceof Response) return authResult
 
-    const { venueName, currentData = {} } = await req.json()
+    const body = await req.json()
+    // Read-only, bounded source capture for known native identities. This mode
+    // never stages new places, proposes claims, or writes venue/source data.
+    if (body.mode === 'contact_evidence') {
+      const ids = body.venue_ids
+      if (!Array.isArray(ids) || !ids.length || ids.length > 5 || new Set(ids).size !== ids.length
+        || ids.some(id => typeof id !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id))) {
+        return new Response(JSON.stringify({ error: 'Provide one to five unique venue UUIDs' }), { status: 400, headers: corsHeaders })
+      }
+      const apiKey = Deno.env.get('FOURSQUARE_API_KEY')
+      if (!apiKey) throw new ProviderUnavailable()
+      const { data: venues, error } = await serviceClient.from('venues')
+        .select('id,name,latitude,longitude,address,country_id,city_id,organization_id,updated_at,category')
+        .in('id', ids).is('duplicate_of_id', null).is('closed_at', null)
+      if (error) throw new Error('Could not read native venue identities')
+      const { data: countries, error: countryError } = await serviceClient.from('countries')
+        .select('id,code').in('id', [...new Set((venues ?? []).map(v => v.country_id).filter(Boolean))])
+      if (countryError) throw new Error('Could not read native country identities')
+      const { data: cities, error: cityError } = await serviceClient.from('cities')
+        .select('id,name').in('id', [...new Set((venues ?? []).map(v => v.city_id).filter(Boolean))])
+      if (cityError) throw new Error('Could not read native city identities')
+      const budget = await reserveFoursquareApiCalls(serviceClient, 'contact-evidence', venues?.length ?? 0)
+      if (!budget.allowed) return new Response(JSON.stringify({ success: false, read_only: true, capped: true, captures: [], budget }), {
+        status: 503, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+      const captures = []
+      for (const venue of venues ?? []) {
+        const country = countries?.find(c => c.id === venue.country_id)
+        if (!country || ['cruising', 'toilet', 'other'].includes(venue.category)
+          || typeof venue.latitude !== 'number' || typeof venue.longitude !== 'number'
+          || !Number.isFinite(venue.latitude) || !Number.isFinite(venue.longitude)
+          || Math.abs(venue.latitude) > 90 || Math.abs(venue.longitude) > 180
+          || (!venue.latitude && !venue.longitude)) continue
+        captures.push(await collectContactEvidence({ ...venue, country_code: country.code, city_name: cities?.find(c => c.id === venue.city_id)?.name } as ContactVenue, apiKey))
+      }
+      return new Response(JSON.stringify({ success: true, read_only: true, captures }), {
+        status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
+    const { venueName, currentData = {} } = body
     
     if (typeof venueName !== 'string' || venueName.trim().length < 2 || venueName.length > 200) {
       return new Response(
@@ -54,10 +96,17 @@ Deno.serve(async (req) => {
     const tripadvisorKey = Deno.env.get('TRIPADVISOR_API_KEY')
 
     const providers: { source: string; run: () => Promise<VenueData | null> }[] = []
+    let foursquareBudget: FoursquareBudgetVerdict | undefined
+
+    let foursquareBudget: FoursquareBudgetVerdict | undefined
 
     // Foursquare search
     if (foursquareKey) {
-      providers.push({ source: 'foursquare', run: () => searchFoursquare(venueName, foursquareKey) })
+      providers.push({ source: 'foursquare', run: async () => {
+        foursquareBudget = await reserveFoursquareApiCalls(serviceClient, 'enrichment-preview', 1)
+        if (!foursquareBudget.allowed) throw new ProviderUnavailable()
+        return searchFoursquare(venueName, foursquareKey)
+      } })
     }
 
     // Google Places search
@@ -97,6 +146,7 @@ Deno.serve(async (req) => {
         sources_available: available,
         sources_unavailable: unavailable,
         degraded: unavailable > 0,
+        foursquare_budget: foursquareBudget,
         ...(success ? {} : { error: results.length ? 'All configured enrichment providers are unavailable' : 'No enrichment providers configured' })
       }),
       { 
@@ -116,50 +166,6 @@ Deno.serve(async (req) => {
     )
   }
 })
-
-async function searchFoursquare(venueName: string, apiKey: string): Promise<VenueData | null> {
-  try {
-    console.log('Searching Foursquare for:', venueName)
-    
-    const searchUrl = `https://api.foursquare.com/v3/places/search?query=${encodeURIComponent(venueName)}&limit=1`
-    
-    const response = await providerFetch(searchUrl, {
-      headers: {
-        'Authorization': apiKey,
-        'Accept': 'application/json'
-      }
-    })
-
-
-
-    const data = await response.json()
-    
-    if (!data.results || data.results.length === 0) {
-      console.log('No Foursquare results found')
-      return null
-    }
-
-    const venue = data.results[0]
-    console.log('Found Foursquare venue:', venue.name)
-
-    return {
-      name: venue.name,
-      address: venue.location?.formatted_address,
-      city: venue.location?.locality,
-      state: venue.location?.region,
-      country: venue.location?.country,
-      postal_code: venue.location?.postcode,
-      latitude: venue.geocodes?.main?.latitude,
-      longitude: venue.geocodes?.main?.longitude,
-      category: venue.categories?.[0]?.name,
-      website: venue.website,
-      phone: venue.tel,
-      rating: venue.rating
-    }
-  } catch (error) {
-    throw error instanceof ProviderUnavailable ? error : new ProviderUnavailable()
-  }
-}
 
 async function searchGooglePlaces(venueName: string, apiKey: string): Promise<VenueData | null> {
   try {
