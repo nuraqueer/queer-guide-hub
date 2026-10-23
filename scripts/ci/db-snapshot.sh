@@ -74,9 +74,9 @@ load)
   psql "$db" -X -q -f /tmp/copy-in.sql 2>&1 | grep -i error || true
   # A schema-only dump creates materialized views WITH NO DATA; populate them
   # now that the rows are in. Two passes: a view reading another view refreshes
-  # on the second pass.
+  # on the second pass. Every schema: tag_usage_summary lives in api_cache.
   for pass in 1 2; do
-    psql "$db" -X -q -At -c "select format('refresh materialized view %I.%I;', schemaname, matviewname) from pg_matviews where schemaname = 'public' and not ispopulated" \
+    psql "$db" -X -q -At -c "select format('refresh materialized view %I.%I;', schemaname, matviewname) from pg_matviews where not ispopulated" \
       | psql "$db" -X -q 2>&1 | grep -i error || true
   done
   ;;
