@@ -835,10 +835,13 @@ export function normalizeGcEvent(
   const ticketUrl = httpsOnly(asString(offers['url']));
   const originalImage = httpsOnly(firstString(ld['image']) ?? asString(ld['thumbnailUrl']));
   const image = liveImage(originalImage);
-  const artworkExclusion = detail.fromWayback === true && ld['_legacyTemplate'] === true && originalImage
-    && /^https:\/\/graph\.facebook\.com\/[1-9]\d*\/picture(?:[?&]type=(?:large|normal|square))?$/.test(originalImage)
-    ? { contract: 'gaycities-wayback-graph-artwork:v1', outcome: 'source_unavailable',
-      api_reference: originalImage, reason: 'api_reference_excluded', human_reviewed: false }
+  const historicalArchive = detail.fromWayback === true && ld['_legacyTemplate'] === true;
+  const graphReference = originalImage && /^https:\/\/graph\.facebook\.com\/[1-9]\d*\/picture(?:[?&]type=(?:large|normal|square))?$/.test(originalImage);
+  const retiredBucket = originalImage && /^https:\/\/gaycities-featured-images-production\.s3\.amazonaws\.com\/events\/[A-Za-z0-9._-]+\.(?:jpg|jpeg|png|webp)$/.test(originalImage);
+  const artworkExclusion = historicalArchive && originalImage && (graphReference || retiredBucket)
+    ? { contract: retiredBucket ? 'gaycities-wayback-retired-bucket-artwork:v1' : 'gaycities-wayback-graph-artwork:v1',
+      outcome: 'source_unavailable', api_reference: originalImage,
+      reason: retiredBucket ? 'retired_source_bucket_excluded' : 'api_reference_excluded', human_reviewed: false }
     : null;
 
   const ldKeywords: string[] = Array.isArray(ld['keywords'])

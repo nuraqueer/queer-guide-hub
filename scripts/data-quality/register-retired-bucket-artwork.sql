@@ -12,6 +12,11 @@ begin
  if auth.uid()is not null then raise exception 'Internal source evidence only';end if;
  if position('gaycities-wayback-retired-bucket-artwork:v1' in pg_get_functiondef('api_private.historical_graph_artwork_scope(uuid)'::regprocedure))=0
   then raise exception 'Retired source contract not deployed';end if;
+ if not pg_try_advisory_xact_lock(hashtext('historical_graph_artwork'))then
+  perform set_config('matching.retired_bucket_result',jsonb_build_object('dry_run',dry_run,'skipped',true,'reason','native_source_repair_busy',
+   'source_denials_registered',0,'source_outcomes_recorded',0)::text,true);
+  return;
+ end if;
  inputs:=coalesce(nullif(current_setting('matching.retired_bucket_proofs',true),''),'[]')::jsonb;
  if jsonb_typeof(inputs)<>'array'or jsonb_array_length(inputs)>100 then raise exception 'At most one hundred response proofs';end if;
  for p in select value from jsonb_array_elements(inputs)loop
