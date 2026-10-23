@@ -390,19 +390,23 @@ function ContentListPanelBody(props: ContentListPanelProps) {
                 </Button>
 
                 {c.config?.toolbarActions?.()}
-                {c.config && (c.allListColumns.length > 0 || c.config.id === 'unified_tags') && (
-                  <>
+                {c.config &&
+                  (['Excel', 'CSV'] as const).map((format) => (
                     <ExportExcelButton
-                      onExport={() => exportContentType(c.config!, c.allListColumns)}
+                      key={format}
+                      format={format}
+                      // The file matches what the list shows: same filters,
+                      // search and archived/merged slice, every page.
+                      onExport={() =>
+                        exportContentType(c.config!, c.allListColumns, format, {
+                          filters: c.filters,
+                          search: c.debouncedSearch,
+                          archivedView: c.archivedView,
+                          mergedView: c.mergedView,
+                        })
+                      }
                     />
-                    {c.config.id === 'unified_tags' && (
-                      <ExportExcelButton
-                        format="CSV"
-                        onExport={() => exportContentType(c.config!, c.allListColumns, 'CSV')}
-                      />
-                    )}
-                  </>
-                )}
+                  ))}
               </AdminToolsPopover>
               {c.config && (
                 <Button size="sm" onClick={() => c.onCreate(c.config!.id)}>
