@@ -377,6 +377,12 @@ jobs:
       - name: Prepare disposable redirect webhook TLS certificates
         run: node scripts/test-redirect-webhooks.mjs --prepare-only
 
+      # Unit discovery does not import Deno.serve entrypoints. A duplicate
+      # block-scoped declaration passed helper tests but boot-failed in prod.
+      - name: Check venue enrichment entrypoint
+        working-directory: supabase/functions
+        run: deno check --node-modules-dir=none enrich-venue/index.ts
+
       - name: Run deno unit tests
         working-directory: supabase/functions
         # --node-modules-dir=none is load-bearing. The repo root package.json puts
