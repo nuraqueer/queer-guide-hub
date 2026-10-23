@@ -65,4 +65,43 @@ describe('email property accessibility adapter', () => {
     );
     expect(root.querySelector('label input')).not.toHaveAttribute('aria-label');
   });
+
+  it('distinguishes individual border sides without confusing corner controls', () => {
+    const root = document.createElement('aside');
+    root.innerHTML = `<div data-re-inspector-section>
+      <button data-re-inspector-section-toggle>Border</button><div data-re-inspector-section-body>
+      <div><div data-re-inspector-prop-row><label data-re-inspector-label>Border</label></div>
+      ${['top', 'right', 'bottom', 'left']
+        .map(
+          (side) => `<div><div>
+        <span><input></span><span><input type="color" data-re-inspector-color-trigger><input data-re-inspector-color-hex></span>
+        </div><div><select><option>Solid</option></select><button aria-label="Clear ${side} border"></button></div></div>`,
+        )
+        .join('')}
+      </div><div><div data-re-inspector-prop-row><label data-re-inspector-label>Rounded</label></div>
+      <div><input><input><input><input></div></div></div></div>`;
+    document.body.append(root);
+    labelEmailInspector(root);
+    for (const side of ['top', 'right', 'bottom', 'left']) {
+      expect(root.querySelector(`input[aria-label="Border ${side} width"]`)).toBeInTheDocument();
+      expect(
+        root.querySelector(`input[aria-label="Border ${side} color picker"]`),
+      ).toBeInTheDocument();
+      expect(
+        root.querySelector(`input[aria-label="Border ${side} color hex value"]`),
+      ).toBeInTheDocument();
+      expect(root.querySelector(`select[aria-label="Border ${side} style"]`)).toBeInTheDocument();
+    }
+    expect(
+      Array.from(root.querySelectorAll('input'))
+        .slice(-4)
+        .map((el) => el.getAttribute('aria-label')),
+    ).toEqual([
+      'Border Rounded top left',
+      'Border Rounded top right',
+      'Border Rounded bottom left',
+      'Border Rounded bottom right',
+    ]);
+    root.remove();
+  });
 });

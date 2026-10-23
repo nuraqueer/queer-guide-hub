@@ -25,15 +25,29 @@ export function labelEmailInspector(root: HTMLElement) {
     const title =
       section?.querySelector('[data-re-inspector-section-toggle]')?.textContent?.trim() ?? '';
     let field = control.closest(rowSelector);
+    let borderSide: string | undefined;
     // Per-side spacing and corner fields sit below their visual label row.
     if (!field) {
       let parent = control.parentElement;
-      while (parent && parent !== section && !parent.querySelector(labelSelector))
+      while (parent && parent !== section && !parent.querySelector(labelSelector)) {
+        // The vendor's per-side border groups have no visual label, but their
+        // existing clear action explicitly identifies the side they control.
+        const clear = parent.querySelectorAll(
+          'button[aria-label^="Clear "][aria-label$=" border"]',
+        );
+        if (clear.length === 1) {
+          borderSide = clear[0]
+            .getAttribute('aria-label')
+            ?.match(/^Clear (top|right|bottom|left) border$/)?.[1];
+          if (borderSide) break;
+        }
         parent = parent.parentElement;
+      }
       field = parent;
     }
     const label = field?.querySelector(labelSelector)?.textContent?.trim() ?? '';
     let name = [title, label !== title ? label : ''].filter(Boolean).join(' ');
+    if (borderSide) name = `${title} ${borderSide}`;
     if (control.matches('button')) {
       if (control.textContent?.trim()) continue;
       const tooltip = control
@@ -46,7 +60,9 @@ export function labelEmailInspector(root: HTMLElement) {
       const peers = Array.from(field.querySelectorAll('input, select'));
       const index = peers.indexOf(control);
       if (control.matches('[data-re-inspector-color-trigger]')) name += ' color picker';
-      else if (control.matches('[data-re-inspector-color-hex]')) name += ' hex value';
+      else if (control.matches('[data-re-inspector-color-hex]'))
+        name += borderSide ? ' color hex value' : ' hex value';
+      else if (borderSide) name += control.matches('select') ? ' style' : ' width';
       else if (peers.length === 4 && /^(Padding|Margin|Rounded)$/.test(label)) {
         const sides =
           label === 'Rounded'
