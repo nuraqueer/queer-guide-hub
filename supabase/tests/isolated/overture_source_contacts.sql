@@ -11,7 +11,8 @@ insert into venue_sources(id,venue_id,source_slug,source_entity_id,source_url,pa
  select f.s,f.v,'overture',f.o::text,'https://stac.overturemaps.org/2026-10-21.0/places/place/collection.json',
  jsonb_build_object('contract','overture_contact_capture:v1','raw',raw.place,
  'normalized',jsonb_build_object('contacts',jsonb_build_object('website','https://venue-'||f.n||'.example')),
- 'capture',jsonb_build_object('window_complete',true,'payload_text',jsonb_build_array(raw.place)::text,
+ 'capture',jsonb_build_object('window_complete',true,'release','2026-10-21.0',
+ 'source_url','https://stac.overturemaps.org/2026-10-21.0/places/place/collection.json','payload_text',jsonb_build_array(raw.place)::text,
  'payload_sha256',encode(extensions.digest(jsonb_build_array(raw.place)::text,'sha256'),'hex'),
  'website_probe',jsonb_build_object('usable',true,'status',200,'prefix_sha256',repeat('a',64),
  'identity',jsonb_build_object('name_match',true,'street_match',true))))
