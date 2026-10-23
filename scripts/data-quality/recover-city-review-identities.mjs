@@ -3,7 +3,7 @@
 // population. No identity decisions, source classifications or quality counters
 // are written here; all enrichment uses the native corroboration/ownership rules.
 import { execFileSync } from 'node:child_process'
-import { mkdir, readFile, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, writeFile, rename } from 'node:fs/promises'
 import { dirname } from 'node:path'
 
 const args = process.argv.slice(2)
@@ -50,7 +50,13 @@ const candidates = await sql(`select distinct c.id,c.country_id from public.revi
  order by c.country_id nulls last,c.id limit ${batchSize*maxBatches}`)
 const report = { started_at:new Date().toISOString(),apply,skip_report:skipReport,skipped_ids:skippedIds,candidate_ids:candidates.map(c=>c.id),receipts:[],totals:{processed:0,updated:0,failed:0},complete:false }
 await mkdir(dirname(output),{recursive:true})
-const save = () => writeFile(output,JSON.stringify(report,null,2))
+// Keep the last complete receipt journal intact if a full disk interrupts a
+// write. A partial JSON file cannot safely tell an operator what ran already.
+const save = async () => {
+  const temporary = `${output}.tmp`
+  await writeFile(temporary,JSON.stringify(report,null,2))
+  await rename(temporary,output)
+}
 await save()
 for (let offset=0;offset<candidates.length;offset+=batchSize) {
   const ids=candidates.slice(offset,offset+batchSize).map(c=>c.id)
