@@ -101,6 +101,21 @@ describe('EmailTemplates safeguards', () => {
       }),
     );
   });
+  it('preserves samples and allows retry when a test submission fails', async () => {
+    api.invoke.mockResolvedValueOnce({ error: new Error('unavailable') });
+    await select();
+    fireEvent.click(screen.getByRole('button', { name: 'Test email' }));
+    fireEvent.change(screen.getByLabelText('name'), { target: { value: 'River' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send test' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Could not submit the test email. Your sample values are preserved. Try again.',
+    );
+    expect(screen.getByLabelText('name')).toHaveValue('River');
+    expect(screen.getByLabelText('Recipient email')).toHaveValue('editor@example.com');
+    fireEvent.click(screen.getByRole('button', { name: 'Send test' }));
+    await waitFor(() => expect(api.invoke).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+  });
   it('shows a retry for a failed registry load', async () => {
     api.fetch.mockResolvedValueOnce({ data: [], error: new Error('offline') });
     render(

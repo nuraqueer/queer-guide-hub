@@ -301,9 +301,7 @@ export default function EmailTemplates() {
       toast.success('Test email accepted', { description: `Queued for delivery to ${recipient}` });
       setTestDialog(false);
     } catch {
-      setTestError(
-        'Could not send the test email. Use your verified admin email address and try again.',
-      );
+      setTestError('Could not submit the test email. Your sample values are preserved. Try again.');
     } finally {
       setSending(false);
     }
