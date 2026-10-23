@@ -1,3 +1,4 @@
+import { filterFoursquareDiscoveries } from '../_shared/foursquare-discovery-filter.ts'
 import { getServiceClient, jsonResponse, errorResponse, corsResponse, requireInternalOrAdmin } from '../_shared/supabase-client.ts'
 import { withCircuitBreaker } from '../_shared/circuit-breaker.ts'
 import type { SourceAdapter, RawItem, NormalizedItem, AdapterConfig } from '../_shared/source-adapter.ts'
@@ -232,7 +233,21 @@ Deno.serve(withErrorReporting('source-foursquare', async (req) => {
       nodeId: body.node_id,
     }
 
-    const rawItems = await foursquareAdapter.fetch(config)
+    const fetchedItems = await foursquareAdapter.fetch(config)
+    const sourceIds = fetchedItems.map(item => item.sourceId)
+    const existingIds = new Set<string>()
+    // Bound identity lookups as well as the provider request batch.
+    for (let offset = 0; offset < sourceIds.length; offset += 100) {
+      const ids = sourceIds.slice(offset, offset + 100)
+      const [sources, venues] = await Promise.all([
+        supabase.from('venue_sources').select('source_entity_id').in('source_slug', ['foursquare', 'foursquare_os']).in('source_entity_id', ids),
+        supabase.from('venues').select('foursquare_id').in('foursquare_id', ids),
+      ])
+      if (sources.error || venues.error) throw new Error('Foursquare canonical identity lookup failed')
+      for (const row of sources.data ?? []) if (row.source_entity_id) existingIds.add(row.source_entity_id)
+      for (const row of venues.data ?? []) if (row.foursquare_id) existingIds.add(row.foursquare_id)
+    }
+    const rawItems = filterFoursquareDiscoveries(fetchedItems, existingIds)
 
     if (config.dryRun) {
       return jsonResponse({ success: true, items: rawItems.length, dry_run: true }, 200, req)
@@ -253,6 +268,7 @@ Deno.serve(withErrorReporting('source-foursquare', async (req) => {
       items_processed: written,
       items_succeeded: written,
       items_failed: 0,
+      skipped_irrelevant: fetchedItems.length - rawItems.length,
     }, 200, req)
   } catch (error) {
     if (error instanceof MissingCredentialsError) {
