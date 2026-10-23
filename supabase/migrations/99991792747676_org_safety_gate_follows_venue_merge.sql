@@ -1,37 +1,58 @@
 -- 99991792747676_org_safety_gate_follows_venue_merge
 --
 -- organizations.safety_gated is decided by trg_organizations_safety_gated
--- (set_org_safety_gated): location_is_high_risk(...) OR the org's primary venue
--- is live (duplicate_of_id IS NULL) AND safety_gated. The org trigger fires only
--- when the ORG row is written, so 99991792403561 added zzz_venue_gate_to_org on
--- venues to re-decide the org when the venue's safety_gated flips.
+-- (set_org_safety_gated). Two defects, one producer:
 --
--- The gap: the predicate ALSO reads venues.duplicate_of_id, and nothing re-decided
--- the org when that moved. 2026-10-23 06:30 the venue dedup sweep merged
--- 'El Gremio' (cruising, gated) into another row; org 0250db11-... kept
--- safety_gated=true while the rule now said false, and
--- release_gate_checks().city_safety_gate_drift (critical, organizations arm)
--- went red on every open PR until fixed by hand.
+-- 1. STALE ON MERGE. The rule reads the primary venue's duplicate_of_id, but the
+--    venue->org propagation (zzz_venue_gate_to_org, 99991792403561) fired only on
+--    venues.safety_gated. 2026-10-23 06:30 the dedup sweep merged 'El Gremio'
+--    (cruising, gated); org 0250db11-... stayed gated against its own rule and
+--    city_safety_gate_drift (critical) went red on every open PR.
 --
--- Fix: the existing propagation trigger now also fires on duplicate_of_id, with a
--- WHEN so the hot venues table pays nothing for writes that change neither.
--- It also stops skipping merged organizations: the gate arm counts EVERY org
--- (647 merged orgs carry a primary_venue_id), so propagation must cover the
--- same set or a merged org drifts the same way.
+-- 2. A MERGE UNGATED THE ORG. The rule counted the primary venue only while live
+--    and never consulted the merge survivor, and no cron runs
+--    repoint_merged_primary_venues(). Measured on prod: 133 orgs point at a
+--    merged-away venue whose SURVIVOR is gated (132 cruising), 58 of them live
+--    and ungated, i.e. anon-readable cruising-venue identities. Fixing (1) alone
+--    would make every cruising->cruising merge ungate its org on the spot.
 --
--- Repointing primary_venue_id to the merge survivor is NOT done here; that is
--- repoint_merged_primary_venues()'s job, and when it writes primary_venue_id the
--- org trigger re-decides anyway.
+-- Rule now: high-risk location OR live primary venue gated OR the primary's
+-- merge survivor gated. One hop: 0 venue merge chains exist today.
+--
+-- The critical gate encodes the same rule in two places (drift arm in
+-- release_gate_checks_raw, venue_identity_gate_bypass in release_gate_checks).
+-- Both are widened here by exactly-once string surgery on the LIVE bodies
+-- (never restated from a file), or gating these orgs would read as drift.
 
+-- 1. The rule.
+create or replace function public.set_org_safety_gated()
+returns trigger language plpgsql
+set search_path to 'public' as $fn$
+begin
+  new.safety_gated :=
+    public.location_is_high_risk(new.country_id, new.city_id)
+    or exists (
+      select 1 from public.venues v
+        left join public.venues s on s.id = v.duplicate_of_id
+       where v.id = new.primary_venue_id
+         and ((v.duplicate_of_id is null and v.safety_gated is true)
+              or s.safety_gated is true)
+    );
+  return new;
+end $fn$;
+
+-- 2. Propagation: a venue's gate or merge state changed -> re-decide orgs whose
+--    primary IS it, or whose primary was merged INTO it.
 create or replace function public.propagate_venue_gate_to_organization()
 returns trigger language plpgsql security definer
-set search_path to 'public', 'pg_temp' as $fn$
+set search_path to 'public', 'pg_temp' as $prop$
 begin
   update public.organizations o
      set primary_venue_id = o.primary_venue_id
-   where o.primary_venue_id = new.id;
+   where o.primary_venue_id = new.id
+      or o.primary_venue_id in (select d.id from public.venues d where d.duplicate_of_id = new.id);
   return null;
-end $fn$;
+end $prop$;
 
 drop trigger if exists zzz_venue_gate_to_org on public.venues;
 create trigger zzz_venue_gate_to_org
@@ -41,20 +62,59 @@ create trigger zzz_venue_gate_to_org
         or old.duplicate_of_id is distinct from new.duplicate_of_id)
   execute function public.propagate_venue_gate_to_organization();
 
--- Heal anything already drifted, through the seal (writes no answer itself).
--- The join is materialized first so location_is_high_risk runs on the handful
--- of candidates, not on all ~38k gated orgs (that form hit the 2 min timeout).
-with c as materialized (
-  select o.id, o.country_id, o.city_id
-    from public.organizations o
-    join public.venues v on v.id = o.primary_venue_id
-   where v.duplicate_of_id is not null and o.safety_gated is true
-)
+-- 3. The gate learns the same rule.
+do $gate$
+declare
+  v_src text;
+  v_old text;
+  v_new text;
+begin
+  v_src := pg_get_functiondef('public.release_gate_checks_raw'::regproc);
+  v_old := 'or exists (select 1 from public.venues pv
+                          where pv.id = t.primary_venue_id
+                            and pv.duplicate_of_id is null
+                            and pv.safety_gated is true), false)';
+  v_new := 'or exists (select 1 from public.venues pv
+                          left join public.venues ps on ps.id = pv.duplicate_of_id
+                          where pv.id = t.primary_venue_id
+                            and ((pv.duplicate_of_id is null and pv.safety_gated is true)
+                                 or ps.safety_gated is true)), false)';
+  if position(v_old in v_src) > 0 then
+    if (length(v_src) - length(replace(v_src, v_old, ''))) / length(v_old) <> 1 then
+      raise exception 'drift arm anchor is not unique';
+    end if;
+    execute replace(v_src, v_old, v_new);
+  elsif position('ps.safety_gated is true' in v_src) = 0 then
+    raise exception 'drift arm anchor not found and survivor term absent';
+  end if;
+
+  v_src := pg_get_functiondef('public.release_gate_checks'::regproc);
+  v_old := 'JOIN public.venues v ON v.id = o.primary_venue_id
+  WHERE coalesce(o.safety_gated, false) IS FALSE
+    AND v.duplicate_of_id IS NULL
+    AND v.safety_gated IS TRUE;';
+  v_new := 'JOIN public.venues v ON v.id = o.primary_venue_id
+  LEFT JOIN public.venues s ON s.id = v.duplicate_of_id
+  WHERE coalesce(o.safety_gated, false) IS FALSE
+    AND ((v.duplicate_of_id IS NULL AND v.safety_gated IS TRUE)
+         OR s.safety_gated IS TRUE);';
+  if position(v_old in v_src) > 0 then
+    if (length(v_src) - length(replace(v_src, v_old, ''))) / length(v_old) <> 1 then
+      raise exception 'bypass anchor is not unique';
+    end if;
+    execute replace(v_src, v_old, v_new);
+  elsif position('s.safety_gated IS TRUE' in v_src) = 0 then
+    raise exception 'bypass anchor not found and survivor term absent';
+  end if;
+end $gate$;
+
+-- 4. Heal through the seal: every org whose primary venue was merged away
+--    (~580 rows). Writes no answer itself.
 update public.organizations o
    set primary_venue_id = o.primary_venue_id
-  from c
- where o.id = c.id
-   and not public.location_is_high_risk(c.country_id, c.city_id);
+  from public.venues v
+ where v.id = o.primary_venue_id
+   and v.duplicate_of_id is not null;
 
 do $verify$
 declare v_def text; v_bad bigint;
@@ -66,20 +126,34 @@ begin
     raise exception 'P1 failed: zzz_venue_gate_to_org does not fire on duplicate_of_id: %', v_def;
   end if;
 
-  if position('o.duplicate_of_id is null' in
-       pg_get_functiondef('public.propagate_venue_gate_to_organization'::regproc)) > 0 then
-    raise exception 'P2 failed: propagation still skips merged organizations';
+  if position('s.safety_gated is true' in pg_get_functiondef('public.set_org_safety_gated'::regproc)) = 0 then
+    raise exception 'P2 failed: set_org_safety_gated does not consult the merge survivor';
   end if;
 
+  -- No org is ungated while its primary venue's survivor is gated.
+  select count(*) into v_bad
+    from public.organizations o
+    join public.venues v on v.id = o.primary_venue_id
+    join public.venues s on s.id = v.duplicate_of_id
+   where s.safety_gated is true and coalesce(o.safety_gated, false) is false;
+  if v_bad <> 0 then
+    raise exception 'P3 failed: % orgs ungated under a gated merge survivor', v_bad;
+  end if;
+
+  -- No org is gated by a merged-away primary when neither its location nor the
+  -- survivor gates it. location_is_high_risk runs on the candidates only.
   with c as materialized (
     select o.country_id, o.city_id
       from public.organizations o
       join public.venues v on v.id = o.primary_venue_id
-     where v.duplicate_of_id is not null and o.safety_gated is true
+      left join public.venues s on s.id = v.duplicate_of_id
+     where v.duplicate_of_id is not null
+       and o.safety_gated is true
+       and s.safety_gated is not true
   )
   select count(*) into v_bad from c
    where not public.location_is_high_risk(c.country_id, c.city_id);
   if v_bad <> 0 then
-    raise exception 'P3 failed: % orgs still gated by a merged-away primary venue', v_bad;
+    raise exception 'P4 failed: % orgs still gated by a merged-away primary venue', v_bad;
   end if;
 end $verify$;
