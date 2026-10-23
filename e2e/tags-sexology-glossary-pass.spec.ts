@@ -438,6 +438,7 @@ test.describe('sexology glossary pass — anon data surface', () => {
     const visible = CREATED;
     const slugs = visible.map(([s]) => s).join(',');
     const rows = await reviewerTagRows<{
+      id: string;
       slug: string;
       status: string;
       seo_indexable: boolean;
@@ -446,7 +447,7 @@ test.describe('sexology glossary pass — anon data surface', () => {
       category_id: string | null;
     }>(
       request,
-      `select=slug,status,seo_indexable,human_reviewed,category,category_id&slug=in.(${slugs})`,
+      `select=id,slug,status,seo_indexable,human_reviewed,category,category_id&slug=in.(${slugs})`,
     );
 
     expect(rows.length, 'all twelve created rows should exist for the reviewer').toBe(
@@ -477,10 +478,7 @@ test.describe('sexology glossary pass — anon data surface', () => {
 
       const junction = await rest<{ category_id: string; is_primary: boolean }>(
         request,
-        `tag_category_assignments?select=category_id,is_primary&tag_id=eq.${
-          // resolve the id through the same anon read rather than trusting a literal
-          (await rest<{ id: string }>(request, `unified_tags?select=id&slug=eq.${slug}`))[0].id
-        }&is_primary=is.true`,
+        `tag_category_assignments?select=category_id,is_primary&tag_id=eq.${row.id}&is_primary=is.true`,
       );
       expect(junction.length, `${slug} should have a primary junction row`).toBe(1);
       expect(junction[0].category_id, `${slug} junction category`).toBe(expected?.id);
@@ -610,9 +608,9 @@ test.describe('sexology glossary pass — anon data surface', () => {
 
     // And `withdrawal` must still be the SUBSTANCE sense — the thing that made
     // the alias wrong. If this ever flips, the refusal above stops making sense.
-    const [withdrawal] = await rest<{ category: string | null }>(
+    const [withdrawal] = await reviewerTagRows<{ category: string | null }>(
       request,
-      'unified_tags?select=category&slug=eq.withdrawal',
+      'select=category&slug=eq.withdrawal',
     );
     expect(withdrawal?.category, 'withdrawal is the substance sense').toBe('Substances & Recovery');
   });
