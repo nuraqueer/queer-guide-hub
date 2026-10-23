@@ -40,8 +40,13 @@ begin
  and jsonb_array_length(i.p->'assets') between 1 and 16
  and not exists(select 1 from jsonb_array_elements_text(i.p->'assets') a(url)
   where url!~'^https://overturemaps-us-west-2\.s3\.us-west-2\.amazonaws\.com/release/2026-10-21\.0/theme=places/type=place/[A-Za-z0-9.-]+\.parquet$')
- and v.longitude between (i.p#>>'{window_bounds,0}')::numeric+.002 and (i.p#>>'{window_bounds,2}')::numeric-.002
- and v.latitude between (i.p#>>'{window_bounds,1}')::numeric+.001 and (i.p#>>'{window_bounds,3}')::numeric-.001
+ and v.longitude between (i.p#>>'{window_bounds,0}')::numeric and (i.p#>>'{window_bounds,2}')::numeric
+ and v.latitude between (i.p#>>'{window_bounds,1}')::numeric and (i.p#>>'{window_bounds,3}')::numeric
+ and least(
+  public.haversine_m(v.latitude,v.longitude,v.latitude,(i.p#>>'{window_bounds,0}')::numeric),
+  public.haversine_m(v.latitude,v.longitude,v.latitude,(i.p#>>'{window_bounds,2}')::numeric),
+  public.haversine_m(v.latitude,v.longitude,(i.p#>>'{window_bounds,1}')::numeric,v.longitude),
+  public.haversine_m(v.latitude,v.longitude,(i.p#>>'{window_bounds,3}')::numeric,v.longitude))>=60
  and length(i.p->>'payload_text')<=1000000
  and encode(extensions.digest(i.p->>'payload_text','sha256'),'hex')=i.p->>'payload_sha256'
  and (i.p->>'observed_at')::timestamptz between now()-interval '1 hour' and now()+interval '5 minutes'

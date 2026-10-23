@@ -23,12 +23,25 @@ ROW_CAP = 150000
 
 
 def normalized(value):
-    return re.sub(r'[^a-z0-9]+', ' ', unicodedata.normalize('NFKD', value or '').encode('ascii', 'ignore').decode().lower()).strip()
+    text = ''.join(c for c in unicodedata.normalize('NFKD', value or '').casefold() if not unicodedata.combining(c))
+    return ' '.join(''.join(c if c.isalnum() else ' ' for c in text).split())
 
 
 def distance(a, b):
     lat1, lon1, lat2, lon2 = map(math.radians, map(float, [a['latitude'], a['longitude'], b['latitude'], b['longitude']]))
     return 12742000 * math.asin(min(1, math.sqrt(math.sin((lat1-lat2)/2)**2 + math.cos(lat1)*math.cos(lat2)*math.sin((lon1-lon2)/2)**2)))
+
+
+def window_contains_radius(venue, bounds):
+    west, south, east, north = bounds
+    lat, lon = float(venue['latitude']), float(venue['longitude'])
+    if not (west < lon < east and south < lat < north):
+        return False
+    # A fixed longitude margin becomes too small near the poles. Check the
+    # actual geographic distance to every window edge before claiming complete
+    # identity evidence within the 60-metre matching circle.
+    return all(distance(venue, dict(latitude=y, longitude=x)) >= 60
+               for x, y in [(west, lat), (east, lat), (lon, south), (lon, north)])
 
 
 def identity_matches(venue, place):
@@ -122,7 +135,7 @@ def main():
     if not (isinstance(venues, list) and 0 < len(venues) <= 2000 and -180 <= west < east <= 180 and -90 <= south < north <= 90 and east-west <= 2 and north-south <= 2):
         raise ValueError('Bounded native candidates and city window required')
     for venue in venues:
-        if not (west+.002 <= float(venue['longitude']) <= east-.002 and south+.001 <= float(venue['latitude']) <= north-.001):
+        if not window_contains_radius(venue, args.bounds):
             raise ValueError('Window must contain the full matching radius of every venue')
     if not args.collect:
         print(json.dumps({'read_only': True, 'candidates': len(venues), 'bounds': args.bounds, 'release': RELEASE, 'collect': False}))

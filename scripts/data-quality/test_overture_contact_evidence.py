@@ -44,6 +44,15 @@ class ContactEvidenceTests(unittest.TestCase):
     def test_distinct_websites_require_further_evidence(self):
         self.assertIsNone(module.positive_match(self.venue, [{**self.place, 'websites': ['https://one.example', 'https://two.example']}], True))
 
+    def test_polar_longitude_margin_must_cover_the_matching_radius(self):
+        venue = dict(latitude=80, longitude=15)
+        self.assertFalse(module.window_contains_radius(venue, [14.998, 79.999, 15.002, 80.001]))
+        self.assertTrue(module.window_contains_radius(venue, [14.996, 79.999, 15.004, 80.001]))
+
+    def test_non_latin_names_are_preserved_for_identity_matching(self):
+        self.assertEqual(module.normalized('ホテル Sunshine'), 'ホテル sunshine')
+        self.assertNotEqual(module.normalized('ホテル Sunshine'), module.normalized('クラブ Sunshine'))
+
 
 if __name__ == '__main__':
     unittest.main()
