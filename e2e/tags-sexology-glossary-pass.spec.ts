@@ -58,7 +58,7 @@ const ALIASES: ReadonlyArray<readonly [alias: string, canonical: string]> = [
   ['chest-surgery', 'top-surgery'],
   ['bilateral-mastectomy', 'top-surgery'],
   ['forced-feminization', 'feminization'],
-  // pap-smear and pubic-lice were merged into these rows by 99991792778003
+  // pap-smear and pubic-lice were merged into these rows by 99991792781503
   // (the 2026-10-23 Review Queue sheet), which repointed their aliases.
   ['smear-test', 'papanicolaou-test-pap-test'],
   ['cervical-screening-tests', 'papanicolaou-test-pap-test'],
@@ -629,7 +629,7 @@ test.describe('sexology glossary pass — anon data surface', () => {
 
   test('the two misfiled rows moved, in all three representations', async ({ request }) => {
     for (const [slug, categoryName] of [
-      // pap-smear itself was merged into the Pap test row by 99991792778003; the
+      // pap-smear itself was merged into the Pap test row by 99991792781503; the
       // filing it carried now lives on the canonical.
       ['papanicolaou-test-pap-test', 'Sexual Health'],
       // Moved again by 99991792777258 (the 2026-10-23 Proposals sheet).

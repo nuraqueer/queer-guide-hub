@@ -52,7 +52,7 @@ test.describe('@smoke glossary entries do not publish a surname stub', () => {
   for (const slug of [
     'farber',
     'kerle',
-    // 'kuenstler' was merged into `artist` by 99991792778003 (2026-10-23 Review
+    // 'kuenstler' was merged into `artist` by 99991792781503 (2026-10-23 Review
     // Queue sheet); its slug now redirects there, so it is no longer an active row.
     'lehrer',
     'maler',

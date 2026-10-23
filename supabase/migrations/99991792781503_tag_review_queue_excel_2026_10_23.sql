@@ -27,7 +27,7 @@
 --    then rejects the row to dismiss it.
 
 set local statement_timeout = '60min';
-select set_config('app.actor', 'migration:99991792778003_tag_review_queue_excel_2026_10_23', true);
+select set_config('app.actor', 'migration:99991792781503_tag_review_queue_excel_2026_10_23', true);
 
 -- ---------------------------------------------------------------- 1. merges
 create temp table _rm (src text primary key, tgt text not null) on commit drop;
@@ -336,7 +336,7 @@ begin
       update public.tag_category_assignments set is_primary = false
        where tag_id = r.src_id and is_primary;
       v_audit := public.merge_tag_concept(r.tgt_id, r.src_id,
-                   'migration:99991792778003', 'excel-review-2026-10-23');
+                   'migration:99991792781503', 'excel-review-2026-10-23');
       -- merge_tag_concept mints an alias from the old slug but leaves the
       -- duplicate's EXISTING aliases on the merged row, where they route to a
       -- tag nobody can open. Repoint them at the canonical. This runs after the
