@@ -272,6 +272,15 @@ where s.id <> t.id
     when 'community_group' then (select '/groups/'||x.id::text from public.community_groups x where x.id=u.canonical_entity_id and x.duplicate_of_id is null)
   end) is distinct from u.canonical_entity_path);
 
+-- merge_tag_concept's trigger (log_unified_tag_merge_redirect) inserts into the
+-- serial tag_slug_redirects. A restored copy of the table can carry rows above
+-- its sequence (the CI snapshot does: 148 of 214 merges hit tag_slug_redirects_pkey),
+-- so move the sequence up to max(id) first. It never moves backwards, so on a
+-- database whose sequence is already ahead this is a no-op.
+select setval('public.tag_slug_redirects_id_seq',
+              greatest((select coalesce(max(id), 1) from public.tag_slug_redirects),
+                       (select last_value from public.tag_slug_redirects_id_seq)));
+
 create temp table _rm_done (src_id uuid, tgt_id uuid, audit_id uuid, err text) on commit drop;
 
 do $merge$
