@@ -118,6 +118,8 @@ begin
   and (p_event_ids is not null or coalesce(cardinality(evt.images),0)>0 or exists(
    select 1 from public.event_quality_issues i where i.event_id=evt.id and i.status='open' and i.reviewed_by is null
     and i.issue_code in('IMAGE_UNREACHABLE','IMAGE_MIME_INVALID','IMAGE_MISSING')))
+  -- Protected low-ID records must not starve later repairs on each tick.
+  and api_private.historical_graph_artwork_scope(evt.id)is not null
   order by evt.id limit greatest(0,least(coalesce(p_batch,500),1000))
  loop
   if not coalesce(p_dry_run,true)then
