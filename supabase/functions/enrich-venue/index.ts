@@ -1,6 +1,7 @@
 import { getCorsHeaders, getServiceClient, requireAdmin } from '../_shared/supabase-client.ts'
 import { providerFetch, providerResults, ProviderUnavailable } from './provider-outcomes.ts'
 import { searchFoursquare } from './foursquare.ts'
+import { reserveFoursquareApiCalls, type FoursquareBudgetVerdict } from '../_shared/foursquare-budget.ts'
 
 interface VenueData {
   name?: string;
@@ -56,9 +57,15 @@ Deno.serve(async (req) => {
 
     const providers: { source: string; run: () => Promise<VenueData | null> }[] = []
 
+    let foursquareBudget: FoursquareBudgetVerdict | undefined
+
     // Foursquare search
     if (foursquareKey) {
-      providers.push({ source: 'foursquare', run: () => searchFoursquare(venueName, foursquareKey) })
+      providers.push({ source: 'foursquare', run: async () => {
+        foursquareBudget = await reserveFoursquareApiCalls(serviceClient, 'enrichment-preview', 1)
+        if (!foursquareBudget.allowed) throw new ProviderUnavailable()
+        return searchFoursquare(venueName, foursquareKey)
+      } })
     }
 
     // Google Places search
@@ -98,6 +105,7 @@ Deno.serve(async (req) => {
         sources_available: available,
         sources_unavailable: unavailable,
         degraded: unavailable > 0,
+        foursquare_budget: foursquareBudget,
         ...(success ? {} : { error: results.length ? 'All configured enrichment providers are unavailable' : 'No enrichment providers configured' })
       }),
       { 
