@@ -63,6 +63,8 @@ test.describe('WebMD glossary production pass', () => {
     await expect(page.getByRole('heading', { name: 'STI', exact: true })).toBeVisible({
       timeout: 20_000,
     });
-    await expect(page.locator('main')).toContainText('regular testing is the main way to find them');
+    await expect(page.locator('main')).toContainText(
+      'regular testing is the main way to find them',
+    );
   });
 });
