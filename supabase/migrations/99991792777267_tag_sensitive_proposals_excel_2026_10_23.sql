@@ -17,7 +17,7 @@
 -- current value; anything changed since the export is skipped and counted.
 
 set local statement_timeout = '15min';
-select set_config('app.actor', 'migration:99991792775643_tag_sensitive_proposals_excel_2026_10_23', true);
+select set_config('app.actor', 'migration:99991792777267_tag_sensitive_proposals_excel_2026_10_23', true);
 
 create temp table _sp (slug text primary key, cur boolean not null, new boolean not null) on commit drop;
 

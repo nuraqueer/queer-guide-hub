@@ -25,7 +25,7 @@
 --   * The Proposals sheet's sensitive-flag changes are NOT applied here.
 
 set local statement_timeout = '15min';
-select set_config('app.actor', 'migration:99991792772639_tag_category_proposals_excel_2026_10_23', true);
+select set_config('app.actor', 'migration:99991792777258_tag_category_proposals_excel_2026_10_23', true);
 
 create temp table _cp (slug text primary key, cur_name text not null, new_name text not null) on commit drop;
 

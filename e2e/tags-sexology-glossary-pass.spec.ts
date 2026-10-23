@@ -628,7 +628,7 @@ test.describe('sexology glossary pass — anon data surface', () => {
   test('the two misfiled rows moved, in all three representations', async ({ request }) => {
     for (const [slug, categoryName] of [
       ['pap-smear', 'Sexual Health'],
-      // Moved again by 99991792772639 (the 2026-10-23 Proposals sheet).
+      // Moved again by 99991792777258 (the 2026-10-23 Proposals sheet).
       ['jizz', 'Slang & Language'],
     ] as const) {
       const [row] = await rest<{
