@@ -3,7 +3,9 @@
 # One read of production per night replaces the per-PR browser traffic that
 # e2e runs used to send to the live backend (53% of API reads, 2026-10-21).
 # The snapshot holds the schema plus rows the anon role can read, so nothing
-# in it is more private than queer.guide itself. It is still ENCRYPTED: this
+# in the public data is more private than queer.guide itself. Four static review
+# registries are also copied, matching main; private queue records are excluded.
+# It is still ENCRYPTED: this
 # repo is public, and a fork PR's workflow can restore caches from main.
 # Fork PRs get no secrets, so they cannot decrypt it.
 name: DB snapshot
@@ -63,7 +65,7 @@ jobs:
         uses: supabase/setup-cli@45a513f8c64c0bc8e0e3dfe572b5c95be85f6359 # v3
         with:
           version: 2.98.2
-      - name: Dump schema and anon-readable data
+      - name: Dump schema, public data, and static registries
         if: steps.cached.outputs.cache-matched-key == ''
         env:
           DB_URL: ${{ secrets.SUPABASE_DB_URL }}

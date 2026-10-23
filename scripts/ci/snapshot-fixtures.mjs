@@ -5,6 +5,12 @@ import { createHash } from 'node:crypto';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repository = resolve(here, '../..');
+const configurationTables = [
+  'admin_review_sources',
+  'admin_review_finding_codes',
+  'triage_sources',
+  'review_field_registry',
+];
 const literal = (value) => "'" + String(value).replaceAll("'", "''") + "'";
 
 // Static paths are data, never evaluated JavaScript. Include regex URL fixtures
@@ -33,6 +39,7 @@ export function manifestSql({
   maxBytes = 20_000_000,
   rowCap = 3000,
   slugs = collectFixtureSlugs(),
+  fullTables = ['unified_tags'],
 } = {}) {
   if (
     !Number.isSafeInteger(maxBytes) ||
@@ -42,6 +49,13 @@ export function manifestSql({
   ) {
     throw new Error('Snapshot limits must be non-negative bytes and a positive row cap');
   }
+  if (!Array.isArray(fullTables) || fullTables.some((name) => !/^[a-z_][a-z_0-9]*$/.test(name)))
+    throw new Error('Invalid full-table snapshot configuration');
+  const configurationArray = 'ARRAY[' + configurationTables.map(literal).join(',') + ']::text[]';
+  const fullArray =
+    'ARRAY[' +
+    [...new Set([...fullTables, ...configurationTables])].map(literal).join(',') +
+    ']::text[]';
   const array = 'ARRAY[' + slugs.map(literal).join(',') + ']::text[]';
   const priority = ' order by case when slug = any(' + array + ') then 0 else 1 end, slug';
   // Keep complete public reference sets for safety charts, representative
@@ -75,7 +89,11 @@ export function manifestSql({
     ') then 0 else 1 end, slug';
   return [
     "select c.relname, string_agg(quote_ident(a.attname), ',' order by a.attnum),",
-    'case when pg_table_size(c.oid) > ' + maxBytes + ' then',
+    'case when pg_table_size(c.oid) > ' +
+      maxBytes +
+      ' and c.relname <> all(' +
+      fullArray +
+      ') then',
     " (case when c.relname='cities' then " + literal(cityPriority),
     " when c.relname='unified_tags' then " + literal(tagPriority),
     " when c.relname='marketplace_listings' then " + literal(marketplacePriority),
@@ -85,7 +103,9 @@ export function manifestSql({
     "else '' end",
     'from pg_class c join pg_namespace n on n.oid=c.relnamespace',
     "join pg_attribute a on a.attrelid=c.oid and a.attnum>0 and not a.attisdropped and a.attgenerated=''",
-    "where n.nspname='public' and c.relkind='r' and has_table_privilege('anon',c.oid,'SELECT')",
+    "where n.nspname='public' and c.relkind='r' and (has_table_privilege('anon',c.oid,'SELECT') or c.relname = any(" +
+      configurationArray +
+      '))',
     'group by c.oid,c.relname order by c.relname;',
   ].join('\n');
 }
@@ -252,6 +272,7 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
       manifestSql({
         maxBytes: Number(process.env.FULL_MAX_BYTES || 20_000_000),
         rowCap: Number(process.env.ROW_CAP || 3000),
+        fullTables: (process.env.FULL_TABLES || 'unified_tags').split(',').filter(Boolean),
       }) + '\n',
     );
   } else if (process.argv[2] === 'cache-key') {

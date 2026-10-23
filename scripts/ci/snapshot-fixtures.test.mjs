@@ -125,3 +125,19 @@ test('RPC fixture verification refuses to send credentials to a remote API', asy
     /loopback/,
   );
 });
+
+test('main sync keeps the full glossary and only the four static registry exceptions', () => {
+  const sql = manifestSql({ slugs: [] });
+  assert(
+    sql.includes(
+      "c.relname <> all(ARRAY['unified_tags','admin_review_sources','admin_review_finding_codes','triage_sources','review_field_registry']::text[])",
+    ),
+  );
+  assert(
+    sql.includes(
+      "or c.relname = any(ARRAY['admin_review_sources','admin_review_finding_codes','triage_sources','review_field_registry']::text[])",
+    ),
+  );
+  assert(!sql.includes("'review_queue'"));
+  assert.throws(() => manifestSql({ fullTables: ["tags'); drop table users; --"] }));
+});

@@ -6,7 +6,8 @@
 #
 # The snapshot is the production SCHEMA plus a DATA SUBSET read as the `anon`
 # role, so RLS decides what is copied: it holds only rows an anonymous visitor
-# can already read on queer.guide. No auth, profiles, staging, logs or vault.
+# can already read on queer.guide, plus four static review configuration tables.
+# No auth, profiles, staging, logs, private queue records or vault.
 # Tables up to FULL_MAX_BYTES are copied whole; larger ones are capped at
 # ROW_CAP rows. Loading runs with session_replication_role=replica so foreign
 # keys and triggers (search sync, pg_net posts) do not fire.
@@ -14,6 +15,10 @@ set -euo pipefail
 
 FULL_MAX_BYTES=${FULL_MAX_BYTES:-20000000}
 ROW_CAP=${ROW_CAP:-3000}
+# Preserve main's complete public glossary export. Other large tables remain capped.
+FULL_TABLES=${FULL_TABLES:-unified_tags}
+# Fixed static registries only; no private queue records or user data.
+CONFIG_TABLES=admin_review_sources,admin_review_finding_codes,triage_sources,review_field_registry
 
 cmd=$1 db=$2 dir=$3
 # SUPABASE_DB_URL is written for node-postgres; libpq and the CLI reject no-verify.
@@ -28,18 +33,24 @@ dump)
   psqlq -At -c "select version from supabase_migrations.schema_migrations order by 1" > "$dir/versions.txt"
 
   # Bound the export while prioritizing actual browser route fixtures and
-  # their parent cities. The COPY session below still runs entirely as anon.
-  FULL_MAX_BYTES="$FULL_MAX_BYTES" ROW_CAP="$ROW_CAP" \
+  # their parent cities. Public data is read as anon; the fixed static registries
+  # are exported separately, matching main.
+  FULL_MAX_BYTES="$FULL_MAX_BYTES" ROW_CAP="$ROW_CAP" FULL_TABLES="$FULL_TABLES" \
     node "$(dirname "$0")/snapshot-fixtures.mjs" manifest > "$dir/manifest-query.sql"
   psqlq -At -F'|' -f "$dir/manifest-query.sql" > "$dir/manifest.txt"
   rm "$dir/manifest-query.sql"
 
   {
+    # These definitions are code/configuration, as in main's exporter.
+    while IFS='|' read -r t cols _; do
+      case ",$CONFIG_TABLES," in *",$t,"*) echo "\\copy (select $cols from public.\"$t\") to '$dir/data/$t.csv' csv" ;; esac
+    done < "$dir/manifest.txt"
     echo "set role anon;"
     # Match an anonymous PostgREST request: auth.role() reads JWT claims,
     # not the SQL role. No subject or authenticated/service claim is set.
     echo "set request.jwt.claims = '{\"role\":\"anon\"}';"
     while IFS='|' read -r t cols lim; do
+      case ",$CONFIG_TABLES," in *",$t,"*) continue ;; esac
       echo "\\copy (select $cols from public.\"$t\"$lim) to '$dir/data/$t.csv' csv"
     done < "$dir/manifest.txt"
   } > "$dir/copy-out.sql"
