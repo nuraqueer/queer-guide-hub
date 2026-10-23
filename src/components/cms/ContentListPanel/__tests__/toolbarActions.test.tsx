@@ -122,11 +122,13 @@ describe('ContentListPanel toolbarActions', () => {
     const original = {
       filters: controller.filters,
       search: controller.search,
+      debouncedSearch: controller.debouncedSearch,
       page: controller.page,
       allListColumns: controller.allListColumns,
     };
     controller.filters = [{ id: 'status-filter', field: 'status', op: 'eq', value: 'active' }];
     controller.search = 'filtered';
+    controller.debouncedSearch = 'filtered';
     controller.page = 3;
     controller.allListColumns = config.fields.filter((field) => field.listColumn);
     expect(controller.allListColumns).toEqual([]);
@@ -136,7 +138,13 @@ describe('ContentListPanel toolbarActions', () => {
       expect(screen.getByRole('button', { name: 'Export Excel' })).toBeVisible();
       fireEvent.click(screen.getByRole('button', { name: 'Export CSV' }));
       await waitFor(() =>
-        expect(exportContentType).toHaveBeenCalledWith(config, controller.allListColumns, 'CSV'),
+        // Every page, but only the rows the list currently matches.
+        expect(exportContentType).toHaveBeenCalledWith(config, controller.allListColumns, 'CSV', {
+          filters: controller.filters,
+          search: 'filtered',
+          archivedView: undefined,
+          mergedView: undefined,
+        }),
       );
       await waitFor(() =>
         expect(screen.getByRole('button', { name: 'Export CSV' })).not.toBeDisabled(),
@@ -144,6 +152,13 @@ describe('ContentListPanel toolbarActions', () => {
     } finally {
       Object.assign(controller, original);
     }
+  });
+
+  it('offers Excel and CSV for every content type, not only tags', () => {
+    renderPanel(baseConfig());
+    fireEvent.click(screen.getByRole('button', { name: 'Content tools' }));
+    expect(screen.getByRole('button', { name: 'Export Excel' })).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Export CSV' })).toBeVisible();
   });
 
   it('renders nothing extra when a type declares none', () => {
