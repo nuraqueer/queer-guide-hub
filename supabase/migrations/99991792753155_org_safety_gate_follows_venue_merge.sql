@@ -1,4 +1,4 @@
--- 99991792747676_org_safety_gate_follows_venue_merge
+-- 99991792753155_org_safety_gate_follows_venue_merge
 --
 -- organizations.safety_gated is decided by trg_organizations_safety_gated
 -- (set_org_safety_gated). Two defects, one producer:
