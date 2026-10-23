@@ -9,7 +9,7 @@ test.describe('Review queue on mobile', () => {
     await page.goto('/admin');
     await expect(page.getByRole('heading', { name: 'Review queue', exact: true })).toBeVisible();
     const rows = page
-      .getByRole('region', { name: 'Pending decisions' })
+      .getByRole('region', { name: 'Review worklist' })
       .locator('button[aria-label^="Open "]');
     await expect(rows.first()).toBeVisible();
     expect(
@@ -18,7 +18,7 @@ test.describe('Review queue on mobile', () => {
       ),
     ).toBeLessThanOrEqual(1);
     await rows.first().click();
-    await expect(page.getByRole('region', { name: 'Pending decisions' })).toHaveCount(0);
+    await expect(page.getByRole('region', { name: 'Review worklist' })).toHaveCount(0);
     await expect(page.getByRole('combobox', { name: 'Review type' })).not.toBeVisible();
     await expect(page.getByRole('button', { name: /Back to queue/ })).toBeVisible();
     await expect(page.getByRole('button', { name: /Skip/ })).toBeVisible();
