@@ -98,6 +98,8 @@ Deno.serve(async (req) => {
     const providers: { source: string; run: () => Promise<VenueData | null> }[] = []
     let foursquareBudget: FoursquareBudgetVerdict | undefined
 
+    let foursquareBudget: FoursquareBudgetVerdict | undefined
+
     // Foursquare search
     if (foursquareKey) {
       providers.push({ source: 'foursquare', run: async () => {
