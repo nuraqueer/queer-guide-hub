@@ -8923,14 +8923,41 @@ from _tc c
 join public.unified_tags t on t.slug = c.slug and t.status = 'active'
 left join public.tag_categories tc on tc.name = c.cat_new;
 
+-- zy_validate_tag_entity_target re-validates an entity_redirect row on EVERY
+-- update and raises if its canonical target no longer resolves, which would
+-- abort the whole batch. Such a row is skipped rather than failing the file.
+-- Measured on prod 2026-10-23: 0 of 170 active redirects are unresolvable, so
+-- this skips nothing there; it matters for databases holding a subset of the
+-- entity tables (the CI snapshot caps them at 3,000 rows each). The CASE mirrors
+-- validate_tag_entity_target() exactly.
+create temp table _tc_redirect_skip on commit drop as
+select a.id, a.slug
+from _tc_apply a
+join public.unified_tags t on t.id = a.id
+where t.publication_role = 'entity_redirect'
+  and (case t.canonical_entity_type
+    when 'personality' then (select '/personalities/'||x.slug from public.personalities x where x.id=t.canonical_entity_id and x.duplicate_of_id is null)
+    when 'city' then (select '/city/'||x.slug from public.cities x where x.id=t.canonical_entity_id and x.duplicate_of_id is null)
+    when 'country' then (select '/country/'||x.slug from public.countries x where x.id=t.canonical_entity_id and x.duplicate_of_id is null)
+    when 'village' then (select '/villages/'||x.slug from public.queer_villages x where x.id=t.canonical_entity_id and x.duplicate_of_id is null)
+    when 'venue' then (select '/venues/'||x.slug from public.venues x where x.id=t.canonical_entity_id and x.duplicate_of_id is null)
+    when 'organization' then (select '/organizations/'||x.slug from public.organizations x where x.id=t.canonical_entity_id and x.duplicate_of_id is null)
+    when 'event' then (select '/events/'||x.slug from public.events x where x.id=t.canonical_entity_id and x.duplicate_of_id is null)
+    when 'hotel' then (select '/hotels/'||x.slug from public.hotels x where x.id=t.canonical_entity_id and x.duplicate_of_id is null)
+    when 'community_group' then (select '/groups/'||x.id::text from public.community_groups x where x.id=t.canonical_entity_id and x.duplicate_of_id is null)
+  end) is distinct from t.canonical_entity_path;
+
+delete from _tc_apply a using _tc_redirect_skip s where a.id = s.id;
+
 do $pre$
-declare v_missing int; v_drift int; v_badcat int;
+declare v_missing int; v_drift int; v_badcat int; v_redirect int;
 begin
+  select count(*) into v_redirect from _tc_redirect_skip;
   select count(*) into v_missing from _tc c where not exists (select 1 from _tc_apply a where a.slug = c.slug);
   select count(*) into v_drift from _tc_apply where drifted;
   select count(*) into v_badcat from _tc c where c.cat_new is not null and not exists (select 1 from public.tag_categories tc where tc.name = c.cat_new);
-  raise notice 'tag corrections: % rows in sheet, % no longer active/present (skipped), % with a field edited since export (that field skipped), % unknown category names',
-    (select count(*) from _tc), v_missing, v_drift, v_badcat;
+  raise notice 'tag corrections: % rows in sheet, % not applicable (skipped; % of them redirects to a missing target), % with a field edited since export (that field skipped), % unknown category names',
+    (select count(*) from _tc), v_missing, v_redirect, v_drift, v_badcat;
 end
 $pre$;
 
