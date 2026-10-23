@@ -1,5 +1,6 @@
 import { getCorsHeaders, getServiceClient, requireAdmin } from '../_shared/supabase-client.ts'
 import { providerFetch, providerResults, ProviderUnavailable } from './provider-outcomes.ts'
+import { searchFoursquare } from './foursquare.ts'
 
 interface VenueData {
   name?: string;
@@ -116,50 +117,6 @@ Deno.serve(async (req) => {
     )
   }
 })
-
-async function searchFoursquare(venueName: string, apiKey: string): Promise<VenueData | null> {
-  try {
-    console.log('Searching Foursquare for:', venueName)
-    
-    const searchUrl = `https://api.foursquare.com/v3/places/search?query=${encodeURIComponent(venueName)}&limit=1`
-    
-    const response = await providerFetch(searchUrl, {
-      headers: {
-        'Authorization': apiKey,
-        'Accept': 'application/json'
-      }
-    })
-
-
-
-    const data = await response.json()
-    
-    if (!data.results || data.results.length === 0) {
-      console.log('No Foursquare results found')
-      return null
-    }
-
-    const venue = data.results[0]
-    console.log('Found Foursquare venue:', venue.name)
-
-    return {
-      name: venue.name,
-      address: venue.location?.formatted_address,
-      city: venue.location?.locality,
-      state: venue.location?.region,
-      country: venue.location?.country,
-      postal_code: venue.location?.postcode,
-      latitude: venue.geocodes?.main?.latitude,
-      longitude: venue.geocodes?.main?.longitude,
-      category: venue.categories?.[0]?.name,
-      website: venue.website,
-      phone: venue.tel,
-      rating: venue.rating
-    }
-  } catch (error) {
-    throw error instanceof ProviderUnavailable ? error : new ProviderUnavailable()
-  }
-}
 
 async function searchGooglePlaces(venueName: string, apiKey: string): Promise<VenueData | null> {
   try {
