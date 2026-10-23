@@ -30,7 +30,7 @@
 -- trigger only demotes: left in place, an adult category keeps is_adult true.
 
 set local statement_timeout = '10min';
-select set_config('app.actor', 'migration:99991792784935_tag_review_batch2_verify_facts', true);
+select set_config('app.actor', 'migration:99991792791779_tag_review_batch2_verify_facts', true);
 
 create temp table _b2 (slug text primary key, sd text, d text, new_cat text) on commit drop;
 insert into _b2 values
@@ -95,7 +95,7 @@ union all select s, 'inferred text confirmed against tagged content' from unnest
 update public.tag_suggestions g
    set status = 'rejected', reviewed_at = now(),
        metadata = coalesce(g.metadata, '{}'::jsonb) || jsonb_build_object(
-         'resolution', c.resolution, 'resolved_by', 'migration:99991792784935')
+         'resolution', c.resolution, 'resolved_by', 'migration:99991792791779')
   from _b2_close c join public.unified_tags t on t.slug = c.slug
  where g.entity_id = t.id and g.entity_type = 'tag'
    and g.source = 'excel_review_2026_10_23' and g.status = 'pending';

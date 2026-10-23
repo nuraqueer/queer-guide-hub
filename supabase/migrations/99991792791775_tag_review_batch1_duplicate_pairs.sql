@@ -24,7 +24,7 @@
 -- resolution recorded in metadata.
 
 set local statement_timeout = '30min';
-select set_config('app.actor', 'migration:99991792784931_tag_review_batch1_duplicate_pairs', true);
+select set_config('app.actor', 'migration:99991792791775_tag_review_batch1_duplicate_pairs', true);
 
 select setval('public.tag_slug_redirects_id_seq',
               greatest((select coalesce(max(id), 1) from public.tag_slug_redirects),
@@ -170,7 +170,7 @@ begin
       update public.tag_category_assignments set is_primary = false
        where tag_id = r.src_id and is_primary;
       v_audit := public.merge_tag_concept(r.tgt_id, r.src_id,
-                   'migration:99991792784931', 'excel-review-batch1-2026-10-23');
+                   'migration:99991792791775', 'excel-review-batch1-2026-10-23');
       delete from public.tag_aliases a
        using public.unified_tags c
        where a.canonical_tag_id = r.src_id and c.id = r.tgt_id
@@ -193,7 +193,7 @@ update public.tag_suggestions g
    set status = 'rejected', reviewed_at = now(),
        metadata = coalesce(g.metadata, '{}'::jsonb) || jsonb_build_object(
          'resolution', 'merged ' || d.src || ' into ' || d.tgt,
-         'resolved_by', 'migration:99991792784931')
+         'resolved_by', 'migration:99991792791775')
   from _b1_done d
  where d.audit_id is not null
    and g.source = 'excel_review_2026_10_23' and g.entity_type = 'tag'
