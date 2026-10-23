@@ -1,4 +1,4 @@
-# Critical paths against a LOCAL Supabase built from a production snapshot
+# Critical paths against a LOCAL Supabase built from the nightly snapshot
 # (db-snapshot.yml), instead of against production.
 #
 # Not a required check yet. It runs beside "Critical paths" (e2e-pr.yml) until
@@ -19,8 +19,7 @@ on:
     paths:
       - '.github/workflows/e2e-local.yml'
       - '.github/workflows/db-snapshot.yml'
-      - 'scripts/ci/db-snapshot.sh'
-      - 'scripts/ci/e2e-seed.sql'
+      - 'scripts/ci/**'
 
 concurrency:
   group: e2e-local-${{ github.head_ref || github.ref }}
@@ -30,39 +29,41 @@ permissions:
   contents: read
 
 jobs:
-  # Rebuilds the snapshot in this run so the job below cannot race a separate
-  # snapshot workflow (two workflows on one branch cancelled each other).
   snapshot:
+    # Production is read once; no consumer runs until its cache is saved.
     uses: ./.github/workflows/db-snapshot.yml
-    secrets: inherit
+    secrets:
+      SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+      DB_SNAPSHOT_KEY: ${{ secrets.DB_SNAPSHOT_KEY }}
 
   critical-local:
+    needs: [snapshot]
     name: Critical paths (local DB)
-    needs: snapshot
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Restore snapshot
         id: snap
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: db-snapshot.tgz.enc
-          key: db-snapshot-none
-          restore-keys: db-snapshot-
+          key: ${{ needs.snapshot.outputs.cache_key }}
+          fail-on-cache-miss: true
       - name: Stop if no snapshot or no key
         env:
           KEY: ${{ secrets.DB_SNAPSHOT_KEY }}
           HIT: ${{ steps.snap.outputs.cache-matched-key }}
+          EXPECTED_KEY: ${{ needs.snapshot.outputs.cache_key }}
         run: |
-          if [ -z "$HIT" ] || [ -z "$KEY" ]; then
-            echo "::error::No DB snapshot (run db-snapshot.yml) or no DB_SNAPSHOT_KEY (fork PR)."; exit 1
+          if [ -z "$HIT" ] || [ "$HIT" != "$EXPECTED_KEY" ] || [ -z "$KEY" ]; then
+            echo "::error::Snapshot prerequisite failed or DB_SNAPSHOT_KEY is unavailable."; exit 1
           fi
           echo "snapshot: $HIT" >> "$GITHUB_STEP_SUMMARY"
           openssl enc -d -aes-256-cbc -pbkdf2 -pass env:KEY -in db-snapshot.tgz.enc | tar -xzf -
 
-      - uses: supabase/setup-cli@v3
+      - uses: supabase/setup-cli@45a513f8c64c0bc8e0e3dfe572b5c95be85f6359 # v3
         with:
           version: 2.98.2
       - name: Start local Supabase and load the snapshot
@@ -98,18 +99,15 @@ jobs:
             -H "Authorization: Bearer $SERVICE_ROLE_KEY" -H 'Content-Type: application/json' \
             -d "{\"email\":\"$email\",\"password\":\"$pw\",\"email_confirm\":true}" | jq -r .id)
           psql "$DB_URL" -X -v ON_ERROR_STOP=1 -c "insert into public.user_roles (user_id, role) values ('$uid', 'admin')"
-          psql "$DB_URL" -X -v ON_ERROR_STOP=1 -f scripts/ci/e2e-seed.sql || echo "::warning::e2e seed failed; admin specs will show why"
           { echo "E2E_ADMIN_EMAIL=$email"; echo "E2E_ADMIN_PASSWORD=$pw"; } >> "$GITHUB_ENV"
 
-      - name: Snapshot sanity
+      - name: Seed and verify synthetic local review fixtures
         run: |
-          psql "$DB_URL" -X -c "select count(*) tags, count(*) filter (where status = 'active') active from public.unified_tags"
-          psql "$DB_URL" -X -c "select slug, status, publication_role, is_sensitive from public.unified_tags where slug in ('lesbian','transgender','methamphetamine','sti-guide')"
-          psql "$DB_URL" -X -c "select count(*) from public.substance_interactions"
-          curl -s "$API_URL/rest/v1/unified_tags?slug=eq.lesbian&select=slug,status" -H "apikey: $ANON_KEY"; echo
-          curl -s -X POST "$API_URL/rest/v1/rpc/substance_interaction_matrix" -H "apikey: $ANON_KEY" -H 'Content-Type: application/json' -d '{}' | head -c 400; echo
+          node scripts/ci/snapshot-fixtures.mjs seed-admin > /tmp/ci-review-fixtures.sql
+          psql "$DB_URL" -X -v ON_ERROR_STOP=1 -f /tmp/ci-review-fixtures.sql
+          node scripts/ci/snapshot-fixtures.mjs verify
 
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version: 22
           cache: npm
@@ -142,7 +140,7 @@ jobs:
             --grep-invert "visual snapshots" --reporter=line,json || status=$?
           node -e "const r=require('./results.json').stats;console.log(r)" | tee -a "$GITHUB_STEP_SUMMARY" || true
           exit ${status:-0}
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: failure()
         continue-on-error: true
         with:
