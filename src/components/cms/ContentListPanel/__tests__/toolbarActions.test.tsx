@@ -19,6 +19,12 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 import { Tag } from 'lucide-react';
 import type { ContentTypeConfig, FieldConfig } from '@/types/cms';
 import type { Filter } from '../viewSpec';
+import {
+  brandListConfig,
+  hotelListConfig,
+  merchantListConfig,
+  partnerListConfig,
+} from '@/components/admin/business/organisationListConfigs';
 import { unifiedTagsContentType } from '@/config/contentTypes/tag';
 
 /**
@@ -177,6 +183,24 @@ describe('ContentListPanel toolbarActions', () => {
       controller.allListColumns,
       'CSV',
       expect.objectContaining({ filters: controller.filters }),
+    );
+  });
+
+  it.each([
+    ['Brands', brandListConfig],
+    ['Hotels', hotelListConfig],
+    ['Merchants', merchantListConfig],
+    ['Partners', partnerListConfig],
+  ])('the Organisations %s tab gets Excel and CSV from the workspace header', (_tab, config) => {
+    renderPanel(config, { workspace: true, hideHeader: true });
+    fireEvent.click(screen.getByRole('button', { name: 'List tools' }));
+    expect(screen.getByRole('button', { name: 'Export Excel' })).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Export CSV' }));
+    expect(exportContentType).toHaveBeenLastCalledWith(
+      config,
+      controller.allListColumns,
+      'CSV',
+      expect.any(Object),
     );
   });
 
