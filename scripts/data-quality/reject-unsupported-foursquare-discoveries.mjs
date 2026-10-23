@@ -9,12 +9,13 @@ const option=(k,d)=>args.includes(k)?args[args.indexOf(k)+1]:d
 const apply=args.includes('--apply'),rollback=args.includes('--rollback')
 if(apply&&rollback)throw Error('Choose apply or rollback')
 const limit=Number(option('--limit','100'))
+if((apply||rollback)&&limit>100)throw Error('Write and rollback transactions are bounded to 100 records; preview supports 2000')
 if(!Number.isInteger(limit)||limit<1||limit>2000)throw Error('Bounded limit 1–2000 required')
 const output=option('--output',`outputs/foursquare-unsupported-${Date.now()}.json`)
 try{await readFile(output);throw Error('A fresh journal path is required')}catch(e){if(e.code!=='ENOENT')throw e}
 let token=process.env.SUPABASE_PAT
 if(!token){const raw=execFileSync('security',['find-generic-password','-s','Supabase CLI','-w'],{encoding:'utf8',stdio:['ignore','pipe','ignore']}).trim();token=raw.startsWith('go-keyring-base64:')?Buffer.from(raw.slice(18),'base64').toString('utf8'):raw}
-async function sql(query){const r=await fetch('https://api.supabase.com/v1/projects/xqeacpakadqfxjxjcewc/database/query',{method:'POST',headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},body:JSON.stringify({query}),signal:AbortSignal.timeout(90000)});if(!r.ok)throw Error(`Native HTTP ${r.status}; reconcile before retry`);return r.json()}
+async function sql(query){const r=await fetch('https://api.supabase.com/v1/projects/xqeacpakadqfxjxjcewc/database/query',{method:'POST',headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},body:JSON.stringify({query}),signal:AbortSignal.timeout(90000)});if(!r.ok){const detail=(await r.text()).slice(0,700);throw Error(`Native HTTP ${r.status}; reconcile before retry: ${detail}`)};return r.json()}
 const scope=`s.source_type='foursquare' and s.source_name='foursquare' and s.target_table='venues' and s.entity_type='venue'
  and s.disposition='pending' and s.review_status='pending_review' and s.reviewed_by is null and s.reviewed_at is null
  and s.target_record_id is null and s.raw_data->>'_requires_editorial_review'='true'
