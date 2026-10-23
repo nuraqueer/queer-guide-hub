@@ -39,13 +39,15 @@ if (skipReport) {
   if (skippedIds.some(id=>typeof id!=='string' || !/^[0-9a-f-]{36}$/.test(id))) throw new Error('Invalid prior native identity')
 }
 const skipClause=skippedIds.length ? `and not(c.id=any(array[${skippedIds.map(id=>`'${id}'::uuid`).join(',')}]))` : ''
-const candidates = await sql(`select distinct c.id from public.review_queue q join public.cities c on c.id=q.entity_id
+// Keep each source resolver batch in the same country where possible, so its
+// existing country/class caches avoid repeated upstream entity reads.
+const candidates = await sql(`select distinct c.id,c.country_id from public.review_queue q join public.cities c on c.id=q.entity_id
  where q.review_type='CITY_IDENTITY_AMBIGUOUS' and q.status='pending' and c.wikidata_qid is null
  and c.duplicate_of_id is null and c.shell_status<>'merged'
  and coalesce(c.enrichment_status#>>'{disposition,state}','')<>'not_a_city'
  and c.latitude between -90 and 90 and c.longitude between -180 and 180
  ${skipClause}
- order by c.id limit ${batchSize*maxBatches}`)
+ order by c.country_id nulls last,c.id limit ${batchSize*maxBatches}`)
 const report = { started_at:new Date().toISOString(),apply,skip_report:skipReport,skipped_ids:skippedIds,candidate_ids:candidates.map(c=>c.id),receipts:[],totals:{processed:0,updated:0,failed:0},complete:false }
 await mkdir(dirname(output),{recursive:true})
 const save = () => writeFile(output,JSON.stringify(report,null,2))
