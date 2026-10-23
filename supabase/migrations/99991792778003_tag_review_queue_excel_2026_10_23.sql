@@ -5,7 +5,7 @@
 -- The rows are notes for a person, not machine instructions, so only the part
 -- that is unambiguous is applied (decided 2026-10-23):
 --
--- 1. MERGES (214 pairs). A "Merge / remove" note that names a single live target
+-- 1. MERGES (250 pairs). A "Merge / remove" note that names a single live target
 --    ("Merge into X", "Duplicate of X; merge"), stated in one direction only, with
 --    no hedging word (consider/likely/probably/check/...) and no chain (neither
 --    side is the source or target of another pair). The target the NOTE names is
@@ -15,13 +15,12 @@
 --    merge_tag_concept moves assignments, tags[] arrays and category rows, mints
 --    an alias from the old slug and writes tag_merge_audit, so every merge is
 --    reversible with unmerge_tag_concept(audit_id).
---    37 further clear pairs are QUEUED instead of merged: 36 whose source tag
---    carries approved aliases (merge_tag_concept mints an alias from the old
---    slug but does not move the duplicate's existing aliases, so they would be
---    left pointing at a merged row), plus brats, whose page e2e/tags-wrong-entity
---    pins.
+--    36 of them have a source carrying approved aliases; merge_tag_concept does
+--    not move those, so each merge is followed by repointing the source's
+--    aliases at the canonical (see the loop). One clear pair, brats -> brat, is
+--    QUEUED instead: e2e/tags-wrong-entity pins that page.
 --
--- 2. EVERYTHING ELSE (2,042 rows: 1,269 merge/remove, 577 verify-facts, 196 check)
+-- 2. EVERYTHING ELSE (2,006 rows: 1,233 merge/remove, 577 verify-facts, 196 check)
 --    is queued in tag_suggestions with entity_type = 'tag', which the admin inbox's
 --    Tags queue renders (as "A ⇄ B" where the note names a target). Approving such
 --    a row is refused by approve_tag_suggestions; a reviewer acts on the tag and
@@ -34,13 +33,19 @@ select set_config('app.actor', 'migration:99991792778003_tag_review_queue_excel_
 create temp table _rm (src text primary key, tgt text not null) on commit drop;
 insert into _rm values
 ('2cb','2c-b'),
+('69','69-position'),
+('actress','actor'),
 ('addyi','flibanserin'),
 ('aegosexuality','aegosexual'),
 ('affirming-environments','affirming-space'),
+('aktivist','activist'),
+('akzeptanz','acceptance'),
 ('allosexuality','allosexual'),
 ('androgen-insensitivity-syndrome-ais','androgen-insensitivity-syndrome'),
 ('androsexuality','androsexual'),
+('anthropologe','anthropologist'),
 ('argentina-based','argentina'),
+('armpit','armpit-fetish'),
 ('aromantic-aro','aromantic'),
 ('asian-food','asian-cuisine'),
 ('ass-fucking','anal-sex'),
@@ -83,6 +88,7 @@ insert into _rm values
 ('community-spot','community-space'),
 ('consent-posters','consent-signage'),
 ('cottage','cottaging'),
+('cruising-ground','cruising-area'),
 ('cuddles','cuddling'),
 ('cultural','arts-culture'),
 ('culture-and-arts','arts-culture'),
@@ -90,12 +96,15 @@ insert into _rm values
 ('diaper','diaper-fetish'),
 ('disabled','disability'),
 ('dp-double-penetration','double-penetration'),
+('drink','beverage'),
 ('drug-addiction','addiction'),
 ('eggs-benedict','brunch-spot'),
 ('european-spot','europe'),
 ('faghag-fruitfly','fag-hag'),
 ('fear','fear-play'),
+('fernsehen','tv'),
 ('fictosexual','fictosexuality'),
+('fkksauna','nudist-sauna'),
 ('flat-whites','coffee'),
 ('florida-bar','bar'),
 ('folsom-europe-2026','folsom-europe'),
@@ -103,6 +112,7 @@ insert into _rm values
 ('friends-with-benefits-fwb','friends-with-benefits'),
 ('friends-with-benefits-relationships','friends-with-benefits'),
 ('frozen-margaritas','cocktails'),
+('galerie','art-gallery'),
 ('garlic-mashed-potatoes','comfort-food'),
 ('gas-masks','gas-mask'),
 ('gay-festival','festival'),
@@ -114,6 +124,7 @@ insert into _rm values
 ('gender-variant','gender-variance'),
 ('genital-warts-hpv','genital-warts'),
 ('georgia-bar','bar'),
+('geschlechtsidentitaten','gender-identity'),
 ('gindara','japanese-cuisine'),
 ('glasses','glasses-fetish'),
 ('grassroots-activism','grassroots-movement'),
@@ -124,17 +135,25 @@ insert into _rm values
 ('happy-hour-specials','happy-hour'),
 ('healthcare-advocacy','health-advocacy'),
 ('help','support'),
+('heterosexual','heterosexuality'),
 ('high-heels','high-heels-fetish'),
+('homosexuellen-bewegung','gay-rights-movement'),
 ('house-ballroom-community','ballroom-culture'),
 ('iced-coffee','coffee'),
 ('impact-toys','impact-tools'),
 ('inclusive-environment','inclusive-space'),
 ('indian','indian-restaurant'),
+('ingwer-sour','cocktails'),
 ('interracial-relationships','interracial'),
+('intersexuality','intersex'),
 ('japanese-animation','anime'),
 ('joburg','johannesburg'),
 ('kitten-petplay','kitten-play'),
 ('klinefelter-syndrome-xxy','klinefelter-syndrome'),
+('krankenpfleger','nurses'),
+('kuenstler','artist'),
+('kultur','arts-culture'),
+('kunst','art'),
 ('lactation','lactation-play'),
 ('leather-community-families-etc','leather-community'),
 ('leather-person','leatherperson'),
@@ -152,6 +171,7 @@ insert into _rm values
 ('lgbtq-bars-beaches-etc','lgbtq-venue'),
 ('lgbtq-film','lgbtq-cinema'),
 ('lgbtq-pride','lgbt-pride'),
+('lgbtq-resource','community-resource'),
 ('lgbtq-theatre','lgbt-theatre'),
 ('lgbtq-welcome','lgbtq-friendly'),
 ('lingerie','lingerie-fetish'),
@@ -169,6 +189,7 @@ insert into _rm values
 ('misgender','misgendering'),
 ('monogamous-relationship','monogamy'),
 ('monosexual','monosexuality'),
+('musikkabarett','cabaret'),
 ('necks','neck-fetish'),
 ('needle-exchange-program-nep','needle-exchange-program'),
 ('nerd','nerds-geeks'),
@@ -178,8 +199,12 @@ insert into _rm values
 ('novel-psychoactive-substances-nps','new-psychoactive-substances'),
 ('omnigender','pangender'),
 ('ortho-tri-cyclen-norgestimate','combined-oral-contraceptives'),
+('pack-er','packing'),
 ('pansexual','pansexuality'),
+('pap-smear','papanicolaou-test-pap-test'),
 ('parental-rights-for-queer-families','parental-rights-for-lgbtq-families'),
+('pastry','pastry-shops'),
+('pelvic-inflammatory-disease','pelvic-inflammatory-disease-pid'),
 ('perseverance-training','resilience-training'),
 ('pinwheel','wartenberg-wheel'),
 ('polyamorous-relationship','polyamory'),
@@ -187,16 +212,21 @@ insert into _rm values
 ('portobello-sandwich','vegetarian'),
 ('post-exposure-prophylaxis-pep','pep'),
 ('power-knowledge','knowledge-power-nexus'),
+('prag','prague'),
 ('premarin-conjugated-estrogens','conjugated-estrogens'),
 ('pride-center','lgbt-center'),
 ('pride-event','pride-events'),
 ('pride-fest','pride-festival'),
 ('pride-merchandising','lgbtq-pride-merchandise'),
 ('primal-predator','primal-hunter'),
+('pubic-lice','pubic-lice-crabs'),
 ('queer-affirmative-therapy','lgbtq-affirmative-therapy'),
+('queer-bewegung','lgbt-movements'),
 ('queer-choirs-and-choruses','lgbtq-choir'),
 ('queer-communes','lgbtq-communes-communities'),
 ('queer-event','lgbtq-event'),
+('queer-film','lgbtq-cinema'),
+('queer-kultur','queer-culture'),
 ('queer-organization','lgbtq-organization'),
 ('queer-spot','queer-space'),
 ('queer-support-hotlines','lgbtq-helpline'),
@@ -209,6 +239,7 @@ insert into _rm values
 ('safe-sexual-practices','safe-sex-practices'),
 ('safe-spaces-for-lgbtqia-individuals','safe-space'),
 ('same-sex-couples','same-sex-relationship'),
+('schwimmen','swimming'),
 ('scottish-pub','scottish-bar'),
 ('sensual-dom','sensual-dominant'),
 ('sex-drive','libido'),
@@ -220,6 +251,7 @@ insert into _rm values
 ('skoliosexual','skoliosexual-ceterosexual'),
 ('spanish-establishment','spanish-venue'),
 ('sport','news-sports'),
+('sportler','athlete'),
 ('step-sibling','stepsibling'),
 ('stepdad','stepfather'),
 ('stepfamily','blended-family'),
@@ -229,15 +261,18 @@ insert into _rm values
 ('substance-abuse-disorders','substance-use-disorder'),
 ('supervised-injection-site','safe-consumption-site-supervised-injection-facility'),
 ('the-lavender-scare','lavender-scare'),
+('theater','theatre'),
 ('tourism-related','tourism'),
 ('tourist-spot','tourist-attraction'),
 ('trans-visibility-campaigns','trans-visibility'),
 ('transgender-identity','transgender'),
 ('transgender-trans','transgender'),
 ('transmasc','transmasculine'),
+('treffen','meeting'),
 ('turkiye-venue','country'),
 ('u-haul','u-haul-lesbian'),
 ('uncircumcised','uncut'),
+('unternehmer','entrepreneur'),
 ('us-locations','united-states'),
 ('venue-in-la','los-angeles'),
 ('vinyl-clothing','pvc-clothing'),
@@ -281,6 +316,14 @@ select setval('public.tag_slug_redirects_id_seq',
               greatest((select coalesce(max(id), 1) from public.tag_slug_redirects),
                        (select last_value from public.tag_slug_redirects_id_seq)));
 
+-- pap-smear still carries a non-primary "Events & Parties" membership from its
+-- old misfiling; the merge would carry it onto the Pap test, and /tags lists a
+-- tag under every category it belongs to. Drop that one row first.
+delete from public.tag_category_assignments j
+ using public.unified_tags t, public.tag_categories c
+ where j.tag_id = t.id and t.slug = 'pap-smear' and t.status = 'active'
+   and j.category_id = c.id and c.name = 'Events & Parties' and not j.is_primary;
+
 create temp table _rm_done (src_id uuid, tgt_id uuid, audit_id uuid, err text) on commit drop;
 
 do $merge$
@@ -294,6 +337,19 @@ begin
        where tag_id = r.src_id and is_primary;
       v_audit := public.merge_tag_concept(r.tgt_id, r.src_id,
                    'migration:99991792778003', 'excel-review-2026-10-23');
+      -- merge_tag_concept mints an alias from the old slug but leaves the
+      -- duplicate's EXISTING aliases on the merged row, where they route to a
+      -- tag nobody can open. Repoint them at the canonical. This runs after the
+      -- merge on purpose: tag_alias_reject_shadow refuses an alias whose slug is
+      -- a live tag other than its own canonical, and before the merge the
+      -- source is still live. An alias that would only repeat the canonical's
+      -- own name is junk on the canonical (alias_equals_name), so it is dropped.
+      delete from public.tag_aliases a
+       using public.unified_tags c
+       where a.canonical_tag_id = r.src_id and c.id = r.tgt_id
+         and lower(btrim(a.alias_name)) = lower(btrim(c.name));
+      update public.tag_aliases set canonical_tag_id = r.tgt_id
+       where canonical_tag_id = r.src_id;
       insert into _rm_done values (r.src_id, r.tgt_id, v_audit, null);
     exception when others then
       insert into _rm_done values (r.src_id, r.tgt_id, null, sqlerrm);
@@ -317,6 +373,12 @@ begin
   if v_bad <> 0 then
     raise exception 'review merges: % merged sources are not status=merged', v_bad;
   end if;
+  select count(*) into v_bad
+  from _rm_done d join public.tag_aliases a on a.canonical_tag_id = d.src_id
+  where d.audit_id is not null;
+  if v_bad <> 0 then
+    raise exception 'review merges: % aliases still point at a merged source', v_bad;
+  end if;
   if v_err > greatest(5, v_eligible * 0.05) then
     raise exception 'review merges: % of % eligible merges failed', v_err, v_eligible;
   end if;
@@ -329,7 +391,6 @@ $verify_merges$;
 -- ---------------------------------------------------------------- 2. queue
 create temp table _rq (slug text primary key, target text, review_type text, label text, note text, qa text) on commit drop;
 insert into _rq values
-('69','69-position','Merge / remove','69 — Merge / remove: Old short said ''natural number''; duplicate of 69-position','Old short said ''natural number''; duplicate of 69-position | This tag appears to duplicate the 69 Position tag.','wrong_sense, contradiction, missing_fields, sensitive_flag, possible_duplicate'),
 ('absolut-peppar',NULL,'Merge / remove','Absolut-Peppar — Merge / remove: Drink brand; merge into ''Cocktails'' or ''Spirits''. Old text claimed jalapeño flavour','Drink brand; merge into ''Cocktails'' or ''Spirits''. Old text claimed jalapeño flavour | As a single drink brand it is narrower than most venue tags and is better covered by a general spirits or cocktails tag.','out_of_scope, category_wrong, factual_error'),
 ('academic-institution',NULL,'Merge / remove','Academic-Institution — Merge / remove: Empty row with hyphenated title; check against university/school tags','Empty row with hyphenated title; check against university/school tags','missing_fields, possible_duplicate'),
 ('acault',NULL,'Check','Acault — Check: Description described a Northeastern Woodlands two-spirit identity; fixed to Burmese sense','Description described a Northeastern Woodlands two-spirit identity; fixed to Burmese sense','wrong_sense, contradiction, category_wrong, boilerplate'),
@@ -345,7 +406,6 @@ insert into _rq values
 ('activism-advocacy-concepts',NULL,'Merge / remove','Activism & Advocacy Concepts — Merge / remove: Grouping tag; overlaps activism/advocacy','Grouping tag; overlaps activism/advocacy','boilerplate, possible_duplicate'),
 ('activism-rights',NULL,'Merge / remove','Activism & Rights — Merge / remove: Overlaps activism; consider merging','Overlaps activism; consider merging','boilerplate, possible_duplicate'),
 ('actor',NULL,'Merge / remove','Actor — Merge / remove: Consider merging actress into actor','Consider merging actress into actor','missing_fields, possible_duplicate'),
-('actress','actor','Merge / remove','Actress — Merge / remove: Merge into actor','Merge into actor','missing_fields, possible_duplicate'),
 ('adoptive-parenthood',NULL,'Merge / remove','Adoptive Parenthood — Merge / remove: Overlaps with adoptive-parent.','Overlaps with adoptive-parent.','boilerplate, too_terse, possible_duplicate'),
 ('adult',NULL,'Merge / remove','Adult — Merge / remove: Overlaps adult-oriented; consider merging','Overlaps adult-oriented; consider merging','missing_fields, possible_duplicate'),
 ('adult-oriented',NULL,'Merge / remove','Adult-Oriented — Merge / remove: Overlaps adult; consider merging','Overlaps adult; consider merging','missing_fields, possible_duplicate'),
@@ -363,8 +423,6 @@ insert into _rq values
 ('air-tight',NULL,'Merge / remove','Air Tight — Merge / remove: Overlaps with triple-penetration; consider merge.','Overlaps with triple-penetration; consider merge.','boilerplate, sensitive_flag, possible_duplicate'),
 ('airline-lounge',NULL,'Merge / remove','Airline-Lounge — Merge / remove: Overlaps airport-lounge','Overlaps airport-lounge | The tag overlaps with airport lounge.','missing_fields, possible_duplicate, category_wrong'),
 ('airport-lounge',NULL,'Check','Airport-Lounge — Check: The tag overlaps with airline lounge.','The tag overlaps with airline lounge.','missing_fields, category_wrong'),
-('aktivist','activist','Merge / remove','Activist — Merge / remove: German slug; merge into ''activist''','German slug; merge into ''activist'' | The German slug suggests the tag was imported and may duplicate an English activist tag.','missing_fields, non_english_title, category_wrong'),
-('akzeptanz','acceptance','Merge / remove','Acceptance — Merge / remove: German slug; merge into ''acceptance''.','German slug; merge into ''acceptance''.','non_english_title, missing_fields, category_wrong'),
 ('algolagnia',NULL,'Merge / remove','Algolagnia — Merge / remove: Long equated it with S&M and humiliation; sensitive_topics lists ''sti''. Overlaps algophilia.','Long equated it with S&M and humiliation; sensitive_topics lists ''sti''. Overlaps algophilia.','factual_error, possible_duplicate'),
 ('algophilia',NULL,'Merge / remove','Algophilia — Merge / remove: Overlaps algolagnia; sensitive_topics lists ''sti'' wrongly.','Overlaps algolagnia; sensitive_topics lists ''sti'' wrongly.','possible_duplicate'),
 ('alien',NULL,'Verify facts / meaning','Alien — Verify facts / meaning: Short/long described legal non-citizen sense; role meaning is inferred.','Short/long described legal non-citizen sense; role meaning is inferred.','wrong_sense, contradiction, alias_dump, wiki_mismatch, sensitive_flag, uncertain_meaning'),
@@ -407,7 +465,6 @@ insert into _rq values
 ('anonym',NULL,'Merge / remove','Anonymous Testing — Merge / remove: German slug ''anonym''; merge into anonymous-testing','German slug ''anonym''; merge into anonymous-testing','missing_fields, non_english_title, category_wrong, sensitive_flag'),
 ('anonymous-donors',NULL,'Verify facts / meaning','Anonymous Donors — Verify facts / meaning: Check whether tag is used for charitable giving or for gamete donors','Check whether tag is used for charitable giving or for gamete donors','uncertain_meaning'),
 ('antagonizer',NULL,'Verify facts / meaning','Antagonizer — Verify facts / meaning: Kink role, wrongly in Violence & Hate; meaning inferred','Kink role, wrongly in Violence & Hate; meaning inferred','placeholder, missing_fields, category_wrong, sensitive_flag, uncertain_meaning'),
-('anthropologe','anthropologist','Merge / remove','Anthropologist (Profession) — Merge / remove: German slug; merge into ''anthropologist''','German slug; merge into ''anthropologist'' | The tag is used on profiles, and the German slug suggests it may duplicate an English anthropologist tag.','missing_fields, non_english_title, category_wrong'),
 ('anthropologist',NULL,'Verify facts / meaning','Anthropologist — Verify facts / meaning: Slang meaning inferred; confirm usage in kink scenes','Slang meaning inferred; confirm usage in kink scenes','placeholder, missing_fields, category_wrong, wiki_mismatch, uncertain_meaning'),
 ('anti-gewalt',NULL,'Merge / remove','Anti-Violence — Merge / remove: German slug; merge into English ''anti-violence'' tag','German slug; merge into English ''anti-violence'' tag','missing_fields, category_wrong, non_english_title'),
 ('anti-queer-discrimination',NULL,'Merge / remove','Anti-Queer Discrimination — Merge / remove: Overlaps homophobia/LGBTQ+ discrimination umbrella tags','Overlaps homophobia/LGBTQ+ discrimination umbrella tags','boilerplate, possible_duplicate'),
@@ -428,7 +485,6 @@ insert into _rq values
 ('archangel',NULL,'Verify facts / meaning','Archangel — Verify facts / meaning: Short described Russian city; kink usage inferred.','Short described Russian city; kink usage inferred.','wrong_sense, contradiction, missing_fields, sensitive_flag, uncertain_meaning'),
 ('architectural-styles',NULL,'Merge / remove','Architectural Styles — Merge / remove: Likely out of scope; consider merging into an architecture or arts tag.','Likely out of scope; consider merging into an architecture or arts tag. | The tag is generic and may be better handled under destination or arts tags.','missing_fields, category_wrong, out_of_scope'),
 ('architekt',NULL,'Merge / remove','Architect — Merge / remove: German slug; merge into English ''architect'' or ''architecture'' tag','German slug; merge into English ''architect'' or ''architecture'' tag','missing_fields, non_english_title, category_wrong'),
-('armpit','armpit-fetish','Merge / remove','Armpit — Merge / remove: Long was anatomy. Duplicate of armpit-fetish.','Long was anatomy. Duplicate of armpit-fetish.','wrong_sense, contradiction, too_long, sensitive_flag, possible_duplicate'),
 ('aromanticism',NULL,'Merge / remove','Aromanticism — Merge / remove: Overlaps aromantic; consider merging','Overlaps aromantic; consider merging','possible_duplicate'),
 ('art',NULL,'Merge / remove','Art — Merge / remove: Generic; check against arts/culture tags','Generic; check against arts/culture tags','missing_fields, possible_duplicate'),
 ('artisan',NULL,'Merge / remove','Artisan — Merge / remove: Not a subculture; consider merging into local-shop','Not a subculture; consider merging into local-shop','missing_fields, category_wrong, out_of_scope'),
@@ -723,7 +779,6 @@ insert into _rq values
 ('crucifixion-fetish',NULL,'Merge / remove','Crucifixion Fetish — Merge / remove: Overlaps crucifixion-play','Overlaps crucifixion-play','boilerplate, too_long, possible_duplicate'),
 ('cruise',NULL,'Check','Cruise — Check: Old text was aviation cruise; check whether tag means cruise ship or cruising','Old text was aviation cruise; check whether tag means cruise ship or cruising','wrong_sense, missing_fields, category_wrong, wiki_mismatch'),
 ('cruise-party',NULL,'Check','Cruise Party — Check: Long described cruise-ship parties; chose cruising sense from description','Long described cruise-ship parties; chose cruising sense from description','wrong_sense, contradiction, category_wrong, sensitive_flag'),
-('cruising-ground','cruising-area','Merge / remove','Cruising Ground — Merge / remove: Duplicate of ''cruising-area''','Duplicate of ''cruising-area''','too_long, possible_duplicate'),
 ('cryptid',NULL,'Verify facts / meaning','Cryptid — Verify facts / meaning: Kink sense inferred; Wikipedia link is the list of cryptids.','Kink sense inferred; Wikipedia link is the list of cryptids.','wrong_sense, too_terse, wiki_mismatch, uncertain_meaning'),
 ('csd-related','csd','Merge / remove','CSD-Related — Merge / remove: Possibly merge into csd','Possibly merge into csd','missing_fields, possible_duplicate'),
 ('cuauhtemoc',NULL,'Check','Cuauhtemoc — Check: Old text described the Aztec emperor; assumed Mexico City borough.','Old text described the Aztec emperor; assumed Mexico City borough.','wrong_sense, too_long, missing_fields'),
@@ -828,7 +883,6 @@ insert into _rq values
 ('drag-scene-events',NULL,'Merge / remove','Drag Scene & Events — Merge / remove: Overlaps drag-performance','Overlaps drag-performance','too_long, category_wrong, possible_duplicate'),
 ('drag-thing',NULL,'Merge / remove','Drag Thing — Merge / remove: Vague; merge into a general ''drag'' tag','Vague; merge into a general ''drag'' tag','placeholder, missing_fields, uncertain_meaning, possible_duplicate, category_wrong'),
 ('dramatiker',NULL,'Merge / remove','Playwright — Merge / remove: German slug; merge into English ''playwright'' tag','German slug; merge into English ''playwright'' tag','non_english_title, missing_fields'),
-('drink','beverage','Merge / remove','Drink — Merge / remove: Duplicate of ''beverage''','Duplicate of ''beverage'' | The existing text was a general encyclopaedia definition rather than a venue description.','missing_fields, too_long, possible_duplicate'),
 ('drink-specials',NULL,'Merge / remove','Drink-Specials — Merge / remove: Overlaps ''happy-hour-specials''','Overlaps ''happy-hour-specials''','missing_fields, category_wrong, possible_duplicate'),
 ('drug-abuse',NULL,'Merge / remove','Drug Abuse — Merge / remove: Overlaps addiction / drug-addiction; consider merging','Overlaps addiction / drug-addiction; consider merging','contradiction, possible_duplicate'),
 ('drug-purification',NULL,'Check','Drug Purification — Check: Trimmed method/purity-gain details per substance rules','Trimmed method/purity-gain details per substance rules','too_long'),
@@ -925,7 +979,6 @@ insert into _rq values
 ('femme-daddy','femdaddy','Merge / remove','Femme Daddy — Merge / remove: Duplicate of femdaddy; keep one','Duplicate of femdaddy; keep one','too_terse, boilerplate, category_wrong, possible_duplicate'),
 ('fennel-salad',NULL,'Merge / remove','Fennel-Salad — Merge / remove: Menu item; candidate for removal','Menu item; candidate for removal','missing_fields, out_of_scope, category_wrong'),
 ('feral-princess-feral-prince',NULL,'Verify facts / meaning','Feral Princess / Feral Prince — Verify facts / meaning: Micro-label; meaning inferred','Micro-label; meaning inferred','placeholder, missing_fields, category_wrong, uncertain_meaning'),
-('fernsehen','tv','Merge / remove','Television — Merge / remove: German title; merge into ''tv''','German title; merge into ''tv''','missing_fields, non_english_title'),
 ('fetishism',NULL,'Merge / remove','Fetishism — Merge / remove: Overlaps fetish; consider merging','Overlaps fetish; consider merging','missing_fields, too_long, possible_duplicate'),
 ('fijian-lgbtq',NULL,'Check','Fijian-LGBTQ — Check: Check legal claims on Fiji (2010 decriminalisation, constitutional protections)','Check legal claims on Fiji (2010 decriminalisation, constitutional protections)','missing_fields, category_wrong'),
 ('filmemacher',NULL,'Merge / remove','Filmmaker — Merge / remove: German slug; merge into English ''filmmaker'' tag','German slug; merge into English ''filmmaker'' tag','non_english_title, missing_fields'),
@@ -937,7 +990,6 @@ insert into _rq values
 ('firefly',NULL,'Verify facts / meaning','Firefly — Verify facts / meaning: Micro-label; meaning unverified','Micro-label; meaning unverified','missing_fields, uncertain_meaning, category_wrong'),
 ('fish-hooks',NULL,'Merge / remove','Fish Hooks — Merge / remove: Overlaps flesh-hooks; merge','Overlaps flesh-hooks; merge','wrong_sense, contradiction, sensitive_flag, possible_duplicate'),
 ('fit-adaptive',NULL,'Check','Adaptive — Check: Assumed adaptive-fashion sense from fit- prefix','Assumed adaptive-fashion sense from fit- prefix','category_missing, missing_fields, too_terse'),
-('fkksauna','nudist-sauna','Merge / remove','Nudist Sauna — Merge / remove: German slug ''fkksauna''; merge into nudist-sauna; note brothel euphemism','German slug ''fkksauna''; merge into nudist-sauna; note brothel euphemism','missing_fields, non_english_title'),
 ('flint','flinta','Merge / remove','FLINT — Merge / remove: Possible duplicate of FLINTA*; consider merging','Possible duplicate of FLINTA*; consider merging','missing_fields, category_wrong, possible_duplicate'),
 ('float',NULL,'Check','Float — Check: Old description gave a sexual slang sense; confirm intended meaning','Old description gave a sexual slang sense; confirm intended meaning','wrong_sense, contradiction, wiki_mismatch'),
 ('flock',NULL,'Verify facts / meaning','Flock — Verify facts / meaning: Usage unclear; may duplicate pack or polycule tags','Usage unclear; may duplicate pack or polycule tags','too_terse, missing_fields, uncertain_meaning'),
@@ -994,7 +1046,6 @@ insert into _rq values
 ('fussballspieler',NULL,'Merge / remove','Football Player — Merge / remove: German title; merge into football player','German title; merge into football player | The tag title is German and should be merged into an English football player tag.','non_english_title, missing_fields'),
 ('fweeb',NULL,'Verify facts / meaning','Fweeb — Verify facts / meaning: Rare term; confirm expansion','Rare term; confirm expansion','missing_fields, too_long, uncertain_meaning'),
 ('gagged',NULL,'Check','Gagged — Check: Slang vs BDSM gag sense; confirm','Slang vs BDSM gag sense; confirm','wrong_sense, boilerplate, category_wrong, wiki_mismatch'),
-('galerie','art-gallery','Merge / remove','Gallery — Merge / remove: German slug; merge into ''art-gallery''','German slug; merge into ''art-gallery''','non_english_title, possible_duplicate, missing_fields'),
 ('gamma',NULL,'Verify facts / meaning','Gamma — Verify facts / meaning: Context of the hierarchy unclear','Context of the hierarchy unclear','too_terse, missing_fields, uncertain_meaning, sensitive_flag'),
 ('garlic-spinach',NULL,'Merge / remove','Garlic-Spinach — Merge / remove: Food item; remove or merge into generic food tag','Food item; remove or merge into generic food tag | It has no LGBTQ+ meaning and is better handled by a general food tag.','out_of_scope, missing_fields, category_wrong'),
 ('garten',NULL,'Merge / remove','Garden — Merge / remove: German slug; merge into English ''Garden'' or ''Outdoor seating'' if present','German slug; merge into English ''Garden'' or ''Outdoor seating'' if present','missing_fields, non_english_title, category_wrong, possible_duplicate'),
@@ -1070,7 +1121,6 @@ insert into _rq values
 ('german-business',NULL,'Verify facts / meaning','German-Business — Verify facts / meaning: Meaning unclear; may need merging or removal','Meaning unclear; may need merging or removal | The tag appears to label venues or services with a German connection, such as German-speaking staff, German products or German ownership.','missing_fields, uncertain_meaning'),
 ('german-establishment',NULL,'Verify facts / meaning','German-Establishment — Verify facts / meaning: Meaning unclear; may merge into german or location tags','Meaning unclear; may merge into german or location tags | The exact intended use of this tag is unclear, and it may overlap with general German or location-based tags.','missing_fields, uncertain_meaning, category_wrong'),
 ('german-event',NULL,'Merge / remove','German-Event — Merge / remove: Redundant with location filters','Redundant with location filters','missing_fields, possible_duplicate'),
-('geschlechtsidentitaten','gender-identity','Merge / remove','Gender Identities — Merge / remove: German slug (Geschlechtsidentitäten); merge into gender-identity','German slug (Geschlechtsidentitäten); merge into gender-identity','non_english_title, missing_fields, possible_duplicate'),
 ('gesellschaft',NULL,'Merge / remove','Society — Merge / remove: German slug ''gesellschaft''; merge into English ''society'' tag','German slug ''gesellschaft''; merge into English ''society'' tag | The German slug suggests this tag came from a German source and may duplicate an English society tag.','missing_fields, non_english_title, category_wrong'),
 ('gewaltverbrechen',NULL,'Merge / remove','Violent Crime — Merge / remove: German slug; merge into violent-crime','German slug; merge into violent-crime | The German title suggests this tag should be merged into an English equivalent.','missing_fields, non_english_title, category_wrong, sensitive_flag'),
 ('ghb',NULL,'Check','GHB — Check: Dropped dose ratio and study statistics not verifiable here; restore if sourced','Dropped dose ratio and study statistics not verifiable here; restore if sourced','too_long'),
@@ -1151,7 +1201,6 @@ insert into _rq values
 ('herpes',NULL,'Merge / remove','Herpes — Merge / remove: Overlaps genital-herpes, herpes-hsv-1-2, herpes-simplex-virus-hsv','Overlaps genital-herpes, herpes-hsv-1-2, herpes-simplex-virus-hsv','contradiction, sensitive_flag, possible_duplicate'),
 ('herpes-hsv-1-2',NULL,'Merge / remove','Herpes (HSV-1/2) — Merge / remove: Merge into herpes or herpes-simplex-virus-hsv','Merge into herpes or herpes-simplex-virus-hsv','boilerplate, sensitive_flag, possible_duplicate'),
 ('herpes-simplex-virus-hsv',NULL,'Merge / remove','Herpes Simplex Virus (HSV) — Merge / remove: Overlaps herpes and herpes-hsv-1-2','Overlaps herpes and herpes-hsv-1-2','missing_fields, sensitive_flag, possible_duplicate'),
-('heterosexual','heterosexuality','Merge / remove','Heterosexual — Merge / remove: Duplicate of heterosexuality; merge','Duplicate of heterosexuality; merge','too_terse, possible_duplicate'),
 ('heterotypical',NULL,'Verify facts / meaning','Heterotypical — Verify facts / meaning: Meaning unclear; consider merging into heteronormativity','Meaning unclear; consider merging into heteronormativity','too_terse, missing_fields, uncertain_meaning'),
 ('high-five',NULL,'Verify facts / meaning','High Five — Verify facts / meaning: Short/long described a K-pop album; may be a venue name','Short/long described a K-pop album; may be a venue name | The meaning in this context is unclear, and the tag may originally come from a venue or event name, so its use on listings should be checked.','wrong_sense, contradiction, missing_fields, uncertain_meaning'),
 ('highbury-location',NULL,'Merge / remove','Highbury-Location — Merge / remove: Merge into a highbury or london location tag.','Merge into a highbury or london location tag. | The tag likely duplicates a general Highbury or London location tag.','missing_fields, possible_duplicate'),
@@ -1168,7 +1217,6 @@ insert into _rq values
 ('homocore',NULL,'Merge / remove','Homocore — Merge / remove: Overlaps queercore and queer-punk; consider merge','Overlaps queercore and queer-punk; consider merge','possible_duplicate'),
 ('homophonic',NULL,'Merge / remove','Homophonic — Merge / remove: Out of scope; consider removing','Out of scope; consider removing | It is otherwise out of scope for queer.guide.','out_of_scope, category_wrong'),
 ('homosexuality-in-modern-sports',NULL,'Merge / remove','Homosexuality in Modern Sports — Merge / remove: Overlaps lgbtqia-inclusion-in-sports','Overlaps lgbtqia-inclusion-in-sports | The tag overlaps with broader LGBTQIA+ inclusion in sport.','boilerplate, possible_duplicate'),
-('homosexuellen-bewegung','gay-rights-movement','Merge / remove','Gay Rights Movement — Merge / remove: German slug; merge into gay-rights-movement','German slug; merge into gay-rights-movement | The German-language slug duplicates the English gay rights movement tag and should be merged into it.','missing_fields, non_english_title, possible_duplicate'),
 ('honesty-training',NULL,'Verify facts / meaning','Honesty Training — Verify facts / meaning: Sense unclear from data; generic definition given.','Sense unclear from data; generic definition given.','boilerplate, uncertain_meaning'),
 ('horatian',NULL,'Verify facts / meaning','Horatian — Verify facts / meaning: Original Byron/Oxford claim is chronologically off; verify','Original Byron/Oxford claim is chronologically off; verify','wrong_sense, contradiction, factual_error, uncertain_meaning'),
 ('horbuch',NULL,'Merge / remove','Audiobook — Merge / remove: German title (Hörbuch); merge into ''audiobook''','German title (Hörbuch); merge into ''audiobook''','missing_fields, non_english_title'),
@@ -1218,7 +1266,6 @@ insert into _rq values
 ('influence',NULL,'Verify facts / meaning','Influence — Verify facts / meaning: Too generic; consider removing or merging.','Too generic; consider removing or merging. | The tag is very generic.','missing_fields, uncertain_meaning'),
 ('informatiker',NULL,'Merge / remove','Computer Scientist — Merge / remove: German slug; merge into ''computer-scientist''','German slug; merge into ''computer-scientist'' | The German slug suggests the tag may duplicate an English computer-scientist tag.','missing_fields, non_english_title, category_wrong'),
 ('infusions',NULL,'Verify facts / meaning','Infusions — Verify facts / meaning: Could be IV services or herbal infusions; confirm intended sense.','Could be IV services or herbal infusions; confirm intended sense.','missing_fields, uncertain_meaning'),
-('ingwer-sour','cocktails','Merge / remove','Ginger Sour — Merge / remove: German slug; menu item; merge into ''Cocktails''','German slug; menu item; merge into ''Cocktails'' | As a tag it marks a drinks menu item and is better covered by the general Cocktails tag.','missing_fields, out_of_scope, non_english_title, category_wrong'),
 ('innenarchitekt',NULL,'Merge / remove','Interior Architect — Merge / remove: German slug; merge into interior-architect or remove','German slug; merge into interior-architect or remove','missing_fields, non_english_title, out_of_scope, category_wrong'),
 ('inspire',NULL,'Verify facts / meaning','Inspire — Verify facts / meaning: Too generic; consider removing.','Too generic; consider removing. | The tag is very generic and could mark inspirational talks, role models or uplifting content.','missing_fields, uncertain_meaning'),
 ('institutional-racism',NULL,'Merge / remove','Institutional Racism — Merge / remove: Overlaps structural-racism and systemic-racism; consider merging','Overlaps structural-racism and systemic-racism; consider merging','possible_duplicate'),
@@ -1233,7 +1280,6 @@ insert into _rq values
 ('intersex-flag','intersex-pride-flag','Merge / remove','Intersex Flag — Merge / remove: Duplicate of intersex-pride-flag; merge','Duplicate of intersex-pride-flag; merge','alias_dump, factual_error, possible_duplicate'),
 ('intersex-legal-protections',NULL,'Merge / remove','Intersex Legal Protections — Merge / remove: Overlaps with intersex-rights','Overlaps with intersex-rights','possible_duplicate'),
 ('intersex-pride-flag','intersex-flag','Merge / remove','Intersex Pride Flag — Merge / remove: Duplicate of intersex-flag; merge','Duplicate of intersex-flag; merge','missing_fields, contradiction, possible_duplicate'),
-('intersexuality','intersex','Merge / remove','Intersexuality — Merge / remove: Merge into intersex','Merge into intersex | This tag duplicates the main Intersex tag.','possible_duplicate'),
 ('investment',NULL,'Merge / remove','Investment — Merge / remove: Unclear purpose; consider removing','Unclear purpose; consider removing | Its intended meaning as a tag is unclear, and it appears out of scope for the legal category.','missing_fields, uncertain_meaning, out_of_scope, category_wrong'),
 ('investor',NULL,'Merge / remove','Investor — Merge / remove: Generic finance term; consider merging into a business or funding tag','Generic finance term; consider merging into a business or funding tag','too_long, missing_fields, category_wrong, out_of_scope'),
 ('irish',NULL,'Merge / remove','Irish — Merge / remove: Regional descriptor; check usage','Regional descriptor; check usage','missing_fields, out_of_scope'),
@@ -1296,13 +1342,9 @@ insert into _rq values
 ('kolkata-cafe',NULL,'Verify facts / meaning','Kolkata-Cafe — Verify facts / meaning: Unclear if a specific café or generic; split into location + café','Unclear if a specific café or generic; split into location + café | This tag appears to combine a location and venue type, or may refer to a specific café; it should probably be split into a ''Kolkata'' location and a ''café'' venue type.','missing_fields, uncertain_meaning, category_wrong'),
 ('kolkata-cuisine','indian-cuisine','Merge / remove','Kolkata-Cuisine — Merge / remove: Could merge into indian-cuisine (or a bengali-cuisine tag)','Could merge into indian-cuisine (or a bengali-cuisine tag)','missing_fields, possible_duplicate'),
 ('korean-food',NULL,'Merge / remove','Korean-Food — Merge / remove: Cuisine tag; merge into a general cuisine/restaurant tag','Cuisine tag; merge into a general cuisine/restaurant tag | It is a cuisine label rather than an LGBTQ+ topic and may be better handled by a general cuisine field.','missing_fields, out_of_scope, category_wrong'),
-('krankenpfleger','nurses','Merge / remove','Nurse — Merge / remove: German slug; merge into ''nurses''.','German slug; merge into ''nurses''. | The tag appears in German-language listings, for example for nursing staff at HIV or sexual-health services.','non_english_title, missing_fields, possible_duplicate'),
 ('kriegerin',NULL,'Merge / remove','Female Warrior — Merge / remove: German title; merge into ''female-warrior''','German title; merge into ''female-warrior''','missing_fields, non_english_title'),
 ('kriminell',NULL,'Merge / remove','Criminal — Merge / remove: German slug; merge into criminal or crime','German slug; merge into criminal or crime | The German title suggests it should be merged into an English tag.','missing_fields, non_english_title, category_wrong'),
 ('kritiker',NULL,'Merge / remove','Critic — Merge / remove: German slug; merge into an English ''critic'' tag','German slug; merge into an English ''critic'' tag','missing_fields, non_english_title, category_wrong'),
-('kuenstler','artist','Merge / remove','Artist — Merge / remove: German slug ''kuenstler''; merge into English ''artist'' tag','German slug ''kuenstler''; merge into English ''artist'' tag','non_english_title, missing_fields'),
-('kultur','arts-culture','Merge / remove','Culture — Merge / remove: German title; merge into arts-culture.','German title; merge into arts-culture. | It covers the same ground as the English arts and culture tags and should be merged into one of them.','missing_fields, non_english_title, possible_duplicate'),
-('kunst','art','Merge / remove','Art — Merge / remove: German slug ''kunst''; merge into English ''art'' tag','German slug ''kunst''; merge into English ''art'' tag','non_english_title, missing_fields'),
 ('kunstlerduo',NULL,'Merge / remove','Artist Duo — Merge / remove: German slug; merge into English ''artist-duo'' tag','German slug; merge into English ''artist-duo'' tag','non_english_title, too_terse, missing_fields'),
 ('kunstsammler',NULL,'Merge / remove','Art Collector — Merge / remove: German slug; merge into English ''art-collector'' tag','German slug; merge into English ''art-collector'' tag','non_english_title, missing_fields'),
 ('labia','labia-majora-and-minora','Merge / remove','Labia — Merge / remove: Duplicate of labia-majora-and-minora','Duplicate of labia-majora-and-minora','sensitive_flag, possible_duplicate'),
@@ -1400,7 +1442,6 @@ insert into _rq values
 ('lgbtq-pride-events',NULL,'Merge / remove','LGBTQ+ Pride Events — Merge / remove: Duplicate of pride-events / pride-event','Duplicate of pride-events / pride-event','boilerplate, possible_duplicate'),
 ('lgbtq-pride-flags',NULL,'Merge / remove','LGBTQ+ Pride Flags — Merge / remove: Overlaps pride-flag; consider merging','Overlaps pride-flag; consider merging','boilerplate, possible_duplicate'),
 ('lgbtq-refugees','lgbtqia-refugee-rights','Merge / remove','LGBTQ-Refugees — Merge / remove: Likely duplicate of lgbtqia-refugee-rights','Likely duplicate of lgbtqia-refugee-rights','missing_fields, possible_duplicate'),
-('lgbtq-resource','community-resource','Merge / remove','LGBTQ-Resource — Merge / remove: Merge with community-resource','Merge with community-resource','missing_fields, possible_duplicate'),
 ('lgbtq-safe',NULL,'Merge / remove','LGBTQ-Safe — Merge / remove: Overlaps safe-space and safer-space','Overlaps safe-space and safer-space','missing_fields, possible_duplicate'),
 ('lgbtq-supportive',NULL,'Check','LGBTQ-Supportive — Check: The tag overlaps with the more generic Supportive.','The tag overlaps with the more generic Supportive.','missing_fields'),
 ('lgbtq-therapy',NULL,'Merge / remove','LGBTQ-Therapy — Merge / remove: Overlaps lgbtq-affirmative-therapy and queer-counseling','Overlaps lgbtq-affirmative-therapy and queer-counseling','missing_fields, too_long, possible_duplicate'),
@@ -1541,7 +1582,6 @@ insert into _rq values
 ('muse',NULL,'Verify facts / meaning','Muse — Verify facts / meaning: Kink meaning inferred','Kink meaning inferred','too_terse, missing_fields, uncertain_meaning'),
 ('mushroom-sandwich',NULL,'Merge / remove','Mushroom-Sandwich — Merge / remove: Menu item; merge into ''Vegetarian'' or ''Food served''','Menu item; merge into ''Vegetarian'' or ''Food served'' | As a tag it describes a menu item rather than an LGBTQ+ venue feature and is better covered by a general food or vegetarian tag.','missing_fields, out_of_scope, category_wrong'),
 ('music-club',NULL,'Merge / remove','Music-Club — Merge / remove: Overlaps live-music-venue / nightclub','Overlaps live-music-venue / nightclub','missing_fields, possible_duplicate'),
-('musikkabarett','cabaret','Merge / remove','Musical Cabaret — Merge / remove: German slug; rename to ''musical-cabaret'' or merge into ''cabaret''','German slug; rename to ''musical-cabaret'' or merge into ''cabaret''','missing_fields, non_english_title'),
 ('mutha',NULL,'Verify facts / meaning','Mutha — Verify facts / meaning: Meaning unclear; maybe Slang & Language','Meaning unclear; maybe Slang & Language','too_terse, missing_fields, uncertain_meaning, category_wrong'),
 ('mutosexual',NULL,'Verify facts / meaning','Mutosexual — Verify facts / meaning: Unverifiable micro-label; consider removing','Unverifiable micro-label; consider removing','missing_fields, category_wrong, uncertain_meaning'),
 ('mutual-penetration',NULL,'Check','Mutual Penetration — Check: Exact configuration from source unclear; check intended means of penetration.','Exact configuration from source unclear; check intended means of penetration.','missing_fields, sensitive_flag'),
@@ -1650,11 +1690,9 @@ insert into _rq values
 ('outstroking',NULL,'Verify facts / meaning','Outstroking — Verify facts / meaning: Rare term, meaning inferred','Rare term, meaning inferred','placeholder, uncertain_meaning, sensitive_flag'),
 ('over-the-bridge-to-pimpleton',NULL,'Verify facts / meaning','Over the Bridge to Pimpleton — Verify facts / meaning: Exact meaning unclear (old text: ''homosexual sex''); verify in slang sources','Exact meaning unclear (old text: ''homosexual sex''); verify in slang sources','missing_fields, too_terse, category_wrong, sensitive_flag, uncertain_meaning'),
 ('overdose-prevention-education',NULL,'Merge / remove','Overdose Prevention Education — Merge / remove: Overlaps safer-use-and-overdose-prevention-training; consider merging.','Overlaps safer-use-and-overdose-prevention-training; consider merging.','too_long, sensitive_flag, possible_duplicate'),
-('pack-er','packing','Merge / remove','Pack(Er) — Merge / remove: Merge into packing','Merge into packing | This tag duplicates the main packing tag.','contradiction, boilerplate, possible_duplicate'),
 ('padding',NULL,'Verify facts / meaning','Padding — Verify facts / meaning: Fields described clothing material generally; kink sense inferred','Fields described clothing material generally; kink sense inferred','wrong_sense, too_long, sensitive_flag, uncertain_meaning'),
 ('palm-springs-eats',NULL,'Merge / remove','Palm-Springs-Eats — Merge / remove: Location-specific; merge into restaurant + location','Location-specific; merge into restaurant + location','missing_fields, possible_duplicate'),
 ('panda',NULL,'Verify facts / meaning','Panda — Verify facts / meaning: Niche persona; check gay-slang sense','Niche persona; check gay-slang sense','too_terse, missing_fields, uncertain_meaning'),
-('pap-smear','papanicolaou-test-pap-test','Merge / remove','Pap Smear — Merge / remove: Duplicate of papanicolaou-test-pap-test; merge','Duplicate of papanicolaou-test-pap-test; merge','truncated, too_long, possible_duplicate'),
 ('papst',NULL,'Merge / remove','Pope — Merge / remove: German slug; merge into an English ''pope'' tag','German slug; merge into an English ''pope'' tag','non_english_title, missing_fields, category_wrong'),
 ('paradise-location',NULL,'Verify facts / meaning','Paradise-Location — Verify facts / meaning: Unclear: promo phrase or place named Paradise (e.g. Nevada)','Unclear: promo phrase or place named Paradise (e.g. Nevada)','missing_fields, uncertain_meaning'),
 ('parental-rights-for-lgbtq-families',NULL,'Merge / remove','Parental Rights for LGBTQ+ Families — Merge / remove: Duplicate of parental-rights-for-queer-families / lgbtqia-parenting-rights','Duplicate of parental-rights-for-queer-families / lgbtqia-parenting-rights','too_long, boilerplate, possible_duplicate'),
@@ -1664,7 +1702,6 @@ insert into _rq values
 ('park','public-park','Merge / remove','Park — Merge / remove: Duplicate of public-park','Duplicate of public-park','missing_fields, possible_duplicate'),
 ('partners-in-mischief',NULL,'Verify facts / meaning','Partners in Mischief — Verify facts / meaning: Old short claimed it means same-sex relationships','Old short claimed it means same-sex relationships','contradiction, missing_fields, uncertain_meaning'),
 ('party-spot',NULL,'Merge / remove','Party-Spot — Merge / remove: Vague; consider merging into ''Nightlife''','Vague; consider merging into ''Nightlife''','boilerplate, category_wrong, possible_duplicate'),
-('pastry','pastry-shops','Merge / remove','Pastry — Merge / remove: Merge into pastry-shops','Merge into pastry-shops','wrong_sense, missing_fields, possible_duplicate'),
 ('pastry-shops',NULL,'Check','Pastry-Shops — Check: This is the venue-type tag that the pastry tag could be merged into.','This is the venue-type tag that the pastry tag could be merged into.','missing_fields'),
 ('patience',NULL,'Merge / remove','Patience — Merge / remove: Generic trait; consider removing','Generic trait; consider removing | The tag has little queer-specific meaning and may be out of scope.','missing_fields, out_of_scope, category_wrong'),
 ('patience-training',NULL,'Verify facts / meaning','Patience Training — Verify facts / meaning: Niche self-help tag; check usage','Niche self-help tag; check usage','boilerplate, uncertain_meaning'),
@@ -1677,7 +1714,6 @@ insert into _rq values
 ('pearls',NULL,'Verify facts / meaning','Pearls — Verify facts / meaning: Meaning in Vibe & Crowd unclear; style sense assumed','Meaning in Vibe & Crowd unclear; style sense assumed | In some sexual slang ''pearl necklace'' has an explicit meaning, so tagged items should be checked for the intended sense.','wrong_sense, missing_fields, category_wrong, uncertain_meaning'),
 ('pecorino',NULL,'Merge / remove','Pecorino — Merge / remove: Food item; remove or merge','Food item; remove or merge | As a food item the tag has no link to a queer subculture.','missing_fields, category_wrong, out_of_scope, non_english_title'),
 ('pederasty',NULL,'Merge / remove','Pederasty — Merge / remove: Refers to sexual relationships between men and adolescent boys; remove or handle editorially','Refers to sexual relationships between men and adolescent boys; remove or handle editorially','remove_candidate, placeholder, sensitive_flag, category_wrong'),
-('pelvic-inflammatory-disease','pelvic-inflammatory-disease-pid','Merge / remove','Pelvic Inflammatory Disease — Merge / remove: Duplicate of pelvic-inflammatory-disease-pid; merge','Duplicate of pelvic-inflammatory-disease-pid; merge','boilerplate, possible_duplicate'),
 ('pembroke',NULL,'Verify facts / meaning','Pembroke — Verify facts / meaning: Ambiguous place name; confirm which Pembroke tagged venues use.','Ambiguous place name; confirm which Pembroke tagged venues use.','missing_fields, uncertain_meaning'),
 ('pendik-dining',NULL,'Merge / remove','Pendik-Dining — Merge / remove: Location-specific; merge into restaurant + location','Location-specific; merge into restaurant + location','missing_fields, possible_duplicate'),
 ('penis-shrinking',NULL,'Verify facts / meaning','Penis Shrinking — Verify facts / meaning: Meaning inferred; check intended sense (kink vs body)','Meaning inferred; check intended sense (kink vs body)','too_terse, missing_fields, category_wrong, sensitive_flag, uncertain_meaning'),
@@ -1756,7 +1792,6 @@ insert into _rq values
 ('pov',NULL,'Check','POV — Check: Short meant POV porn, description generic; check tagged items','Short meant POV porn, description generic; check tagged items','missing_fields, contradiction, sensitive_flag'),
 ('pov-point-of-view',NULL,'Check','POV (Point of View) — Check: Description said porn sense, long said narrative POV; chose porn sense','Description said porn sense, long said narrative POV; chose porn sense','wrong_sense, contradiction, category_wrong, sensitive_flag'),
 ('power-knowledge-regime',NULL,'Merge / remove','Power/Knowledge Regime — Merge / remove: Overlaps power-knowledge','Overlaps power-knowledge','boilerplate, possible_duplicate'),
-('prag','prague','Merge / remove','Prague — Merge / remove: German slug; merge into ''prague''.','German slug; merge into ''prague''. | This tag duplicates the main Prague tag.','too_terse, missing_fields, non_english_title, possible_duplicate'),
 ('praise-princess',NULL,'Verify facts / meaning','Praise Princess — Verify facts / meaning: Meaning inferred from construction; confirm usage.','Meaning inferred from construction; confirm usage.','placeholder, missing_fields, category_wrong, sensitive_flag, uncertain_meaning'),
 ('prater-pils',NULL,'Merge / remove','Prater-Pils — Merge / remove: Beer brand, out of scope; merge into Alcohol or remove.','Beer brand, out of scope; merge into Alcohol or remove.','missing_fields, out_of_scope, uncertain_meaning'),
 ('pre-exposure-prophylaxis-prep','prep','Merge / remove','Pre-Exposure Prophylaxis (PrEP) — Merge / remove: Duplicate of prep; merge','Duplicate of prep; merge','possible_duplicate'),
@@ -1799,7 +1834,6 @@ insert into _rq values
 ('psychosocial-impact',NULL,'Verify facts / meaning','Psychosocial Impact — Verify facts / meaning: Description was chemsex-specific; long cited a Wikidata thesis. Check intended scope','Description was chemsex-specific; long cited a Wikidata thesis. Check intended scope','contradiction, factual_error'),
 ('pubephilia',NULL,'Merge / remove','Pubephilia — Merge / remove: Overlaps with pubic-hair tag','Overlaps with pubic-hair tag','missing_fields, too_terse, possible_duplicate'),
 ('pubic-hair',NULL,'Merge / remove','Pubic Hair — Merge / remove: Overlaps with pubephilia','Overlaps with pubephilia','wrong_sense, contradiction, sensitive_flag, wiki_mismatch, possible_duplicate'),
-('pubic-lice','pubic-lice-crabs','Merge / remove','Pubic Lice — Merge / remove: Duplicate of pubic-lice-crabs; merge','Duplicate of pubic-lice-crabs; merge','possible_duplicate'),
 ('public',NULL,'Verify facts / meaning','Public — Verify facts / meaning: Short described a medical article database; intended sense unclear','Short described a medical article database; intended sense unclear','contradiction, wrong_sense, missing_fields, category_missing, uncertain_meaning'),
 ('public-park','park','Merge / remove','Public-Park — Merge / remove: Merge into park','Merge into park | This tag duplicates ''park''.','missing_fields, possible_duplicate'),
 ('public-reminder',NULL,'Verify facts / meaning','Public Reminder — Verify facts / meaning: Short/long described community notices; niche online slang','Short/long described community notices; niche online slang','wrong_sense, contradiction, sensitive_flag, uncertain_meaning'),
@@ -1815,7 +1849,6 @@ insert into _rq values
 ('queer-activism',NULL,'Merge / remove','Queer Activism — Merge / remove: Description was identical to lgbtq-activism; check for merge','Description was identical to lgbtq-activism; check for merge','boilerplate, possible_duplicate'),
 ('queer-advocacy','lgbtq-advocacy','Merge / remove','Queer-Advocacy — Merge / remove: Likely duplicate of lgbtq-advocacy','Likely duplicate of lgbtq-advocacy | The tag largely overlaps with LGBTQ+ advocacy and could be merged with it.','missing_fields, possible_duplicate'),
 ('queer-asylum-seekers',NULL,'Merge / remove','Queer Asylum Seekers — Merge / remove: Overlaps lgbtq-refugees','Overlaps lgbtq-refugees','boilerplate, possible_duplicate, sensitive_flag'),
-('queer-bewegung','lgbt-movements','Merge / remove','Queer Movement — Merge / remove: German slug; merge into lgbt-movements','German slug; merge into lgbt-movements | The German-language slug should be merged into the corresponding English queer movement or LGBTQ+ movements tag.','missing_fields, non_english_title, truncated'),
 ('queer-club-bar',NULL,'Merge / remove','Queer Club/Bar — Merge / remove: Merge into lgbtq-bar / lgbtq-club','Merge into lgbtq-bar / lgbtq-club','boilerplate, possible_duplicate'),
 ('queer-clubs-and-bars',NULL,'Merge / remove','Queer Clubs and Bars — Merge / remove: Merge into lgbtq-bar / lgbtq-club','Merge into lgbtq-bar / lgbtq-club | It should be merged into LGBTQ+ bar and LGBTQ+ club tags so that users find all such venues under one filter.','boilerplate, possible_duplicate'),
 ('queer-community',NULL,'Merge / remove','Queer Community — Merge / remove: Overlaps lgbtq-community','Overlaps lgbtq-community','possible_duplicate'),
@@ -1824,14 +1857,12 @@ insert into _rq values
 ('queer-culture',NULL,'Merge / remove','Queer-Culture — Merge / remove: Overlaps lgbtq-culture and queer-kultur; merge','Overlaps lgbtq-culture and queer-kultur; merge | This tag overlaps with LGBTQ-Culture.','missing_fields, possible_duplicate'),
 ('queer-dance',NULL,'Merge / remove','Queer Dance — Merge / remove: Overlaps lgbtq-dance; merge','Overlaps lgbtq-dance; merge | This tag overlaps with LGBTQ-Dance.','category_wrong, possible_duplicate'),
 ('queer-festival','lgbtq-festival','Merge / remove','Queer-Festival — Merge / remove: Duplicate of lgbtq-festival','Duplicate of lgbtq-festival | The tag duplicates lgbtq-festival and the two should probably be merged.','missing_fields, possible_duplicate'),
-('queer-film','lgbtq-cinema','Merge / remove','Queer-Film — Merge / remove: Duplicate of ''lgbtq-cinema''','Duplicate of ''lgbtq-cinema'' | The tag duplicates LGBTQ+ Cinema and LGBTQ+ Film.','boilerplate, possible_duplicate'),
 ('queer-friendly',NULL,'Merge / remove','Queer-Friendly — Merge / remove: Overlaps lgbtq-friendly and gay-friendly','Overlaps lgbtq-friendly and gay-friendly','missing_fields, possible_duplicate'),
 ('queer-hip-hop-artists',NULL,'Merge / remove','Queer Hip-Hop Artists — Merge / remove: Overlaps ''queer-hip-hop''','Overlaps ''queer-hip-hop'' | The tag identifies artists and the events where they perform, and overlaps with Queer Hip-Hop.','boilerplate, possible_duplicate'),
 ('queer-history',NULL,'Merge / remove','Queer History — Merge / remove: Overlaps lgbtq-history and history-of-homosexuality','Overlaps lgbtq-history and history-of-homosexuality','possible_duplicate'),
 ('queer-identity-formation',NULL,'Merge / remove','Queer Identity Formation — Merge / remove: Overlaps sexual-identity-development','Overlaps sexual-identity-development','truncated, boilerplate, possible_duplicate'),
 ('queer-inclusive',NULL,'Merge / remove','Queer-Inclusive — Merge / remove: Overlaps lgbtq-inclusive; merge','Overlaps lgbtq-inclusive; merge | This tag overlaps with LGBTQ-Inclusive.','truncated, category_wrong, possible_duplicate'),
 ('queer-inclusive-education',NULL,'Merge / remove','Queer Inclusive Education — Merge / remove: Overlaps lgbtq-education and education-and-the-lgbt-community','Overlaps lgbtq-education and education-and-the-lgbt-community','boilerplate, possible_duplicate'),
-('queer-kultur','queer-culture','Merge / remove','Queer Culture — Merge / remove: German slug; merge into queer-culture','German slug; merge into queer-culture | Content tagged here should be merged into the English Queer Culture tag.','missing_fields, non_english_title, possible_duplicate'),
 ('queer-mental-health',NULL,'Merge / remove','Queer Mental Health — Merge / remove: Overlaps lgbtq-mental-health','Overlaps lgbtq-mental-health','too_long, possible_duplicate'),
 ('queer-named',NULL,'Verify facts / meaning','Queer-Named — Verify facts / meaning: Unclear purpose; likely internal venue metadata','Unclear purpose; likely internal venue metadata','missing_fields, category_wrong, uncertain_meaning'),
 ('queer-owned-businesses','queer-owned','Merge / remove','Queer-Owned Businesses — Merge / remove: Merge into queer-owned','Merge into queer-owned | This tag duplicates the attribute Queer-Owned and could be merged into it.','too_terse, possible_duplicate'),
@@ -1979,7 +2010,6 @@ insert into _rq values
 ('schoolgirl',NULL,'Check','Schoolgirl — Check: Age-adjacent role-play; check against content policy','Age-adjacent role-play; check against content policy','missing_fields'),
 ('schoolgirl-uniform',NULL,'Check','Schoolgirl Uniform — Check: Youth-coded costume; check policy fit','Youth-coded costume; check policy fit','category_wrong, sensitive_flag'),
 ('schooners',NULL,'Verify facts / meaning','Schooners — Verify facts / meaning: Could be a pub name or beer glass size; check tagged items','Could be a pub name or beer glass size; check tagged items','missing_fields, uncertain_meaning'),
-('schwimmen','swimming','Merge / remove','Swimming — Merge / remove: German title; merge into swimming. Wiki URL is a German slug','German title; merge into swimming. Wiki URL is a German slug | The tag title is German and duplicates swimming.','non_english_title, missing_fields, possible_duplicate, wiki_mismatch'),
 ('scottish-bar',NULL,'Merge / remove','Scottish-Bar — Merge / remove: Overlaps scottish-pub, scottish-venue; consider merging','Overlaps scottish-pub, scottish-venue; consider merging | Because the tag mixes location and style, it overlaps with Scottish-Pub and Scottish-Venue and with destination tags such as Glasgow or Edinburgh.','missing_fields, possible_duplicate'),
 ('scottish-venue',NULL,'Merge / remove','Scottish-Venue — Merge / remove: Location tag; merge into Scotland destination','Location tag; merge into Scotland destination','missing_fields, category_wrong, possible_duplicate'),
 ('scratching-post',NULL,'Verify facts / meaning','Scratching Post — Verify facts / meaning: Kink sense inferred; may be out of scope','Kink sense inferred; may be out of scope','wrong_sense, too_terse, sensitive_flag, wiki_mismatch, uncertain_meaning'),
@@ -2098,7 +2128,6 @@ insert into _rq values
 ('splosh','sploshing','Merge / remove','Splosh — Merge / remove: Duplicate of sploshing; merge','Duplicate of sploshing; merge','too_terse, possible_duplicate'),
 ('sploshing','splosh','Merge / remove','Sploshing — Merge / remove: Duplicate of splosh; merge','Duplicate of splosh; merge','missing_fields, sensitive_flag, possible_duplicate'),
 ('spongeworthy',NULL,'Verify facts / meaning','Spongeworthy — Verify facts / meaning: Description said bad makeup; possibly out of scope','Description said bad makeup; possibly out of scope','contradiction, factual_error, category_wrong'),
-('sportler','athlete','Merge / remove','Athlete — Merge / remove: German title; merge into athlete','German title; merge into athlete | The tag title is German and should be merged into an English athlete tag.','non_english_title, missing_fields'),
 ('spots-in-la','city','Merge / remove','Spots-in-La — Merge / remove: Assumed LA = Los Angeles; merge into city tag','Assumed LA = Los Angeles; merge into city tag','missing_fields, category_wrong, uncertain_meaning, possible_duplicate'),
 ('sprecher',NULL,'Merge / remove','Speaker — Merge / remove: German slug; merge into an English ''speakers'' or ''spokesperson'' tag','German slug; merge into an English ''speakers'' or ''spokesperson'' tag','missing_fields, non_english_title'),
 ('spucking',NULL,'Verify facts / meaning','Spucking — Verify facts / meaning: Slang with several competing meanings','Slang with several competing meanings','missing_fields, sensitive_flag, uncertain_meaning'),
@@ -2195,7 +2224,6 @@ insert into _rq values
 ('the-power-of-three',NULL,'Verify facts / meaning','The Power of Three — Verify facts / meaning: Meaning unclear; possibly remove.','Meaning unclear; possibly remove.','missing_fields, uncertain_meaning, sensitive_flag'),
 ('the-question-of-gender',NULL,'Verify facts / meaning','The Question of Gender — Verify facts / meaning: Unclear if a specific book/thesis; consider merging into gender theory tag','Unclear if a specific book/thesis; consider merging into gender theory tag | Content using this tag should be checked for which work or debate it refers to.','uncertain_meaning, placeholder'),
 ('the-revealing-of-truth',NULL,'Merge / remove','The Revealing of Truth — Merge / remove: Description: psychedelic insight; short/long: coming out. Confirm or merge','Description: psychedelic insight; short/long: coming out. Confirm or merge | The intended meaning should be confirmed, or the tag merged into Coming Out.','contradiction, uncertain_meaning, possible_duplicate'),
-('theater','theatre','Merge / remove','Theater — Merge / remove: US spelling duplicate of ''theatre''','US spelling duplicate of ''theatre''','possible_duplicate'),
 ('theno-touch-wallflowers',NULL,'Verify facts / meaning','No-Touch Wallflowers — Verify facts / meaning: Slug has stray ''the'' prefix; check slug','Slug has stray ''the'' prefix; check slug','contradiction, boilerplate, uncertain_meaning'),
 ('theologe',NULL,'Merge / remove','Theologian — Merge / remove: German slug (Theologe); merge into English ''theologian'' tag','German slug (Theologe); merge into English ''theologian'' tag','missing_fields, non_english_title'),
 ('theoretiker',NULL,'Merge / remove','Theorist — Merge / remove: German slug; merge into an English ''theorist'' tag','German slug; merge into an English ''theorist'' tag','non_english_title, missing_fields, category_wrong'),
@@ -2245,7 +2273,6 @@ insert into _rq values
 ('trappist',NULL,'Merge / remove','Trappist — Merge / remove: Assumed beer sense from venue context; old text described the monastic order','Assumed beer sense from venue context; old text described the monastic order','missing_fields, wrong_sense, out_of_scope'),
 ('trash',NULL,'Verify facts / meaning','Trash — Verify facts / meaning: Old short described thrash metal; kink meaning inferred','Old short described thrash metal; kink meaning inferred','wrong_sense, contradiction, too_terse, missing_fields, sensitive_flag, uncertain_meaning'),
 ('trauma-informed',NULL,'Merge / remove','Trauma-Informed — Merge / remove: Overlaps trauma-informed-care and trauma-informed-space','Overlaps trauma-informed-care and trauma-informed-space','contradiction, category_wrong, wiki_mismatch, possible_duplicate'),
-('treffen','meeting','Merge / remove','Meetings — Merge / remove: German title; merge into meeting.','German title; merge into meeting. | The tag duplicates the English meeting tag.','non_english_title, missing_fields, possible_duplicate'),
 ('tribe',NULL,'Verify facts / meaning','Tribe — Verify facts / meaning: Possible duplicate of leather family/household','Possible duplicate of leather family/household','wrong_sense, contradiction, too_long, wiki_mismatch, sensitive_flag, uncertain_meaning'),
 ('trifecta',NULL,'Verify facts / meaning','Trifecta — Verify facts / meaning: Configuration from source; confirm exact arrangement.','Configuration from source; confirm exact arrangement.','missing_fields, sensitive_flag, uncertain_meaning'),
 ('trinket-goblin',NULL,'Verify facts / meaning','Trinket Goblin — Verify facts / meaning: Micro-label of uncertain usage; confirm meaning','Micro-label of uncertain usage; confirm meaning','placeholder, missing_fields, uncertain_meaning'),
@@ -2282,7 +2309,6 @@ insert into _rq values
 ('universalism',NULL,'Merge / remove','Universalism — Merge / remove: Not a fetish; consider moving or removing','Not a fetish; consider moving or removing','contradiction, factual_error, category_wrong, out_of_scope'),
 ('university',NULL,'Merge / remove','University — Merge / remove: Overlaps academic-institution','Overlaps academic-institution','missing_fields, possible_duplicate'),
 ('unsure','questioning','Merge / remove','Unsure — Merge / remove: Likely duplicate of questioning','Likely duplicate of questioning','missing_fields, possible_duplicate'),
-('unternehmer','entrepreneur','Merge / remove','Entrepreneur — Merge / remove: German slug; merge into ''entrepreneur''','German slug; merge into ''entrepreneur'' | The German slug suggests the tag may duplicate an English entrepreneur tag.','missing_fields, non_english_title, category_wrong'),
 ('updates','news','Merge / remove','Updates — Merge / remove: Old text described LGBTQ+ surgery updates; scope unclear, maybe merge into news','Old text described LGBTQ+ surgery updates; scope unclear, maybe merge into news | The tag is generic and its intended scope is unclear; it may duplicate a news tag.','wrong_sense, contradiction, uncertain_meaning, possible_duplicate'),
 ('upstairs-restaurant',NULL,'Verify facts / meaning','Upstairs-Restaurant — Verify facts / meaning: Might be a venue name (''Upstairs''); check tagged items','Might be a venue name (''Upstairs''); check tagged items','missing_fields, category_wrong, uncertain_meaning'),
 ('ureaplasma-urealyticum',NULL,'Verify facts / meaning','Ureaplasma Urealyticum — Verify facts / meaning: Original PID/NSU claims overstated; check against current guidelines','Original PID/NSU claims overstated; check against current guidelines','factual_error, missing_fields, sensitive_flag'),
