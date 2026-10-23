@@ -45,8 +45,13 @@ const REDIRECTS: Array<[string, string]> = [
   ['cozumel', 'san-miguel-de-cozumel'],
 ];
 
-async function anonGet(request: APIRequestContext, path: string): Promise<Array<Record<string, unknown>>> {
-  const res = await request.get(`${SUPABASE_REST_URL}/rest/v1/${path}`, { headers: await anonHeaders(request) });
+async function anonGet(
+  request: APIRequestContext,
+  path: string,
+): Promise<Array<Record<string, unknown>>> {
+  const res = await request.get(`${SUPABASE_REST_URL}/rest/v1/${path}`, {
+    headers: await anonHeaders(request),
+  });
   expect(res.ok(), `anon read failed for ${path}: ${res.status()}`).toBeTruthy();
   return (await res.json()) as Array<Record<string, unknown>>;
 }
@@ -54,7 +59,10 @@ async function anonGet(request: APIRequestContext, path: string): Promise<Array<
 test.describe('city duplicate merges', () => {
   test('the anon role can read cities at all', async ({ request }) => {
     // Positive control: without it every "not live" assertion below passes on a broken read.
-    const rows = await anonGet(request, 'cities?select=slug&slug=eq.london&duplicate_of_id=is.null');
+    const rows = await anonGet(
+      request,
+      'cities?select=slug&slug=eq.london&duplicate_of_id=is.null',
+    );
     expect(rows).toHaveLength(1);
   });
 
@@ -62,14 +70,19 @@ test.describe('city duplicate merges', () => {
     test(`/city/${from} leads to /city/${to}`, async ({ request }) => {
       const res = await request.get(`/city/${from}`, { headers: CRAWLER, maxRedirects: 0 });
       expect(res.status(), `/city/${from}`).toBe(301);
-      expect(new URL(res.headers()['location'] ?? '', 'https://queer.guide').pathname).toBe(`/city/${to}`);
+      expect(new URL(res.headers()['location'] ?? '', 'https://queer.guide').pathname).toBe(
+        `/city/${to}`,
+      );
 
       const page = await request.get(`/city/${to}`, { headers: CRAWLER, maxRedirects: 0 });
       expect(page.status(), `/city/${to}`).toBe(200);
       // Positive fingerprint: the survivor serves a real city page, not a shell.
       expect(await page.text()).toMatch(/<title>[^<]*LGBTQ\+ guide to [^<]+<\/title>/);
 
-      const dropped = await anonGet(request, `cities?select=id&slug=eq.${from}&duplicate_of_id=is.null`);
+      const dropped = await anonGet(
+        request,
+        `cities?select=id&slug=eq.${from}&duplicate_of_id=is.null`,
+      );
       expect(dropped, `${from} is live again`).toHaveLength(0);
     });
   }
@@ -86,7 +99,10 @@ test.describe('city duplicate merges', () => {
       // venues.city_id has no FK to cities any more (Geo P2), so PostgREST cannot embed it.
       const [city] = await anonGet(request, `cities?select=id&slug=eq.${citySlug}`);
       expect(city, `${citySlug} not readable`).toBeTruthy();
-      const rows = await anonGet(request, `venues?select=city_id&name=eq.${encodeURIComponent(venue)}&latitude=gte.47.9&latitude=lte.48.1&longitude=gte.7.7&longitude=lte.8.0`);
+      const rows = await anonGet(
+        request,
+        `venues?select=city_id&name=eq.${encodeURIComponent(venue)}&latitude=gte.47.9&latitude=lte.48.1&longitude=gte.7.7&longitude=lte.8.0`,
+      );
       expect(rows.length, `${venue} not readable`).toBeGreaterThan(0);
       for (const r of rows) expect(r.city_id, venue).toBe(city.id);
     }
