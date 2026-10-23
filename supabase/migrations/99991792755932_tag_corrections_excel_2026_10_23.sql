@@ -21,7 +21,7 @@
 -- dominik-schmitt, lgbt-community-centre-etc (individual fields only).
 
 set local statement_timeout = '15min';
-select set_config('app.actor', 'migration:99991792752907_tag_corrections_excel_2026_10_23', true);
+select set_config('app.actor', 'migration:99991792755932_tag_corrections_excel_2026_10_23', true);
 
 create temp table _tc (
   slug text primary key,
