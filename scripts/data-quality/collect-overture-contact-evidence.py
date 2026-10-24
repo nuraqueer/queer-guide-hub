@@ -116,32 +116,101 @@ def website_identity(venue, place, title, body):
             expansions = {'st': 'street', 'ave': 'avenue', 'av': 'avenue', 'blvd': 'boulevard', 'rd': 'road', 'dr': 'drive', 'ln': 'lane', 'pl': 'place', 'hwy': 'highway'}
             words = [expansions.get(word, word) for word in words]
         return ' '.join(words)
-    # Source freeform addresses usually contain a house number missing from a
-    # legacy native street. Require that more specific location when available.
-    addresses = [a.get('freeform') for a in place.get('addresses') or [] if a.get('country') == venue['country_code'] and a.get('freeform')]
-    address = max(addresses + [venue.get('address') or ''], key=len)
+    # Compare the street line, not a source's duplicated city/state formatting.
+    # Keep the source's house number; a city, postcode or suite alone cannot
+    # establish ownership of a business website.
+    def street_line(value):
+        parts = [part.strip() for part in (value or '').split(',')]
+        line = parts[0] if parts else ''
+        if re.match(r'^(?:suite|unit|floor|room|apt|apartment|level)\b', line, re.I):
+            line = parts[1] if len(parts) > 1 else ''
+        if (not re.search(r'\d', line) or sum(char.isalpha() for char in normalized(line)) < 3
+                or re.match(r'^p[.]?\s*o[.]?\s*box\b', line, re.I)
+                or normalized(line) == normalized(venue.get('city_name'))):
+            return ''
+        return line
+
+    native_address = normalized(venue.get('address'))
+    addresses = [a.get('freeform') for a in place.get('addresses') or []
+                 if a.get('country') == venue['country_code'] and a.get('freeform')
+                 and (not native_address or ' ' + native_address + ' ' in ' ' + normalized(a['freeform']) + ' '
+                      or ' ' + normalized(a['freeform']) + ' ' in ' ' + native_address + ' ')]
+    lines = [line for value in addresses if (line := street_line(value))]
+    address = max(lines, key=len) if lines else street_line(venue.get('address'))
     document = street(unescape(re.sub(r'<[^>]+>', ' ', body)))
     expected = street(address)
     street_match = len(expected) >= 5 and ' ' + expected + ' ' in ' ' + document + ' '
     return {'name_match': name_match, 'street_match': street_match, 'brand_words': brand, 'street_address': address}
 
 
+def contact_page_urls(root_url, html):
+    """Follow only published contact links on the already identified business host."""
+    host = urllib.parse.urlsplit(root_url).hostname.removeprefix('www.')
+    urls = []
+    for match in re.finditer(r"<a\b[^>]*\bhref\s*=\s*[\"']([^\"']+)[\"']", html, re.I):
+        try:
+            parsed = urllib.parse.urlsplit(urllib.parse.urljoin(root_url, unescape(match[1])))
+            if (parsed.scheme not in ('http', 'https') or parsed.username or parsed.password
+                    or not parsed.hostname or parsed.hostname.removeprefix('www.') != host
+                    or parsed.port not in (None, 80, 443)):
+                continue
+            if not re.search(r'contact|kontakt|impressum|imprint|about|location|find[-_]?us|ueber[-_]?uns', parsed.path, re.I):
+                continue
+            url = urllib.parse.urlunsplit(parsed._replace(scheme='https', fragment=''))
+            if url.rstrip('/') != root_url.rstrip('/') and url not in urls:
+                urls.append(url)
+        except ValueError:
+            continue
+    return urls[:3]
+
+
 def website_probe(url, venue, place):
     if url.startswith('http://'):
         url = 'https://' + url[7:]
-    try:
-        safe_url(url)
-        opener = urllib.request.build_opener(PublicRedirect())
-        with opener.open(urllib.request.Request(url, headers={'User-Agent': 'QueerGuide-ContactEvidence/1.0'}), timeout=15) as response:
+    opener = urllib.request.build_opener(PublicRedirect())
+
+    def read_page(page_url):
+        safe_url(page_url)
+        with opener.open(urllib.request.Request(page_url, headers={'User-Agent': 'QueerGuide-ContactEvidence/1.0'}), timeout=15) as response:
             body = response.read(500001)
             text = body.decode('utf-8', 'replace')
             title = re.search(r'<title[^>]*>(.*?)</title>', text, re.I | re.S)
             title_text = unescape(title[1]).strip() if title else ''
             identity = website_identity(venue, place, title_text, text)
-            return {'status': response.status, 'url': response.url, 'observed_at': now(),
-                    'prefix_sha256': hashlib.sha256(body).hexdigest(), 'bytes_read': len(body),
-                    'title': title_text or None, 'identity': identity,
-                    'usable': identity['name_match'] and identity['street_match'] and response.status == 200 and len(body) > 2000 and 'text/html' in response.headers.get('Content-Type', '') and not any(marker in text.lower() for marker in ('hugedomains.com', 'domain is for sale', 'buy this domain', 'domain has expired'))}
+            page_valid = (response.status == 200 and len(body) > 2000
+                          and 'text/html' in response.headers.get('Content-Type', '')
+                          and not any(marker in text.lower() for marker in
+                                      ('hugedomains.com', 'domain is for sale', 'buy this domain', 'domain has expired')))
+            probe = {'status': response.status, 'url': response.url, 'observed_at': now(),
+                     'prefix_sha256': hashlib.sha256(body).hexdigest(), 'bytes_read': len(body),
+                     'title': title_text or None, 'identity': identity,
+                     'usable': identity['name_match'] and identity['street_match'] and page_valid}
+            return probe, text, page_valid
+
+    try:
+        root, text, valid = read_page(url)
+        if root['usable'] or not valid or not root['identity']['name_match']:
+            return root
+        attempts = []
+        for page_url in contact_page_urls(root['url'], text):
+            try:
+                contact, _, contact_valid = read_page(page_url)
+                attempts.append({'url': page_url, 'status': contact['status'],
+                                 'street_match': contact['identity']['street_match']})
+                if contact_valid and contact['identity']['street_match']:
+                    # Keep the contact page's actual title. Brand ownership was
+                    # established on its linked same-host homepage; retain both
+                    # independent response hashes rather than inventing a title.
+                    contact['identity'].update(name_match=True, brand_source_url=root['url'],
+                                               brand_title=root['title'], brand_prefix_sha256=root['prefix_sha256'])
+                    contact['site_root_probe'] = root
+                    contact['contact_attempts'] = attempts
+                    contact['usable'] = True
+                    return contact
+            except Exception as error:
+                attempts.append({'url': page_url, 'outcome_unknown': type(error).__name__})
+        root['contact_attempts'] = attempts
+        return root
     except Exception as error:
         return {'usable': False, 'outcome_unknown': type(error).__name__}
 
