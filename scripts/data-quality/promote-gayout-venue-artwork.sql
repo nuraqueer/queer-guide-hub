@@ -46,7 +46,7 @@ begin
   join countries c on c.id=v.country_id join venue_sources s on s.venue_id=v.id and s.id=(p->>'source_id')::uuid
   where v.id=(p->>'id')::uuid and v.name=p->>'name'and v.updated_at=(p->>'expected_updated_at')::timestamptz
    and v.duplicate_of_id is null and v.closed_at is null and not coalesce(v.verified,false)
-   and coalesce(v.verification_status,'')in('','auto','unverified') and o.duplicate_of_id is null and o.status='active'
+   and coalesce(to_jsonb(v)->>'verification_status','')in('','auto','unverified') and o.duplicate_of_id is null and o.status='active'
    and o.claim_status='unclaimed'and o.last_verified_at is null and o.roles=array['venue']::text[]
    and o.field_provenance#>>'{identity,source}'='unified_location'and lower(btrim(o.name))=lower(btrim(v.name))
    and o.country_id=v.country_id and o.city_id is not distinct from v.city_id and v.category not in('other','toilet','cruising')
