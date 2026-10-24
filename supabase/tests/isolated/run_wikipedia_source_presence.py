@@ -105,8 +105,51 @@ begin
  assert not has_function_privilege('authenticated','register_wikipedia_source_observations(jsonb,boolean)','execute');
 end $test$;
 '''
+# Exercise the actual new migration after real observation registration.
+regional_setup = """
+update organizations set quality_checked_at=now();
+-- Only an exact normalized derivative of structured location fields qualifies.
+update venue_sources set payload=jsonb_set(jsonb_set(jsonb_set(payload,
+ '{raw,region}','"Regional fixture"'),'{raw,venue_subtype}','"Other"'),
+ '{normalized,description}','"Social nudity place in Regional fixture, Angola."')where id=(select s from fixture where n=1);
+create table regional_old_organizations as select id,to_jsonb(o)row from organizations o;
+"""
+regional_assertions = """
+do $test$declare f record;scope jsonb;
+begin
+ for f in select *from fixture loop
+  assert(api_private.organization_missing_wikipedia_source(f.o)is not null)=(f.n in(1,33)),'Original exclusion regressed '||f.n;
+ end loop;
+ assert api_private.organization_missing_wikipedia_source((select o from fixture where n=1))is not null;
+ assert(select quality_checked_at is null from organizations where id=(select o from fixture where n=1));
+ assert(select quality_checked_at is not null from organizations where id=(select o from fixture where n=33)),'Already qualifying scope needlessly invalidated';
+ assert not exists(select 1 from organizations o join regional_old_organizations old using(id)
+  where to_jsonb(o)-'quality_checked_at' is distinct from old.row-'quality_checked_at'),'Migration changed canonical profile fields';
+ assert not exists(select 1 from entity_quality_findings where state<>'fail'),'Migration invented passes';
+ -- These changes must each revoke the scope, including absent CASE inputs.
+ for f in select *from(values
+  ('{raw,region}'::text[],'null'::jsonb),
+  ('{raw,country}'::text[],'null'::jsonb),
+  ('{raw,region}'::text[],'123'::jsonb),
+  ('{raw,region}'::text[],'""'::jsonb),
+  ('{raw,venue_subtype}'::text[],'"Beach"'::jsonb),
+  ('{raw,description}'::text[],'"Actual publisher narrative"'::jsonb),
+  ('{normalized,description}'::text[],'"Short but specific publisher description"'::jsonb),
+  ('{normalized,description}'::text[],'"Social nudity place in Different region, Angola."'::jsonb),
+  ('{normalized,phone}'::text[],'"+244933472424"'::jsonb),
+  ('{normalized,images}'::text[],'["https://source.example/artwork.jpg"]'::jsonb)
+ )x(path,value)loop
+  update venue_sources set payload=jsonb_set(payload,f.path,f.value)where id=(select s from fixture where n=1);
+  assert api_private.organization_missing_wikipedia_source((select o from fixture where n=1))is null,'Structured label scope leaked for '||f.path::text;
+  update venue_sources set payload=(select row->'payload'from regional_old_sources where id=venue_sources.id)where id=(select s from fixture where n=1);
+ end loop;
+ update organizations set field_provenance=field_provenance||'{"description":{"human_reviewed":true}}'where id=(select o from fixture where n=1);
+ assert api_private.organization_missing_wikipedia_source((select o from fixture where n=1))is null,'Human description lost protection';
+end $test$;
+"""
+
 # All source mutation in the setup is deliberate drift, never writer output.
-sql=schema+(ROOT/'supabase/migrations/99991792812600_wikipedia_missing_source_evidence.sql').read_text()+setup+assertions
+sql=schema+(ROOT/'supabase/migrations/99991792812600_wikipedia_missing_source_evidence.sql').read_text()+setup+assertions+regional_setup+"create table regional_old_sources as select id,to_jsonb(s)row from venue_sources s;"+(ROOT/'supabase/migrations/99991792818000_wikipedia_regional_generated_label.sql').read_text()+regional_assertions
 
 def binary(name):return str(Path(os.environ['PG_BINDIR'])/name)if os.environ.get('PG_BINDIR')else shutil.which(name)
 with tempfile.TemporaryDirectory(prefix='qg-wikipedia-presence-')as tmp:
