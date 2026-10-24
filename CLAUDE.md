@@ -721,8 +721,8 @@ Guarded by `src/lib/__tests__/sexologyGlossaryPass.test.ts` (28 assertions, muta
 
 ## Repo stats
 
-- **Edge functions:** 226
-- **Migrations:** 1611
+- **Edge functions:** 256
+- **Migrations:** 2526
 
 ## Infrastructure
 
