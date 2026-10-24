@@ -433,4 +433,22 @@ describe('AdminEditButton', () => {
       ),
     );
   });
+
+  it('exports a brand record from the maker detail page', async () => {
+    exportRecordMock.mockReset().mockResolvedValue(undefined);
+    useAdminRolesMock.mockReturnValue({ canManageContent: () => true, loading: false });
+    renderIn(
+      <AdminEditButton contentType="marketplace_brands" contentId="b1" exportable />,
+      '/marketplace/brands/x',
+    );
+    await openMenu();
+    fireEvent.click(await screen.findByText('Export record (Excel)'));
+    await waitFor(() =>
+      expect(exportRecordMock).toHaveBeenCalledWith(
+        expect.objectContaining({ tableName: 'marketplace_brands' }),
+        'b1',
+        'Excel',
+      ),
+    );
+  });
 });
