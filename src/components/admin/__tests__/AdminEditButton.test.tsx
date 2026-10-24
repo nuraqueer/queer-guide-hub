@@ -451,4 +451,22 @@ describe('AdminEditButton', () => {
       ),
     );
   });
+
+  it('exports an organization record from the organization detail page', async () => {
+    exportRecordMock.mockReset().mockResolvedValue(undefined);
+    useAdminRolesMock.mockReturnValue({ canManageContent: () => true, loading: false });
+    renderIn(
+      <AdminEditButton contentType="organizations" contentId="o1" exportable />,
+      '/organizations/x',
+    );
+    await openMenu();
+    fireEvent.click(await screen.findByText('Export record (CSV)'));
+    await waitFor(() =>
+      expect(exportRecordMock).toHaveBeenCalledWith(
+        expect.objectContaining({ tableName: 'organizations' }),
+        'o1',
+        'CSV',
+      ),
+    );
+  });
 });
