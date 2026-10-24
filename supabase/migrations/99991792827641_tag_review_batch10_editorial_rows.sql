@@ -112,10 +112,12 @@ begin
    where m.status = 'merged' and t.status = 'merged';
   if v_bad <> 0 then raise exception 'batch10: % merged tags still point at a merged tag', v_bad; end if;
 
-  -- The friendly trio and the kept-separate tags are still active.
-  select count(*) into v_bad from unnest(array['queer-friendly','lgbtq-friendly','gay-friendly','dance-club',
-      'antiretroviral','antiretroviral-therapy','nudist','naturist','gay-men','gay']) s(slug)
-   where not exists (select 1 from public.unified_tags t where t.slug = s.slug and t.status = 'active');
+  -- None of the kept-separate tags was merged or retired by this batch. A slug absent
+  -- from the corpus (a fresh or seeded database) is not a failure of this file.
+  select count(*) into v_bad from public.unified_tags t
+   where t.slug = any (array['queer-friendly','lgbtq-friendly','gay-friendly','dance-club',
+      'antiretroviral','antiretroviral-therapy','nudist','naturist','gay-men','gay'])
+     and t.status <> 'active';
   if v_bad <> 0 then raise exception 'batch10: % kept-separate tags are no longer active', v_bad; end if;
 
   select count(*) into v_bad from _b10_close c
