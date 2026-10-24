@@ -469,4 +469,19 @@ describe('AdminEditButton', () => {
       ),
     );
   });
+
+  it('exports a milestone record from the history detail page', async () => {
+    exportRecordMock.mockReset().mockResolvedValue(undefined);
+    useAdminRolesMock.mockReturnValue({ canManageContent: () => true, loading: false });
+    renderIn(<AdminEditButton contentType="milestones" contentId="h1" exportable />, '/history/x');
+    await openMenu();
+    fireEvent.click(await screen.findByText('Export record (Excel)'));
+    await waitFor(() =>
+      expect(exportRecordMock).toHaveBeenCalledWith(
+        expect.objectContaining({ tableName: 'milestones' }),
+        'h1',
+        'Excel',
+      ),
+    );
+  });
 });
