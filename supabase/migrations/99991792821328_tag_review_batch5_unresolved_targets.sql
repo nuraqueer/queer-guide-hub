@@ -16,7 +16,7 @@
 -- archaeologist, rest-and-leisure, and the two human_reviewed food rows
 -- (generous-servings, ginger-cookies).
 
-select set_config('app.actor', 'migration:99991792791783_tag_review_batch5_unresolved_targets', true);
+select set_config('app.actor', 'migration:99991792821328_tag_review_batch5_unresolved_targets', true);
 
 select setval('public.tag_slug_redirects_id_seq',
               greatest((select coalesce(max(id), 1) from public.tag_slug_redirects),
@@ -38,7 +38,7 @@ begin
   for r in select * from _b5_pairs order by src loop
     begin
       update public.tag_category_assignments set is_primary = false where tag_id = r.src_id and is_primary;
-      v_audit := public.merge_tag_concept(r.tgt_id, r.src_id, 'migration:99991792791783', 'excel-review-batch5-2026-10-23');
+      v_audit := public.merge_tag_concept(r.tgt_id, r.src_id, 'migration:99991792821328', 'excel-review-batch5-2026-10-23');
       execute 'delete from public.tag_aliases a using public.unified_tags c
        where a.canonical_tag_id = $1 and c.id = $2
          and lower(btrim(a.alias_name)) = lower(btrim(c.name))' using r.src_id, r.tgt_id;
@@ -179,7 +179,7 @@ union select t.id, 'already the canonical: its duplicates are merged into it' fr
 update public.tag_suggestions g
    set status = 'rejected', reviewed_at = now(),
        metadata = coalesce(g.metadata, '{}'::jsonb) || jsonb_build_object(
-         'resolution', c.resolution, 'resolved_by', 'migration:99991792791783')
+         'resolution', c.resolution, 'resolved_by', 'migration:99991792821328')
   from _b5_close c
  where g.entity_id = c.id and g.entity_type = 'tag'
    and g.source = 'excel_review_2026_10_23' and g.status = 'pending';

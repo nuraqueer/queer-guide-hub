@@ -21,7 +21,7 @@
 -- greysexual (an e2e-asserted canonical, against gray-asexuality), kinderfur, masseuses,
 -- and the scope questions (news-pride, art, mental-health, dinner, lunch, beer, ...).
 
-select set_config('app.actor', 'migration:99991792820720_tag_review_batch7_other_rows', true);
+select set_config('app.actor', 'migration:99991792821333_tag_review_batch7_other_rows', true);
 
 select setval('public.tag_slug_redirects_id_seq',
               greatest((select coalesce(max(id), 1) from public.tag_slug_redirects),
@@ -102,7 +102,7 @@ begin
   for r in select * from _b7_pairs order by src loop
     begin
       update public.tag_category_assignments set is_primary = false where tag_id = r.src_id and is_primary;
-      v_audit := public.merge_tag_concept(r.tgt_id, r.src_id, 'migration:99991792820720', 'excel-review-batch7-2026-10-23');
+      v_audit := public.merge_tag_concept(r.tgt_id, r.src_id, 'migration:99991792821333', 'excel-review-batch7-2026-10-23');
       execute 'delete from public.tag_aliases a using public.unified_tags c
        where a.canonical_tag_id = $1 and c.id = $2
          and lower(btrim(a.alias_name)) = lower(btrim(c.name))' using r.src_id, r.tgt_id;
@@ -189,7 +189,7 @@ union select t.id, 'kept as canonical: its duplicate is already merged into it' 
 update public.tag_suggestions g
    set status = 'rejected', reviewed_at = now(),
        metadata = coalesce(g.metadata, '{}'::jsonb) || jsonb_build_object(
-         'resolution', c.resolution, 'resolved_by', 'migration:99991792820720')
+         'resolution', c.resolution, 'resolved_by', 'migration:99991792821333')
   from _b7_close c
  where g.entity_id = c.id and g.entity_type = 'tag'
    and g.source = 'excel_review_2026_10_23' and g.status = 'pending';

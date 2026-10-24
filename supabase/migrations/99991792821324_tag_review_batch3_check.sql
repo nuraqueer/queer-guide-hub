@@ -30,7 +30,7 @@
 -- and other content-policy rows.
 
 set local statement_timeout = '15min';
-select set_config('app.actor', 'migration:99991792791780_tag_review_batch3_check', true);
+select set_config('app.actor', 'migration:99991792821324_tag_review_batch3_check', true);
 
 select setval('public.tag_slug_redirects_id_seq',
               greatest((select coalesce(max(id), 1) from public.tag_slug_redirects),
@@ -84,7 +84,7 @@ begin
   for r in select * from _b3_pairs order by src loop
     begin
       update public.tag_category_assignments set is_primary = false where tag_id = r.src_id and is_primary;
-      v_audit := public.merge_tag_concept(r.tgt_id, r.src_id, 'migration:99991792791780', 'excel-review-batch3-2026-10-23');
+      v_audit := public.merge_tag_concept(r.tgt_id, r.src_id, 'migration:99991792821324', 'excel-review-batch3-2026-10-23');
       delete from public.tag_aliases a using public.unified_tags c
        where a.canonical_tag_id = r.src_id and c.id = r.tgt_id
          and lower(btrim(a.alias_name)) = lower(btrim(c.name));
@@ -132,7 +132,7 @@ union select t.id, 'chosen sense confirmed against tagged content' from public.u
 update public.tag_suggestions g
    set status = 'rejected', reviewed_at = now(),
        metadata = coalesce(g.metadata, '{}'::jsonb) || jsonb_build_object(
-         'resolution', c.resolution, 'resolved_by', 'migration:99991792791780')
+         'resolution', c.resolution, 'resolved_by', 'migration:99991792821324')
   from _b3_close c
  where g.entity_id = c.id and g.entity_type = 'tag'
    and g.source = 'excel_review_2026_10_23' and g.status = 'pending';

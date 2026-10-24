@@ -20,7 +20,7 @@
 -- Left for a person: village (39 uses, mixed: Manchester Gay Village news, venues and
 -- an unrelated meditation group) and updates (one news post, no clear meaning).
 
-select set_config('app.actor', 'migration:99991792791785_tag_review_batch6_hedged_merges', true);
+select set_config('app.actor', 'migration:99991792821330_tag_review_batch6_hedged_merges', true);
 
 select setval('public.tag_slug_redirects_id_seq',
               greatest((select coalesce(max(id), 1) from public.tag_slug_redirects),
@@ -42,7 +42,7 @@ begin
   for r in select * from _b6_pairs order by src loop
     begin
       update public.tag_category_assignments set is_primary = false where tag_id = r.src_id and is_primary;
-      v_audit := public.merge_tag_concept(r.tgt_id, r.src_id, 'migration:99991792791785', 'excel-review-batch6-2026-10-23');
+      v_audit := public.merge_tag_concept(r.tgt_id, r.src_id, 'migration:99991792821330', 'excel-review-batch6-2026-10-23');
       execute 'delete from public.tag_aliases a using public.unified_tags c
        where a.canonical_tag_id = $1 and c.id = $2
          and lower(btrim(a.alias_name)) = lower(btrim(c.name))' using r.src_id, r.tgt_id;
@@ -119,7 +119,7 @@ union select t.id, 'kept separate: a distinct concept, not a duplicate' from pub
 update public.tag_suggestions g
    set status = 'rejected', reviewed_at = now(),
        metadata = coalesce(g.metadata, '{}'::jsonb) || jsonb_build_object(
-         'resolution', c.resolution, 'resolved_by', 'migration:99991792791785')
+         'resolution', c.resolution, 'resolved_by', 'migration:99991792821330')
   from _b6_close c
  where g.entity_id = c.id and g.entity_type = 'tag'
    and g.source = 'excel_review_2026_10_23' and g.status = 'pending';
