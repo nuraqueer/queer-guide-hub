@@ -16,6 +16,31 @@ class ContactEvidenceTests(unittest.TestCase):
                           addresses=[dict(country='CH', freeform='Brandschenkestrasse 152')], confidence=.99,
                           operating_status='open', websites=['https://www.b2hotel.ch/'], sources=[dict(license='CDLA-Permissive-2.0')])
 
+    def test_phone_capture_does_not_require_a_website(self):
+        place = {**self.place, 'websites': [], 'phones': ['+41 44 123 45 67']}
+        self.assertEqual(module.positive_match(self.venue, [place], True, 'phone'), place)
+        self.assertIsNone(module.positive_match(self.venue, [place], False, 'phone'))
+        self.assertIsNone(module.positive_match(self.venue, [place, {**place, 'id': 'another'}], True, 'phone'))
+
+    def test_phone_is_one_published_number_never_a_guessed_contact(self):
+        for phones in (None, [], [None], ['123'], ['call reception'], ['+41441234567 ext 5'],
+                       ['+41441234567', '+41441234568'], ['+41441234567', 41441234567]):
+            self.assertIsNone(module.published_phone({'phones': phones}), repr(phones))
+        self.assertEqual(module.published_phone({'phones': ['+41 44 123 45 67', '+41441234567']}), '+41 44 123 45 67')
+
+    def test_phone_capture_retains_country_status_license_and_distance_guards(self):
+        place = {**self.place, 'phones': ['+41441234567'], 'websites': []}
+        for overrides in ({'operating_status': 'closed'}, {'confidence': .1}, {'sources': []},
+                          {'latitude': 47.38}, {'addresses': [{'country': 'DE', 'freeform': self.venue['address']}] }):
+            self.assertIsNone(module.positive_match(self.venue, [{**place, **overrides}], True, 'phone'))
+
+    def test_dense_windows_partition_each_identity_once_with_full_margins(self):
+        venues = [dict(id=str(i), latitude=52.5+y, longitude=13.4+x)
+                  for i, (x,y) in enumerate(((0,0), (.01,.01), (-.01,-.01), (0,.01)))]
+        parts = module.partition_window(venues, [13.3,52.4,13.5,52.6])
+        self.assertCountEqual([v['id'] for selected,_ in parts for v in selected], [v['id'] for v in venues])
+        self.assertTrue(all(module.window_contains_radius(v,b) for selected,b in parts for v in selected))
+
     def test_corroborated_unique_identity(self):
         self.assertEqual(module.positive_match(self.venue, [self.place], True), self.place)
 
