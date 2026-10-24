@@ -19,8 +19,9 @@ create table venues(id uuid primary key default gen_random_uuid(),city_id uuid);
 create table events(id uuid primary key,title text,city text,event_type text,images text[],duplicate_of_id uuid,start_date timestamptz,city_id uuid);
 create table milestones(id uuid primary key,title text,city_id uuid,city_name text,country_id uuid,country_name text,date date,image_url text,sources jsonb,status text,duplicate_of_id uuid,image_metadata jsonb,category text,impact text,significance int);
 create table enrichment_log(step text,entity_type text,entity_id uuid);
-create table admin_automations(slug text primary key,enabled boolean default true,lifecycle_state text default 'active',can_run_now boolean default true,can_dry_run boolean default true,capability_reason text,action jsonb,updated_at timestamptz default now());
+create table admin_automations(slug text primary key,name text,managed_by text,trigger jsonb,schedule text,enabled boolean default true,lifecycle_state text default 'active',can_run_now boolean default true,can_dry_run boolean default true,capability_reason text,action jsonb,updated_at timestamptz default now());
 create table cron.job(jobid bigint primary key,jobname text unique,schedule text,active boolean default true,command text);
+create function cron.schedule(text,text,text)returns bigint language sql as $$insert into cron.job(jobid,jobname,schedule,command)values((select coalesce(max(jobid),0)+1 from cron.job),$1,$2,$3)returning jobid$$;
 create function cron.unschedule(bigint)returns boolean language sql as $$delete from cron.job where jobid=$1 returning true$$;
 insert into countries values('00000000-0000-0000-0000-000000000001','Country','Capital',null,null,100);
 insert into cities values('00000000-0000-0000-0000-000000000002','City','00000000-0000-0000-0000-000000000001',null,null,50);
@@ -66,10 +67,14 @@ with tempfile.TemporaryDirectory(prefix='qg-event-stock-guard-') as tmp:
     subprocess.run([binary('pg_ctl'), '-D', str(data), '-l', str(Path(tmp) / 'postgres.log'), '-o', f'-k {tmp} -p 55507 -c listen_addresses= -c min_wal_size=2MB -c max_wal_size=16MB', '-w', 'start'], check=True, stdout=subprocess.DEVNULL)
     try:
         subprocess.run([binary('psql'), '-h', tmp, '-p', '55507', '-d', 'postgres', '-v', 'ON_ERROR_STOP=1'], input='create role anon;create role authenticated;create role service_role;', text=True, check=True, stdout=subprocess.DEVNULL)
-        for mode in ['active', 'paused', 'missing_owner']:
+        for mode in ['active', 'paused', 'missing_owner', 'snapshot_dependencies']:
             subprocess.run([binary('createdb'), '-h', tmp, '-p', '55507', mode], check=True)
             command = [binary('psql'), '-h', tmp, '-p', '55507', '-d', mode, '-v', 'ON_ERROR_STOP=1']
-            setup = schema + selector + baseline
+            setup = schema + selector
+            if mode == 'snapshot_dependencies':
+                setup += "delete from admin_automations where slug in ('event_image_backfill','queer_image_backfill_event');delete from cron.job where jobname in ('event_image_backfill','queer_image_backfill_event');"
+                setup += subprocess.check_output(['node', str(ROOT / 'scripts/ci/snapshot-fixtures.mjs'), 'seed-event-artwork-migration'], env={**os.environ, 'DB_URL': 'postgresql://127.0.0.1/postgres'}, text=True)
+            setup += baseline
             if mode == 'paused':
                 setup += "update admin_automations set enabled=false,lifecycle_state='paused'where slug='queer_image_backfill_event';delete from cron.job where jobname='queer_image_backfill_event';"
             if mode == 'missing_owner':

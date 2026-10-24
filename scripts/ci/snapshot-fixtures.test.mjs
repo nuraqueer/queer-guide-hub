@@ -8,6 +8,7 @@ import {
   manifestSql,
   assertLocalDatabase,
   adminSeedSql,
+  eventArtworkMigrationSeedSql,
 } from './snapshot-fixtures.mjs';
 
 test('actual positive browser routes are prioritized, including regex redirects', () => {
@@ -140,4 +141,13 @@ test('main sync keeps the full glossary and only the four static registry except
   );
   assert(!sql.includes("'review_queue'"));
   assert.throws(() => manifestSql({ fullTables: ["tags'); drop table users; --"] }));
+});
+
+// The exported builder also enforces locality, not just the CLI entry point.
+test('artwork migration dependencies refuse remote databases and never invoke providers', () => {
+  assert.throws(() => eventArtworkMigrationSeedSql('postgresql://db.example.com/postgres'), /loopback/);
+  const sql = eventArtworkMigrationSeedSql('postgresql://127.0.0.1/postgres');
+  assert(sql.includes("'command','select 1'"));
+  assert(!sql.includes('http_post'));
+  assert(!sql.includes('vault'));
 });

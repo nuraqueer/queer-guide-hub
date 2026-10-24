@@ -129,6 +129,22 @@ export function snapshotCacheKey({
   return 'db-snapshot-v2-' + day + '-' + digest;
 }
 
+// The anonymous snapshot excludes private automation rows and cron jobs. Seed
+// only this migration's dependencies locally, with a harmless SQL command.
+export function eventArtworkMigrationSeedSql(databaseUrl) {
+  assertLocalDatabase(databaseUrl);
+  return `begin;
+set local session_replication_role='replica';
+insert into public.admin_automations(slug,name,managed_by,enabled,trigger,action,schedule,lifecycle_state)
+select slug,'CI synthetic artwork dependency','system',true,'{"type":"schedule"}'::jsonb,
+ jsonb_build_object('type','sql','jobname',slug,'command','select 1'),'18 * * * *','active'
+from unnest(array['event_image_backfill','queer_image_backfill_event'])slug
+on conflict(slug)do nothing;
+select cron.schedule('event_image_backfill','18 * * * *','select 1')
+where not exists(select 1 from cron.job where jobname='event_image_backfill');
+commit;`;
+}
+
 export function adminSeedSql() {
   // Configuration only: these source definitions and finding-code mappings
   // are already code in migrations. No production review records are copied.
@@ -277,6 +293,8 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
     );
   } else if (process.argv[2] === 'cache-key') {
     process.stdout.write(snapshotCacheKey() + '\n');
+  } else if (process.argv[2] === 'seed-event-artwork-migration') {
+    process.stdout.write(eventArtworkMigrationSeedSql(process.env.DB_URL) + '\n');
   } else if (process.argv[2] === 'seed-admin') {
     assertLocalDatabase(process.env.DB_URL);
     process.stdout.write(adminSeedSql() + '\n');
