@@ -277,7 +277,6 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
     );
   } else if (process.argv[2] === 'cache-key') {
     process.stdout.write(snapshotCacheKey() + '\n');
-
   } else if (process.argv[2] === 'seed-admin') {
     assertLocalDatabase(process.env.DB_URL);
     process.stdout.write(adminSeedSql() + '\n');
