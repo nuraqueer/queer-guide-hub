@@ -73,7 +73,7 @@ with tempfile.TemporaryDirectory(prefix='qg-event-stock-guard-') as tmp:
             setup = schema + selector
             if mode == 'snapshot_dependencies':
                 setup += "delete from admin_automations where slug in ('event_image_backfill','queer_image_backfill_event');delete from cron.job where jobname in ('event_image_backfill','queer_image_backfill_event');"
-                setup += subprocess.check_output(['node', str(ROOT / 'scripts/ci/snapshot-fixtures.mjs'), 'seed-event-artwork-migration'], env={**os.environ, 'DB_URL': 'postgresql://127.0.0.1/postgres'}, text=True)
+                setup += subprocess.check_output(['node', str(ROOT / 'scripts/ci/seed-event-artwork-migration.mjs')], env={**os.environ, 'DB_URL': 'postgresql://127.0.0.1/postgres'}, text=True)
             setup += baseline
             if mode == 'paused':
                 setup += "update admin_automations set enabled=false,lifecycle_state='paused'where slug='queer_image_backfill_event';delete from cron.job where jobname='queer_image_backfill_event';"

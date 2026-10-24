@@ -184,7 +184,7 @@ jobs:
           # snapshot. Supply local, no-network dependencies only while this
           # guarded migration is pending; never resurrect the retired producer.
           if [ -f /tmp/migrations/99991792816500_event_owned_artwork_producer.sql ] && ! grep -qx '99991792816500' snapshot/versions.txt; then
-            DB_URL="$DB_URL" node scripts/ci/snapshot-fixtures.mjs seed-event-artwork-migration > /tmp/ci-artwork-dependencies.sql
+            DB_URL="$DB_URL" node scripts/ci/seed-event-artwork-migration.mjs > /tmp/ci-artwork-dependencies.sql
             psql "$DB_URL" -X -v ON_ERROR_STOP=1 -f /tmp/ci-artwork-dependencies.sql
           fi
 

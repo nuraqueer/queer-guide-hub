@@ -1,3 +1,4 @@
+import { eventArtworkMigrationSeedSql } from './seed-event-artwork-migration.mjs';
 import { strict as assert } from 'node:assert';
 import { mkdtempSync, rmSync, writeFileSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -8,7 +9,6 @@ import {
   manifestSql,
   assertLocalDatabase,
   adminSeedSql,
-  eventArtworkMigrationSeedSql,
 } from './snapshot-fixtures.mjs';
 
 test('actual positive browser routes are prioritized, including regex redirects', () => {
