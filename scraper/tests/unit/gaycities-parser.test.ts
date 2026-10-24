@@ -442,6 +442,14 @@ describe('normalizeGcEvent dead image hosts', () => {
       outcome: 'source_unavailable', api_reference: image, reason: 'api_reference_excluded', human_reviewed: false });
   });
 
+  it.each(['originals', 't/sm'])('preserves potentially live nested source artwork in %s', path => {
+    const image = `https://gaycities-featured-images-production.s3.amazonaws.com/events/${path}/poster.jpg`;
+    const norm = normalizeGcEvent(detailFixture({ fromWayback: true, jsonLd: { ...ld(image), _legacyTemplate: true }, bodyDescription: null }), METRO);
+    if ('reject' in norm) throw new Error('unexpected reject: ' + norm.reject);
+    expect(norm.images).toEqual([image]);
+    expect(norm.metadata.artwork_exclusion).toBeUndefined();
+  });
+
   it('records the existing retired-bucket importer exclusion for a complete archive record', () => {
     const image = 'https://gaycities-featured-images-production.s3.amazonaws.com/events/sm_fb_1.jpg';
     const norm = normalizeGcEvent(detailFixture({ jsonLd: { ...ld(image), _legacyTemplate: true },

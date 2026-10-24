@@ -23,6 +23,11 @@ update event_sources set payload=jsonb_set(payload,'{raw,jsonLd,image}','["https
 update event_sources set payload=jsonb_set(payload,'{raw,jsonLd,image}','["https://gaycities-featured-images-production.s3.amazonaws.com/events/t/sm/../a.jpg"]')where id=(select s from fixture_bucket_paths where n=4);
 update event_sources set payload=jsonb_set(payload,'{enriched}','{"images":["https://official.example/poster.jpg"]}')where id=(select s from fixture_bucket_paths where n=5);
 delete from event_image_quality_observations where event_id=(select e from fixture_bucket_paths where n=6);
+-- A claimed importer exclusion cannot waive a potentially live nested URL.
+update event_sources set payload=jsonb_set(payload,'{normalized,metadata,artwork_exclusion}',
+ jsonb_build_object('contract','gaycities-wayback-retired-bucket-artwork:v1','outcome','source_unavailable',
+ 'reason','retired_source_bucket_excluded','api_reference',payload#>>'{raw,jsonLd,image,0}','human_reviewed',false))
+ where id=(select s from fixture_bucket_paths where n=6);
 update event_image_quality_observations set failure_reason='http_403',mime_type='text/html'where event_id=(select e from fixture_bucket_paths where n=7);
 update event_image_quality_observations set probe_status='pass',http_status=200,mime_type='image/jpeg'where event_id=(select e from fixture_bucket_paths where n=8);
 update fixture_bucket_paths f set old_event=to_jsonb(evt)from events evt where evt.id=f.e;
