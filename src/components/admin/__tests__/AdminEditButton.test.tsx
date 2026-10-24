@@ -484,4 +484,19 @@ describe('AdminEditButton', () => {
       ),
     );
   });
+
+  it('exports a guide record from the guide detail page', async () => {
+    exportRecordMock.mockReset().mockResolvedValue(undefined);
+    useAdminRolesMock.mockReturnValue({ canManageContent: () => true, loading: false });
+    renderIn(<AdminEditButton contentType="guides" contentId="g1" exportable />, '/guides/x');
+    await openMenu();
+    fireEvent.click(await screen.findByText('Export record (CSV)'));
+    await waitFor(() =>
+      expect(exportRecordMock).toHaveBeenCalledWith(
+        expect.objectContaining({ tableName: 'guides' }),
+        'g1',
+        'CSV',
+      ),
+    );
+  });
 });
