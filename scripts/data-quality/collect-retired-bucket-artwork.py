@@ -11,7 +11,7 @@ import urllib.request
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
-URL = re.compile(r'^https://gaycities-featured-images-production\.s3\.amazonaws\.com/events/[A-Za-z0-9._-]+\.(jpg|jpeg|png|webp)$')
+URL = re.compile(r'^https://gaycities-featured-images-production\.s3\.amazonaws\.com/events/(?:t/sm/|originals/)?[A-Za-z0-9._-]+\.(jpg|jpeg|png|webp)$')
 
 class NoRedirect(urllib.request.HTTPRedirectHandler):
     def redirect_request(self, req, fp, code, msg, headers, newurl):

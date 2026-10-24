@@ -25,7 +25,7 @@ begin
    or(select count(*)from jsonb_array_elements(inputs) other where other->>'event_id'=p->>'event_id')<>1
    or p->>'usable_denial'is distinct from 'true'or p->>'human_reviewed'is distinct from 'false'
    or p->>'status'is distinct from '403'or p->>'mime_type'is distinct from 'application/xml'
-   or coalesce(p->>'image_url','')!~'^https://gaycities-featured-images-production[.]s3[.]amazonaws[.]com/events/[A-Za-z0-9._-]+[.](jpg|jpeg|png|webp)$'
+   or coalesce(p->>'image_url','')!~'^https://gaycities-featured-images-production[.]s3[.]amazonaws[.]com/events/(t/sm/|originals/)?[A-Za-z0-9._-]+[.](jpg|jpeg|png|webp)$'
    or octet_length(coalesce(p->>'response_body',''))not between 1 and 8192
    or coalesce(p->>'response_sha256','')!~'^[a-f0-9]{64}$'
    or encode(extensions.digest(p->>'response_body','sha256'),'hex')is distinct from p->>'response_sha256'
